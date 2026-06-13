@@ -1,6 +1,8 @@
+import 'package:caderno/features/auth/presentation/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:caderno/main.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 void main() {
@@ -10,16 +12,18 @@ void main() {
   });
 
   testWidgets('Garantir que a estrutura básica do app carrega sem erros', (WidgetTester tester) async {
-    // Build our app.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ],
+        child: const MyApp(),
+      ),
+    );
     
-    // O GoRouter leva um tempo para resolver a rota inicial
     await tester.pumpAndSettle();
 
-    // Verifica se a tela de login (que é a inicial) renderizou o título
     expect(find.text('SyncScribe'), findsOneWidget);
-    
-    // Verifica se os campos de texto estão presentes
     expect(find.byType(TextField), findsNWidgets(2));
   });
 }

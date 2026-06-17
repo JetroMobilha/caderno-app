@@ -28,39 +28,46 @@ class SubjectsScreen extends ConsumerWidget {
         ),
         centerTitle: false,
       ),
-      body: subjects.isEmpty
-          ? Center(
-        child: Text(
-          'A tua estante está vazia.\nCria a tua primeira disciplina!',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.inter(
-            color: Colors.grey.shade500,
-            fontSize: 16,
-          ),
-        ),
-      )
-          : GridView.builder(
-        padding: const EdgeInsets.all(20),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2, // Dois cadernos por linha
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.8, // Formato vertical de caderno
-        ),
-        itemCount: subjects.length,
-        itemBuilder: (context, index) {
-          final subject = subjects[index];
-          return _buildBinderCard(subject);
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (subjects.isEmpty) {
+            return Center(
+              child: Text(
+                'A tua estante está vazia.\nCria a tua primeira disciplina!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 16),
+              ),
+            );
+          }
+
+          // Aplicamos a nossa matemática testada para definir as colunas
+          int crossAxisCount = 2;
+          if (constraints.maxWidth >= 900) {
+            crossAxisCount = 6; // Monitor grande
+          } else if (constraints.maxWidth >= 600) {
+            crossAxisCount = 4; // Tablet ou janela encolhida
+          }
+
+          return GridView.builder(
+            padding: const EdgeInsets.all(20),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount, // Dinâmico!
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
+              childAspectRatio: 0.75, // Proporção perfeita de um caderno físico
+            ),
+            itemCount: subjects.length,
+            itemBuilder: (context, index) {
+              return _buildBinderCard(subjects[index]);
+            },
+          );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddSubjectDialog(context, ref),
-        backgroundColor: const Color(0xFF2C3E50), // Azul Tinta
+        backgroundColor: const Color(0xFF2C3E50),
         icon: const Icon(Icons.add, color: Colors.white),
-        label: Text(
-          'Nova Disciplina',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        label: Text('Nova Disciplina', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }

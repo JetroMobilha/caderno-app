@@ -12,18 +12,23 @@ class CanvasScreen extends StatefulWidget {
 }
 
 class _CanvasScreenState extends State<CanvasScreen> {
-  // Lista que guarda todos os traços finalizados e o traço atual
   List<Stroke> _strokes = [];
   List<Offset> _currentPoints = [];
 
-  // Configurações padrão da caneta digital (Azul Tinta)
-  final String _selectedColorHex = '#2C3E50';
-  final double _selectedThickness = 3.0;
+  String _selectedColorHex = '#2C3E50';
+  double _selectedThickness = 3.0;
+
+  final Map<String, Color> _colorPalette = {
+    'Azul': const Color(0xFF2C3E50),
+    'Preto': const Color(0xFF1A1A24),
+    'Vermelho': const Color(0xFFE74C3C),
+    'Verde': const Color(0xFF27AE60),
+  };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7), // Folha de papel creme
+      backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -40,49 +45,124 @@ class _CanvasScreenState extends State<CanvasScreen> {
           ),
         ],
       ),
-      body: GestureDetector(
-        // 1. O utilizador toca no ecrã: Iniciamos um novo traço
-        onPanStart: (details) {
-          setState(() {
-            _currentPoints = [details.localPosition];
-          });
-        },
-        // 2. O utilizador arrasta o dedo: Vamos empilhando as coordenadas cartesianas
-        onPanUpdate: (details) {
-          setState(() {
-            _currentPoints.add(details.localPosition);
-          });
-        },
-        // 3. O utilizador levanta o dedo: Fechamos o Traço e guardamos na lista estruturada
-        onPanEnd: (details) {
-          setState(() {
-            _strokes.add(
-              Stroke(
-                color: _selectedColorHex,
-                thickness: _selectedThickness,
-                points: List.from(_currentPoints),
+      body: Stack(
+        children: [
+          GestureDetector(
+            onPanStart: (details) {
+              setState(() {
+                _currentPoints = [details.localPosition];
+              });
+            },
+            onPanUpdate: (details) {
+              setState(() {
+                _currentPoints.add(details.localPosition);
+              });
+            },
+            onPanEnd: (details) {
+              setState(() {
+                _strokes.add(
+                  Stroke(
+                    color: _selectedColorHex,
+                    thickness: _selectedThickness,
+                    points: List.from(_currentPoints),
+                  ),
+                );
+                _currentPoints.clear();
+              });
+            },
+            child: RepaintBoundary(
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: NotebookPainter(
+                  strokes: _strokes,
+                  currentPoints: _currentPoints,
+                  currentColor: _selectedColorHex,
+                  currentThickness: _selectedThickness,
+                ),
               ),
-            );
-            _currentPoints.clear(); // Limpa o rascunho para o próximo traço
-          });
-        },
-        child: RepaintBoundary(
-          child: CustomPaint(
-            size: Size.infinite,
-            painter: NotebookPainter(
-              strokes: _strokes,
-              currentPoints: _currentPoints,
-              currentColor: _selectedColorHex,
-              currentThickness: _selectedThickness,
             ),
           ),
-        ),
+
+          Positioned(
+            top: 10,
+            left: 20,
+            right: 20,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ..._colorPalette.entries.map((entry) {
+                      final hexString = '#${entry.value.value.toRadixString(16).substring(2).toUpperCase()}';
+                      final isSelected = _selectedColorHex == hexString;
+
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedColorHex = hexString),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? Colors.blue : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                            padding: const EdgeInsets.all(2),
+                            child: CircleAvatar(
+                              radius: 12,
+                              backgroundColor: entry.value,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    // 🚀 CORREÇÃO: Envolvemos o VerticalDivider num SizedBox com altura fixa!
+                    const SizedBox(
+                      height: 24,
+                      child: VerticalDivider(thickness: 1, color: Colors.black12),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButton<double>(
+                      value: _selectedThickness,
+                      underline: const SizedBox(),
+                      icon: const Icon(Icons.line_weight, size: 20, color: Color(0xFF2C3E50)),
+                      items: [1.5, 3.0, 5.0, 8.0].map((double value) {
+                        return DropdownMenuItem<double>(
+                          value: value,
+                          child: Text('${value.toInt()}px', style: GoogleFonts.inter(fontSize: 13)),
+                        );
+                      }).toList(),
+                      onChanged: (newValue) {
+                        if (newValue != null) {
+                          setState(() => _selectedThickness = newValue);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// O "Pincel" da nossa aplicação que desenha os píxeis no ecrã em tempo real
+// 🚀 CORREÇÃO: NotebookPainter reintroduzido no escopo global do ficheiro
 class NotebookPainter extends CustomPainter {
   final List<Stroke> strokes;
   final List<Offset> currentPoints;
@@ -98,7 +178,6 @@ class NotebookPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Desenhar primeiro as linhas pautadas (o fundo do caderno físico)
     final linePaint = Paint()
       ..color = Colors.blue.withOpacity(0.08)
       ..strokeWidth = 1.0;
@@ -107,12 +186,11 @@ class NotebookPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
     }
 
-    // Configuração para desenhar os traços guardados
     for (final stroke in strokes) {
       final paint = Paint()
         ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
         ..strokeWidth = stroke.thickness
-        ..strokeCap = StrokeCap.round // Ponta da caneta arredondada (suave)
+        ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
 
       for (int i = 0; i < stroke.points.length - 1; i++) {
@@ -120,7 +198,6 @@ class NotebookPainter extends CustomPainter {
       }
     }
 
-    // Desenhar o traço que está a acontecer em tempo real
     if (currentPoints.length > 1) {
       final activePaint = Paint()
         ..color = Color(int.parse(currentColor.replaceFirst('#', '0xFF')))

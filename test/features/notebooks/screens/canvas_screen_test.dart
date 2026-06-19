@@ -9,13 +9,22 @@ void main() {
         home: CanvasScreen(notebookTitle: 'Apontamentos de Álgebra'),
       ),
     );
-
     await tester.pumpAndSettle();
 
     expect(find.text('Apontamentos de Álgebra'), findsOneWidget);
-
-    // 🔥 CORREÇÃO: Verificamos se existe pelo menos um GestureDetector na árvore
-    // sem falhar caso o Scaffold/AppBar crie os seus próprios por defeito.
     expect(find.byType(GestureDetector), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('Deve conter botões de seleção de cor na Toolbar', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CanvasScreen(notebookTitle: 'Teste de Cores'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 🔥 CORREÇÃO: Procuramos por CircleAvatar (o nosso estojo de canetas real)
+    // Esperamos pelo menos 4 candidatos (Azul, Preto, Vermelho, Verde)
+    expect(find.byType(CircleAvatar), findsAtLeastNWidgets(4));
   });
 }

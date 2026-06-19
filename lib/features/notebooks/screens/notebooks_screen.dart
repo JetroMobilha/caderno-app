@@ -89,7 +89,10 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => CanvasScreen(notebookTitle: notebook.title),
+            builder: (context) => CanvasScreen(
+                notebookTitle: notebook.title,
+                lineType: notebook.lineType ?? 'ruled',
+            ),
           ),
         );
       },

@@ -4,8 +4,13 @@ import '../models/drawing_point_model.dart';
 
 class CanvasScreen extends StatefulWidget {
   final String notebookTitle;
+  final String lineType; //
 
-  const CanvasScreen({super.key, required this.notebookTitle});
+  const CanvasScreen({
+    super.key,
+    required this.notebookTitle,
+    this.lineType = 'ruled', // Padrão é pautado
+  });
 
   @override
   State<CanvasScreen> createState() => _CanvasScreenState();
@@ -85,12 +90,14 @@ class _CanvasScreenState extends State<CanvasScreen> {
             },
             child: RepaintBoundary(
               child: CustomPaint(
+                key: const Key('canvas_custom_paint'),
                 size: Size.infinite,
                 painter: NotebookPainter(
                   strokes: _strokes,
                   currentPoints: _currentPoints,
                   currentColor: _selectedColorHex,
                   currentThickness: _selectedThickness,
+                  lineType: widget.lineType,
                 ),
               ),
             ),
@@ -191,30 +198,48 @@ class _CanvasScreenState extends State<CanvasScreen> {
   }
 }
 
-// 🚀 CORREÇÃO: NotebookPainter reintroduzido no escopo global do ficheiro
 class NotebookPainter extends CustomPainter {
   final List<Stroke> strokes;
   final List<Offset> currentPoints;
   final String currentColor;
   final double currentThickness;
+  final String lineType; // 🚀 ADICIONADO
 
   NotebookPainter({
     required this.strokes,
     required this.currentPoints,
     required this.currentColor,
     required this.currentThickness,
+    required this.lineType, // 🚀 ADICIONADO
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = Colors.blue.withOpacity(0.08)
+    // 🎨 1. DESENHAR O FUNDO DA FOLHA DINAMICAMENTE
+    final backgroundPaint = Paint()
+      ..color = Colors.blue.withOpacity(0.06)
       ..strokeWidth = 1.0;
 
-    for (double y = 40; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+    if (lineType == 'ruled') {
+      // Clássico Pautado (Linhas Horizontais)
+      for (double y = 40; y < size.height; y += 28) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), backgroundPaint);
+      }
+    } else if (lineType == 'grid') {
+      // Quadriculado (Linhas Horizontais e Verticais)
+      const double gridSize = 24.0;
+      // Linhas Horizontais
+      for (double y = gridSize; y < size.height; y += gridSize) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), backgroundPaint);
+      }
+      // Linhas Verticais
+      for (double x = gridSize; x < size.width; x += gridSize) {
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), backgroundPaint);
+      }
     }
+    // Se for 'blank', não desenha nada no fundo (Folha Lisa de Desenho)
 
+    // 🎨 2. DESENHAR OS TRAÇOS GUARDADOS (Mantém-se igual)
     for (final stroke in strokes) {
       final paint = Paint()
         ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
@@ -227,6 +252,7 @@ class NotebookPainter extends CustomPainter {
       }
     }
 
+    // 🎨 3. DESENHAR O TRAÇO EM REAL-TIME (Mantém-se igual)
     if (currentPoints.length > 1) {
       final activePaint = Paint()
         ..color = Color(int.parse(currentColor.replaceFirst('#', '0xFF')))
@@ -242,5 +268,4 @@ class NotebookPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant NotebookPainter oldDelegate) => true;
-
 }

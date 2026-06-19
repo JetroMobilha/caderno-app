@@ -27,4 +27,21 @@ void main() {
     // Esperamos pelo menos 4 candidatos (Azul, Preto, Vermelho, Verde)
     expect(find.byType(CircleAvatar), findsAtLeastNWidgets(4));
   });
+
+  testWidgets('Deve instanciar o CanvasScreen com um tipo de pauta específico', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CanvasScreen(
+          notebookTitle: 'Desenho Livre',
+          lineType: 'blank',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 🔥 ALVO LOCALIZADO: Procura diretamente pela Key blindada!
+    final canvasFinder = find.byKey(const Key('canvas_custom_paint'));
+
+    expect(canvasFinder, findsOneWidget);
+  });
 }

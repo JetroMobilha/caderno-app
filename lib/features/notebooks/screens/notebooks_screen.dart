@@ -158,39 +158,92 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
 
   void _showAddNotebookDialog(BuildContext context) {
     final titleController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    String selectedCoverType = 'classic';
+    String selectedLineType = 'ruled';
+
+    final Map<String, String> coverTypes = {
+      'classic': 'Capa Clássica',
+      'leather': 'Textura Couro',
+      'geometric': 'Design Geométrico'
+    };
+
+    final Map<String, String> lineTypes = {
+      'ruled': 'Pautado (Linhas)',
+      'grid': 'Quadriculado',
+      'blank': 'Liso (Desenho)'
+    };
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFFDFBF7),
-        title: Text('Novo Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: titleController,
-          decoration: const InputDecoration(
-            hintText: 'Ex: Apontamentos de Álgebra',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
-            onPressed: () {
-              if (titleController.text.isNotEmpty) {
-                ref.read(notebookProvider.notifier).addNotebook(
-                  Notebook(
-                    subject_id: widget.subjectId,
-                    title: titleController.text,
-                    coverType: 'classic',
-                    lineType: 'ruled', // Padrão pautado
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Configurar Novo Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Título do Bloco',
+                      hintText: 'Ex: Álgebra Linear - Vol I',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Introduza o título do caderno';
+                      }
+                      return null;
+                    },
                   ),
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Criar', style: TextStyle(color: Colors.white)),
+                  const SizedBox(height: 20),
+                  Text('Estilo da Capa:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  DropdownButtonFormField<String>(
+                    value: selectedCoverType,
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    items: coverTypes.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                    onChanged: (val) => setModalState(() => selectedCoverType = val!),
+                  ),
+                  const SizedBox(height: 20),
+                  Text('Tipo de Folha Interna:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  DropdownButtonFormField<String>(
+                    value: selectedLineType,
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    items: lineTypes.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                    onChanged: (val) => setModalState(() => selectedLineType = val!),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  ref.read(notebookProvider.notifier).addNotebook(
+                    Notebook(
+                      subject_id: widget.subjectId,
+                      title: titleController.text.trim(),
+                      coverType: selectedCoverType,
+                      lineType: selectedLineType,
+                    ),
+                  );
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Criar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }

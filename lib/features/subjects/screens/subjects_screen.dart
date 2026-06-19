@@ -145,38 +145,84 @@ class SubjectsScreen extends ConsumerWidget {
 
   void _showAddSubjectDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    String pickedColorHex = '#8B0000'; // Cor padrão (Vinho)
+
+    final List<String> availableColors = [
+      '#8B0000', '#2C3E50', '#1E8449', '#D35400', '#6C3483', '#7F8C8D'
+    ];
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFFDFBF7),
-        title: Text('Nova Disciplina', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            hintText: 'Ex: Matemática Analítica',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                ref.read(subjectProvider.notifier).addSubject(
-                  Subject(
-                    userId: 1,
-                    name: nameController.text,
-                    color: '#8B0000',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Nova Disciplina', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome da Disciplina',
+                    hintText: 'Ex: Engenharia de Software',
+                    border: OutlineInputBorder(),
                   ),
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Criar', style: TextStyle(color: Colors.white)),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Por favor, introduza o nome da disciplina';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                Text('Cor do Marcador Latitudinal:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  children: availableColors.map((hex) {
+                    final color = Color(int.parse(hex.replaceFirst('#', '0xFF')));
+                    final isSelected = pickedColorHex == hex;
+                    return GestureDetector(
+                      onTap: () => setModalState(() => pickedColorHex = hex),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: isSelected ? Colors.blue : Colors.transparent, width: 3),
+                        ),
+                        padding: const EdgeInsets.all(2),
+                        child: CircleAvatar(backgroundColor: color, radius: 14),
+                      ),
+                    );
+                  }).toList(),
+                )
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  ref.read(subjectProvider.notifier).addSubject(
+                    Subject(
+                      userId: 1,
+                      name: nameController.text.trim(),
+                      color: pickedColorHex,
+                    ),
+                  );
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Criar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }

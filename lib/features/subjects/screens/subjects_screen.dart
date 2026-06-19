@@ -3,30 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/subject_provider.dart';
 import '../models/subject_model.dart';
+// 1. CORREÇÃO: Import em falta adicionado!
+import '../../notebooks/screens/notebooks_screen.dart';
 
-// Usamos ConsumerWidget para escutar as mudanças no Riverpod
 class SubjectsScreen extends ConsumerWidget {
   const SubjectsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Escuta a lista de disciplinas da base de dados
     final subjects = ref.watch(subjectProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7), // Cor de folha de papel macia
+      backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           'Os Meus Cadernos',
-          style: GoogleFonts.lora( // Fonte elegante e clássica
+          style: GoogleFonts.lora(
             color: const Color(0xFF1A1A24),
             fontSize: 26,
             fontWeight: FontWeight.w600,
           ),
         ),
-        centerTitle: false,
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -40,25 +39,25 @@ class SubjectsScreen extends ConsumerWidget {
             );
           }
 
-          // Aplicamos a nossa matemática testada para definir as colunas
           int crossAxisCount = 2;
           if (constraints.maxWidth >= 900) {
-            crossAxisCount = 6; // Monitor grande
+            crossAxisCount = 6;
           } else if (constraints.maxWidth >= 600) {
-            crossAxisCount = 4; // Tablet ou janela encolhida
+            crossAxisCount = 4;
           }
 
           return GridView.builder(
             padding: const EdgeInsets.all(20),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount, // Dinâmico!
+              crossAxisCount: crossAxisCount,
               crossAxisSpacing: 20,
               mainAxisSpacing: 20,
-              childAspectRatio: 0.75, // Proporção perfeita de um caderno físico
+              childAspectRatio: 0.75,
             ),
             itemCount: subjects.length,
             itemBuilder: (context, index) {
-              return _buildBinderCard(subjects[index]);
+              // 2. CORREÇÃO: Passamos o 'context' que o método agora exige!
+              return _buildBinderCard(context, subjects[index]);
             },
           );
         },
@@ -72,71 +71,78 @@ class SubjectsScreen extends ConsumerWidget {
     );
   }
 
-  // O Design do Caderno (Lombada colorida à esquerda)
-  Widget _buildBinderCard(Subject subject) {
-    // Converte a string hexadecimal '#FF0000' para cor do Flutter
+  // 3. CORREÇÃO: Método ajustado com Context e variável 'color' reposicionada
+  Widget _buildBinderCard(BuildContext context, Subject subject) {
     final color = Color(int.parse(subject.color.replaceFirst('#', '0xFF')));
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // A lombada do caderno (A parte colorida com textura)
-          Container(
-            width: 16,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                bottomLeft: Radius.circular(12),
-              ),
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => NotebooksScreen(
+              subjectId: subject.id ?? 0,
+              subjectName: subject.name,
             ),
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Spacer(),
-                  Text(
-                    subject.name,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF1A1A24),
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Cadernos: 0', // Placeholder para o futuro
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 16,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
               ),
             ),
-          ),
-        ],
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Spacer(),
+                    Text(
+                      subject.name,
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1A1A24),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Cadernos: 0',
+                      style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // Janela para adicionar a disciplina
   void _showAddSubjectDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
 
@@ -153,20 +159,16 @@ class SubjectsScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
             onPressed: () {
               if (nameController.text.isNotEmpty) {
-                // Chama o nosso Cérebro para gravar na BD!
                 ref.read(subjectProvider.notifier).addSubject(
                   Subject(
-                    userId: 1, // Temporário (até termos o Login feito)
+                    userId: 1,
                     name: nameController.text,
-                    color: '#8B0000', // Vermelho Escuro (Bordô) por defeito
+                    color: '#8B0000',
                   ),
                 );
                 Navigator.pop(context);

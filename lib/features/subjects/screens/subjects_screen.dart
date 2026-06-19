@@ -1,144 +1,92 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../providers/subject_provider.dart';
-import '../models/subject_model.dart';
-// 1. CORREÇÃO: Import em falta adicionado!
+import '../../../core/theme/app_profile_provider.dart';
 import '../../notebooks/screens/notebooks_screen.dart';
+import '../../notebooks/providers/notebook_provider.dart';
+import '../models/subject_model.dart';
+import '../providers/subject_provider.dart';
 
 class SubjectsScreen extends ConsumerWidget {
   const SubjectsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subjects = ref.watch(subjectProvider);
+    final currentProfile = ref.watch(appProfileProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'Os Meus Cadernos',
-          style: GoogleFonts.lora(
-            color: const Color(0xFF1A1A24),
-            fontSize: 26,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        title: Text('Os meus Cadernos', style: currentProfile.titleStyle),
+        backgroundColor: currentProfile.primaryColor,
+        foregroundColor: Colors.white,
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          if (subjects.isEmpty) {
-            return Center(
-              child: Text(
-                'A tua estante está vazia.\nCria a tua primeira disciplina!',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 16),
+      drawer: Drawer(
+        child: Container(
+          color: const Color(0xFFFDFBF7),
+          child: Column(
+            children: [
+              UserAccountsDrawerHeader(
+                decoration: BoxDecoration(color: currentProfile.primaryColor),
+                currentAccountPicture: const CircleAvatar(
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.person, size: 40, color: Color(0xFF2C3E50)),
+                ),
+                accountName: const Text('Comandante Jetro', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                accountEmail: const Text('modo.offline@cadernodigital.local', style: TextStyle(color: Colors.white70)),
               ),
-            );
-          }
-
-          int crossAxisCount = 2;
-          if (constraints.maxWidth >= 900) {
-            crossAxisCount = 6;
-          } else if (constraints.maxWidth >= 600) {
-            crossAxisCount = 4;
-          }
-
-          return GridView.builder(
-            padding: const EdgeInsets.all(20),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              childAspectRatio: 0.75,
-            ),
-            itemCount: subjects.length,
-            itemBuilder: (context, index) {
-              // 2. CORREÇÃO: Passamos o 'context' que o método agora exige!
-              return _buildBinderCard(context, subjects[index]);
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddSubjectDialog(context, ref),
-        backgroundColor: const Color(0xFF2C3E50),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text('Nova Disciplina', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  // 3. CORREÇÃO: Método ajustado com Context e variável 'color' reposicionada
-  Widget _buildBinderCard(BuildContext context, Subject subject) {
-    final color = Color(int.parse(subject.color.replaceFirst('#', '0xFF')));
-
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => NotebooksScreen(
-              subjectId: subject.id ?? 0,
-              subjectName: subject.name,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 16,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'MODO DE TRABALHO',
+                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ...AppProfile.values.map((profile) {
+                final isSelected = currentProfile == profile;
+                return ListTile(
+                  leading: Icon(profile.icon, color: isSelected ? profile.primaryColor : Colors.black54),
+                  title: Text(
+                    profile.name,
+                    style: GoogleFonts.inter(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? profile.primaryColor : Colors.black87,
+                    ),
+                  ),
+                  trailing: isSelected ? Icon(Icons.check_circle, color: profile.primaryColor) : null,
+                  selected: isSelected,
+                  onTap: () {
+                    ref.read(appProfileProvider.notifier).changeProfile(profile);
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+              const Spacer(),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Spacer(),
-                    Text(
-                      subject.name,
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1A1A24),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Cadernos: 0',
-                      style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
-                    ),
+                    Icon(Icons.cloud_off, size: 16, color: Colors.green),
+                    SizedBox(width: 6),
+                    Text('Motor Local Ativo (100% Offline)', style: TextStyle(fontSize: 12, color: Colors.grey)),
                   ],
                 ),
-              ),
-            ),
-          ],
+              )
+            ],
+          ),
         ),
+      ),
+      body: const SubjectsListBody(),
+      // 🚀 ADICIONADO: O Botão Flutuante que estava em falta para os testes e UI!
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: currentProfile.primaryColor,
+        foregroundColor: Colors.white,
+        onPressed: () => _showAddSubjectDialog(context, ref),
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -147,11 +95,9 @@ class SubjectsScreen extends ConsumerWidget {
     final nameController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     String pickedColorHex = '#8B0000';
-    String selectedIcon = 'book'; // Ícone padrão
+    String selectedIcon = 'book';
 
     final List<String> availableColors = ['#8B0000', '#2C3E50', '#1E8449', '#D35400', '#6C3483'];
-
-    // Mapeamento de strings para Icons reais do Flutter
     final Map<String, IconData> availableIcons = {
       'book': Icons.book,
       'computer': Icons.computer,
@@ -221,7 +167,7 @@ class SubjectsScreen extends ConsumerWidget {
                       userId: 1,
                       name: nameController.text.trim(),
                       color: pickedColorHex,
-                      icon: selectedIcon, // 👈 Gravado com sucesso!
+                      icon: selectedIcon,
                     ),
                   );
                   Navigator.pop(context);
@@ -230,6 +176,92 @@ class SubjectsScreen extends ConsumerWidget {
               child: const Text('Criar', style: TextStyle(color: Colors.white)),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class SubjectsListBody extends ConsumerWidget {
+  const SubjectsListBody({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final subjects = ref.watch(subjectProvider);
+
+    if (subjects.isEmpty) {
+      return const Center(child: Text('Nenhuma disciplina criada.'));
+    }
+
+    return ListView.builder(
+      itemCount: subjects.length,
+      itemBuilder: (context, index) {
+        return _buildSubjectCard(context, ref, subjects[index]);
+      },
+    );
+  }
+
+  Widget _buildSubjectCard(BuildContext context, WidgetRef ref, Subject subject) {
+    final allNotebooks = ref.watch(notebookProvider);
+    final notebookCount = allNotebooks.where((n) => n.subject_id == subject.id).length;
+
+    IconData getIconData(String? iconName) {
+      switch (iconName) {
+        case 'computer': return Icons.computer;
+        case 'calculate': return Icons.calculate;
+        case 'biotech': return Icons.biotech;
+        case 'gavel': return Icons.gavel;
+        case 'book':
+        default: return Icons.book;
+      }
+    }
+
+    final Color subjectColor = Color(int.parse((subject.color).replaceFirst('#', '0xFF')));
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NotebooksScreen(
+                subjectId: subject.id!,
+                subjectName: subject.name,
+              ),
+            ),
+          );
+        },
+        leading: Container(
+          width: 6,
+          height: 40,
+          decoration: BoxDecoration(
+            color: subjectColor,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        title: Row(
+          children: [
+            Icon(getIconData(subject.icon), color: Colors.black54, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              subject.name,
+              style: GoogleFonts.lora(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '$notebookCount ${notebookCount == 1 ? 'caderno' : 'cadernos'}',
+            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+          ),
         ),
       ),
     );

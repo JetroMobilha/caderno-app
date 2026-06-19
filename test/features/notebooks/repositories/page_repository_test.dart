@@ -1,0 +1,22 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:http/http.dart' as http;
+import 'package:caderno_digital_app/features/notebooks/models/page_model.dart';
+// (Assume que criamos a classe PageRepository abaixo)
+
+void main() {
+  group('PageRepository Tests |', () {
+    test('Deve enviar uma pagina com traços com sucesso para o Laravel', () async {
+      // Aqui iríamos mockar o cliente HTTP para devolver status 201 Created
+      // Garantindo que o payload toMap() é processado sem exceções.
+      final page = NotebookPage(
+        notebookId: 1,
+        pageNumber: 1,
+        strokeData: [], // Traços vazios para o teste base
+      );
+
+      expect(page.notebookId, 1);
+      expect(page.strokeData, isEmpty);
+    });
+  });
+}

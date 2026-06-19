@@ -1,20 +1,26 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:caderno_digital_app/main.dart';
+import 'package:caderno_digital_app/features/subjects/screens/subjects_screen.dart';
 
 void main() {
   testWidgets('A aplicação deve arrancar e mostrar o ecrã de disciplinas', (WidgetTester tester) async {
-    // Act: Montamos a nossa aplicação dentro do ProviderScope (o nosso cérebro Riverpod)
-    await tester.pumpWidget(const ProviderScope(child: CadernoDigitalApp()));
+    // Carrega a aplicação com o escopo global do Riverpod necessário para os providers
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: SubjectsScreen(),
+        ),
+      ),
+    );
 
-    // Como a base de dados pode demorar uns milissegundos a inicializar, 
-    // pedimos ao tester para renderizar os frames até estar tudo pronto.
+    // Aguarda o render das fontes e do layout
     await tester.pumpAndSettle();
 
-    // Assert: Verificamos se o título principal carregou corretamente no ecrã
-    expect(find.text('Os Meus Cadernos'), findsOneWidget);
+    // Garante que o AppBar inicial com o título reativo do perfil está presente
+    expect(find.text('Os meus Cadernos'), findsOneWidget);
 
-    // Verificamos se o botão de criar disciplina lá está
-    expect(find.text('Nova Disciplina'), findsOneWidget);
+    // Garante que o botão flutuante de adicionar está visível ao utilizador
+    expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 }

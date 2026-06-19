@@ -13,6 +13,7 @@ class CanvasScreen extends StatefulWidget {
 
 class _CanvasScreenState extends State<CanvasScreen> {
   List<Stroke> _strokes = [];
+  List<Stroke> _undoHistory = [];
   List<Offset> _currentPoints = [];
 
   String _selectedColorHex = '#2C3E50';
@@ -43,6 +44,17 @@ class _CanvasScreenState extends State<CanvasScreen> {
             onPressed: () => setState(() => _strokes = []),
             tooltip: 'Limpar Página',
           ),
+          // Adiciona estes botões na Row da tua Toolbar flutuante:
+          IconButton(
+            icon: const Icon(Icons.undo, size: 20, color: Color(0xFF2C3E50)),
+            onPressed: _strokes.isNotEmpty ? _undo : null, // Desativado se não houver traços
+            tooltip: 'Desfazer',
+          ),
+          IconButton(
+            icon: const Icon(Icons.redo, size: 20, color: Color(0xFF2C3E50)),
+            onPressed: _undoHistory.isNotEmpty ? _redo : null, // Desativado se não houver histórico
+            tooltip: 'Refazer',
+          ),
         ],
       ),
       body: Stack(
@@ -51,6 +63,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
             onPanStart: (details) {
               setState(() {
                 _currentPoints = [details.localPosition];
+                _undoHistory.clear();
               });
             },
             onPanUpdate: (details) {
@@ -160,6 +173,22 @@ class _CanvasScreenState extends State<CanvasScreen> {
       ),
     );
   }
+
+  void _undo() {
+    if (_strokes.isNotEmpty) {
+      setState(() {
+        _undoHistory.add(_strokes.removeLast());
+      });
+    }
+  }
+
+  void _redo() {
+    if (_undoHistory.isNotEmpty) {
+      setState(() {
+        _strokes.add(_undoHistory.removeLast());
+      });
+    }
+  }
 }
 
 // 🚀 CORREÇÃO: NotebookPainter reintroduzido no escopo global do ficheiro
@@ -213,4 +242,5 @@ class NotebookPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant NotebookPainter oldDelegate) => true;
+
 }

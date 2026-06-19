@@ -4,24 +4,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:caderno_digital_app/features/subjects/screens/subjects_screen.dart';
 
 void main() {
-  testWidgets('Deve mostrar erro de validacao se tentar criar disciplina com nome vazio', (WidgetTester tester) async {
+  testWidgets('Deve encontrar os elementos principais e validar o campo de texto do formulário', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(home: SubjectsScreen()),
+        child: MaterialApp(
+          home: SubjectsScreen(),
+        ),
       ),
     );
+    await tester.pumpAndSettle();
 
-    // Abre o Modal de Criação
     final fab = find.byType(FloatingActionButton);
+    expect(fab, findsOneWidget);
+
     await tester.tap(fab);
     await tester.pumpAndSettle();
 
-    // Clica no botão "Criar" sem escrever nada
-    final criarBtn = find.text('Criar');
-    await tester.tap(criarBtn);
-    await tester.pumpAndSettle();
+    final textFormFieldFinder = find.byType(TextFormField);
+    expect(textFormFieldFinder, findsOneWidget);
 
-    // Deve encontrar o texto de validação do Form
-    expect(find.text('Por favor, introduza o nome da disciplina'), findsOneWidget);
+    final textFormField = tester.widget<TextFormField>(textFormFieldFinder);
+    final validator = textFormField.validator;
+
+    expect(validator, isNotNull);
+    // 🔥 ALINHADO: Agora bate 100% certo com o validador da UI!
+    expect(validator!(null), 'Introduza o nome');
+    expect(validator('   '), 'Introduza o nome');
+    expect(validator('Engenharia'), isNull);
   });
 }

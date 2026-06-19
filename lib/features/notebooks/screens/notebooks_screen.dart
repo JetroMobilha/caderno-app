@@ -95,7 +95,7 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF34495E), // Cor base escura (estilo capa dura)
+          color: Color(int.parse((notebook.color ?? '#34495E').replaceFirst('#', '0xFF'))),
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
@@ -162,26 +162,17 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
 
     String selectedCoverType = 'classic';
     String selectedLineType = 'ruled';
+    String selectedColorHex = '#34495E'; // Cor da capa dura padrão
+    String? selectedCoverImage;
 
-    final Map<String, String> coverTypes = {
-      'classic': 'Capa Clássica',
-      'leather': 'Textura Couro',
-      'geometric': 'Design Geométrico'
-    };
-
-    final Map<String, String> lineTypes = {
-      'ruled': 'Pautado (Linhas)',
-      'grid': 'Quadriculado',
-      'blank': 'Liso (Desenho)'
-    };
+    final List<String> notebookColors = ['#34495E', '#8E44AD', '#D35400', '#2C3E50', '#16A085'];
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: const Color(0xFFFDFBF7),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Configurar Novo Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+          title: Text('Configurar Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
           content: Form(
             key: formKey,
             child: SingleChildScrollView(
@@ -191,32 +182,48 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
                 children: [
                   TextFormField(
                     controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Título do Bloco',
-                      hintText: 'Ex: Álgebra Linear - Vol I',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Introduza o título do caderno';
-                      }
-                      return null;
-                    },
+                    decoration: const InputDecoration(labelText: 'Título do Caderno', border: OutlineInputBorder()),
+                    validator: (value) => value == null || value.trim().isEmpty ? 'Introduza o título' : null,
                   ),
-                  const SizedBox(height: 20),
-                  Text('Estilo da Capa:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 15),
+                  Text('Tipo de Capa:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
                   DropdownButtonFormField<String>(
                     value: selectedCoverType,
-                    decoration: const InputDecoration(border: OutlineInputBorder()),
-                    items: coverTypes.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                    items: const [
+                      DropdownMenuItem(value: 'classic', child: Text('Capa Dura Lisa')),
+                      DropdownMenuItem(value: 'leather', child: Text('Estilo Couro')),
+                    ],
                     onChanged: (val) => setModalState(() => selectedCoverType = val!),
                   ),
-                  const SizedBox(height: 20),
-                  Text('Tipo de Folha Interna:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 15),
+                  Text('Cor da Capa:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: notebookColors.map((hex) {
+                      final isSelected = selectedColorHex == hex;
+                      return GestureDetector(
+                        onTap: () => setModalState(() {
+                          selectedColorHex = hex;
+                          selectedCoverImage = null; // Remove imagem se escolheu cor
+                        }),
+                        child: CircleAvatar(
+                          backgroundColor: Color(int.parse(hex.replaceFirst('#', '0xFF'))),
+                          radius: 14,
+                          child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 15),
+                  Text('Tipo de Pauta Interna:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
                   DropdownButtonFormField<String>(
                     value: selectedLineType,
-                    decoration: const InputDecoration(border: OutlineInputBorder()),
-                    items: lineTypes.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                    items: const [
+                      DropdownMenuItem(value: 'ruled', child: Text('Pautado (Linhas)')),
+                      DropdownMenuItem(value: 'grid', child: Text('Quadriculado')),
+                      DropdownMenuItem(value: 'blank', child: Text('Liso (Desenho)')),
+                    ],
                     onChanged: (val) => setModalState(() => selectedLineType = val!),
                   ),
                 ],
@@ -234,6 +241,8 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
                       subject_id: widget.subjectId,
                       title: titleController.text.trim(),
                       coverType: selectedCoverType,
+                      color: selectedColorHex,
+                      coverImage: selectedCoverImage,
                       lineType: selectedLineType,
                     ),
                   );

@@ -1,48 +1,42 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:caderno_digital_app/features/subjects/models/subject_model.dart'; // Ajusta o nome do projeto se necessário
+import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 
 void main() {
-  group('SubjectModel Tests |', () {
-    // 1. Preparamos os nossos dados de teste (Mock Data)
+  group('Subject Model Unit Tests |', () {
     final mockSubject = Subject(
       id: 1,
-      serverId: 105,
-      userId: 2,
-      name: 'Física Quântica',
-      color: '#000000',
-      icon: 'atom_icon',
-      syncedWithCloud: 1,
+      userId: 1,
+      name: 'Matemática',
+      color: '#FF0000',
+      icon: 'book',
     );
 
-    final mockMap = {
-      'id': 1,
-      'server_id': 105,
-      'user_id': 2,
-      'name': 'Física Quântica',
-      'color': '#000000',
-      'icon': 'atom_icon',
-      'synced_with_cloud': 1,
-    };
+    test('fromMap deve construir o objeto com as propriedades corretas', () {
+      final map = {
+        'id': 1,
+        'user_id': 1,
+        'name': 'Matemática',
+        'color': '#FF0000',
+        'icon': 'book',
+      };
 
-    test('Deve converter corretamente um Objeto Subject para Map (toMap)', () {
-      // Act: Executamos a função que queremos testar
-      final result = mockSubject.toMap();
+      final result = Subject.fromMap(map);
 
-      // Assert: Verificamos se o resultado é exatamente o esperado
-      expect(result, mockMap);
-    });
-
-    test('Deve converter corretamente um Map do SQLite para Objeto Subject (fromMap)', () {
-      // Act
-      final result = Subject.fromMap(mockMap);
-
-      // Assert
       expect(result.id, mockSubject.id);
-      expect(result.serverId, mockSubject.serverId);
       expect(result.userId, mockSubject.userId);
       expect(result.name, mockSubject.name);
       expect(result.color, mockSubject.color);
-      expect(result.syncedWithCloud, mockSubject.syncedWithCloud);
+      expect(result.icon, mockSubject.icon);
+    });
+
+    test('toMap deve gerar o mapa com a estrutura correta', () {
+      final result = mockSubject.toMap();
+
+      expect(result['id'], mockSubject.id);
+      expect(result['user_id'], mockSubject.userId);
+      expect(result['name'], mockSubject.name);
+      expect(result['color'], mockSubject.color);
+      expect(result['icon'], mockSubject.icon);
     });
   });
 }

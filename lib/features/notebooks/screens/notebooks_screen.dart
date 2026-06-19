@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/notebook_provider.dart';
 import '../models/notebook_model.dart';
+import 'canvas_screen.dart';
 
 class NotebooksScreen extends ConsumerStatefulWidget {
   final int subjectId;
@@ -85,7 +86,12 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
   Widget _buildNotebookCard(Notebook notebook) {
     return InkWell(
       onTap: () {
-        // Futuro: Abrir a tela de Canvas (desenho) deste caderno!
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CanvasScreen(notebookTitle: notebook.title),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(

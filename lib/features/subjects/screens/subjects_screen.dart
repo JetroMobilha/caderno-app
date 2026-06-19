@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_profile_provider.dart';
+import '../../agenda/screens/quick_notes_screen.dart';
 import '../../notebooks/screens/notebooks_screen.dart';
 import '../../notebooks/providers/notebook_provider.dart';
 import '../models/subject_model.dart';
@@ -60,7 +61,15 @@ class SubjectsScreen extends ConsumerWidget {
                   selected: isSelected,
                   onTap: () {
                     ref.read(appProfileProvider.notifier).changeProfile(profile);
-                    Navigator.pop(context);
+                    Navigator.pop(context); // Fecha a gaveta
+
+                    // 🚀 REDIRECIONAMENTO DINÂMICO DE LAYOUT:
+                    if (profile == AppProfile.agenda) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const QuickNotesScreen()),
+                      );
+                    }
                   },
                 );
               }).toList(),

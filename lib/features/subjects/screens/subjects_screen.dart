@@ -228,7 +228,7 @@ class SubjectsListBody extends ConsumerWidget {
             context,
             MaterialPageRoute(
               builder: (context) => NotebooksScreen(
-                subjectId: subject.id!,
+                subjectId: subject.id ?? 0,
                 subjectName: subject.name,
               ),
             ),

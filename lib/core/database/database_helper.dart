@@ -78,6 +78,7 @@ class DatabaseHelper {
         color TEXT,
         cover_image TEXT,
         line_type TEXT,
+        paper_size TEXT
         synced_with_cloud INTEGER DEFAULT 0,
         FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
       )

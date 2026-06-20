@@ -6,6 +6,7 @@ class Notebook {
   final String? color;
   final String? coverImage;
   final String? lineType;
+  final String paperSize;
 
   Notebook({
     this.id,
@@ -15,6 +16,7 @@ class Notebook {
     this.color,
     this.coverImage,
     this.lineType,
+    this.paperSize = 'A4'
   });
 
   factory Notebook.fromMap(Map<String, dynamic> map) {
@@ -26,6 +28,7 @@ class Notebook {
       color: map['color'],
       coverImage: map['cover_image'],
       lineType: map['line_type'],
+      paperSize: map['paper_size'] ?? 'A4',
     );
   }
 
@@ -38,6 +41,7 @@ class Notebook {
       'color': color,
       'cover_image': coverImage,
       'line_type': lineType,
+      'paper_size': paperSize,
     };
   }
 }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../providers/notebook_provider.dart';
 import '../models/notebook_model.dart';
+import '../providers/notebook_provider.dart';
 import 'canvas_screen.dart';
 
-class NotebooksScreen extends ConsumerStatefulWidget {
+class NotebooksScreen extends ConsumerWidget {
   final int subjectId;
   final String subjectName;
 
@@ -16,140 +16,119 @@ class NotebooksScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<NotebooksScreen> createState() => _NotebooksScreenState();
-}
-
-class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Dispara a leitura da Base de Dados assim que o ecrã é montado
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(notebookProvider.notifier).loadNotebooks(widget.subjectId);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final notebooks = ref.watch(notebookProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Filtra em tempo real os cadernos pertencentes a esta disciplina
+    final allNotebooks = ref.watch(notebookProvider);
+    final notebooks = allNotebooks.where((n) => n.subject_id == subjectId).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7), // Fundo folha de papel cremosa
+      backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF1A1A24)),
-        title: Text(
-          widget.subjectName,
-          style: GoogleFonts.lora(
-            color: const Color(0xFF1A1A24),
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: Text(subjectName, style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF2C3E50),
+        foregroundColor: Colors.white,
       ),
       body: notebooks.isEmpty
           ? Center(
         child: Text(
-          'Nenhum caderno nesta disciplina.\nCria o teu primeiro bloco de notas!',
+          'Nenhum caderno nesta disciplina.\nClique no + para começar!',
           textAlign: TextAlign.center,
-          style: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 16),
+          style: GoogleFonts.inter(color: Colors.black45, fontSize: 14),
         ),
       )
-          : GridView.builder(
-        padding: const EdgeInsets.all(20),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 200, // Mantém o tamanho do caderno controlado em ecrãs grandes
-          crossAxisSpacing: 20,
-          mainAxisSpacing: 20,
-          childAspectRatio: 0.75, // Proporção vertical de caderno real
+          : Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.75,
+          ),
+          itemCount: notebooks.length,
+          itemBuilder: (context, index) {
+            return _buildNotebookCard(context, notebooks[index]);
+          },
         ),
-        itemCount: notebooks.length,
-        itemBuilder: (context, index) {
-          final notebook = notebooks[index];
-          return _buildNotebookCard(notebook);
-        },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddNotebookDialog(context),
+      floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF2C3E50),
-        icon: const Icon(Icons.menu_book, color: Colors.white),
-        label: Text(
-          'Novo Caderno',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        foregroundColor: Colors.white,
+        onPressed: () => _showAddNotebookDialog(context, ref),
+        child: const Icon(Icons.add),
       ),
     );
   }
 
-  // Desenha o aspeto físico do caderno
-  Widget _buildNotebookCard(Notebook notebook) {
-    return InkWell(
+  Widget _buildNotebookCard(BuildContext context, Notebook notebook) {
+    final cardColor = notebook.color != null
+        ? Color(int.parse(notebook.color!.replaceFirst('#', '0xFF')))
+        : const Color(0xFF8B0000);
+
+    return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => CanvasScreen(
-                notebookTitle: notebook.title,
-                lineType: notebook.lineType ?? 'ruled',
+              notebookTitle: notebook.title,
+              lineType: notebook.lineType ?? 'ruled',
+              paperSize: notebook.paperSize, // 🚀 ENVIADO DO TEU MODELO REAL
             ),
           ),
         );
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Color(int.parse((notebook.color ?? '#34495E').replaceFirst('#', '0xFF'))),
-          borderRadius: BorderRadius.circular(8),
+          color: cardColor,
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 8,
-              offset: const Offset(3, 5),
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 6,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Stack(
           children: [
-            // Linhas brancas na lateral esquerda imitando anéis/espiral de caderno
             Positioned(
-              left: 5,
-              top: 10,
-              bottom: 10,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(
-                  6,
-                      (index) => Container(
-                    width: 4,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 15,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.15),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    bottomLeft: Radius.circular(12),
                   ),
                 ),
               ),
             ),
-            // Etiqueta branca centralizada para o título
-            Center(
+            Positioned(
+              right: 12,
+              left: 27,
+              top: 40,
               child: Container(
-                width: 120,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFDFBF7),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.black12, width: 2),
-                ),
-                child: Text(
-                  notebook.title,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1A1A24),
-                  ),
+                padding: const EdgeInsets.all(8),
+                color: Colors.white.withOpacity(0.9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notebook.title,
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 13),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Formato: ${notebook.paperSize}',
+                      style: GoogleFonts.inter(color: Colors.black54, fontSize: 10, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -159,26 +138,30 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
     );
   }
 
-  void _showAddNotebookDialog(BuildContext context) {
+  void _showAddNotebookDialog(BuildContext context, WidgetRef ref) {
     final titleController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
-    String selectedCoverType = 'classic';
     String selectedLineType = 'ruled';
-    String selectedColorHex = '#34495E'; // Cor da capa dura padrão
-    String? selectedCoverImage;
+    String selectedPaperSize = 'A4';
+    String pickedColorHex = '#8B0000';
 
-    final List<String> notebookColors = ['#34495E', '#8E44AD', '#D35400', '#2C3E50', '#16A085'];
+    final List<String> availableColors = ['#8B0000', '#2C3E50', '#1E8449', '#D35400', '#6C3483'];
+    final Map<String, String> lineTypes = {
+      'ruled': 'Pautado',
+      'grid': 'Quadriculado',
+      'blank': 'Liso / Em Branco',
+    };
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: const Color(0xFFFDFBF7),
-          title: Text('Configurar Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
+          title: Text('Novo Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,28 +171,40 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
                     decoration: const InputDecoration(labelText: 'Título do Caderno', border: OutlineInputBorder()),
                     validator: (value) => value == null || value.trim().isEmpty ? 'Introduza o título' : null,
                   ),
-                  const SizedBox(height: 15),
-                  Text('Tipo de Capa:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 16),
+
                   DropdownButtonFormField<String>(
-                    value: selectedCoverType,
-                    items: const [
-                      DropdownMenuItem(value: 'classic', child: Text('Capa Dura Lisa')),
-                      DropdownMenuItem(value: 'leather', child: Text('Estilo Couro')),
-                    ],
-                    onChanged: (val) => setModalState(() => selectedCoverType = val!),
+                    value: selectedPaperSize,
+                    decoration: const InputDecoration(labelText: 'Tamanho da Folha (Real para PDF)', border: OutlineInputBorder()),
+                    items: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((size) {
+                      return DropdownMenuItem(value: size, child: Text(size));
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) setModalState(() => selectedPaperSize = value);
+                    },
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 16),
+
+                  DropdownButtonFormField<String>(
+                    value: selectedLineType,
+                    decoration: const InputDecoration(labelText: 'Estilo da Pauta', border: OutlineInputBorder()),
+                    items: lineTypes.entries.map((entry) {
+                      return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) setModalState(() => selectedLineType = value);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
                   Text('Cor da Capa:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: notebookColors.map((hex) {
-                      final isSelected = selectedColorHex == hex;
+                    children: availableColors.map((hex) {
+                      final isSelected = pickedColorHex == hex;
                       return GestureDetector(
-                        onTap: () => setModalState(() {
-                          selectedColorHex = hex;
-                          selectedCoverImage = null; // Remove imagem se escolheu cor
-                        }),
+                        onTap: () => setModalState(() => pickedColorHex = hex),
                         child: CircleAvatar(
                           backgroundColor: Color(int.parse(hex.replaceFirst('#', '0xFF'))),
                           radius: 14,
@@ -217,18 +212,7 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
                         ),
                       );
                     }).toList(),
-                  ),
-                  const SizedBox(height: 15),
-                  Text('Tipo de Pauta Interna:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
-                  DropdownButtonFormField<String>(
-                    value: selectedLineType,
-                    items: const [
-                      DropdownMenuItem(value: 'ruled', child: Text('Pautado (Linhas)')),
-                      DropdownMenuItem(value: 'grid', child: Text('Quadriculado')),
-                      DropdownMenuItem(value: 'blank', child: Text('Liso (Desenho)')),
-                    ],
-                    onChanged: (val) => setModalState(() => selectedLineType = val!),
-                  ),
+                  )
                 ],
               ),
             ),
@@ -239,14 +223,15 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
               onPressed: () {
                 if (formKey.currentState!.validate()) {
+                  // 🚀 ALINHADO COM O TEU MODELO REAL OBRIGATÓRIO (coverType incluído)
                   ref.read(notebookProvider.notifier).addNotebook(
                     Notebook(
-                      subject_id: widget.subjectId,
+                      subject_id: subjectId,
                       title: titleController.text.trim(),
-                      coverType: selectedCoverType,
-                      color: selectedColorHex,
-                      coverImage: selectedCoverImage,
+                      coverType: 'color',
+                      color: pickedColorHex,
                       lineType: selectedLineType,
+                      paperSize: selectedPaperSize,
                     ),
                   );
                   Navigator.pop(context);

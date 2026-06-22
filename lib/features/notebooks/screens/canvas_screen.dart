@@ -412,12 +412,18 @@ class _CanvasScreenState extends State<CanvasScreen> {
             tooltip: 'Aproximar',
           ),
           IconButton(
-            icon: const Icon(Icons.undo, color: Color(0xFF1A1A24)),
+            icon: Icon(
+                Icons.undo,
+                color: currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)
+            ),
             onPressed: currentPage.strokes.isNotEmpty ? _undo : null,
             tooltip: 'Desfazer Traço',
           ),
           IconButton(
-            icon: const Icon(Icons.redo, color: Color(0xFF1A1A24)),
+            icon: Icon(
+                Icons.redo,
+                color: currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)
+            ),
             onPressed: currentPage.redoHistory.isNotEmpty ? _redo : null,
             tooltip: 'Avançar Traço',
           ),

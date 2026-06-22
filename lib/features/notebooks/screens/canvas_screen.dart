@@ -59,21 +59,27 @@ class _CanvasScreenState extends State<CanvasScreen> {
     'A0': const Size(2384, 3370),
   };
 
-  // 🚀 EXPANDIDO: Palete de Cores Alargada (9 Cores Premium)
+  // 🚀 PALETA EXPANDIDA: 15 Cores prontas para o novo Diálogo
   final Map<String, Color> _colorPalette = {
-    'Azul': const Color(0xFF2C3E50),
     'Preto': const Color(0xFF1A1A24),
-    'Vermelho': const Color(0xFFE74C3C),
-    'Verde': const Color(0xFF27AE60),
+    'Cinzento Escuro': const Color(0xFF455A64),
+    'Cinzento Claro': const Color(0xFF90A4AE),
+    'Azul Marinho': const Color(0xFF2C3E50),
+    'Azul Clássico': const Color(0xFF1976D2),
+    'Ciano': const Color(0xFF00BCD4),
+    'Verde Floresta': const Color(0xFF27AE60),
+    'Verde Alface': const Color(0xFF8BC34A),
+    'Amarelo': const Color(0xFFFBC02D),
     'Laranja': const Color(0xFFE67E22),
-    'Roxo': const Color(0xFF9B59B6),
+    'Vermelho': const Color(0xFFE74C3C),
+    'Bordô': const Color(0xFFB71C1C),
     'Rosa': const Color(0xFFE91E63),
-    'Amarelo': const Color(0xFFF1C40F),
-    'Ciano': const Color(0xFF1ABC9C),
+    'Roxo': const Color(0xFF9B59B6),
+    'Castanho': const Color(0xFF795548),
   };
 
   // 🚀 EXPANDIDO: Lista de Traços Suportados de 1px até 30px
-  final List<double> _thicknessOptions = [1.0, 2.0, 3.0, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0];
+  final List<double> _thicknessOptions = [1.0, 2.0, 3.0, 5.0 , 10.0, 20.0];
 
   @override
   void dispose() {
@@ -168,6 +174,231 @@ class _CanvasScreenState extends State<CanvasScreen> {
                 });
               },
               child: const Text('Adicionar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🎨 ESTÚDIO DE CORES (Diálogo Rico com Grelha)
+  void _showColorStudioDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDFBF7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Cor da Caneta', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            alignment: WrapAlignment.center,
+            children: [
+              // 1. Renderiza as 15 cores prontas do sistema
+              ..._colorPalette.entries.map((entry) {
+                final hex = '#${entry.value.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+                final isSelected = _selectedColorHex == hex;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedColorHex = hex);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2),
+                    ),
+                    child: CircleAvatar(radius: 16, backgroundColor: entry.value),
+                  ),
+                );
+              }),
+
+              // 🚀 2. O NOVO BOTÃO: Atalho para abrir a paleta livre de 16 milhões de cores
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context); // Fecha o diálogo das cores básicas
+                  _showAdvancedColorPicker(); // Abre o misturador avançado RGB
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black26, width: 2),
+                  ),
+                  child: const CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.colorize, size: 16, color: Color(0xFF0F4C5C)), // Ícone de conta-gotas/paleta
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🚀 NOVO: Estúdio Avançado RGB para seleção de qualquer cor do espectro
+  void _showAdvancedColorPicker() {
+    // Transforma o Hex atual numa cor nativa do Flutter para extrair os canais
+    Color currentColor = Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF')));
+    double r = currentColor.red.toDouble();
+    double g = currentColor.green.toDouble();
+    double b = currentColor.blue.toDouble();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final previewColor = Color.fromARGB(255, r.toInt(), g.toInt(), b.toInt());
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFFFDFBF7),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('Misturador de Cores', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Círculo de pré-visualização da nova cor misturada
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: previewColor,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24, width: 2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '#${r.toInt().toRadixString(16).padLeft(2, '0')}${g.toInt().toRadixString(16).padLeft(2, '0')}${b.toInt().toRadixString(16).padLeft(2, '0')}'.toUpperCase(),
+                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
+                ),
+                const SizedBox(height: 20),
+
+                // Canal Vermelho (Red)
+                _buildRGBSlider('V', r, Colors.red, (val) => setModalState(() => r = val)),
+                // Canal Verde (Green)
+                _buildRGBSlider('Vd', g, Colors.green, (val) => setModalState(() => g = val)),
+                // Canal Azul (Blue)
+                _buildRGBSlider('Az', b, Colors.blue, (val) => setModalState(() => b = val)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.black54)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
+                onPressed: () {
+                  // Converte o RGB de volta para a String HEX pura que o teu motor já usa
+                  final hexString = '#${r.toInt().toRadixString(16).padLeft(2, '0')}${g.toInt().toRadixString(16).padLeft(2, '0')}${b.toInt().toRadixString(16).padLeft(2, '0')}'.toUpperCase();
+                  setState(() => _selectedColorHex = hexString);
+                  Navigator.pop(context);
+                },
+                child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // Widget auxiliar para desenhar as linhas do misturador
+  Widget _buildRGBSlider(String label, double value, Color color, ValueChanged<double> onChanged) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 24,
+          child: Text(label, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
+        ),
+        Expanded(
+          child: Slider(
+            value: value,
+            min: 0.0,
+            max: 255.0,
+            activeColor: color,
+            inactiveColor: color.withOpacity(0.15),
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 30,
+          child: Text('${value.toInt()}', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54), textAlign: Alignment.centerRight == null ? null : TextAlign.right),
+        ),
+      ],
+    );
+  }
+
+  // 📐 ESTÚDIO DE ESPESSURA (Predefinições + Controlo Deslizante Livre)
+  void _showThicknessStudioDialog() {
+    double tempThickness = _selectedThickness;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Espessura', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pré-visualização do traço em tempo real
+              Container(
+                height: 60,
+                alignment: Alignment.center,
+                child: CircleAvatar(
+                  radius: tempThickness / 1.5,
+                  backgroundColor: Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF'))),
+                ),
+              ),
+              Text('${tempThickness.toInt()} px', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+              const SizedBox(height: 20),
+
+              // O Slider de precisão
+              Slider(
+                value: tempThickness,
+                min: 1.0,
+                max: 50.0,
+                activeColor: const Color(0xFF0F4C5C),
+                inactiveColor: Colors.black12,
+                onChanged: (value) => setModalState(() => tempThickness = value),
+              ),
+              const SizedBox(height: 10),
+
+              // Botões rápidos de predefinição
+              Wrap(
+                spacing: 12,
+                alignment: WrapAlignment.center,
+                children: _thicknessOptions.map((t) => ActionChip(
+                  label: Text('${t.toInt()}'),
+                  backgroundColor: tempThickness == t ? const Color(0xFF0F4C5C) : Colors.white,
+                  labelStyle: TextStyle(color: tempThickness == t ? Colors.white : Colors.black87, fontSize: 12),
+                  onPressed: () => setModalState(() => tempThickness = t),
+                )).toList(),
+              )
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.black54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
+              onPressed: () {
+                setState(() => _selectedThickness = tempThickness);
+                Navigator.pop(context);
+              },
+              child: const Text('Aplicar', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -511,10 +742,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
           BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8)),
         ],
       ),
-      // 🚀 MOTOR INTELIGENTE RESPONSIVO: Junta tudo na mesma linha. Só quebra se faltar espaço físico!
       child: Wrap(
-        spacing: 4,       // Distância horizontal entre os botões
-        runSpacing: 4,    // Distância vertical se algum botão for jogado para a 2ª linha
+        spacing: 6,       // 🚀 Aumentei ligeiramente o espaço natural para compensar a falta da linha
+        runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
         alignment: WrapAlignment.center,
         children: [
@@ -522,87 +752,59 @@ class _CanvasScreenState extends State<CanvasScreen> {
           _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar e Mover'),
           _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha / Zoom'),
 
-          const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-
           _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
           _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
-
-          const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
 
           _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? _undo : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
           _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? _redo : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
           _buildCompactIconButton(Icons.delete_sweep, currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null, 'Apagar Tudo', currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey.withOpacity(0.5)),
 
-          // As configurações adicionais de escrita aparecem de forma compacta ao lado dos botões
           if (_currentTool == ToolMode.draw) ...[
-            const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-            _buildColorDropdown(),
-            const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-            _buildThicknessDropdown(),
+            _buildColorButton(),
+            _buildThicknessButton(),
           ],
         ],
       ),
     );
   }
 
-  // 🎨 DROPDOWN DE CORES: Só mostra a cor selecionada no ecrã principal
-  // 🎨 DROPDOWN DE CORES: Só mostra a cor selecionada no ecrã principal
-  Widget _buildColorDropdown() {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: _selectedColorHex,
-        icon: const Icon(Icons.arrow_drop_down, size: 16, color: Colors.black54),
-        isDense: true,
+// 🎨 BOTÃO DE COR: Abre o estúdio de cores
+  Widget _buildColorButton() {
+    return InkWell(
+      onTap: _showColorStudioDialog, // 🚀 Chama o diálogo
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 36,
+        height: 36,
         alignment: Alignment.center,
-        onChanged: (String? newHex) {
-          if (newHex != null) setState(() => _selectedColorHex = newHex);
-        },
-        items: _colorPalette.entries.map((entry) {
-          // 🚀 DEFESA ATIVA: padLeft garante que os códigos hex têm sempre 8 caracteres (AARRGGBB)
-          final hex = '#${entry.value.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-          return DropdownMenuItem<String>(
-            value: hex,
-            child: Center(
-              child: CircleAvatar(radius: 9, backgroundColor: entry.value),
-            ),
-          );
-        }).toList(),
+        child: CircleAvatar(
+            radius: 11,
+            backgroundColor: Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF')))
+        ),
       ),
     );
   }
 
-  // 📐 DROPDOWN DE ESPESSURAS: Só mostra o tamanho do ponto selecionado
-  Widget _buildThicknessDropdown() {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<double>(
-        value: _selectedThickness,
-        icon: const Icon(Icons.arrow_drop_down, size: 16, color: Colors.black54),
-        isDense: true,
+  // 📐 BOTÃO DE ESPESSURA: Abre o estúdio de calibração
+  Widget _buildThicknessButton() {
+    return InkWell(
+      onTap: _showThicknessStudioDialog, // 🚀 Chama o diálogo
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 36,
+        height: 36,
         alignment: Alignment.center,
-        onChanged: (double? newThickness) {
-          if (newThickness != null) setState(() => _selectedThickness = newThickness);
-        },
-        items: _thicknessOptions.map((t) {
-          return DropdownMenuItem<double>(
-            value: t,
-            child: Center(
-              child: CircleAvatar(
-                radius: 9,
-                backgroundColor: Colors.white,
-                child: Container(
-                  width: (t / 1.5).clamp(2.0, 14.0),
-                  height: (t / 1.5).clamp(2.0, 14.0),
-                  decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+        child: CircleAvatar(
+          radius: 11,
+          backgroundColor: Colors.black12,
+          child: CircleAvatar(
+            radius: (_selectedThickness / 1.5).clamp(2.0, 9.0),
+            backgroundColor: const Color(0xFF1A1A24),
+          ),
+        ),
       ),
     );
   }
-
-
   // 🚀 REDE DE SEGURANÇA: Diálogo para confirmar a limpeza da folha
   void _confirmClearPage(LocalPage page) {
     showDialog(

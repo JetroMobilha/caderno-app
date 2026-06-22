@@ -22,15 +22,27 @@ class CanvasScreen extends StatefulWidget {
   State<CanvasScreen> createState() => _CanvasScreenState();
 }
 
+// 🚀 NOVO: Máquina de Estados clara para as ferramentas principais
+enum ToolMode { draw, pan, select }
+
 class _CanvasScreenState extends State<CanvasScreen> {
   List<LocalPage> _pages = [];
   int _currentPageIndex = 0;
   List<Offset> _currentPoints = [];
 
+  // 🚀 ATUALIZADO: A variável que controla a ferramenta ativa
+  ToolMode _currentTool = ToolMode.draw;
+
+  final Set<String> _selectedStrokeIds = {};
+  Offset? _selectionRectStart;
+  Offset? _selectionRectEnd;
+  bool _isMovingStrokes = false;
+  Offset? _lastPanOffset;
+
   String _selectedColorHex = '#2C3E50';
   double _selectedThickness = 3.0;
 
-  bool _isDrawingMode = true;
+
   bool _isToolbarVisible = true;
   bool _isToolbarPinned = true;
 
@@ -47,12 +59,21 @@ class _CanvasScreenState extends State<CanvasScreen> {
     'A0': const Size(2384, 3370),
   };
 
+  // 🚀 EXPANDIDO: Palete de Cores Alargada (9 Cores Premium)
   final Map<String, Color> _colorPalette = {
     'Azul': const Color(0xFF2C3E50),
     'Preto': const Color(0xFF1A1A24),
     'Vermelho': const Color(0xFFE74C3C),
     'Verde': const Color(0xFF27AE60),
+    'Laranja': const Color(0xFFE67E22),
+    'Roxo': const Color(0xFF9B59B6),
+    'Rosa': const Color(0xFFE91E63),
+    'Amarelo': const Color(0xFFF1C40F),
+    'Ciano': const Color(0xFF1ABC9C),
   };
+
+  // 🚀 EXPANDIDO: Lista de Traços Suportados de 1px até 30px
+  final List<double> _thicknessOptions = [1.0, 2.0, 3.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0];
 
   @override
   void dispose() {
@@ -197,7 +218,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
           // 🚀 MOTOR DE RENDERIZAÇÃO DE FOLHAS ANIMADAS
           PageView.builder(
             controller: _pageController,
-            physics: _isDrawingMode ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
+            // 🚀 Bloqueia o deslize de página a menos que estejamos no modo de mover a folha
+            physics: _currentTool == ToolMode.pan ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
             itemCount: _pages.length,
             onPageChanged: (index) => setState(() => _currentPageIndex = index),
             itemBuilder: (context, index) {
@@ -205,8 +227,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
               final Size currentPageSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
 
               return InteractiveViewer.builder(
-                scaleEnabled: !_isDrawingMode,
-                panEnabled: !_isDrawingMode,
+                // 🚀 A folha só é movível se a ferramenta Mão estiver ativa!
+                scaleEnabled: _currentTool == ToolMode.pan,
+                panEnabled: _currentTool == ToolMode.pan,
                 maxScale: 6.0,
                 minScale: 0.1,
                 transformationController: page.transformationController,
@@ -220,35 +243,92 @@ class _CanvasScreenState extends State<CanvasScreen> {
                         color: const Color(0xFFFDFBF7),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
-                          ),
+                          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8)),
                         ],
                       ),
                       child: GestureDetector(
-                        onPanStart: _isDrawingMode ? (details) {
-                          setState(() {
-                            _currentPoints = [details.localPosition];
-                            page.undoHistory.clear();
-                            page.redoHistory.clear();
-                          });
+                        // 🚀 Se a ferramenta Mão estiver ativa, o GestureDetector é desativado (retorna null)
+                        onPanStart: _currentTool != ToolMode.pan ? (details) {
+                          final localPos = details.localPosition;
+                          if (_currentTool == ToolMode.draw) {
+                            setState(() {
+                              _currentPoints = [localPos];
+                              page.undoHistory.clear();
+                              page.redoHistory.clear();
+                            });
+                          } else if (_currentTool == ToolMode.select) {
+                            bool clickedOnSelected = false;
+                            for (var id in _selectedStrokeIds) {
+                              final stroke = page.strokes.firstWhere((s) => s.id == id);
+                              for (var pt in stroke.points) {
+                                if ((pt - localPos).distance < 25.0) {
+                                  clickedOnSelected = true;
+                                  break;
+                                }
+                              }
+                              if (clickedOnSelected) break;
+                            }
+
+                            if (clickedOnSelected) {
+                              _isMovingStrokes = true;
+                              _lastPanOffset = localPos;
+                            } else {
+                              _isMovingStrokes = false;
+                              _selectionRectStart = localPos;
+                              _selectionRectEnd = localPos;
+                              setState(() => _selectedStrokeIds.clear());
+                            }
+                          }
                         } : null,
-                        onPanUpdate: _isDrawingMode ? (details) {
-                          setState(() => _currentPoints.add(details.localPosition));
+                        onPanUpdate: _currentTool != ToolMode.pan ? (details) {
+                          final localPos = details.localPosition;
+                          if (_currentTool == ToolMode.draw) {
+                            setState(() => _currentPoints.add(localPos));
+                          } else if (_currentTool == ToolMode.select) {
+                            if (_isMovingStrokes && _lastPanOffset != null) {
+                              final delta = localPos - _lastPanOffset!;
+                              setState(() {
+                                for (var id in _selectedStrokeIds) {
+                                  final stroke = page.strokes.firstWhere((s) => s.id == id);
+                                  for (int i = 0; i < stroke.points.length; i++) {
+                                    stroke.points[i] = stroke.points[i] + delta;
+                                  }
+                                }
+                              });
+                              _lastPanOffset = localPos;
+                            } else if (_selectionRectStart != null) {
+                              setState(() {
+                                _selectionRectEnd = localPos;
+                                final rect = Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!);
+                                _selectedStrokeIds.clear();
+                                for (var stroke in page.strokes) {
+                                  for (var pt in stroke.points) {
+                                    if (rect.contains(pt)) {
+                                      _selectedStrokeIds.add(stroke.id);
+                                      break;
+                                    }
+                                  }
+                                }
+                              });
+                            }
+                          }
                         } : null,
-                        onPanEnd: _isDrawingMode ? (details) {
-                          setState(() {
-                            page.strokes.add(
-                              Stroke(
-                                color: _selectedColorHex,
-                                thickness: _selectedThickness,
-                                points: List.from(_currentPoints),
-                              ),
-                            );
-                            _currentPoints.clear();
-                          });
+                        onPanEnd: _currentTool != ToolMode.pan ? (details) {
+                          if (_currentTool == ToolMode.draw) {
+                            setState(() {
+                              page.strokes.add(
+                                Stroke(color: _selectedColorHex, thickness: _selectedThickness, points: List.from(_currentPoints)),
+                              );
+                              _currentPoints.clear();
+                            });
+                          } else if (_currentTool == ToolMode.select) {
+                            setState(() {
+                              _isMovingStrokes = false;
+                              _selectionRectStart = null;
+                              _selectionRectEnd = null;
+                              _lastPanOffset = null;
+                            });
+                          }
                         } : null,
                         child: RepaintBoundary(
                           child: CustomPaint(
@@ -260,6 +340,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                               currentColor: _selectedColorHex,
                               currentThickness: _selectedThickness,
                               lineType: widget.lineType,
+                              selectedStrokeIds: _selectedStrokeIds,
+                              selectionRect: _selectionRectStart != null && _selectionRectEnd != null
+                                  ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!)
+                                  : null,
                             ),
                           ),
                         ),
@@ -270,7 +354,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
               );
             },
           ),
-
           Positioned(
             bottom: 20,
             left: 0,
@@ -383,6 +466,26 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
+  // 🚀 CONSTRUTOR DE BOTÃO DE FERRAMENTA (Mostra claramente qual está ativa)
+  Widget _buildToolButton(IconData icon, ToolMode mode, String tooltip) {
+    final isActive = _currentTool == mode;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFF0F4C5C).withOpacity(0.15) : Colors.transparent,
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: isActive ? const Color(0xFF0F4C5C) : const Color(0xFF1A1A24)),
+        onPressed: () => setState(() {
+          _currentTool = mode;
+          if (mode != ToolMode.select) _selectedStrokeIds.clear();
+        }),
+        tooltip: tooltip,
+      ),
+    );
+  }
+
   Widget _buildFloatingToolbar(LocalPage currentPage) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -396,11 +499,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: Icon(_isDrawingMode ? Icons.brush : Icons.pan_tool, color: const Color(0xFF0F4C5C)),
-            onPressed: () => setState(() => _isDrawingMode = !_isDrawingMode),
-            tooltip: _isDrawingMode ? 'Modo Caneta' : 'Modo Mover/Zoom',
-          ),
+          // 🚀 AS 3 FERRAMENTAS PRINCIPAIS LADO A LADO
+          _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
+          _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar e Mover'),
+          _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha / Zoom'),
+
+          const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
           IconButton(
             icon: const Icon(Icons.zoom_out, color: Color(0xFF1A1A24)),
             onPressed: () => _zoom(0.8),
@@ -446,6 +550,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
       tooltip: 'Mais Ferramentas',
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       offset: const Offset(0, -180),
+      // Modifica o itemBuilder do PopupMenuButton para atualizar as espessuras e a ação de seleção:
       itemBuilder: (context) => [
         PopupMenuItem(
           enabled: false,
@@ -480,39 +585,35 @@ class _CanvasScreenState extends State<CanvasScreen> {
           child: Text('Espessura', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
         ),
         PopupMenuItem(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [1.5, 3.0, 5.0, 8.0].map((t) {
-              final isSelected = _selectedThickness == t;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _selectedThickness = t);
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: isSelected ? Colors.blue : Colors.transparent, width: 2),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              // Usando a nova lista estendida de espessuras
+              children: _thicknessOptions.map((t) {
+                final isSelected = _selectedThickness == t;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedThickness = t);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: isSelected ? Colors.blue : Colors.transparent, width: 2),
+                    ),
+                    child: CircleAvatar(radius: 10, backgroundColor: Colors.white, child: Container(width: t/2 + 2, height: t/2 + 2, decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle))),
                   ),
-                  child: CircleAvatar(radius: t * 1.5, backgroundColor: Colors.black87),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
         ),
         const PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'select',
-          child: Row(
-            children: [
-              const Icon(Icons.highlight_alt, color: Colors.black54, size: 20),
-              const SizedBox(width: 8),
-              Text('Selecionar Área (Lasso)', style: GoogleFonts.inter(color: Colors.black87, fontSize: 14)),
-            ],
-          ),
-        ),
+
       ],
+
     );
   }
 
@@ -564,6 +665,8 @@ class NotebookPainter extends CustomPainter {
   final String currentColor;
   final double currentThickness;
   final String lineType;
+  final Set<String> selectedStrokeIds; // 🚀 NOVO
+  final Rect? selectionRect; // 🚀 NOVO
 
   NotebookPainter({
     required this.strokes,
@@ -571,6 +674,8 @@ class NotebookPainter extends CustomPainter {
     required this.currentColor,
     required this.currentThickness,
     required this.lineType,
+    required this.selectedStrokeIds,
+    required this.selectionRect,
   });
 
   @override
@@ -593,18 +698,35 @@ class NotebookPainter extends CustomPainter {
       }
     }
 
+    // Desenha todos os traços salvos
     for (final stroke in strokes) {
+      final isSelected = selectedStrokeIds.contains(stroke.id);
+
       final paint = Paint()
         ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
         ..strokeWidth = stroke.thickness
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
 
+      // Se o traço estiver selecionado, desenha primeiro uma caixa azul de destaque por baixo
+      if (isSelected && stroke.points.isNotEmpty) {
+        double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
+        double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
+        for (var pt in stroke.points) {
+          if (pt.dx < minX) minX = pt.dx; if (pt.dx > maxX) maxX = pt.dx;
+          if (pt.dy < minY) minY = pt.dy; if (pt.dy > maxY) maxY = pt.dy;
+        }
+        final bounds = Rect.fromLTRB(minX - 6, minY - 6, maxX + 6, maxY + 6);
+        canvas.drawRect(bounds, Paint()..color = const Color(0x220000FF)..style = PaintingStyle.fill);
+        canvas.drawRect(bounds, Paint()..color = const Color(0xFF0000FF)..style = PaintingStyle.stroke..strokeWidth = 1.0);
+      }
+
       for (int i = 0; i < stroke.points.length - 1; i++) {
-        canvas.drawLine(stroke.points[i], stroke.points[i + 1], paint);
+         canvas.drawLine(stroke.points[i], stroke.points[i + 1], paint);
       }
     }
 
+    // Linha atual que está a ser desenhada
     if (currentPoints.length > 1) {
       final activePaint = Paint()
         ..color = Color(int.parse(currentColor.replaceFirst('#', '0xFF')))
@@ -615,6 +737,12 @@ class NotebookPainter extends CustomPainter {
       for (int i = 0; i < currentPoints.length - 1; i++) {
         canvas.drawLine(currentPoints[i], currentPoints[i + 1], activePaint);
       }
+    }
+
+    // 🚀 Desenha o retângulo semi-transparente do arrasto do Lasso de Caixa
+    if (selectionRect != null) {
+      canvas.drawRect(selectionRect!, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
+      canvas.drawRect(selectionRect!, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5);
     }
   }
 

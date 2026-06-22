@@ -29,7 +29,6 @@ class CanvasScreen extends StatefulWidget {
 class _CanvasScreenState extends State<CanvasScreen> {
   List<LocalPage> _pages = [];
   int _currentPageIndex = 0;
-
   List<Offset> _currentPoints = [];
 
   String _selectedColorHex = '#2C3E50';
@@ -164,8 +163,73 @@ class _CanvasScreenState extends State<CanvasScreen> {
         backgroundColor: Colors.white,
         elevation: 1,
         iconTheme: const IconThemeData(color: Color(0xFF1A1A24)),
-        title: Text(
-          hasPages ? '${widget.notebookTitle} - Folha ${_currentPageIndex + 1}/${_pages.length}' : widget.notebookTitle,
+        title: hasPages
+            ? DropdownButtonHideUnderline(
+          child: DropdownButton<int>(
+            value: _currentPageIndex,
+            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
+              selectedItemBuilder: (BuildContext context) {
+                // 🚀 A CORREÇÃO: Adicionamos explicitamente o tipo <Widget> após o .map
+                List<Widget> selectedItems = _pages.asMap().entries.map<Widget>((entry) {
+                  return Container(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${widget.notebookTitle} - Folha ${entry.key + 1}/${_pages.length}',
+                      style: GoogleFonts.lora(
+                          color: const Color(0xFF1A1A24),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16
+                      ),
+                    ),
+                  );
+                }).toList();
+
+                // Agora o Dart aceita o SizedBox perfeitamente na lista de Widgets!
+                selectedItems.add(const SizedBox.shrink());
+
+                return selectedItems;
+              },
+            items: [
+              // Lista normal de folhas
+              ..._pages.asMap().entries.map((entry) {
+                return DropdownMenuItem<int>(
+                  value: entry.key,
+                  child: Text(
+                      'Ir para Folha ${entry.key + 1}',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w500)
+                  ),
+                );
+              }),
+              // 🚀 O ÚLTIMO ITEM: O Botão embutido de Adicionar Folha
+              DropdownMenuItem<int>(
+                value: _pages.length, // Um índice especial que representa a ação
+                child: Row(
+                  children: [
+                    const Icon(Icons.add, size: 18, color: Color(0xFF0F4C5C)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Nova Folha',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            onChanged: (int? newIndex) {
+              if (newIndex != null) {
+                if (newIndex == _pages.length) {
+                  // Se clicou no último item especial, abre o dialog!
+                  _showAddPageDialog();
+                } else {
+                  // Se clicou numa página, apenas navega para ela
+                  setState(() => _currentPageIndex = newIndex);
+                }
+              }
+            },
+          ),
+        )
+            : Text(
+          widget.notebookTitle,
           style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
         ),
         actions: [
@@ -374,46 +438,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
               ],
             ),
           ),
-
-          // 🚀 PAINEL DE NAVEGAÇÃO E CRIAÇÃO DE MÚLTIPLAS FOLHAS (Canto Inferior Esquerdo)
-          if (hasPages)
-            Positioned(
-              bottom: 20,
-              left: 20,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FloatingActionButton.small(
-                    heroTag: 'prev_page_btn',
-                    backgroundColor: _currentPageIndex > 0 ? Colors.white : Colors.grey[300],
-                    foregroundColor: const Color(0xFF0F4C5C),
-                    onPressed: _currentPageIndex > 0 ? () => setState(() => _currentPageIndex--) : null,
-                    child: const Icon(Icons.arrow_back_ios_new, size: 16),
-                  ),
-                  const SizedBox(width: 8),
-                  FloatingActionButton.small(
-                    heroTag: 'next_page_btn',
-                    backgroundColor: _currentPageIndex < _pages.length - 1 ? Colors.white : Colors.grey[300],
-                    foregroundColor: const Color(0xFF0F4C5C),
-                    onPressed: _currentPageIndex < _pages.length - 1 ? () => setState(() => _currentPageIndex++) : null,
-                    child: const Icon(Icons.arrow_forward_ios, size: 16),
-                  ),
-                  const SizedBox(width: 16),
-                  // 🚀 NOVO: Botão para adicionar mais folhas a qualquer momento!
-                  FloatingActionButton.extended(
-                    heroTag: 'add_more_pages_btn',
-                    backgroundColor: const Color(0xFF0F4C5C),
-                    foregroundColor: Colors.white,
-                    onPressed: _showAddPageDialog,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: Text('Nova Folha', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
-      // Mostra o botão grande central APENAS se o caderno estiver totalmente vazio
+      // FAB central visível apenas quando não há nenhuma página
       floatingActionButton: hasPages ? null : FloatingActionButton(
         backgroundColor: const Color(0xFF0F4C5C),
         foregroundColor: Colors.white,
@@ -424,7 +451,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
   }
 }
 
-// O NotebookPainter mantém-se perfeitamente igual
 class NotebookPainter extends CustomPainter {
   final List<Stroke> strokes;
   final List<Offset> currentPoints;

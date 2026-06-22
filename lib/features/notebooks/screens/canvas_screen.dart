@@ -271,11 +271,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
             },
           ),
 
-          // 🚀 HUB DE CONTROLO / CÁPSULA FLUTUANTE (Canto Inferior Esquerdo)
           Positioned(
             bottom: 20,
-            left: 20,
-            child: _buildFloatingToolbar(currentPage!),
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _buildFloatingToolbar(currentPage!),
+            ),
           ),
         ],
       ),
@@ -419,15 +421,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
             onPressed: currentPage.redoHistory.isNotEmpty ? _redo : null,
             tooltip: 'Avançar Traço',
           ),
+          // Botão: Apagar Tudo (Agora com proteção e desativado se já estiver vazio)
           IconButton(
-            icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-            onPressed: () {
-              setState(() {
-                currentPage.undoHistory.addAll(currentPage.strokes);
-                currentPage.strokes.clear();
-                currentPage.redoHistory.clear();
-              });
-            },
+            icon: Icon(Icons.delete_sweep, color: currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey),
+            onPressed: currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null,
             tooltip: 'Apagar Toda a Folha',
           ),
           const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
@@ -510,6 +507,47 @@ class _CanvasScreenState extends State<CanvasScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // 🚀 REDE DE SEGURANÇA: Diálogo para confirmar a limpeza da folha
+  void _confirmClearPage(LocalPage page) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDFBF7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            const SizedBox(width: 8),
+            Text('Apagar Folha', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+            'Tem a certeza que deseja apagar todos os traços desta folha?\n(Poderá anular esta ação depois usando o botão Voltar).',
+            style: GoogleFonts.inter(fontSize: 14)
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () {
+              setState(() {
+                // Guarda o estado atual no histórico antes de apagar, permitindo o "Desfazer"
+                page.undoHistory.addAll(page.strokes);
+                page.strokes.clear();
+                page.redoHistory.clear();
+              });
+              Navigator.pop(context); // Fecha o diálogo
+            },
+            child: const Text('Apagar Tudo', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 }

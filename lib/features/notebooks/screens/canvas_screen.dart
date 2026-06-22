@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/drawing_point_model.dart';
 
+class LocalPage {
+  final bool isLandscape;
+  List<Stroke> strokes = [];
+  List<Stroke> undoHistory = [];
+
+  LocalPage({required this.isLandscape});
+}
+
 class CanvasScreen extends StatefulWidget {
   final String notebookTitle;
   final String lineType;
@@ -19,17 +27,18 @@ class CanvasScreen extends StatefulWidget {
 }
 
 class _CanvasScreenState extends State<CanvasScreen> {
-  List<Stroke> _strokes = [];
-  List<Stroke> _undoHistory = [];
+  List<LocalPage> _pages = [];
+  int _currentPageIndex = 0;
+
   List<Offset> _currentPoints = [];
 
   String _selectedColorHex = '#2C3E50';
   double _selectedThickness = 3.0;
 
-  bool _isLandscape = false;
   bool _isDrawingMode = true;
+  bool _isToolbarVisible = true;
+  bool _isToolbarPinned = true;
 
-  // 🚀 NOVO: Controlador de transformação persistente na memória do State
   late TransformationController _transformationController;
 
   final Map<String, Size> _paperSizes = {
@@ -51,24 +60,103 @@ class _CanvasScreenState extends State<CanvasScreen> {
   @override
   void initState() {
     super.initState();
-    // 🚀 INICIALIZAÇÃO ÚNICA: Define o zoom inicial padrão sem resetar nos setStates futuros
     _transformationController = TransformationController();
+    _resetZoom();
+  }
 
+  void _resetZoom() {
     final double initialScale = widget.paperSize == 'A0' || widget.paperSize == 'A1' ? 0.25 : 1.4;
     _transformationController.value = Matrix4.identity()..scale(initialScale);
   }
 
   @override
   void dispose() {
-    // Evita vazamentos de memória ao fechar o caderno
     _transformationController.dispose();
     super.dispose();
   }
 
+  void _zoom(double factor) {
+    setState(() {
+      final Matrix4 matrix = _transformationController.value;
+      final double currentScale = matrix.getMaxScaleOnAxis();
+      if (currentScale * factor < 0.1 || currentScale * factor > 6.0) return;
+
+      final Size screenSize = MediaQuery.of(context).size;
+      final double centerX = screenSize.width / 2;
+      final double centerY = screenSize.height / 2;
+
+      matrix.translate(centerX, centerY);
+      matrix.scale(factor);
+      matrix.translate(-centerX, -centerY);
+
+      _transformationController.value = matrix;
+    });
+  }
+
+  void _showAddPageDialog() {
+    bool selectedIsLandscape = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          title: Text('Nova Folha', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Escolha a orientação desta folha:', style: GoogleFonts.inter(fontSize: 14)),
+              const SizedBox(height: 16),
+              RadioListTile<bool>(
+                title: const Text('Retrato (Vertical)'),
+                value: false,
+                groupValue: selectedIsLandscape,
+                onChanged: (value) => setModalState(() => selectedIsLandscape = value!),
+              ),
+              RadioListTile<bool>(
+                title: const Text('Paisagem (Horizontal)'),
+                value: true,
+                groupValue: selectedIsLandscape,
+                onChanged: (value) => setModalState(() => selectedIsLandscape = value!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
+              onPressed: () {
+                setState(() {
+                  _pages.add(LocalPage(isLandscape: selectedIsLandscape));
+                  _currentPageIndex = _pages.length - 1;
+                  _resetZoom();
+                });
+                Navigator.pop(context);
+              },
+              child: const Text('Adicionar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _undo() {
+    if (_pages.isEmpty) return;
+    final currentPage = _pages[_currentPageIndex];
+    if (currentPage.strokes.isNotEmpty) {
+      setState(() => currentPage.undoHistory.add(currentPage.strokes.removeLast()));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool hasPages = _pages.isNotEmpty;
+    final LocalPage? currentPage = hasPages ? _pages[_currentPageIndex] : null;
+
     Size baseSize = _paperSizes[widget.paperSize] ?? const Size(595, 842);
-    final Size pageSize = _isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
+    final Size pageSize = (currentPage?.isLandscape ?? false) ? Size(baseSize.height, baseSize.width) : baseSize;
 
     return Scaffold(
       backgroundColor: const Color(0xFFD6D6D6),
@@ -77,40 +165,57 @@ class _CanvasScreenState extends State<CanvasScreen> {
         elevation: 1,
         iconTheme: const IconThemeData(color: Color(0xFF1A1A24)),
         title: Text(
-          '${widget.notebookTitle} (${widget.paperSize})',
+          hasPages ? '${widget.notebookTitle} - Folha ${_currentPageIndex + 1}/${_pages.length}' : widget.notebookTitle,
           style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
         ),
         actions: [
-          IconButton(
-            icon: Icon(_isDrawingMode ? Icons.brush : Icons.pan_tool, color: const Color(0xFF0F4C5C)),
-            onPressed: () => setState(() => _isDrawingMode = !_isDrawingMode),
-            tooltip: _isDrawingMode ? 'Modo Caneta Ativo' : 'Modo Mover Ativo',
-          ),
-          IconButton(
-            icon: const Icon(Icons.screen_rotation, color: Color(0xFF0F4C5C)),
-            onPressed: () => setState(() => _isLandscape = !_isLandscape),
-            tooltip: 'Rodar Folha',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-            onPressed: () => setState(() => _strokes = []),
-            tooltip: 'Limpar Página',
-          ),
-          IconButton(
-            icon: const Icon(Icons.undo, size: 20, color: Color(0xFF2C3E50)),
-            onPressed: _strokes.isNotEmpty ? _undo : null,
-            tooltip: 'Desfazer',
-          ),
+          if (hasPages && !_isToolbarVisible)
+            IconButton(
+              icon: const Icon(Icons.build_circle, color: Color(0xFF0F4C5C)),
+              onPressed: () => setState(() => _isToolbarVisible = true),
+              tooltip: 'Mostrar Ferramentas',
+            ),
+          if (hasPages) ...[
+            IconButton(
+              icon: Icon(_isDrawingMode ? Icons.brush : Icons.pan_tool, color: const Color(0xFF0F4C5C)),
+              onPressed: () => setState(() => _isDrawingMode = !_isDrawingMode),
+              tooltip: _isDrawingMode ? 'Modo Caneta' : 'Modo Mover / Zoom',
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+              onPressed: () => setState(() => currentPage!.strokes.clear()),
+              tooltip: 'Limpar Folha',
+            ),
+            IconButton(
+              icon: const Icon(Icons.undo, size: 20, color: Color(0xFF2C3E50)),
+              onPressed: currentPage!.strokes.isNotEmpty ? _undo : null,
+              tooltip: 'Desfazer',
+            ),
+          ]
         ],
       ),
-      body: Stack(
+      body: !hasPages
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.insert_page_break_outlined, size: 80, color: Colors.black.withOpacity(0.1)),
+            const SizedBox(height: 16),
+            Text(
+              'Este caderno está vazio.\nClique no + para adicionar a primeira folha.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(color: Colors.black45, fontSize: 16),
+            ),
+          ],
+        ),
+      )
+          : Stack(
         children: [
           InteractiveViewer.builder(
             scaleEnabled: !_isDrawingMode,
             panEnabled: !_isDrawingMode,
             maxScale: 6.0,
             minScale: 0.1,
-            // 🚀 CORREÇÃO: Passa a referência da instância estável em vez de criar uma nova
             transformationController: _transformationController,
             boundaryMargin: const EdgeInsets.all(3000),
             builder: (context, viewport) {
@@ -129,17 +234,15 @@ class _CanvasScreenState extends State<CanvasScreen> {
                     onPanStart: _isDrawingMode ? (details) {
                       setState(() {
                         _currentPoints = [details.localPosition];
-                        _undoHistory.clear();
+                        currentPage!.undoHistory.clear();
                       });
                     } : null,
                     onPanUpdate: _isDrawingMode ? (details) {
-                      setState(() {
-                        _currentPoints.add(details.localPosition);
-                      });
+                      setState(() => _currentPoints.add(details.localPosition));
                     } : null,
                     onPanEnd: _isDrawingMode ? (details) {
                       setState(() {
-                        _strokes.add(
+                        currentPage!.strokes.add(
                           Stroke(
                             color: _selectedColorHex,
                             thickness: _selectedThickness,
@@ -154,7 +257,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                         key: const Key('canvas_custom_paint'),
                         size: pageSize,
                         painter: NotebookPainter(
-                          strokes: _strokes,
+                          strokes: currentPage!.strokes,
                           currentPoints: _currentPoints,
                           currentColor: _selectedColorHex,
                           currentThickness: _selectedThickness,
@@ -168,85 +271,160 @@ class _CanvasScreenState extends State<CanvasScreen> {
             },
           ),
 
-          // Toolbar Flutuante Superior (Igual)
-          Positioned(
-            top: 10,
-            left: 20,
-            right: 20,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5)),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Formato: ${widget.paperSize}',
-                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
-                    ),
-                    const SizedBox(width: 8),
-                    const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-                    const SizedBox(width: 8),
-                    ..._colorPalette.entries.map((entry) {
-                      final hexString = '#${entry.value.value.toRadixString(16).substring(2).toUpperCase()}';
-                      final isSelected = _selectedColorHex == hexString;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedColorHex = hexString),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: isSelected ? Colors.blue : Colors.transparent, width: 2),
-                            ),
-                            padding: const EdgeInsets.all(2),
-                            child: CircleAvatar(radius: 12, backgroundColor: entry.value),
+          if (_isToolbarVisible)
+            Positioned(
+              top: 10,
+              left: 16,
+              right: 16,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5)),
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            _isToolbarPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                            size: 18,
+                            color: _isToolbarPinned ? const Color(0xFF0F4C5C) : Colors.black45,
                           ),
+                          onPressed: () => setState(() => _isToolbarPinned = !_isToolbarPinned),
+                          tooltip: _isToolbarPinned ? 'Desfixar Barra' : 'Fixar Barra',
                         ),
-                      );
-                    }),
-                    const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-                    const SizedBox(width: 8),
-                    DropdownButton<double>(
-                      value: _selectedThickness,
-                      underline: const SizedBox(),
-                      icon: const Icon(Icons.line_weight, size: 20, color: Color(0xFF2C3E50)),
-                      items: [1.5, 3.0, 5.0, 8.0].map((double value) {
-                        return DropdownMenuItem<double>(
-                          value: value,
-                          child: Text('${value.toInt()}px', style: GoogleFonts.inter(fontSize: 13)),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        if (newValue != null) {
-                          setState(() => _selectedThickness = newValue);
-                        }
-                      },
+                        const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+                        PopupMenuButton<String>(
+                          icon: CircleAvatar(
+                            radius: 10,
+                            backgroundColor: Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF'))),
+                          ),
+                          tooltip: 'Selecionar Cor',
+                          onSelected: (hex) => setState(() => _selectedColorHex = hex),
+                          itemBuilder: (context) => _colorPalette.entries.map((entry) {
+                            final hex = '#${entry.value.value.toRadixString(16).substring(2).toUpperCase()}';
+                            return PopupMenuItem<String>(
+                              value: hex,
+                              child: Row(
+                                children: [
+                                  CircleAvatar(radius: 8, backgroundColor: entry.value),
+                                  const SizedBox(width: 12),
+                                  Text(entry.key, style: GoogleFonts.inter(fontSize: 13)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+                        PopupMenuButton<double>(
+                          icon: const Icon(Icons.line_weight, size: 18, color: Color(0xFF2C3E50)),
+                          tooltip: 'Espessura da Caneta',
+                          onSelected: (thickness) => setState(() => _selectedThickness = thickness),
+                          itemBuilder: (context) => [1.5, 3.0, 5.0, 8.0].map((value) {
+                            return PopupMenuItem<double>(
+                              value: value,
+                              child: Text('${value.toInt()} px', style: GoogleFonts.inter(fontSize: 13)),
+                            );
+                          }).toList(),
+                        ),
+                        if (!_isToolbarPinned) ...[
+                          const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                            onPressed: () => setState(() => _isToolbarVisible = false),
+                            tooltip: 'Esconder Barra',
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
+
+          // ZOOM FLUTUANTE
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'zoom_in_btn',
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF0F4C5C),
+                  onPressed: () => _zoom(1.2),
+                  child: const Icon(Icons.zoom_in),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'zoom_out_btn',
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF0F4C5C),
+                  onPressed: () => _zoom(0.8),
+                  child: const Icon(Icons.zoom_out),
+                ),
+              ],
+            ),
           ),
+
+          // 🚀 PAINEL DE NAVEGAÇÃO E CRIAÇÃO DE MÚLTIPLAS FOLHAS (Canto Inferior Esquerdo)
+          if (hasPages)
+            Positioned(
+              bottom: 20,
+              left: 20,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'prev_page_btn',
+                    backgroundColor: _currentPageIndex > 0 ? Colors.white : Colors.grey[300],
+                    foregroundColor: const Color(0xFF0F4C5C),
+                    onPressed: _currentPageIndex > 0 ? () => setState(() => _currentPageIndex--) : null,
+                    child: const Icon(Icons.arrow_back_ios_new, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'next_page_btn',
+                    backgroundColor: _currentPageIndex < _pages.length - 1 ? Colors.white : Colors.grey[300],
+                    foregroundColor: const Color(0xFF0F4C5C),
+                    onPressed: _currentPageIndex < _pages.length - 1 ? () => setState(() => _currentPageIndex++) : null,
+                    child: const Icon(Icons.arrow_forward_ios, size: 16),
+                  ),
+                  const SizedBox(width: 16),
+                  // 🚀 NOVO: Botão para adicionar mais folhas a qualquer momento!
+                  FloatingActionButton.extended(
+                    heroTag: 'add_more_pages_btn',
+                    backgroundColor: const Color(0xFF0F4C5C),
+                    foregroundColor: Colors.white,
+                    onPressed: _showAddPageDialog,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text('Nova Folha', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
         ],
+      ),
+      // Mostra o botão grande central APENAS se o caderno estiver totalmente vazio
+      floatingActionButton: hasPages ? null : FloatingActionButton(
+        backgroundColor: const Color(0xFF0F4C5C),
+        foregroundColor: Colors.white,
+        onPressed: _showAddPageDialog,
+        child: const Icon(Icons.note_add),
       ),
     );
   }
-
-  void _undo() {
-    if (_strokes.isNotEmpty) {
-      setState(() => _undoHistory.add(_strokes.removeLast()));
-    }
-  }
 }
 
-// O NotebookPainter mantém-se igual e intocado
+// O NotebookPainter mantém-se perfeitamente igual
 class NotebookPainter extends CustomPainter {
   final List<Stroke> strokes;
   final List<Offset> currentPoints;

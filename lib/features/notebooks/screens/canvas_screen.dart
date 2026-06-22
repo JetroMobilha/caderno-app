@@ -73,7 +73,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
   };
 
   // 🚀 EXPANDIDO: Lista de Traços Suportados de 1px até 30px
-  final List<double> _thicknessOptions = [1.0, 2.0, 3.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0];
+  final List<double> _thicknessOptions = [1.0, 2.0, 3.0, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0];
 
   @override
   void dispose() {
@@ -466,7 +466,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-  // 🚀 CONSTRUTOR DE BOTÃO DE FERRAMENTA (Mostra claramente qual está ativa)
   Widget _buildToolButton(IconData icon, ToolMode mode, String tooltip) {
     final isActive = _currentTool == mode;
     return Container(
@@ -476,6 +475,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
         shape: BoxShape.circle,
       ),
       child: IconButton(
+        iconSize: 20,
+        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        padding: EdgeInsets.zero,
         icon: Icon(icon, color: isActive ? const Color(0xFF0F4C5C) : const Color(0xFF1A1A24)),
         onPressed: () => setState(() {
           _currentTool = mode;
@@ -486,8 +488,21 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
+  // 🚀 CONSTRUTOR DE BOTÕES ULTRA-COMPACTOS (Poupa muito espaço na altura)
+  Widget _buildCompactIconButton(IconData icon, VoidCallback? onPressed, String tooltip, Color color) {
+    return IconButton(
+      iconSize: 20, // Ícone ligeiramente mais pequeno
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36), // Área de toque mínima do Material Design
+      padding: EdgeInsets.zero, // Remove o padding gigante padrão do Flutter
+      icon: Icon(icon, color: color),
+      onPressed: onPressed,
+      tooltip: tooltip,
+    );
+  }
+
   Widget _buildFloatingToolbar(LocalPage currentPage) {
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -496,126 +511,97 @@ class _CanvasScreenState extends State<CanvasScreen> {
           BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8)),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      // 🚀 MOTOR INTELIGENTE RESPONSIVO: Junta tudo na mesma linha. Só quebra se faltar espaço físico!
+      child: Wrap(
+        spacing: 4,       // Distância horizontal entre os botões
+        runSpacing: 4,    // Distância vertical se algum botão for jogado para a 2ª linha
+        crossAxisAlignment: WrapCrossAlignment.center,
+        alignment: WrapAlignment.center,
         children: [
-          // 🚀 AS 3 FERRAMENTAS PRINCIPAIS LADO A LADO
           _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
           _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar e Mover'),
           _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha / Zoom'),
 
-          const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-          IconButton(
-            icon: const Icon(Icons.zoom_out, color: Color(0xFF1A1A24)),
-            onPressed: () => _zoom(0.8),
-            tooltip: 'Afastar',
-          ),
-          IconButton(
-            icon: const Icon(Icons.zoom_in, color: Color(0xFF1A1A24)),
-            onPressed: () => _zoom(1.2),
-            tooltip: 'Aproximar',
-          ),
-          IconButton(
-            icon: Icon(
-                Icons.undo,
-                color: currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)
-            ),
-            onPressed: currentPage.strokes.isNotEmpty ? _undo : null,
-            tooltip: 'Desfazer Traço',
-          ),
-          IconButton(
-            icon: Icon(
-                Icons.redo,
-                color: currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)
-            ),
-            onPressed: currentPage.redoHistory.isNotEmpty ? _redo : null,
-            tooltip: 'Avançar Traço',
-          ),
-          // Botão: Apagar Tudo (Agora com proteção e desativado se já estiver vazio)
-          IconButton(
-            icon: Icon(Icons.delete_sweep, color: currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey),
-            onPressed: currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null,
-            tooltip: 'Apagar Toda a Folha',
-          ),
-          const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-          _buildMoreToolsDropdown(),
+          const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+
+          _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
+          _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
+
+          const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+
+          _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? _undo : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+          _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? _redo : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+          _buildCompactIconButton(Icons.delete_sweep, currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null, 'Apagar Tudo', currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey.withOpacity(0.5)),
+
+          // As configurações adicionais de escrita aparecem de forma compacta ao lado dos botões
+          if (_currentTool == ToolMode.draw) ...[
+            const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+            _buildColorDropdown(),
+            const SizedBox(height: 20, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+            _buildThicknessDropdown(),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildMoreToolsDropdown() {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Color(0xFF0F4C5C)),
-      tooltip: 'Mais Ferramentas',
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      offset: const Offset(0, -180),
-      // Modifica o itemBuilder do PopupMenuButton para atualizar as espessuras e a ação de seleção:
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          enabled: false,
-          child: Text('Cores da Caneta', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
-        ),
-        PopupMenuItem(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: _colorPalette.entries.map((entry) {
-              final hex = '#${entry.value.value.toRadixString(16).substring(2).toUpperCase()}';
-              final isSelected = _selectedColorHex == hex;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _selectedColorHex = hex);
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: isSelected ? Colors.black45 : Colors.transparent, width: 2),
-                  ),
-                  child: CircleAvatar(radius: 12, backgroundColor: entry.value),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem(
-          enabled: false,
-          child: Text('Espessura', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
-        ),
-        PopupMenuItem(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              // Usando a nova lista estendida de espessuras
-              children: _thicknessOptions.map((t) {
-                final isSelected = _selectedThickness == t;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedThickness = t);
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: isSelected ? Colors.blue : Colors.transparent, width: 2),
-                    ),
-                    child: CircleAvatar(radius: 10, backgroundColor: Colors.white, child: Container(width: t/2 + 2, height: t/2 + 2, decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle))),
-                  ),
-                );
-              }).toList(),
+  // 🎨 DROPDOWN DE CORES: Só mostra a cor selecionada no ecrã principal
+  // 🎨 DROPDOWN DE CORES: Só mostra a cor selecionada no ecrã principal
+  Widget _buildColorDropdown() {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: _selectedColorHex,
+        icon: const Icon(Icons.arrow_drop_down, size: 16, color: Colors.black54),
+        isDense: true,
+        alignment: Alignment.center,
+        onChanged: (String? newHex) {
+          if (newHex != null) setState(() => _selectedColorHex = newHex);
+        },
+        items: _colorPalette.entries.map((entry) {
+          // 🚀 DEFESA ATIVA: padLeft garante que os códigos hex têm sempre 8 caracteres (AARRGGBB)
+          final hex = '#${entry.value.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+          return DropdownMenuItem<String>(
+            value: hex,
+            child: Center(
+              child: CircleAvatar(radius: 9, backgroundColor: entry.value),
             ),
-          ),
-        ),
-        const PopupMenuDivider(),
-
-      ],
-
+          );
+        }).toList(),
+      ),
     );
   }
+
+  // 📐 DROPDOWN DE ESPESSURAS: Só mostra o tamanho do ponto selecionado
+  Widget _buildThicknessDropdown() {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<double>(
+        value: _selectedThickness,
+        icon: const Icon(Icons.arrow_drop_down, size: 16, color: Colors.black54),
+        isDense: true,
+        alignment: Alignment.center,
+        onChanged: (double? newThickness) {
+          if (newThickness != null) setState(() => _selectedThickness = newThickness);
+        },
+        items: _thicknessOptions.map((t) {
+          return DropdownMenuItem<double>(
+            value: t,
+            child: Center(
+              child: CircleAvatar(
+                radius: 9,
+                backgroundColor: Colors.white,
+                child: Container(
+                  width: (t / 1.5).clamp(2.0, 14.0),
+                  height: (t / 1.5).clamp(2.0, 14.0),
+                  decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
 
   // 🚀 REDE DE SEGURANÇA: Diálogo para confirmar a limpeza da folha
   void _confirmClearPage(LocalPage page) {

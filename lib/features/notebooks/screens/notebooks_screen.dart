@@ -71,6 +71,7 @@ class NotebooksScreen extends ConsumerWidget {
           context,
           MaterialPageRoute(
             builder: (context) => CanvasScreen(
+              notebookId: notebook.id ?? 0,
               notebookTitle: notebook.title,
               lineType: notebook.lineType ?? 'ruled',
               paperSize: notebook.paperSize, // 🚀 ENVIADO DO TEU MODELO REAL

@@ -1,38 +1,77 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:uuid/uuid.dart';
+import 'dart:convert';
 
-/// Representa um traço contínuo desenhado no Canvas, pronto para sincronização.
 class Stroke {
+  final String id;
   final String color;
   final double thickness;
   final List<Offset> points;
 
   Stroke({
+    String? id,
     required this.color,
     required this.thickness,
     required this.points,
-  });
+  }) : id = id ?? const Uuid().v4();
 
-  /// Converte o Traço num Map (JSON) compatível com a API Laravel.
+  // 🚀 RESTAURADO: Para compatibilidade com page_model.dart e testes antigos
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'color': color,
       'thickness': thickness,
-      'points': points.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+      'points': points.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
     };
   }
 
-  /// Cria um Traço a partir do formato JSON vindo do Servidor.
+  // 🚀 RESTAURADO: Construtor a partir de Map
   factory Stroke.fromMap(Map<String, dynamic> map) {
-    final List<dynamic> pointsList = map['points'] ?? [];
     return Stroke(
-      color: map['color'] ?? '#000000',
+      id: map['id'] as String?,
+      color: map['color'] as String,
       thickness: (map['thickness'] as num).toDouble(),
-      points: pointsList.map((p) {
-        return Offset(
-          (p['x'] as num).toDouble(),
-          (p['y'] as num).toDouble(),
-        );
-      }).toList(),
+      points: (map['points'] as List)
+          .map((p) => Offset((p['dx'] as num).toDouble(), (p['dy'] as num).toDouble()))
+          .toList(),
+    );
+  }
+
+  // Atalhos para JSON string exigidos pelo SQLite
+  String toJsonString() => jsonEncode(toMap());
+  factory Stroke.fromJsonString(String jsonStr) => Stroke.fromMap(jsonDecode(jsonStr));
+}
+
+class LocalPage {
+  final bool isLandscape;
+  List<Stroke> strokes;
+  List<Stroke> undoHistory = [];
+  List<Stroke> redoHistory = [];
+
+  late TransformationController transformationController;
+
+  LocalPage({
+    required this.isLandscape,
+    List<Stroke>? strokes,
+  }) : strokes = strokes ?? [] {
+    transformationController = TransformationController();
+  }
+
+  void dispose() {
+    transformationController.dispose();
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'isLandscape': isLandscape,
+      'strokes': strokes.map((s) => s.toMap()).toList(),
+    };
+  }
+
+  factory LocalPage.fromMap(Map<String, dynamic> map) {
+    return LocalPage(
+      isLandscape: map['isLandscape'] ?? false,
+      strokes: (map['strokes'] as List).map((s) => Stroke.fromMap(s)).toList(),
     );
   }
 }

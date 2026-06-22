@@ -1,32 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/drawing_point_model.dart';
+import '../repositories/notebook_repository.dart';
 
-// 🚀 MODELO DE ESTADO INDEPENDENTE PARA CADA FOLHA
-class LocalPage {
-  final bool isLandscape;
-  List<Stroke> strokes = [];
-  List<Stroke> undoHistory = [];
-
-  // Cada folha agora é dona absoluta da sua própria câmara e nível de zoom
-  late TransformationController transformationController;
-
-  LocalPage({required this.isLandscape}) {
-    transformationController = TransformationController();
-  }
-
-  void dispose() {
-    transformationController.dispose();
-  }
-}
 
 class CanvasScreen extends StatefulWidget {
+  final int notebookId; // 🚀 ADICIONADO
   final String notebookTitle;
   final String lineType;
   final String paperSize;
 
   const CanvasScreen({
     super.key,
+    required this.notebookId,
     required this.notebookTitle,
     this.lineType = 'ruled',
     required this.paperSize,
@@ -172,7 +158,22 @@ class _CanvasScreenState extends State<CanvasScreen> {
     if (_pages.isEmpty) return;
     final currentPage = _pages[_currentPageIndex];
     if (currentPage.strokes.isNotEmpty) {
-      setState(() => currentPage.undoHistory.add(currentPage.strokes.removeLast()));
+      setState(() {
+        // Remove do ecrã e atira para o "futuro" (redo)
+        currentPage.redoHistory.add(currentPage.strokes.removeLast());
+      });
+    }
+  }
+
+  // 🚀 NOVA: Função para Avançar linhas
+  void _redo() {
+    if (_pages.isEmpty) return;
+    final currentPage = _pages[_currentPageIndex];
+    if (currentPage.redoHistory.isNotEmpty) {
+      setState(() {
+        // Puxa do "futuro" de volta para o ecrã
+        currentPage.strokes.add(currentPage.redoHistory.removeLast());
+      });
     }
   }
 
@@ -181,126 +182,24 @@ class _CanvasScreenState extends State<CanvasScreen> {
     final bool hasPages = _pages.isNotEmpty;
     final LocalPage? currentPage = hasPages ? _pages[_currentPageIndex] : null;
 
-    Size baseSize = _paperSizes[widget.paperSize] ?? const Size(595, 842);
-    final Size pageSize = (currentPage?.isLandscape ?? false) ? Size(baseSize.height, baseSize.width) : baseSize;
+    final Size baseSize = _paperSizes[widget.paperSize] ?? const Size(595, 842);
+    final Size pageSize = (currentPage?.isLandscape ?? false)
+        ? Size(baseSize.height, baseSize.width)
+        : baseSize;
 
     return Scaffold(
       backgroundColor: const Color(0xFFD6D6D6),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: const IconThemeData(color: Color(0xFF1A1A24)),
-        title: hasPages
-            ? DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            value: _currentPageIndex,
-            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
-            // 🚀 ALINHAMENTO DE TIPAGEM COESO: Evita o erro de subtipo do SizedBox/Container
-            selectedItemBuilder: (BuildContext context) {
-              List<Widget> selectedItems = _pages.asMap().entries.map<Widget>((entry) {
-                return Container(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${widget.notebookTitle} - Folha ${entry.key + 1}/${_pages.length}',
-                    style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                );
-              }).toList();
-
-              selectedItems.add(const SizedBox.shrink()); // Elemento fantasma para balancear a lista
-              return selectedItems;
-            },
-            items: [
-              ..._pages.asMap().entries.map((entry) {
-                return DropdownMenuItem<int>(
-                  value: entry.key,
-                  child: Text('Ir para Folha ${entry.key + 1}', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
-                );
-              }),
-              // 🚀 COMPACTAÇÃO DE INTERFACE: Adicionar folha embutida como último item da lista
-              DropdownMenuItem<int>(
-                value: _pages.length,
-                child: Row(
-                  children: [
-                    const Icon(Icons.add, size: 18, color: Color(0xFF0F4C5C)),
-                    const SizedBox(width: 8),
-                    Text('Nova Folha', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
-                  ],
-                ),
-              ),
-            ],
-            onChanged: (int? newIndex) {
-              if (newIndex != null) {
-                if (newIndex == _pages.length) {
-                  _showAddPageDialog();
-                } else {
-                  _pageController.animateToPage(
-                      newIndex,
-                      duration: const Duration(milliseconds: 350),
-                      curve: Curves.easeInOut
-                  );
-                }
-              }
-            },
-          ),
-        )
-            : Text(
-          widget.notebookTitle,
-          style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        actions: [
-          if (hasPages && !_isToolbarVisible)
-            IconButton(
-              icon: const Icon(Icons.build_circle, color: Color(0xFF0F4C5C)),
-              onPressed: () => setState(() => _isToolbarVisible = true),
-              tooltip: 'Mostrar Ferramentas',
-            ),
-          if (hasPages) ...[
-            IconButton(
-              icon: Icon(_isDrawingMode ? Icons.brush : Icons.pan_tool, color: const Color(0xFF0F4C5C)),
-              onPressed: () => setState(() => _isDrawingMode = !_isDrawingMode),
-              tooltip: _isDrawingMode ? 'Modo Caneta' : 'Modo Mover / Zoom',
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-              onPressed: () => setState(() => currentPage!.strokes.clear()),
-              tooltip: 'Limpar Folha',
-            ),
-            IconButton(
-              icon: const Icon(Icons.undo, size: 20, color: Color(0xFF2C3E50)),
-              onPressed: currentPage!.strokes.isNotEmpty ? _undo : null,
-              tooltip: 'Desfazer',
-            ),
-          ]
-        ],
-      ),
+      appBar: _buildAppBar(hasPages),
       body: !hasPages
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.insert_page_break_outlined, size: 80, color: Colors.black.withOpacity(0.1)),
-            const SizedBox(height: 16),
-            Text(
-              'Este caderno está vazio.\nClique no + para adicionar a primeira folha.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: Colors.black45, fontSize: 16),
-            ),
-          ],
-        ),
-      )
+          ? _buildEmptyState()
           : Stack(
         children: [
-          // 🚀 MOTOR DE ANIMAÇÃO ENTRE FOLHAS PRESERVANDO O ZOOM INDIVIDUAL
+          // 🚀 MOTOR DE RENDERIZAÇÃO DE FOLHAS ANIMADAS
           PageView.builder(
             controller: _pageController,
             physics: _isDrawingMode ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
             itemCount: _pages.length,
-            onPageChanged: (index) {
-              setState(() {
-                _currentPageIndex = index;
-              });
-            },
+            onPageChanged: (index) => setState(() => _currentPageIndex = index),
             itemBuilder: (context, index) {
               final page = _pages[index];
               final Size currentPageSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
@@ -310,7 +209,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                 panEnabled: !_isDrawingMode,
                 maxScale: 6.0,
                 minScale: 0.1,
-                transformationController: page.transformationController, // Atua na folha isolada
+                transformationController: page.transformationController,
                 boundaryMargin: const EdgeInsets.all(3000),
                 builder: (context, viewport) {
                   return Center(
@@ -321,7 +220,11 @@ class _CanvasScreenState extends State<CanvasScreen> {
                         color: const Color(0xFFFDFBF7),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8)),
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 15,
+                            offset: const Offset(0, 8),
+                          ),
                         ],
                       ),
                       child: GestureDetector(
@@ -329,6 +232,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                           setState(() {
                             _currentPoints = [details.localPosition];
                             page.undoHistory.clear();
+                            page.redoHistory.clear();
                           });
                         } : null,
                         onPanUpdate: _isDrawingMode ? (details) {
@@ -367,109 +271,11 @@ class _CanvasScreenState extends State<CanvasScreen> {
             },
           ),
 
-          // TOOLBAR POPUP COMPACTA SUPERIOR (MANTÉM-SE ESTÁTICA ENQUANTO AS FOLHAS DESLIZAM)
-          if (_isToolbarVisible)
-            Positioned(
-              top: 10,
-              left: 16,
-              right: 16,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5)),
-                    ],
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            _isToolbarPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                            size: 18,
-                            color: _isToolbarPinned ? const Color(0xFF0F4C5C) : Colors.black45,
-                          ),
-                          onPressed: () => setState(() => _isToolbarPinned = !_isToolbarPinned),
-                          tooltip: _isToolbarPinned ? 'Desfixar Barra' : 'Fixar Barra',
-                        ),
-                        const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-                        PopupMenuButton<String>(
-                          icon: CircleAvatar(
-                            radius: 10,
-                            backgroundColor: Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF'))),
-                          ),
-                          tooltip: 'Selecionar Cor',
-                          onSelected: (hex) => setState(() => _selectedColorHex = hex),
-                          itemBuilder: (context) => _colorPalette.entries.map((entry) {
-                            final hex = '#${entry.value.value.toRadixString(16).substring(2).toUpperCase()}';
-                            return PopupMenuItem<String>(
-                              value: hex,
-                              child: Row(
-                                children: [
-                                  CircleAvatar(radius: 8, backgroundColor: entry.value),
-                                  const SizedBox(width: 12),
-                                  Text(entry.key, style: GoogleFonts.inter(fontSize: 13)),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-                        PopupMenuButton<double>(
-                          icon: const Icon(Icons.line_weight, size: 18, color: Color(0xFF2C3E50)),
-                          tooltip: 'Espessura da Caneta',
-                          onSelected: (thickness) => setState(() => _selectedThickness = thickness),
-                          itemBuilder: (context) => [1.5, 3.0, 5.0, 8.0].map((value) {
-                            return PopupMenuItem<double>(
-                              value: value,
-                              child: Text('${value.toInt()} px', style: GoogleFonts.inter(fontSize: 13)),
-                            );
-                          }).toList(),
-                        ),
-                        if (!_isToolbarPinned) ...[
-                          const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
-                            onPressed: () => setState(() => _isToolbarVisible = false),
-                            tooltip: 'Esconder Barra',
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // BOTÕES FLUTUANTES DE ZOOM (CANTO INFERIOR DIREITO)
+          // 🚀 HUB DE CONTROLO / CÁPSULA FLUTUANTE (Canto Inferior Esquerdo)
           Positioned(
             bottom: 20,
-            right: 20,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton.small(
-                  heroTag: 'zoom_in_btn',
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF0F4C5C),
-                  onPressed: () => _zoom(1.2),
-                  child: const Icon(Icons.zoom_in),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton.small(
-                  heroTag: 'zoom_out_btn',
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF0F4C5C),
-                  onPressed: () => _zoom(0.8),
-                  child: const Icon(Icons.zoom_out),
-                ),
-              ],
-            ),
+            left: 20,
+            child: _buildFloatingToolbar(currentPage!),
           ),
         ],
       ),
@@ -479,6 +285,231 @@ class _CanvasScreenState extends State<CanvasScreen> {
         onPressed: _showAddPageDialog,
         child: const Icon(Icons.note_add),
       ),
+    );
+  }
+
+  // 🛠️ MÉTODOS DE EXTRAÇÃO DE LAYOUT (Estilo de Código Flutter Limpo e Declarativo)
+
+  PreferredSizeWidget _buildAppBar(bool hasPages) {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 1,
+      iconTheme: const IconThemeData(color: Color(0xFF1A1A24)),
+      title: hasPages ? _buildAppBarDropdown() : Text(widget.notebookTitle, style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16)),
+      actions: [
+        if (hasPages)
+          IconButton(
+            icon: const Icon(Icons.save, color: Color(0xFF27AE60)),
+            tooltip: 'Guardar Caderno',
+            onPressed: () async {
+              final repo = NotebookRepository();
+              await repo.saveFullNotebook(widget.notebookId, _pages);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Caderno guardado localmente!'), backgroundColor: Color(0xFF27AE60)),
+                );
+              }
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAppBarDropdown() {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<int>(
+        value: _currentPageIndex,
+        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
+        selectedItemBuilder: (BuildContext context) {
+          List<Widget> selectedItems = _pages.asMap().entries.map<Widget>((entry) {
+            return Container(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${widget.notebookTitle} - Folha ${entry.key + 1}/${_pages.length}',
+                style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            );
+          }).toList();
+          selectedItems.add(const SizedBox.shrink());
+          return selectedItems;
+        },
+        items: [
+          ..._pages.asMap().entries.map((entry) {
+            return DropdownMenuItem<int>(
+              value: entry.key,
+              child: Text('Ir para Folha ${entry.key + 1}', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+            );
+          }),
+          DropdownMenuItem<int>(
+            value: _pages.length,
+            child: Row(
+              children: [
+                const Icon(Icons.add, size: 18, color: Color(0xFF0F4C5C)),
+                const SizedBox(width: 8),
+                Text('Nova Folha', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+              ],
+            ),
+          ),
+        ],
+        onChanged: (int? newIndex) {
+          if (newIndex != null) {
+            if (newIndex == _pages.length) {
+              _showAddPageDialog();
+            } else {
+              _pageController.animateToPage(newIndex, duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.insert_page_break_outlined, size: 80, color: Colors.black.withOpacity(0.1)),
+          const SizedBox(height: 16),
+          Text(
+            'Este caderno está vazio.\nClique no + para adicionar a primeira folha.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: Colors.black45, fontSize: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingToolbar(LocalPage currentPage) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(_isDrawingMode ? Icons.brush : Icons.pan_tool, color: const Color(0xFF0F4C5C)),
+            onPressed: () => setState(() => _isDrawingMode = !_isDrawingMode),
+            tooltip: _isDrawingMode ? 'Modo Caneta' : 'Modo Mover/Zoom',
+          ),
+          IconButton(
+            icon: const Icon(Icons.zoom_out, color: Color(0xFF1A1A24)),
+            onPressed: () => _zoom(0.8),
+            tooltip: 'Afastar',
+          ),
+          IconButton(
+            icon: const Icon(Icons.zoom_in, color: Color(0xFF1A1A24)),
+            onPressed: () => _zoom(1.2),
+            tooltip: 'Aproximar',
+          ),
+          IconButton(
+            icon: const Icon(Icons.undo, color: Color(0xFF1A1A24)),
+            onPressed: currentPage.strokes.isNotEmpty ? _undo : null,
+            tooltip: 'Desfazer Traço',
+          ),
+          IconButton(
+            icon: const Icon(Icons.redo, color: Color(0xFF1A1A24)),
+            onPressed: currentPage.redoHistory.isNotEmpty ? _redo : null,
+            tooltip: 'Avançar Traço',
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+            onPressed: () {
+              setState(() {
+                currentPage.undoHistory.addAll(currentPage.strokes);
+                currentPage.strokes.clear();
+                currentPage.redoHistory.clear();
+              });
+            },
+            tooltip: 'Apagar Toda a Folha',
+          ),
+          const SizedBox(height: 24, child: VerticalDivider(thickness: 1, color: Colors.black12)),
+          _buildMoreToolsDropdown(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMoreToolsDropdown() {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, color: Color(0xFF0F4C5C)),
+      tooltip: 'Mais Ferramentas',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      offset: const Offset(0, -180),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Text('Cores da Caneta', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
+        ),
+        PopupMenuItem(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: _colorPalette.entries.map((entry) {
+              final hex = '#${entry.value.value.toRadixString(16).substring(2).toUpperCase()}';
+              final isSelected = _selectedColorHex == hex;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _selectedColorHex = hex);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: isSelected ? Colors.black45 : Colors.transparent, width: 2),
+                  ),
+                  child: CircleAvatar(radius: 12, backgroundColor: entry.value),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          enabled: false,
+          child: Text('Espessura', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
+        ),
+        PopupMenuItem(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [1.5, 3.0, 5.0, 8.0].map((t) {
+              final isSelected = _selectedThickness == t;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _selectedThickness = t);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: isSelected ? Colors.blue : Colors.transparent, width: 2),
+                  ),
+                  child: CircleAvatar(radius: t * 1.5, backgroundColor: Colors.black87),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'select',
+          child: Row(
+            children: [
+              const Icon(Icons.highlight_alt, color: Colors.black54, size: 20),
+              const SizedBox(width: 8),
+              Text('Selecionar Área (Lasso)', style: GoogleFonts.inter(color: Colors.black87, fontSize: 14)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

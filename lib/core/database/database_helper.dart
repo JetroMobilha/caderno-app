@@ -78,7 +78,7 @@ class DatabaseHelper {
         color TEXT,
         cover_image TEXT,
         line_type TEXT,
-        paper_size TEXT
+        paper_size TEXT,
         synced_with_cloud INTEGER DEFAULT 0,
         FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
       )
@@ -91,6 +91,7 @@ class DatabaseHelper {
         server_id INTEGER NULL,
         notebook_id INTEGER NOT NULL,
         page_number INTEGER NOT NULL,
+        is_landscape INTEGER DEFAULT 0, -- 🚀 NOVO: 0 = Retrato, 1 = Paisagem
         header_data TEXT, 
         footer_data TEXT,
         synced_with_cloud INTEGER DEFAULT 0,

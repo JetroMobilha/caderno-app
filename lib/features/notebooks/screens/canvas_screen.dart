@@ -2,12 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/drawing_point_model.dart';
 
+// 🚀 MODELO DE ESTADO INDEPENDENTE PARA CADA FOLHA
 class LocalPage {
   final bool isLandscape;
   List<Stroke> strokes = [];
   List<Stroke> undoHistory = [];
 
-  LocalPage({required this.isLandscape});
+  // Cada folha agora é dona absoluta da sua própria câmara e nível de zoom
+  late TransformationController transformationController;
+
+  LocalPage({required this.isLandscape}) {
+    transformationController = TransformationController();
+  }
+
+  void dispose() {
+    transformationController.dispose();
+  }
 }
 
 class CanvasScreen extends StatefulWidget {
@@ -38,8 +48,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
   bool _isToolbarVisible = true;
   bool _isToolbarPinned = true;
 
-  late TransformationController _transformationController;
+  // Controlador do motor de animação e deslize horizontal das folhas
+  final PageController _pageController = PageController(initialPage: 0);
 
+  // 📐 DIMENSÕES ISO PURAS PARA EXPORTAÇÃO MILIMÉTRICA EM PDF
   final Map<String, Size> _paperSizes = {
     'A5': const Size(420, 595),
     'A4': const Size(595, 842),
@@ -57,26 +69,28 @@ class _CanvasScreenState extends State<CanvasScreen> {
   };
 
   @override
-  void initState() {
-    super.initState();
-    _transformationController = TransformationController();
-    _resetZoom();
-  }
-
-  void _resetZoom() {
-    final double initialScale = widget.paperSize == 'A0' || widget.paperSize == 'A1' ? 0.25 : 1.4;
-    _transformationController.value = Matrix4.identity()..scale(initialScale);
-  }
-
-  @override
   void dispose() {
-    _transformationController.dispose();
+    _pageController.dispose();
+    // Limpa os controladores de zoom de todas as páginas para evitar vazamentos de memória
+    for (var page in _pages) {
+      page.dispose();
+    }
     super.dispose();
   }
 
+  // Define a escala inicial ideal sem quebrar as proporções do papel
+  void _resetZoomForPage(LocalPage page, String paperSize) {
+    final double initialScale = paperSize == 'A0' || paperSize == 'A1' ? 0.25 : 1.4;
+    page.transformationController.value = Matrix4.identity()..scale(initialScale);
+  }
+
+  // Controla o Zoom via Botão focado na página que está atualmente visível
   void _zoom(double factor) {
+    if (_pages.isEmpty) return;
+    final currentPage = _pages[_currentPageIndex];
+
     setState(() {
-      final Matrix4 matrix = _transformationController.value;
+      final Matrix4 matrix = currentPage.transformationController.value;
       final double currentScale = matrix.getMaxScaleOnAxis();
       if (currentScale * factor < 0.1 || currentScale * factor > 6.0) return;
 
@@ -88,10 +102,11 @@ class _CanvasScreenState extends State<CanvasScreen> {
       matrix.scale(factor);
       matrix.translate(-centerX, -centerY);
 
-      _transformationController.value = matrix;
+      currentPage.transformationController.value = matrix;
     });
   }
 
+  // Diálogo para escolher a orientação da nova folha
   void _showAddPageDialog() {
     bool selectedIsLandscape = false;
 
@@ -126,12 +141,24 @@ class _CanvasScreenState extends State<CanvasScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
               onPressed: () {
+                final newPage = LocalPage(isLandscape: selectedIsLandscape);
+                _resetZoomForPage(newPage, widget.paperSize);
+
                 setState(() {
-                  _pages.add(LocalPage(isLandscape: selectedIsLandscape));
-                  _currentPageIndex = _pages.length - 1;
-                  _resetZoom();
+                  _pages.add(newPage);
                 });
                 Navigator.pop(context);
+
+                // Desliza com animação realista até à folha recém-criada
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_pageController.hasClients) {
+                    _pageController.animateToPage(
+                      _pages.length - 1,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOutCubic,
+                    );
+                  }
+                });
               },
               child: const Text('Adicionar', style: TextStyle(color: Colors.white)),
             ),
@@ -168,49 +195,36 @@ class _CanvasScreenState extends State<CanvasScreen> {
           child: DropdownButton<int>(
             value: _currentPageIndex,
             icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
-              selectedItemBuilder: (BuildContext context) {
-                // 🚀 A CORREÇÃO: Adicionamos explicitamente o tipo <Widget> após o .map
-                List<Widget> selectedItems = _pages.asMap().entries.map<Widget>((entry) {
-                  return Container(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '${widget.notebookTitle} - Folha ${entry.key + 1}/${_pages.length}',
-                      style: GoogleFonts.lora(
-                          color: const Color(0xFF1A1A24),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16
-                      ),
-                    ),
-                  );
-                }).toList();
+            // 🚀 ALINHAMENTO DE TIPAGEM COESO: Evita o erro de subtipo do SizedBox/Container
+            selectedItemBuilder: (BuildContext context) {
+              List<Widget> selectedItems = _pages.asMap().entries.map<Widget>((entry) {
+                return Container(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${widget.notebookTitle} - Folha ${entry.key + 1}/${_pages.length}',
+                    style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                );
+              }).toList();
 
-                // Agora o Dart aceita o SizedBox perfeitamente na lista de Widgets!
-                selectedItems.add(const SizedBox.shrink());
-
-                return selectedItems;
-              },
+              selectedItems.add(const SizedBox.shrink()); // Elemento fantasma para balancear a lista
+              return selectedItems;
+            },
             items: [
-              // Lista normal de folhas
               ..._pages.asMap().entries.map((entry) {
                 return DropdownMenuItem<int>(
                   value: entry.key,
-                  child: Text(
-                      'Ir para Folha ${entry.key + 1}',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w500)
-                  ),
+                  child: Text('Ir para Folha ${entry.key + 1}', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
                 );
               }),
-              // 🚀 O ÚLTIMO ITEM: O Botão embutido de Adicionar Folha
+              // 🚀 COMPACTAÇÃO DE INTERFACE: Adicionar folha embutida como último item da lista
               DropdownMenuItem<int>(
-                value: _pages.length, // Um índice especial que representa a ação
+                value: _pages.length,
                 child: Row(
                   children: [
                     const Icon(Icons.add, size: 18, color: Color(0xFF0F4C5C)),
                     const SizedBox(width: 8),
-                    Text(
-                      'Nova Folha',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
-                    ),
+                    Text('Nova Folha', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
                   ],
                 ),
               ),
@@ -218,11 +232,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
             onChanged: (int? newIndex) {
               if (newIndex != null) {
                 if (newIndex == _pages.length) {
-                  // Se clicou no último item especial, abre o dialog!
                   _showAddPageDialog();
                 } else {
-                  // Se clicou numa página, apenas navega para ela
-                  setState(() => _currentPageIndex = newIndex);
+                  _pageController.animateToPage(
+                      newIndex,
+                      duration: const Duration(milliseconds: 350),
+                      curve: Curves.easeInOut
+                  );
                 }
               }
             },
@@ -275,66 +291,83 @@ class _CanvasScreenState extends State<CanvasScreen> {
       )
           : Stack(
         children: [
-          InteractiveViewer.builder(
-            scaleEnabled: !_isDrawingMode,
-            panEnabled: !_isDrawingMode,
-            maxScale: 6.0,
-            minScale: 0.1,
-            transformationController: _transformationController,
-            boundaryMargin: const EdgeInsets.all(3000),
-            builder: (context, viewport) {
-              return Center(
-                child: Container(
-                  width: pageSize.width,
-                  height: pageSize.height,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDFBF7),
-                    borderRadius: BorderRadius.circular(2),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8)),
-                    ],
-                  ),
-                  child: GestureDetector(
-                    onPanStart: _isDrawingMode ? (details) {
-                      setState(() {
-                        _currentPoints = [details.localPosition];
-                        currentPage!.undoHistory.clear();
-                      });
-                    } : null,
-                    onPanUpdate: _isDrawingMode ? (details) {
-                      setState(() => _currentPoints.add(details.localPosition));
-                    } : null,
-                    onPanEnd: _isDrawingMode ? (details) {
-                      setState(() {
-                        currentPage!.strokes.add(
-                          Stroke(
-                            color: _selectedColorHex,
-                            thickness: _selectedThickness,
-                            points: List.from(_currentPoints),
+          // 🚀 MOTOR DE ANIMAÇÃO ENTRE FOLHAS PRESERVANDO O ZOOM INDIVIDUAL
+          PageView.builder(
+            controller: _pageController,
+            physics: _isDrawingMode ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
+            itemCount: _pages.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentPageIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              final page = _pages[index];
+              final Size currentPageSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
+
+              return InteractiveViewer.builder(
+                scaleEnabled: !_isDrawingMode,
+                panEnabled: !_isDrawingMode,
+                maxScale: 6.0,
+                minScale: 0.1,
+                transformationController: page.transformationController, // Atua na folha isolada
+                boundaryMargin: const EdgeInsets.all(3000),
+                builder: (context, viewport) {
+                  return Center(
+                    child: Container(
+                      width: currentPageSize.width,
+                      height: currentPageSize.height,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDFBF7),
+                        borderRadius: BorderRadius.circular(2),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8)),
+                        ],
+                      ),
+                      child: GestureDetector(
+                        onPanStart: _isDrawingMode ? (details) {
+                          setState(() {
+                            _currentPoints = [details.localPosition];
+                            page.undoHistory.clear();
+                          });
+                        } : null,
+                        onPanUpdate: _isDrawingMode ? (details) {
+                          setState(() => _currentPoints.add(details.localPosition));
+                        } : null,
+                        onPanEnd: _isDrawingMode ? (details) {
+                          setState(() {
+                            page.strokes.add(
+                              Stroke(
+                                color: _selectedColorHex,
+                                thickness: _selectedThickness,
+                                points: List.from(_currentPoints),
+                              ),
+                            );
+                            _currentPoints.clear();
+                          });
+                        } : null,
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            key: const Key('canvas_custom_paint'),
+                            size: currentPageSize,
+                            painter: NotebookPainter(
+                              strokes: page.strokes,
+                              currentPoints: _currentPoints,
+                              currentColor: _selectedColorHex,
+                              currentThickness: _selectedThickness,
+                              lineType: widget.lineType,
+                            ),
                           ),
-                        );
-                        _currentPoints.clear();
-                      });
-                    } : null,
-                    child: RepaintBoundary(
-                      child: CustomPaint(
-                        key: const Key('canvas_custom_paint'),
-                        size: pageSize,
-                        painter: NotebookPainter(
-                          strokes: currentPage!.strokes,
-                          currentPoints: _currentPoints,
-                          currentColor: _selectedColorHex,
-                          currentThickness: _selectedThickness,
-                          lineType: widget.lineType,
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),
 
+          // TOOLBAR POPUP COMPACTA SUPERIOR (MANTÉM-SE ESTÁTICA ENQUANTO AS FOLHAS DESLIZAM)
           if (_isToolbarVisible)
             Positioned(
               top: 10,
@@ -413,7 +446,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
               ),
             ),
 
-          // ZOOM FLUTUANTE
+          // BOTÕES FLUTUANTES DE ZOOM (CANTO INFERIOR DIREITO)
           Positioned(
             bottom: 20,
             right: 20,
@@ -440,7 +473,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
           ),
         ],
       ),
-      // FAB central visível apenas quando não há nenhuma página
       floatingActionButton: hasPages ? null : FloatingActionButton(
         backgroundColor: const Color(0xFF0F4C5C),
         foregroundColor: Colors.white,

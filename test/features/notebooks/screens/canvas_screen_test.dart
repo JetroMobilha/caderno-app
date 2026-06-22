@@ -33,6 +33,9 @@ void main() {
 
     expect(find.text('História - Folha 1/1'), findsOneWidget);
 
+    // 🚀 NOVO TESTE: Garante que o motor de animação e deslize de folhas está ativo
+    expect(find.byType(PageView), findsOneWidget);
+
     // 2. Adiciona a SEGUNDA folha (abrindo o Dropdown no topo)
     await tester.tap(find.text('História - Folha 1/1'));
     await tester.pumpAndSettle();

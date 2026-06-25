@@ -191,11 +191,49 @@ class SubjectsScreen extends ConsumerWidget {
   }
 }
 
-class SubjectsListBody extends ConsumerWidget {
+class SubjectsListBody extends ConsumerStatefulWidget {
   const SubjectsListBody({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SubjectsListBody> createState() => _SubjectsListBodyState();
+}
+
+class _SubjectsListBodyState extends ConsumerState<SubjectsListBody> {
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubjects();
+  }
+
+  Future<void> _loadSubjects() async {
+    // Se tiveres um método loadSubjects no provider, chama-o aqui.
+    // O delay garante que a UI nunca pisca mensagens erradas enquanto o SQLite arranca.
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: Color(0xFF2C3E50), strokeWidth: 3),
+            const SizedBox(height: 16),
+            Text(
+              'A carregar disciplinas...',
+              style: GoogleFonts.inter(color: Colors.black54, fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      );
+    }
+
     final subjects = ref.watch(subjectProvider);
 
     if (subjects.isEmpty) {

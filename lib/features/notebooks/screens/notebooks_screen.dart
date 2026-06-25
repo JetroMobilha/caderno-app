@@ -5,7 +5,7 @@ import '../models/notebook_model.dart';
 import '../providers/notebook_provider.dart';
 import 'canvas_screen.dart';
 
-class NotebooksScreen extends ConsumerWidget {
+class NotebooksScreen extends ConsumerStatefulWidget {
   final int subjectId;
   final String subjectName;
 
@@ -16,19 +16,58 @@ class NotebooksScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Filtra em tempo real os cadernos pertencentes a esta disciplina
+  ConsumerState<NotebooksScreen> createState() => _NotebooksScreenState();
+}
+
+class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
+
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    // 🚀 Pede ao Provider para ir buscar os dados reais ao SQLite
+    await ref.read(notebookProvider.notifier).loadNotebooks(widget.subjectId);
+
+    // Adicionamos um micro-delay intencional apenas para a animação respirar e ser suave
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final allNotebooks = ref.watch(notebookProvider);
-    final notebooks = allNotebooks.where((n) => n.subject_id == subjectId).toList();
+    final notebooks = allNotebooks.where((n) => n.subject_id == widget.subjectId).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
-        title: Text(subjectName, style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+        title: Text(widget.subjectName, style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF2C3E50),
         foregroundColor: Colors.white,
       ),
-      body: notebooks.isEmpty
+      body: _isLoading
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: Color(0xFF2C3E50), strokeWidth: 3),
+            const SizedBox(height: 16),
+            Text(
+              'A organizar a estante...',
+              style: GoogleFonts.inter(color: Colors.black54, fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      )
+          : notebooks.isEmpty
           ? Center(
         child: Text(
           'Nenhum caderno nesta disciplina.\nClique no + para começar!',
@@ -73,8 +112,8 @@ class NotebooksScreen extends ConsumerWidget {
             builder: (context) => CanvasScreen(
               notebookId: notebook.id ?? 0,
               notebookTitle: notebook.title,
-              lineType: notebook.lineType ?? 'ruled',
-              paperSize: notebook.paperSize, // 🚀 ENVIADO DO TEU MODELO REAL
+              lineType: notebook.line_type ?? 'ruled',
+              paperSize: notebook.paper_size ?? 'A4',
             ),
           ),
         );
@@ -126,7 +165,7 @@ class NotebooksScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Formato: ${notebook.paperSize}',
+                      'Formato: ${notebook.paper_size}',
                       style: GoogleFonts.inter(color: Colors.black54, fontSize: 10, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -222,20 +261,38 @@ class NotebooksScreen extends ConsumerWidget {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
-              onPressed: () {
+              onPressed: () async {
                 if (formKey.currentState!.validate()) {
-                  // 🚀 ALINHADO COM O TEU MODELO REAL OBRIGATÓRIO (coverType incluído)
-                  ref.read(notebookProvider.notifier).addNotebook(
-                    Notebook(
-                      subject_id: subjectId,
-                      title: titleController.text.trim(),
-                      coverType: 'color',
-                      color: pickedColorHex,
-                      lineType: selectedLineType,
-                      paperSize: selectedPaperSize,
-                    ),
+                  // 🚀 ALINHADO COM O TEU MODELO: Usando os sublinhados corretos (snake_case)
+                  final newNotebook = Notebook(
+                    subject_id: widget.subjectId,
+                    title: titleController.text.trim(),
+                    cover_type: 'color',        // Corrigido
+                    color: pickedColorHex,
+                    line_type: selectedLineType,  // Corrigido
+                    paper_size: selectedPaperSize, // Corrigido
                   );
-                  Navigator.pop(context);
+
+                  // 1. Espera que o Provider grave no SQLite e devolva o ID real!
+                  final realId = await ref.read(notebookProvider.notifier).addNotebook(newNotebook);
+
+                  if (context.mounted) {
+                    Navigator.pop(context); // Fecha o Diálogo
+
+                    // 2. Mergulha imediatamente no Canvas com a ligação de dados perfeita
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CanvasScreen(
+                          notebookId: realId,
+                          notebookTitle: newNotebook.title,
+                          // 🚀 Acedendo às propriedades também com sublinhado
+                          lineType: newNotebook.line_type ?? 'ruled',
+                          paperSize: newNotebook.paper_size ?? 'A4',
+                        ),
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Criar', style: TextStyle(color: Colors.white)),

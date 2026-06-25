@@ -15,7 +15,7 @@ void main() {
 
     // Adicionamos um caderno de teste manualmente usando o notifier
     final notifier = container.read(notebookProvider.notifier);
-    final newNotebook = Notebook(subject_id: 1, title: 'Álgebra', coverType: 'classic');
+    final newNotebook = Notebook(subject_id: 1, title: 'Álgebra', cover_type: 'classic');
 
     // Atualizamos o estado diretamente para simular a inserção
     notifier.state = [newNotebook];

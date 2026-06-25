@@ -19,10 +19,10 @@ void main() {
       expect(notebook.id, 1);
       expect(notebook.subject_id, 10);
       expect(notebook.title, 'Álgebra Linear');
-      expect(notebook.coverType, 'leather');
+      expect(notebook.cover_type, 'leather');
       expect(notebook.color, '#2C3E50');
-      expect(notebook.coverImage, isNull);
-      expect(notebook.lineType, 'ruled');
+      expect(notebook.cover_image, isNull);
+      expect(notebook.line_type, 'ruled');
     });
 
     test('Deve converter corretamente um Objeto Notebook para Map (toMap)', () {
@@ -30,10 +30,10 @@ void main() {
         id: 2,
         subject_id: 10,
         title: 'Geometria Analítica',
-        coverType: 'classic',
+        cover_type: 'classic',
         color: null,
-        coverImage: 'assets/covers/geo.png',
-        lineType: 'grid',
+        cover_image: 'assets/covers/geo.png',
+        line_type: 'grid',
       );
 
       final map = notebook.toMap();

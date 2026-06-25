@@ -5,8 +5,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // O nosso tradutor de Des
 import 'package:path/path.dart';
 
 class DatabaseHelper {
-  static const _databaseName = "caderno_digital_offline.db";
-  static const _databaseVersion = 1;
+  static const _databaseName = "caderno_digital_offline_v2.db";
+  static const _databaseVersion = 2;
 
   DatabaseHelper._privateConstructor();
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -49,7 +49,8 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         plan_type TEXT DEFAULT 'free',
-        synced_with_cloud INTEGER DEFAULT 0
+        synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0
       )
     ''');
 
@@ -63,6 +64,7 @@ class DatabaseHelper {
         color TEXT NOT NULL,
         icon TEXT,
         synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');
@@ -80,27 +82,29 @@ class DatabaseHelper {
         line_type TEXT,
         paper_size TEXT,
         synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
       )
     ''');
 
     // 4. Tabela de Páginas (pages)
+    // 🚀 ATUALIZADO: header_data e footer_data vão receber o nosso Título e Rodapé dinâmicos
     await db.execute('''
       CREATE TABLE pages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id INTEGER NULL,
         notebook_id INTEGER NOT NULL,
         page_number INTEGER NOT NULL,
-        is_landscape INTEGER DEFAULT 0, -- 🚀 NOVO: 0 = Retrato, 1 = Paisagem
+        is_landscape INTEGER DEFAULT 0, 
         header_data TEXT, 
         footer_data TEXT,
         synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
       )
     ''');
 
-    // 5. Motor de Desenho (canvas_strokes)
-    // Usamos client_stroke_id como TEXT (UUID gerado no Flutter)
+    // 5. Motor de Desenho Vetorial (canvas_strokes)
     await db.execute('''
       CREATE TABLE canvas_strokes (
         client_stroke_id TEXT PRIMARY KEY,
@@ -109,6 +113,22 @@ class DatabaseHelper {
         stroke_data TEXT NOT NULL, 
         is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
+        FOREIGN KEY (page_id) REFERENCES pages (id) ON DELETE CASCADE
+      )
+    ''');
+
+    // 🚀 5.1 NOVO: Motor de Tipografia (canvas_text_blocks)
+    // Segue a tua arquitetura de granularidade fina. Cada bloco de texto viaja sozinho para o servidor.
+    await db.execute('''
+      CREATE TABLE canvas_text_blocks (
+        client_text_id TEXT PRIMARY KEY,
+        server_id INTEGER NULL,
+        page_id INTEGER NOT NULL,
+        text_data TEXT NOT NULL, -- JSON com o texto, fontSize, isBold, textColorHex, dx, dy
+        is_deleted INTEGER DEFAULT 0,
+        synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (page_id) REFERENCES pages (id) ON DELETE CASCADE
       )
     ''');
@@ -122,6 +142,7 @@ class DatabaseHelper {
         user_id INTEGER NOT NULL,
         role TEXT NOT NULL, 
         synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
@@ -139,6 +160,7 @@ class DatabaseHelper {
         reference TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
         synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');

@@ -91,9 +91,13 @@ class TextBlock {
   );
 }
 
-// 🚀 A FOLHA BLINDADA (Compatível com esquemas velhos e novos)
 class LocalPage {
+  int? id;             // 🚀 ID Local (INTEGER AUTOINCREMENT do teu SQLite)
+  int? serverId;       // server_id vindo do Laravel
+  final int notebookId;      // notebook_id (chave estrangeira)
+  final int pageNumber;      // page_number sequencial
   final bool isLandscape;
+
   List<Stroke> strokes;
   List<Stroke> undoHistory = [];
   List<Stroke> redoHistory = [];
@@ -102,16 +106,26 @@ class LocalPage {
   String footer;
   List<TextBlock> textBlocks;
 
+  int syncedWithCloud;       // 🚀 0 = Não sincronizado, 1 = Sincronizado (Seguindo o teu padrão)
+  int updatedAt;             // Timestamp para controlo de modificação
+
   late TransformationController transformationController;
 
   LocalPage({
+    this.id,
+    this.serverId,
+    required this.notebookId,
+    required this.pageNumber,
     required this.isLandscape,
     List<Stroke>? strokes,
     this.title = '',
     this.footer = '',
     List<TextBlock>? textBlocks,
+    this.syncedWithCloud = 0,
+    int? updatedAt,
   })  : strokes = strokes ?? <Stroke>[],
-        textBlocks = textBlocks ?? <TextBlock>[] { // O <TextBlock>[] previne injeções dinâmicas
+        textBlocks = textBlocks ?? <TextBlock>[],
+        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch {
     transformationController = TransformationController();
   }
 
@@ -119,28 +133,31 @@ class LocalPage {
     transformationController.dispose();
   }
 
-  Map<String, dynamic> toMap() {
+  // Mapeia para corresponder exatamente à tua tabela 'pages'
+  Map<String, dynamic> toDatabaseMap() {
     return {
-      'isLandscape': isLandscape,
-      'title': title,
-      'footer': footer,
-      'strokes': strokes.map((s) => s.toMap()).toList(),
-      'textBlocks': textBlocks.map((t) => t.toMap()).toList(),
+      if (id != null) 'id': id,
+      'server_id': serverId,
+      'notebook_id': notebookId,
+      'page_number': pageNumber,
+      'is_landscape': isLandscape ? 1 : 0,
+      'header_data': title,        // O teu campo header_data recebe o título
+      'footer_data': footer,       // O teu campo footer_data recebe o rodapé
+      'synced_with_cloud': syncedWithCloud,
     };
   }
 
-  factory LocalPage.fromMap(Map<String, dynamic> map) {
+  // Cria o objeto a partir da tua tabela 'pages' (as listas de strokes e textBlocks serão carregadas à parte)
+  factory LocalPage.fromDatabaseMap(Map<String, dynamic> map) {
     return LocalPage(
-      isLandscape: map['isLandscape'] ?? false,
-      title: map['title']?.toString() ?? '',
-      footer: map['footer']?.toString() ?? '',
-      // 🚀 Defesas ativas: List.from obriga o Dart a respeitar o Tipo, falhando graciosamente com vazios
-      strokes: map['strokes'] != null
-          ? List<Stroke>.from((map['strokes'] as List).map((s) => Stroke.fromMap(s as Map<String, dynamic>)))
-          : <Stroke>[],
-      textBlocks: map['textBlocks'] != null
-          ? List<TextBlock>.from((map['textBlocks'] as List).map((t) => TextBlock.fromMap(t as Map<String, dynamic>)))
-          : <TextBlock>[],
+      id: map['id'] as int?,
+      serverId: map['server_id'] as int?,
+      notebookId: map['notebook_id'] as int,
+      pageNumber: map['page_number'] as int,
+      isLandscape: map['is_landscape'] == 1,
+      title: map['header_data']?.toString() ?? '',
+      footer: map['footer_data']?.toString() ?? '',
+      syncedWithCloud: map['synced_with_cloud'] as int? ?? 0,
     );
   }
 }

@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/drawing_point_model.dart';
 import '../repositories/notebook_repository.dart';
 
-
 class CanvasScreen extends StatefulWidget {
   final int notebookId;
   final String notebookTitle;
@@ -22,15 +21,18 @@ class CanvasScreen extends StatefulWidget {
   State<CanvasScreen> createState() => _CanvasScreenState();
 }
 
-// 🚀 NOVO: Máquina de Estados clara para as ferramentas principais
-enum ToolMode { draw, pan, select,text }
+// 🚀 Máquina de Estados para as ferramentas
+enum ToolMode { draw, pan, select, text }
 
 class _CanvasScreenState extends State<CanvasScreen> {
+  // 🚀 INSTÂNCIA DO REPOSITÓRIO E CONTROLO DE CARREGAMENTO
+  final NotebookRepository _repository = NotebookRepository();
+  bool _isLoading = true;
+
   List<LocalPage> _pages = [];
   int _currentPageIndex = 0;
   List<Offset> _currentPoints = [];
 
-  // 🚀 ATUALIZADO: A variável que controla a ferramenta ativa
   ToolMode _currentTool = ToolMode.draw;
 
   final Set<String> _selectedStrokeIds = {};
@@ -42,10 +44,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
   String _selectedColorHex = '#2C3E50';
   double _selectedThickness = 3.0;
 
-  // Controlador do motor de animação e deslize horizontal das folhas
   final PageController _pageController = PageController(initialPage: 0);
 
-  // 📐 DIMENSÕES ISO PURAS PARA EXPORTAÇÃO MILIMÉTRICA EM PDF
+  // 📐 DIMENSÕES ISO
   final Map<String, Size> _paperSizes = {
     'A5': const Size(420, 595),
     'A4': const Size(595, 842),
@@ -55,7 +56,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
     'A0': const Size(2384, 3370),
   };
 
-  // 🚀 PALETA EXPANDIDA: 15 Cores prontas para o novo Diálogo
+  // 🚀 PALETA EXPANDIDA
   final Map<String, Color> _colorPalette = {
     'Preto': const Color(0xFF1A1A24),
     'Cinzento Escuro': const Color(0xFF455A64),
@@ -74,26 +75,45 @@ class _CanvasScreenState extends State<CanvasScreen> {
     'Castanho': const Color(0xFF795548),
   };
 
-  // 🚀 EXPANDIDO: Lista de Traços Suportados de 1px até 30px
-  final List<double> _thicknessOptions = [1.0, 2.0, 3.0, 5.0 , 10.0, 20.0];
+  final List<double> _thicknessOptions = [1.0, 2.0, 3.0, 5.0, 10.0, 20.0];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedPages();
+  }
+
+  // 🚀 MÉTODO DE CARREGAMENTO OFFLINE-FIRST (Agora 100% Ativo)
+  Future<void> _loadSavedPages() async {
+    try {
+      // 1. Vai buscar as folhas pesadas ao SQLite através do Repositório
+      final pages = await _repository.getFullPagesForNotebook(widget.notebookId);
+
+      setState(() {
+        _pages = pages;
+        _isLoading = false;
+      });
+
+    } catch (e) {
+      print("Erro ao carregar o caderno: $e");
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
-    // Limpa os controladores de zoom de todas as páginas para evitar vazamentos de memória
     for (var page in _pages) {
       page.dispose();
     }
     super.dispose();
   }
 
-  // Define a escala inicial ideal sem quebrar as proporções do papel
   void _resetZoomForPage(LocalPage page, String paperSize) {
     final double initialScale = paperSize == 'A0' || paperSize == 'A1' ? 0.25 : 1.4;
     page.transformationController.value = Matrix4.identity()..scale(initialScale);
   }
 
-  // Controla o Zoom via Botão focado na página que está atualmente visível
   void _zoom(double factor) {
     if (_pages.isEmpty) return;
     final currentPage = _pages[_currentPageIndex];
@@ -115,7 +135,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
     });
   }
 
-  // Diálogo para escolher a orientação da nova folha
   void _showAddPageDialog() {
     bool selectedIsLandscape = false;
 
@@ -149,8 +168,14 @@ class _CanvasScreenState extends State<CanvasScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
-              onPressed: () {
-                final newPage = LocalPage(isLandscape: selectedIsLandscape);
+              onPressed: () async {
+                // 🚀 ADAPTAÇÃO AO TEU SQLITE: Informa o ID do caderno e número da página
+                final newPage = LocalPage(
+                  notebookId: widget.notebookId,
+                  pageNumber: _pages.length + 1,
+                  isLandscape: selectedIsLandscape,
+                );
+
                 _resetZoomForPage(newPage, widget.paperSize);
 
                 setState(() {
@@ -158,7 +183,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
                 });
                 Navigator.pop(context);
 
-                // Desliza com animação realista até à folha recém-criada
+                // 🚀 BULK SAVE PARA CRIAR A FOLHA NO SQLITE IMEDIATAMENTE
+                await _repository.saveFullNotebook(widget.notebookId, _pages);
+
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (_pageController.hasClients) {
                     _pageController.animateToPage(
@@ -177,7 +204,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-  // 🎨 ESTÚDIO DE CORES (Diálogo Rico com Grelha)
   void _showColorStudioDialog() {
     showDialog(
       context: context,
@@ -192,7 +218,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
             runSpacing: 16,
             alignment: WrapAlignment.center,
             children: [
-              // 1. Renderiza as 15 cores prontas do sistema
               ..._colorPalette.entries.map((entry) {
                 final hex = '#${entry.value.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
                 final isSelected = _selectedColorHex == hex;
@@ -211,12 +236,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                   ),
                 );
               }),
-
-              // 🚀 2. O NOVO BOTÃO: Atalho para abrir a paleta livre de 16 milhões de cores
               GestureDetector(
                 onTap: () {
-                  Navigator.pop(context); // Fecha o diálogo das cores básicas
-                  _showAdvancedColorPicker(); // Abre o misturador avançado RGB
+                  Navigator.pop(context);
+                  _showAdvancedColorPicker();
                 },
                 child: Container(
                   padding: const EdgeInsets.all(3),
@@ -227,7 +250,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                   child: const CircleAvatar(
                     radius: 16,
                     backgroundColor: Colors.white,
-                    child: Icon(Icons.colorize, size: 16, color: Color(0xFF0F4C5C)), // Ícone de conta-gotas/paleta
+                    child: Icon(Icons.colorize, size: 16, color: Color(0xFF0F4C5C)),
                   ),
                 ),
               ),
@@ -238,9 +261,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-  // 🚀 NOVO: Estúdio Avançado RGB para seleção de qualquer cor do espectro
   void _showAdvancedColorPicker() {
-    // Transforma o Hex atual numa cor nativa do Flutter para extrair os canais
     Color currentColor = Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF')));
     double r = currentColor.red.toDouble();
     double g = currentColor.green.toDouble();
@@ -259,7 +280,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Círculo de pré-visualização da nova cor misturada
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: previewColor,
@@ -276,12 +296,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
                   style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
                 ),
                 const SizedBox(height: 20),
-
-                // Canal Vermelho (Red)
                 _buildRGBSlider('V', r, Colors.red, (val) => setModalState(() => r = val)),
-                // Canal Verde (Green)
                 _buildRGBSlider('Vd', g, Colors.green, (val) => setModalState(() => g = val)),
-                // Canal Azul (Blue)
                 _buildRGBSlider('Az', b, Colors.blue, (val) => setModalState(() => b = val)),
               ],
             ),
@@ -293,7 +309,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
                 onPressed: () {
-                  // Converte o RGB de volta para a String HEX pura que o teu motor já usa
                   final hexString = '#${r.toInt().toRadixString(16).padLeft(2, '0')}${g.toInt().toRadixString(16).padLeft(2, '0')}${b.toInt().toRadixString(16).padLeft(2, '0')}'.toUpperCase();
                   setState(() => _selectedColorHex = hexString);
                   Navigator.pop(context);
@@ -307,7 +322,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-  // 🚀 ATUALIZADO: Diálogo Rich Text Ultra-Responsivo (À prova de telemóveis e teclados)
   void _showTextInputDialog({
     required String initialText,
     String title = 'Editar Texto',
@@ -320,7 +334,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
   })
   {
     final TextEditingController textController = TextEditingController(text: initialText);
-
     bool bold = initialBold;
     bool italic = initialItalic;
     bool underline = initialUnderline;
@@ -331,17 +344,16 @@ class _CanvasScreenState extends State<CanvasScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          insetPadding: const EdgeInsets.all(16), // 🚀 Garante que o modal não cola nas bordas do telemóvel
+          insetPadding: const EdgeInsets.all(16),
           backgroundColor: const Color(0xFFFDFBF7),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(title, style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
           content: SizedBox(
             width: double.maxFinite,
-            child: SingleChildScrollView( // 🚀 Evita que o teclado oculte a caixa de texto
+            child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 🚀 1. WRAP DE ESTILOS: Quebra para a linha de baixo se não houver espaço físico
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                     decoration: BoxDecoration(color: Colors.black.withOpacity(0.03), borderRadius: BorderRadius.circular(8)),
@@ -366,7 +378,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
                           icon: Icon(Icons.format_underlined, color: underline ? const Color(0xFF0F4C5C) : Colors.black45),
                           onPressed: () => setModalState(() => underline = !underline),
                         ),
-                        // O Divider agora é um container simples para não dar erro dentro do Wrap
                         Container(height: 24, width: 1, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
                         ...[const Color(0xFF1A1A24), const Color(0xFFE74C3C), const Color(0xFF27AE60), const Color(0xFF1976D2)].map((c) {
                           final currentHex = '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
@@ -377,7 +388,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                               margin: const EdgeInsets.symmetric(horizontal: 4),
                               padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: isCurrentSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2)),
-                              child: CircleAvatar(radius: 10, backgroundColor: c), // 🚀 Maior para ser fácil tocar com o dedo
+                              child: CircleAvatar(radius: 10, backgroundColor: c),
                             ),
                           );
                         }),
@@ -385,8 +396,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // 🚀 2. SLIDER RESPONSIVO
                   Row(
                     children: [
                       const Icon(Icons.format_size, color: Colors.black45, size: 18),
@@ -408,15 +417,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // 🚀 3. CAIXA DE TEXTO OTIMIZADA
                   TextField(
                     controller: textController,
                     autofocus: true,
                     maxLines: null,
                     minLines: 4,
                     style: GoogleFonts.inter(
-                      // 🚀 LIMITADOR INTELIGENTE: Na folha pode ter 64px, mas no diálogo nunca passa de 28px para não estourar o ecrã
                       fontSize: fontSize.clamp(10.0, 28.0),
                       fontWeight: bold ? FontWeight.bold : FontWeight.normal,
                       fontStyle: italic ? FontStyle.italic : FontStyle.normal,
@@ -449,7 +455,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
       ),
     );
   }
-  // Widget auxiliar para desenhar as linhas do misturador
+
   Widget _buildRGBSlider(String label, double value, Color color, ValueChanged<double> onChanged) {
     return Row(
       children: [
@@ -469,13 +475,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
         ),
         SizedBox(
           width: 30,
-          child: Text('${value.toInt()}', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54), textAlign: Alignment.centerRight == null ? null : TextAlign.right),
+          child: Text('${value.toInt()}', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54), textAlign: TextAlign.right),
         ),
       ],
     );
   }
 
-  // 📐 ESTÚDIO DE ESPESSURA (Predefinições + Controlo Deslizante Livre)
   void _showThicknessStudioDialog() {
     double tempThickness = _selectedThickness;
 
@@ -489,7 +494,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Pré-visualização do traço em tempo real
               Container(
                 height: 60,
                 alignment: Alignment.center,
@@ -500,8 +504,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
               ),
               Text('${tempThickness.toInt()} px', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 20),
-
-              // O Slider de precisão
               Slider(
                 value: tempThickness,
                 min: 1.0,
@@ -511,8 +513,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
                 onChanged: (value) => setModalState(() => tempThickness = value),
               ),
               const SizedBox(height: 10),
-
-              // Botões rápidos de predefinição
               Wrap(
                 spacing: 12,
                 alignment: WrapAlignment.center,
@@ -549,26 +549,58 @@ class _CanvasScreenState extends State<CanvasScreen> {
     final currentPage = _pages[_currentPageIndex];
     if (currentPage.strokes.isNotEmpty) {
       setState(() {
-        // Remove do ecrã e atira para o "futuro" (redo)
         currentPage.redoHistory.add(currentPage.strokes.removeLast());
       });
+      // Na versão final, podes querer atualizar o status "is_deleted" no SQLite
     }
   }
 
-  // 🚀 NOVA: Função para Avançar linhas
   void _redo() {
     if (_pages.isEmpty) return;
     final currentPage = _pages[_currentPageIndex];
     if (currentPage.redoHistory.isNotEmpty) {
+      final strokeToRestore = currentPage.redoHistory.removeLast();
       setState(() {
-        // Puxa do "futuro" de volta para o ecrã
-        currentPage.strokes.add(currentPage.redoHistory.removeLast());
+        currentPage.strokes.add(strokeToRestore);
       });
+      // Re-gravar o traço no SQLite se necessário
+      if (currentPage.id != null) {
+        _repository.saveSingleStroke(currentPage.id!, strokeToRestore);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 🚀 Ecrã de carregamento Polido e Imersivo
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFD6D6D6),
+        appBar: _buildAppBar(false),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 56,
+                height: 56,
+                child: CircularProgressIndicator(color: Color(0xFF0F4C5C), strokeWidth: 4),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'A preparar as suas folhas...',
+                style: GoogleFonts.lora(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Por favor, aguarde.',
+                style: GoogleFonts.inter(fontSize: 14, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final bool hasPages = _pages.isNotEmpty;
     final LocalPage? currentPage = hasPages ? _pages[_currentPageIndex] : null;
 
@@ -584,7 +616,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
           ? _buildEmptyState()
           : Stack(
         children: [
-          // 🚀 MOTOR DE RENDERIZAÇÃO DE FOLHAS ANIMADAS
           PageView.builder(
             controller: _pageController,
             physics: _currentTool == ToolMode.pan ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
@@ -610,32 +641,30 @@ class _CanvasScreenState extends State<CanvasScreen> {
                         color: const Color(0xFFFDFBF7),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
-                          ),
+                          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8)),
                         ],
                       ),
-                      // 🚀 AQUI ESTÁ O BLOCO 3: O STACK QUE EMPILHA TUDO
                       child: Stack(
                         children: [
-                          // CAMADA 1: A Grelha e os Traços de Tinta (Desenho/Seleção)
+                          // 🚀 CAMADA 1: Tinta Vetorial
                           Positioned.fill(
                             child: GestureDetector(
-                              // Atualiza o onTapUp da Camada 1 para passar os novos parâmetros do Rich Text
                               onTapUp: _currentTool == ToolMode.text ? (details) {
                                 _showTextInputDialog(
                                     initialText: '',
                                     title: 'Novo Bloco de Texto',
-                                    onSave: (val, b, i, u, color, size) { // 🚀 NOVO PARÂMETRO SIZE
+                                    onSave: (val, b, i, u, color, size) {
                                       if (val.trim().isNotEmpty) {
-                                        setState(() => page.textBlocks.add(
-                                          TextBlock(
-                                              text: val, position: details.localPosition,
-                                              isBold: b, isItalic: i, isUnderline: u, textColorHex: color, fontSize: size
-                                          ),
-                                        ));
+                                        final newBlock = TextBlock(
+                                            text: val, position: details.localPosition,
+                                            isBold: b, isItalic: i, isUnderline: u, textColorHex: color, fontSize: size
+                                        );
+                                        setState(() => page.textBlocks.add(newBlock));
+
+                                        // 🚀 SQLITE: Grava Bloco Granularmente
+                                        if (page.id != null) {
+                                          _repository.saveSingleTextBlock(page.id!, newBlock);
+                                        }
                                       }
                                     }
                                 );
@@ -675,10 +704,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                               onPanUpdate: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
                                 final localPos = details.localPosition;
                                 if (_currentTool == ToolMode.draw) {
-                                  // 🚀 OTIMIZAÇÃO DE MEMÓRIA DE ALTO NÍVEL (Filtro Espacial)
-                                  // Só adicionamos o novo ponto à RAM se ele se tiver afastado pelo menos 2.5 pixéis do ponto anterior.
-                                  // Isto corta milhares de coordenadas inúteis (micro-tremores da mão) mantendo a linha perfeitamente suave!
-                                  // Ao exigir uma distância mínima de 2.5 pixéis (podes afinar este valor entre 1.5 e 4.0 dependendo da tua preferência)
+                                  // 🚀 OTIMIZAÇÃO FILTRO ESPACIAL
                                   if (_currentPoints.isEmpty || (localPos - _currentPoints.last).distance > 4.0) {
                                     setState(() => _currentPoints.add(localPos));
                                   }
@@ -713,16 +739,22 @@ class _CanvasScreenState extends State<CanvasScreen> {
                               } : null,
                               onPanEnd: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
                                 if (_currentTool == ToolMode.draw) {
+                                  final newStroke = Stroke(
+                                    color: _selectedColorHex,
+                                    thickness: _selectedThickness,
+                                    points: List.from(_currentPoints),
+                                  );
+
                                   setState(() {
-                                    page.strokes.add(
-                                      Stroke(
-                                        color: _selectedColorHex,
-                                        thickness: _selectedThickness,
-                                        points: List.from(_currentPoints),
-                                      ),
-                                    );
+                                    page.strokes.add(newStroke);
                                     _currentPoints.clear();
                                   });
+
+                                  // 🚀 SQLITE: Grava Traço Granularmente (0ms)
+                                  if (page.id != null) {
+                                    _repository.saveSingleStroke(page.id!, newStroke);
+                                  }
+
                                 } else if (_currentTool == ToolMode.select) {
                                   setState(() {
                                     _isMovingStrokes = false;
@@ -752,12 +784,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
                             ),
                           ),
 
-                          // CAMADA 2: Blocos de Texto Arrastáveis e Editáveis
+                          // 🚀 CAMADA 2: Blocos de Texto Arrastáveis
                           ...page.textBlocks.map((tb) => Positioned(
                             left: tb.position.dx,
                             top: tb.position.dy,
                             child: GestureDetector(
-                              onPanUpdate: _currentTool != ToolMode.draw ? (details) {
+                              // Bloqueio Magnético
+                              onPanUpdate: (_currentTool == ToolMode.text || _currentTool == ToolMode.select) ? (details) {
                                 setState(() => tb.position += details.delta);
                               } : null,
                               onTap: _currentTool == ToolMode.text ? () {
@@ -766,8 +799,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                     title: 'Editar Bloco',
                                     initialBold: tb.isBold, initialItalic: tb.isItalic,
                                     initialUnderline: tb.isUnderline, initialColorHex: tb.textColorHex,
-                                    initialFontSize: tb.fontSize, // 🚀 ENVIA O TAMANHO ATUAL
-                                    onSave: (val, b, i, u, color, size) { // 🚀 NOVO PARÂMETRO SIZE
+                                    initialFontSize: tb.fontSize,
+                                    onSave: (val, b, i, u, color, size) {
                                       setState(() {
                                         if (val.trim().isEmpty) { page.textBlocks.remove(tb); }
                                         else {
@@ -775,6 +808,11 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                           tb.isUnderline = u; tb.textColorHex = color; tb.fontSize = size;
                                         }
                                       });
+
+                                      // 🚀 SQLITE: Atualiza Bloco
+                                      if (page.id != null && val.trim().isNotEmpty) {
+                                        _repository.saveSingleTextBlock(page.id!, tb);
+                                      }
                                     }
                                 );
                               } : null,
@@ -784,7 +822,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                 child: Text(
                                   tb.text,
                                   style: GoogleFonts.inter(
-                                    fontSize: tb.fontSize, // 🚀 USA O TAMANHO DO BLOCO AQUI
+                                    fontSize: tb.fontSize,
                                     fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
                                     fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
                                     decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
@@ -794,7 +832,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
                               ),
                             ),
                           )),
-                          // CAMADA 3: Título Dinâmico da Folha
+
+                          // 🚀 CAMADA 3: Título Dinâmico
                           Positioned(
                             top: 30, left: 0, right: 0,
                             child: Center(
@@ -802,20 +841,21 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                 onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(
                                     initialText: page.title,
                                     title: 'Título da Folha',
-                                    // 🚀 CORREÇÃO: Adicionamos b, i, u, color para bater certo com a nova função
-                                    onSave: (val, b, i, u, color, size) => setState(() => page.title = val)
+                                    onSave: (val, b, i, u, color, size) {
+                                      setState(() => page.title = val);
+                                      // 🚀 SQLITE: Atualiza Metadados
+                                      if (page.id != null) _repository.updatePageMetadata(page.id!, page.title, page.footer);
+                                    }
                                 ) : null,
                                 child: Text(
-                                  page.title.isEmpty
-                                      ? (_currentTool == ToolMode.text ? 'Tocar para Título' : '')
-                                      : page.title,
+                                  page.title.isEmpty ? (_currentTool == ToolMode.text ? 'Tocar para Título' : '') : page.title,
                                   style: GoogleFonts.lora(fontSize: 26, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24)),
                                 ),
                               ),
                             ),
                           ),
 
-                          // CAMADA 4: Rodapé Dinâmico da Folha
+                          // 🚀 CAMADA 4: Rodapé Dinâmico
                           Positioned(
                             bottom: 30, left: 0, right: 0,
                             child: Center(
@@ -823,13 +863,14 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                 onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(
                                     initialText: page.footer,
                                     title: 'Rodapé da Folha',
-                                    // 🚀 CORREÇÃO: Adicionamos b, i, u, color para bater certo com a nova função
-                                    onSave: (val, b, i, u, color, size) => setState(() => page.footer = val)
+                                    onSave: (val, b, i, u, color, size) {
+                                      setState(() => page.footer = val);
+                                      // 🚀 SQLITE: Atualiza Metadados
+                                      if (page.id != null) _repository.updatePageMetadata(page.id!, page.title, page.footer);
+                                    }
                                 ) : null,
                                 child: Text(
-                                  page.footer.isEmpty
-                                      ? (_currentTool == ToolMode.text ? 'Tocar para Rodapé' : '')
-                                      : page.footer,
+                                  page.footer.isEmpty ? (_currentTool == ToolMode.text ? 'Tocar para Rodapé' : '') : page.footer,
                                   style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
                                 ),
                               ),
@@ -844,7 +885,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
             },
           ),
 
-          // HUB DE CONTROLO / CÁPSULA FLUTUANTE CENTRALIZADA
+          // CÁPSULA FLUTUANTE
           Positioned(
             bottom: 20,
             left: 0,
@@ -863,7 +904,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
       ),
     );
   }
-  // 🛠️ MÉTODOS DE EXTRAÇÃO DE LAYOUT (Estilo de Código Flutter Limpo e Declarativo)
 
   PreferredSizeWidget _buildAppBar(bool hasPages) {
     return AppBar(
@@ -875,13 +915,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
         if (hasPages)
           IconButton(
             icon: const Icon(Icons.save, color: Color(0xFF27AE60)),
-            tooltip: 'Guardar Caderno',
+            tooltip: 'Guardar Caderno (Bulk)',
             onPressed: () async {
-              final repo = NotebookRepository();
-              await repo.saveFullNotebook(widget.notebookId, _pages);
+              await _repository.saveFullNotebook(widget.notebookId, _pages);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Caderno guardado localmente!'), backgroundColor: Color(0xFF27AE60)),
+                  const SnackBar(content: Text('Caderno sincronizado localmente!'), backgroundColor: Color(0xFF27AE60)),
                 );
               }
             },
@@ -978,12 +1017,11 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-  // 🚀 CONSTRUTOR DE BOTÕES ULTRA-COMPACTOS (Poupa muito espaço na altura)
   Widget _buildCompactIconButton(IconData icon, VoidCallback? onPressed, String tooltip, Color color) {
     return IconButton(
-      iconSize: 20, // Ícone ligeiramente mais pequeno
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36), // Área de toque mínima do Material Design
-      padding: EdgeInsets.zero, // Remove o padding gigante padrão do Flutter
+      iconSize: 20,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      padding: EdgeInsets.zero,
       icon: Icon(icon, color: color),
       onPressed: onPressed,
       tooltip: tooltip,
@@ -1002,15 +1040,14 @@ class _CanvasScreenState extends State<CanvasScreen> {
         ],
       ),
       child: Wrap(
-        spacing: 6,       // 🚀 Aumentei ligeiramente o espaço natural para compensar a falta da linha
+        spacing: 6,
         runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
         alignment: WrapAlignment.center,
         children: [
           _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
           _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover/Zoom'),
-          _buildToolButton(Icons.text_fields, ToolMode.text, 'Caixa de Texto'),
-           // 🚀 A NOVA FERRAMENTA!
+          _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
           _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
           _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
           _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar'),
@@ -1027,10 +1064,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-// 🎨 BOTÃO DE COR: Abre o estúdio de cores
   Widget _buildColorButton() {
     return InkWell(
-      onTap: _showColorStudioDialog, // 🚀 Chama o diálogo
+      onTap: _showColorStudioDialog,
       customBorder: const CircleBorder(),
       child: Container(
         width: 36,
@@ -1044,10 +1080,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-  // 📐 BOTÃO DE ESPESSURA: Abre o estúdio de calibração
   Widget _buildThicknessButton() {
     return InkWell(
-      onTap: _showThicknessStudioDialog, // 🚀 Chama o diálogo
+      onTap: _showThicknessStudioDialog,
       customBorder: const CircleBorder(),
       child: Container(
         width: 36,
@@ -1064,7 +1099,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
       ),
     );
   }
-  // 🚀 REDE DE SEGURANÇA: Diálogo para confirmar a limpeza da folha
+
   void _confirmClearPage(LocalPage page) {
     showDialog(
       context: context,
@@ -1091,12 +1126,11 @@ class _CanvasScreenState extends State<CanvasScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () {
               setState(() {
-                // Guarda o estado atual no histórico antes de apagar, permitindo o "Desfazer"
                 page.undoHistory.addAll(page.strokes);
                 page.strokes.clear();
                 page.redoHistory.clear();
               });
-              Navigator.pop(context); // Fecha o diálogo
+              Navigator.pop(context);
             },
             child: const Text('Apagar Tudo', style: TextStyle(color: Colors.white)),
           ),
@@ -1112,8 +1146,8 @@ class NotebookPainter extends CustomPainter {
   final String currentColor;
   final double currentThickness;
   final String lineType;
-  final Set<String> selectedStrokeIds; // 🚀 NOVO
-  final Rect? selectionRect; // 🚀 NOVO
+  final Set<String> selectedStrokeIds;
+  final Rect? selectionRect;
 
   NotebookPainter({
     required this.strokes,
@@ -1145,7 +1179,6 @@ class NotebookPainter extends CustomPainter {
       }
     }
 
-    // Desenha todos os traços salvos
     for (final stroke in strokes) {
       final isSelected = selectedStrokeIds.contains(stroke.id);
 
@@ -1155,7 +1188,6 @@ class NotebookPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
 
-      // Se o traço estiver selecionado, desenha primeiro uma caixa azul de destaque por baixo
       if (isSelected && stroke.points.isNotEmpty) {
         double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
         double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
@@ -1169,11 +1201,10 @@ class NotebookPainter extends CustomPainter {
       }
 
       for (int i = 0; i < stroke.points.length - 1; i++) {
-         canvas.drawLine(stroke.points[i], stroke.points[i + 1], paint);
+        canvas.drawLine(stroke.points[i], stroke.points[i + 1], paint);
       }
     }
 
-    // Linha atual que está a ser desenhada
     if (currentPoints.length > 1) {
       final activePaint = Paint()
         ..color = Color(int.parse(currentColor.replaceFirst('#', '0xFF')))
@@ -1186,7 +1217,6 @@ class NotebookPainter extends CustomPainter {
       }
     }
 
-    // 🚀 Desenha o retângulo semi-transparente do arrasto do Lasso de Caixa
     if (selectionRect != null) {
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5);

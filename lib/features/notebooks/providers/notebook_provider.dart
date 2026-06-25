@@ -17,11 +17,16 @@ class NotebookNotifier extends Notifier<List<Notebook>> {
     state = await _repository.getNotebooksBySubject(subjectId);
   }
 
-  /// Cria um novo caderno associado a uma disciplina e atualiza o estado da UI
-  Future<void> addNotebook(Notebook notebook) async {
-    await _repository.insertNotebook(notebook);
-    // Adiciona o novo objeto mantendo a imutabilidade do estado
+  /// 🚀 ATUALIZADO: Devolve o Future<int> com o ID real gerado pelo SQLite
+  Future<int> addNotebook(Notebook notebook) async {
+    // 1. O repositório insere na BD e atualiza o notebook.id internamente
+    final int generatedId = await _repository.insertNotebook(notebook);
+
+    // 2. Adiciona o novo objeto atualizado com o ID, mantendo a imutabilidade
     state = [...state, notebook];
+
+    // 3. Devolve o ID para que a UI possa abrir o CanvasScreen imediatamente
+    return generatedId;
   }
 }
 

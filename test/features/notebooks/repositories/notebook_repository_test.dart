@@ -19,11 +19,11 @@ void main() {
     final repository = MockWebNotebookRepository();
 
     // Cadernos da Disciplina 1 (ex: Matemática)
-    await repository.saveNotebook(Notebook(subject_id: 1, title: 'Álgebra', coverType: 'ruled'));
-    await repository.saveNotebook(Notebook(subject_id: 1, title: 'Geometria', coverType: 'grid'));
+    await repository.saveNotebook(Notebook(subject_id: 1, title: 'Álgebra', cover_type: 'ruled'));
+    await repository.saveNotebook(Notebook(subject_id: 1, title: 'Geometria', cover_type: 'grid'));
 
     // Caderno da Disciplina 2 (ex: História)
-    await repository.saveNotebook(Notebook(subject_id: 2, title: 'Idade Média', coverType: 'blank'));
+    await repository.saveNotebook(Notebook(subject_id: 2, title: 'Idade Média', cover_type: 'blank'));
 
     // Act: Buscamos apenas os cadernos da disciplina 1
     final notebooksSubject1 = await repository.fetchNotebooksBySubject(1);

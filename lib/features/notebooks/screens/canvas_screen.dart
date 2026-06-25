@@ -5,7 +5,7 @@ import '../repositories/notebook_repository.dart';
 
 
 class CanvasScreen extends StatefulWidget {
-  final int notebookId; // 🚀 ADICIONADO
+  final int notebookId;
   final String notebookTitle;
   final String lineType;
   final String paperSize;
@@ -23,7 +23,7 @@ class CanvasScreen extends StatefulWidget {
 }
 
 // 🚀 NOVO: Máquina de Estados clara para as ferramentas principais
-enum ToolMode { draw, pan, select }
+enum ToolMode { draw, pan, select,text }
 
 class _CanvasScreenState extends State<CanvasScreen> {
   List<LocalPage> _pages = [];
@@ -41,10 +41,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
 
   String _selectedColorHex = '#2C3E50';
   double _selectedThickness = 3.0;
-
-
-  bool _isToolbarVisible = true;
-  bool _isToolbarPinned = true;
 
   // Controlador do motor de animação e deslize horizontal das folhas
   final PageController _pageController = PageController(initialPage: 0);
@@ -311,6 +307,148 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
+  // 🚀 ATUALIZADO: Diálogo Rich Text Ultra-Responsivo (À prova de telemóveis e teclados)
+  void _showTextInputDialog({
+    required String initialText,
+    String title = 'Editar Texto',
+    bool initialBold = false,
+    bool initialItalic = false,
+    bool initialUnderline = false,
+    String initialColorHex = '#1A1A24',
+    double initialFontSize = 18.0,
+    required Function(String text, bool bold, bool italic, bool underline, String colorHex, double fontSize) onSave
+  })
+  {
+    final TextEditingController textController = TextEditingController(text: initialText);
+
+    bool bold = initialBold;
+    bool italic = initialItalic;
+    bool underline = initialUnderline;
+    String colorHex = initialColorHex;
+    double fontSize = initialFontSize;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          insetPadding: const EdgeInsets.all(16), // 🚀 Garante que o modal não cola nas bordas do telemóvel
+          backgroundColor: const Color(0xFFFDFBF7),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView( // 🚀 Evita que o teclado oculte a caixa de texto
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 🚀 1. WRAP DE ESTILOS: Quebra para a linha de baixo se não houver espaço físico
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.03), borderRadius: BorderRadius.circular(8)),
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 4,
+                      runSpacing: 8,
+                      children: [
+                        IconButton(
+                          constraints: const BoxConstraints(), padding: const EdgeInsets.all(6),
+                          icon: Icon(Icons.format_bold, color: bold ? const Color(0xFF0F4C5C) : Colors.black45),
+                          onPressed: () => setModalState(() => bold = !bold),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(), padding: const EdgeInsets.all(6),
+                          icon: Icon(Icons.format_italic, color: italic ? const Color(0xFF0F4C5C) : Colors.black45),
+                          onPressed: () => setModalState(() => italic = !italic),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(), padding: const EdgeInsets.all(6),
+                          icon: Icon(Icons.format_underlined, color: underline ? const Color(0xFF0F4C5C) : Colors.black45),
+                          onPressed: () => setModalState(() => underline = !underline),
+                        ),
+                        // O Divider agora é um container simples para não dar erro dentro do Wrap
+                        Container(height: 24, width: 1, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                        ...[const Color(0xFF1A1A24), const Color(0xFFE74C3C), const Color(0xFF27AE60), const Color(0xFF1976D2)].map((c) {
+                          final currentHex = '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+                          final isCurrentSelected = colorHex == currentHex;
+                          return GestureDetector(
+                            onTap: () => setModalState(() => colorHex = currentHex),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: isCurrentSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2)),
+                              child: CircleAvatar(radius: 10, backgroundColor: c), // 🚀 Maior para ser fácil tocar com o dedo
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 🚀 2. SLIDER RESPONSIVO
+                  Row(
+                    children: [
+                      const Icon(Icons.format_size, color: Colors.black45, size: 18),
+                      Expanded(
+                        child: Slider(
+                          value: fontSize,
+                          min: 10.0,
+                          max: 64.0,
+                          divisions: 54,
+                          activeColor: const Color(0xFF0F4C5C),
+                          inactiveColor: Colors.black12,
+                          onChanged: (val) => setModalState(() => fontSize = val),
+                        ),
+                      ),
+                      SizedBox(
+                          width: 36,
+                          child: Text('${fontSize.toInt()}px', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54))
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 🚀 3. CAIXA DE TEXTO OTIMIZADA
+                  TextField(
+                    controller: textController,
+                    autofocus: true,
+                    maxLines: null,
+                    minLines: 4,
+                    style: GoogleFonts.inter(
+                      // 🚀 LIMITADOR INTELIGENTE: Na folha pode ter 64px, mas no diálogo nunca passa de 28px para não estourar o ecrã
+                      fontSize: fontSize.clamp(10.0, 28.0),
+                      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                      fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+                      decoration: underline ? TextDecoration.underline : TextDecoration.none,
+                      color: Color(int.parse(colorHex.replaceFirst('#', '0xFF'))),
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'Escreva as suas notas aqui...',
+                      border: OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF0F4C5C), width: 2)),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.black54))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
+              onPressed: () {
+                onSave(textController.text, bold, italic, underline, colorHex, fontSize);
+                Navigator.pop(context);
+              },
+              child: const Text('Salvar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   // Widget auxiliar para desenhar as linhas do misturador
   Widget _buildRGBSlider(String label, double value, Color color, ValueChanged<double> onChanged) {
     return Row(
@@ -449,7 +587,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
           // 🚀 MOTOR DE RENDERIZAÇÃO DE FOLHAS ANIMADAS
           PageView.builder(
             controller: _pageController,
-            // 🚀 Bloqueia o deslize de página a menos que estejamos no modo de mover a folha
             physics: _currentTool == ToolMode.pan ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
             itemCount: _pages.length,
             onPageChanged: (index) => setState(() => _currentPageIndex = index),
@@ -458,7 +595,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
               final Size currentPageSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
 
               return InteractiveViewer.builder(
-                // 🚀 A folha só é movível se a ferramenta Mão estiver ativa!
                 scaleEnabled: _currentTool == ToolMode.pan,
                 panEnabled: _currentTool == ToolMode.pan,
                 maxScale: 6.0,
@@ -474,110 +610,232 @@ class _CanvasScreenState extends State<CanvasScreen> {
                         color: const Color(0xFFFDFBF7),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8)),
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 15,
+                            offset: const Offset(0, 8),
+                          ),
                         ],
                       ),
-                      child: GestureDetector(
-                        // 🚀 Se a ferramenta Mão estiver ativa, o GestureDetector é desativado (retorna null)
-                        onPanStart: _currentTool != ToolMode.pan ? (details) {
-                          final localPos = details.localPosition;
-                          if (_currentTool == ToolMode.draw) {
-                            setState(() {
-                              _currentPoints = [localPos];
-                              page.undoHistory.clear();
-                              page.redoHistory.clear();
-                            });
-                          } else if (_currentTool == ToolMode.select) {
-                            bool clickedOnSelected = false;
-                            for (var id in _selectedStrokeIds) {
-                              final stroke = page.strokes.firstWhere((s) => s.id == id);
-                              for (var pt in stroke.points) {
-                                if ((pt - localPos).distance < 25.0) {
-                                  clickedOnSelected = true;
-                                  break;
-                                }
-                              }
-                              if (clickedOnSelected) break;
-                            }
-
-                            if (clickedOnSelected) {
-                              _isMovingStrokes = true;
-                              _lastPanOffset = localPos;
-                            } else {
-                              _isMovingStrokes = false;
-                              _selectionRectStart = localPos;
-                              _selectionRectEnd = localPos;
-                              setState(() => _selectedStrokeIds.clear());
-                            }
-                          }
-                        } : null,
-                        onPanUpdate: _currentTool != ToolMode.pan ? (details) {
-                          final localPos = details.localPosition;
-                          if (_currentTool == ToolMode.draw) {
-                            setState(() => _currentPoints.add(localPos));
-                          } else if (_currentTool == ToolMode.select) {
-                            if (_isMovingStrokes && _lastPanOffset != null) {
-                              final delta = localPos - _lastPanOffset!;
-                              setState(() {
-                                for (var id in _selectedStrokeIds) {
-                                  final stroke = page.strokes.firstWhere((s) => s.id == id);
-                                  for (int i = 0; i < stroke.points.length; i++) {
-                                    stroke.points[i] = stroke.points[i] + delta;
-                                  }
-                                }
-                              });
-                              _lastPanOffset = localPos;
-                            } else if (_selectionRectStart != null) {
-                              setState(() {
-                                _selectionRectEnd = localPos;
-                                final rect = Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!);
-                                _selectedStrokeIds.clear();
-                                for (var stroke in page.strokes) {
-                                  for (var pt in stroke.points) {
-                                    if (rect.contains(pt)) {
-                                      _selectedStrokeIds.add(stroke.id);
-                                      break;
+                      // 🚀 AQUI ESTÁ O BLOCO 3: O STACK QUE EMPILHA TUDO
+                      child: Stack(
+                        children: [
+                          // CAMADA 1: A Grelha e os Traços de Tinta (Desenho/Seleção)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              // Atualiza o onTapUp da Camada 1 para passar os novos parâmetros do Rich Text
+                              onTapUp: _currentTool == ToolMode.text ? (details) {
+                                _showTextInputDialog(
+                                    initialText: '',
+                                    title: 'Novo Bloco de Texto',
+                                    onSave: (val, b, i, u, color, size) { // 🚀 NOVO PARÂMETRO SIZE
+                                      if (val.trim().isNotEmpty) {
+                                        setState(() => page.textBlocks.add(
+                                          TextBlock(
+                                              text: val, position: details.localPosition,
+                                              isBold: b, isItalic: i, isUnderline: u, textColorHex: color, fontSize: size
+                                          ),
+                                        ));
+                                      }
                                     }
+                                );
+                              } : null,
+                              onPanStart: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
+                                final localPos = details.localPosition;
+                                if (_currentTool == ToolMode.draw) {
+                                  setState(() {
+                                    _currentPoints = [localPos];
+                                    page.undoHistory.clear();
+                                    page.redoHistory.clear();
+                                  });
+                                } else if (_currentTool == ToolMode.select) {
+                                  bool clickedOnSelected = false;
+                                  for (var id in _selectedStrokeIds) {
+                                    final stroke = page.strokes.firstWhere((s) => s.id == id);
+                                    for (var pt in stroke.points) {
+                                      if ((pt - localPos).distance < 25.0) {
+                                        clickedOnSelected = true;
+                                        break;
+                                      }
+                                    }
+                                    if (clickedOnSelected) break;
+                                  }
+
+                                  if (clickedOnSelected) {
+                                    _isMovingStrokes = true;
+                                    _lastPanOffset = localPos;
+                                  } else {
+                                    _isMovingStrokes = false;
+                                    _selectionRectStart = localPos;
+                                    _selectionRectEnd = localPos;
+                                    setState(() => _selectedStrokeIds.clear());
                                   }
                                 }
-                              });
-                            }
-                          }
-                        } : null,
-                        onPanEnd: _currentTool != ToolMode.pan ? (details) {
-                          if (_currentTool == ToolMode.draw) {
-                            setState(() {
-                              page.strokes.add(
-                                Stroke(color: _selectedColorHex, thickness: _selectedThickness, points: List.from(_currentPoints)),
-                              );
-                              _currentPoints.clear();
-                            });
-                          } else if (_currentTool == ToolMode.select) {
-                            setState(() {
-                              _isMovingStrokes = false;
-                              _selectionRectStart = null;
-                              _selectionRectEnd = null;
-                              _lastPanOffset = null;
-                            });
-                          }
-                        } : null,
-                        child: RepaintBoundary(
-                          child: CustomPaint(
-                            key: const Key('canvas_custom_paint'),
-                            size: currentPageSize,
-                            painter: NotebookPainter(
-                              strokes: page.strokes,
-                              currentPoints: _currentPoints,
-                              currentColor: _selectedColorHex,
-                              currentThickness: _selectedThickness,
-                              lineType: widget.lineType,
-                              selectedStrokeIds: _selectedStrokeIds,
-                              selectionRect: _selectionRectStart != null && _selectionRectEnd != null
-                                  ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!)
-                                  : null,
+                              } : null,
+                              onPanUpdate: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
+                                final localPos = details.localPosition;
+                                if (_currentTool == ToolMode.draw) {
+                                  // 🚀 OTIMIZAÇÃO DE MEMÓRIA DE ALTO NÍVEL (Filtro Espacial)
+                                  // Só adicionamos o novo ponto à RAM se ele se tiver afastado pelo menos 2.5 pixéis do ponto anterior.
+                                  // Isto corta milhares de coordenadas inúteis (micro-tremores da mão) mantendo a linha perfeitamente suave!
+                                  // Ao exigir uma distância mínima de 2.5 pixéis (podes afinar este valor entre 1.5 e 4.0 dependendo da tua preferência)
+                                  if (_currentPoints.isEmpty || (localPos - _currentPoints.last).distance > 4.0) {
+                                    setState(() => _currentPoints.add(localPos));
+                                  }
+                                } else if (_currentTool == ToolMode.select) {
+                                  if (_isMovingStrokes && _lastPanOffset != null) {
+                                    final delta = localPos - _lastPanOffset!;
+                                    setState(() {
+                                      for (var id in _selectedStrokeIds) {
+                                        final stroke = page.strokes.firstWhere((s) => s.id == id);
+                                        for (int i = 0; i < stroke.points.length; i++) {
+                                          stroke.points[i] = stroke.points[i] + delta;
+                                        }
+                                      }
+                                    });
+                                    _lastPanOffset = localPos;
+                                  } else if (_selectionRectStart != null) {
+                                    setState(() {
+                                      _selectionRectEnd = localPos;
+                                      final rect = Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!);
+                                      _selectedStrokeIds.clear();
+                                      for (var stroke in page.strokes) {
+                                        for (var pt in stroke.points) {
+                                          if (rect.contains(pt)) {
+                                            _selectedStrokeIds.add(stroke.id);
+                                            break;
+                                          }
+                                        }
+                                      }
+                                    });
+                                  }
+                                }
+                              } : null,
+                              onPanEnd: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
+                                if (_currentTool == ToolMode.draw) {
+                                  setState(() {
+                                    page.strokes.add(
+                                      Stroke(
+                                        color: _selectedColorHex,
+                                        thickness: _selectedThickness,
+                                        points: List.from(_currentPoints),
+                                      ),
+                                    );
+                                    _currentPoints.clear();
+                                  });
+                                } else if (_currentTool == ToolMode.select) {
+                                  setState(() {
+                                    _isMovingStrokes = false;
+                                    _selectionRectStart = null;
+                                    _selectionRectEnd = null;
+                                    _lastPanOffset = null;
+                                  });
+                                }
+                              } : null,
+                              child: RepaintBoundary(
+                                child: CustomPaint(
+                                  key: const Key('canvas_custom_paint'),
+                                  size: currentPageSize,
+                                  painter: NotebookPainter(
+                                    strokes: page.strokes,
+                                    currentPoints: _currentPoints,
+                                    currentColor: _selectedColorHex,
+                                    currentThickness: _selectedThickness,
+                                    lineType: widget.lineType,
+                                    selectedStrokeIds: _selectedStrokeIds,
+                                    selectionRect: _selectionRectStart != null && _selectionRectEnd != null
+                                        ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!)
+                                        : null,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+
+                          // CAMADA 2: Blocos de Texto Arrastáveis e Editáveis
+                          ...page.textBlocks.map((tb) => Positioned(
+                            left: tb.position.dx,
+                            top: tb.position.dy,
+                            child: GestureDetector(
+                              onPanUpdate: _currentTool != ToolMode.draw ? (details) {
+                                setState(() => tb.position += details.delta);
+                              } : null,
+                              onTap: _currentTool == ToolMode.text ? () {
+                                _showTextInputDialog(
+                                    initialText: tb.text,
+                                    title: 'Editar Bloco',
+                                    initialBold: tb.isBold, initialItalic: tb.isItalic,
+                                    initialUnderline: tb.isUnderline, initialColorHex: tb.textColorHex,
+                                    initialFontSize: tb.fontSize, // 🚀 ENVIA O TAMANHO ATUAL
+                                    onSave: (val, b, i, u, color, size) { // 🚀 NOVO PARÂMETRO SIZE
+                                      setState(() {
+                                        if (val.trim().isEmpty) { page.textBlocks.remove(tb); }
+                                        else {
+                                          tb.text = val; tb.isBold = b; tb.isItalic = i;
+                                          tb.isUnderline = u; tb.textColorHex = color; tb.fontSize = size;
+                                        }
+                                      });
+                                    }
+                                );
+                              } : null,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(border: _currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withOpacity(0.5)) : null),
+                                child: Text(
+                                  tb.text,
+                                  style: GoogleFonts.inter(
+                                    fontSize: tb.fontSize, // 🚀 USA O TAMANHO DO BLOCO AQUI
+                                    fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                    fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                    decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                    color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )),
+                          // CAMADA 3: Título Dinâmico da Folha
+                          Positioned(
+                            top: 30, left: 0, right: 0,
+                            child: Center(
+                              child: GestureDetector(
+                                onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(
+                                    initialText: page.title,
+                                    title: 'Título da Folha',
+                                    // 🚀 CORREÇÃO: Adicionamos b, i, u, color para bater certo com a nova função
+                                    onSave: (val, b, i, u, color, size) => setState(() => page.title = val)
+                                ) : null,
+                                child: Text(
+                                  page.title.isEmpty
+                                      ? (_currentTool == ToolMode.text ? 'Tocar para Título' : '')
+                                      : page.title,
+                                  style: GoogleFonts.lora(fontSize: 26, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24)),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // CAMADA 4: Rodapé Dinâmico da Folha
+                          Positioned(
+                            bottom: 30, left: 0, right: 0,
+                            child: Center(
+                              child: GestureDetector(
+                                onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(
+                                    initialText: page.footer,
+                                    title: 'Rodapé da Folha',
+                                    // 🚀 CORREÇÃO: Adicionamos b, i, u, color para bater certo com a nova função
+                                    onSave: (val, b, i, u, color, size) => setState(() => page.footer = val)
+                                ) : null,
+                                child: Text(
+                                  page.footer.isEmpty
+                                      ? (_currentTool == ToolMode.text ? 'Tocar para Rodapé' : '')
+                                      : page.footer,
+                                  style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -585,6 +843,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
               );
             },
           ),
+
+          // HUB DE CONTROLO / CÁPSULA FLUTUANTE CENTRALIZADA
           Positioned(
             bottom: 20,
             left: 0,
@@ -603,7 +863,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
       ),
     );
   }
-
   // 🛠️ MÉTODOS DE EXTRAÇÃO DE LAYOUT (Estilo de Código Flutter Limpo e Declarativo)
 
   PreferredSizeWidget _buildAppBar(bool hasPages) {
@@ -749,12 +1008,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
         alignment: WrapAlignment.center,
         children: [
           _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
-          _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar e Mover'),
-          _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha / Zoom'),
-
+          _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover/Zoom'),
+          _buildToolButton(Icons.text_fields, ToolMode.text, 'Caixa de Texto'),
+           // 🚀 A NOVA FERRAMENTA!
           _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
           _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
-
+          _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar'),
           _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? _undo : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
           _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? _redo : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
           _buildCompactIconButton(Icons.delete_sweep, currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null, 'Apagar Tudo', currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey.withOpacity(0.5)),

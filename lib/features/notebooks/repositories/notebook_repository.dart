@@ -166,4 +166,17 @@ class NotebookRepository {
         whereArgs: [pageId]
     );
   }
+
+// 🚀 APAGA UM TRAÇO ISOLADO (Soft Delete para sincronizar com a Nuvem depois)
+  Future<void> deleteSingleStroke(int pageId, String clientStrokeId) async {
+    if (kIsWeb) return;
+    final db = await _dbHelper.database;
+
+    await db.update(
+      'canvas_strokes',
+      {'is_deleted': 1, 'synced_with_cloud': 0}, // 1 = Apagado (O Painter vai ignorar)
+      where: 'client_stroke_id = ? AND page_id = ?',
+      whereArgs: [clientStrokeId, pageId],
+    );
+  }
 }

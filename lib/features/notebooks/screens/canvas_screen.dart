@@ -22,7 +22,8 @@ class CanvasScreen extends StatefulWidget {
 }
 
 // 🚀 Máquina de Estados para as ferramentas
-enum ToolMode { draw, pan, select, text }
+// 🚀 1. Adiciona a Borracha (eraser) ao enum
+enum ToolMode { draw, pan, select, text, eraser }
 
 class _CanvasScreenState extends State<CanvasScreen> {
   // 🚀 INSTÂNCIA DO REPOSITÓRIO E CONTROLO DE CARREGAMENTO
@@ -34,6 +35,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
   List<Offset> _currentPoints = [];
 
   ToolMode _currentTool = ToolMode.draw;
+  // 🚀 NOVOS CONTROLADORES PARA A EDIÇÃO INLINE (Direto na Folha)
+  TextBlock? _editingTextBlock;
+  final FocusNode _textFocusNode = FocusNode();
+  final TextEditingController _textController = TextEditingController();
 
   final Set<String> _selectedStrokeIds = {};
   Offset? _selectionRectStart;
@@ -103,10 +108,33 @@ class _CanvasScreenState extends State<CanvasScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _textFocusNode.dispose();
+    _textController.dispose();
     for (var page in _pages) {
       page.dispose();
     }
     super.dispose();
+  }
+
+  // 🚀 GUARDA O TEXTO E DEVOLVE A BARRA NORMAL
+  void _finishEditingText(LocalPage page) {
+    if (_editingTextBlock == null) return;
+
+    setState(() {
+      _editingTextBlock!.text = _textController.text.trim();
+
+      // Se ele não escreveu nada, removemos o bloco da folha
+      if (_editingTextBlock!.text.isEmpty) {
+        page.textBlocks.remove(_editingTextBlock);
+      } else if (page.id != null) {
+        // Gravação ultra-rápida no SQLite
+        _repository.saveSingleTextBlock(page.id!, _editingTextBlock!);
+      }
+
+      _editingTextBlock = null; // Sai do modo de edição
+    });
+
+    _textFocusNode.unfocus(); // Esconde o teclado do telemóvel
   }
 
   void _resetZoomForPage(LocalPage page, String paperSize) {
@@ -544,6 +572,35 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
+  // 🚀 O MOTOR DA BORRACHA VETORIAL
+  void _eraseAtPosition(Offset pos, LocalPage page) {
+    const double eraserRadius = 20.0; // O raio de alcance da borracha
+    List<Stroke> strokesToRemove = [];
+
+    // Procura todos os traços onde pelo menos um ponto cruzou o raio da borracha
+    for (var stroke in page.strokes) {
+      for (var point in stroke.points) {
+        if ((point - pos).distance < eraserRadius) {
+          strokesToRemove.add(stroke);
+          break; // Mal deteta o toque, marca a linha toda para morrer
+        }
+      }
+    }
+
+    // Se encontrou traços, remove do ecrã e do SQLite
+    if (strokesToRemove.isNotEmpty) {
+      setState(() {
+        for (var stroke in strokesToRemove) {
+          page.strokes.remove(stroke);
+          // Garante que o apagão sobrevive ao fechar a app
+          if (page.id != null) {
+            _repository.deleteSingleStroke(page.id!, stroke.id);
+          }
+        }
+      });
+    }
+  }
+
   void _undo() {
     if (_pages.isEmpty) return;
     final currentPage = _pages[_currentPageIndex];
@@ -649,26 +706,31 @@ class _CanvasScreenState extends State<CanvasScreen> {
                           // 🚀 CAMADA 1: Tinta Vetorial
                           Positioned.fill(
                             child: GestureDetector(
-                              onTapUp: _currentTool == ToolMode.text ? (details) {
-                                _showTextInputDialog(
-                                    initialText: '',
-                                    title: 'Novo Bloco de Texto',
-                                    onSave: (val, b, i, u, color, size) {
-                                      if (val.trim().isNotEmpty) {
-                                        final newBlock = TextBlock(
-                                            text: val, position: details.localPosition,
-                                            isBold: b, isItalic: i, isUnderline: u, textColorHex: color, fontSize: size
-                                        );
-                                        setState(() => page.textBlocks.add(newBlock));
+                              onTapUp: (details) {
+                                // 🚀 Se o utilizador tocar na folha, fechamos o texto atual.
+                                if (_editingTextBlock != null) {
+                                  _finishEditingText(page);
+                                }
 
-                                        // 🚀 SQLITE: Grava Bloco Granularmente
-                                        if (page.id != null) {
-                                          _repository.saveSingleTextBlock(page.id!, newBlock);
-                                        }
-                                      }
-                                    }
-                                );
-                              } : null,
+                                // 🚀 Se a ferramenta Texto estiver ativa, criamos um bloco NOVO no local do toque
+                                if (_currentTool == ToolMode.text) {
+                                  final newBlock = TextBlock(
+                                      text: '', position: details.localPosition,
+                                      isBold: false, isItalic: false, isUnderline: false,
+                                      textColorHex: _selectedColorHex, fontSize: 18.0
+                                  );
+                                  setState(() {
+                                    page.textBlocks.add(newBlock);
+                                    _editingTextBlock = newBlock; // Entra em modo edição
+                                    _textController.text = '';
+                                  });
+                                  _textFocusNode.requestFocus(); // Puxa o teclado na hora
+                                }
+
+                                if (_currentTool == ToolMode.eraser) {
+                                  _eraseAtPosition(details.localPosition, page);
+                                }
+                              },
                               onPanStart: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
                                 final localPos = details.localPosition;
                                 if (_currentTool == ToolMode.draw) {
@@ -699,6 +761,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                     _selectionRectEnd = localPos;
                                     setState(() => _selectedStrokeIds.clear());
                                   }
+                                }else if (_currentTool == ToolMode.eraser) {
+                                  // 🚀 Início do apagão contínuo
+                                  _eraseAtPosition(localPos, page);
                                 }
                               } : null,
                               onPanUpdate: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
@@ -735,6 +800,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                       }
                                     });
                                   }
+                                }else if (_currentTool == ToolMode.eraser) {
+                                  // 🚀 Apagão contínuo enquanto arrastas o dedo
+                                  _eraseAtPosition(localPos, page);
                                 }
                               } : null,
                               onPanEnd: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
@@ -784,54 +852,70 @@ class _CanvasScreenState extends State<CanvasScreen> {
                             ),
                           ),
 
-                          // 🚀 CAMADA 2: Blocos de Texto Arrastáveis
-                          ...page.textBlocks.map((tb) => Positioned(
-                            left: tb.position.dx,
-                            top: tb.position.dy,
-                            child: GestureDetector(
-                              // Bloqueio Magnético
-                              onPanUpdate: (_currentTool == ToolMode.text || _currentTool == ToolMode.select) ? (details) {
-                                setState(() => tb.position += details.delta);
-                              } : null,
-                              onTap: _currentTool == ToolMode.text ? () {
-                                _showTextInputDialog(
-                                    initialText: tb.text,
-                                    title: 'Editar Bloco',
-                                    initialBold: tb.isBold, initialItalic: tb.isItalic,
-                                    initialUnderline: tb.isUnderline, initialColorHex: tb.textColorHex,
-                                    initialFontSize: tb.fontSize,
-                                    onSave: (val, b, i, u, color, size) {
-                                      setState(() {
-                                        if (val.trim().isEmpty) { page.textBlocks.remove(tb); }
-                                        else {
-                                          tb.text = val; tb.isBold = b; tb.isItalic = i;
-                                          tb.isUnderline = u; tb.textColorHex = color; tb.fontSize = size;
-                                        }
-                                      });
+                          // 🚀 CAMADA 2: Blocos de Texto (Agora com Edição Inline!)
+                          ...page.textBlocks.map((tb) {
+                            final isEditing = tb == _editingTextBlock;
 
-                                      // 🚀 SQLITE: Atualiza Bloco
-                                      if (page.id != null && val.trim().isNotEmpty) {
-                                        _repository.saveSingleTextBlock(page.id!, tb);
-                                      }
-                                    }
-                                );
-                              } : null,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(border: _currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withOpacity(0.5)) : null),
-                                child: Text(
-                                  tb.text,
-                                  style: GoogleFonts.inter(
-                                    fontSize: tb.fontSize,
-                                    fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                    fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                    decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
-                                    color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                            return Positioned(
+                              left: tb.position.dx,
+                              top: tb.position.dy,
+                              child: GestureDetector(
+                                onPanUpdate: (_currentTool == ToolMode.text || _currentTool == ToolMode.select) && !isEditing ? (details) {
+                                  setState(() => tb.position += details.delta);
+                                } : null,
+                                onTap: _currentTool == ToolMode.text && !isEditing ? () {
+                                  if (_editingTextBlock != null) _finishEditingText(page);
+                                  setState(() {
+                                    _editingTextBlock = tb; // Transforma o texto normal num campo de edição
+                                    _textController.text = tb.text;
+                                  });
+                                  _textFocusNode.requestFocus();
+                                } : null,
+                                child: isEditing
+                                // 🔥 ESTADO 1: QUANDO ESTÁ A SER EDITADO (Aparece o Cursor)
+                                    ? Container(
+                                  width: 250, // Largura invisível para a escrita
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFF0F4C5C).withOpacity(0.5), style: BorderStyle.solid),
+                                  ),
+                                  child: TextField(
+                                    controller: _textController,
+                                    focusNode: _textFocusNode,
+                                    maxLines: null,
+                                    autofocus: true,
+                                    style: GoogleFonts.inter(
+                                      fontSize: tb.fontSize,
+                                      fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                      fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                      decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                      color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                    ),
+                                    decoration: const InputDecoration(
+                                        isDense: true, contentPadding: EdgeInsets.zero, border: InputBorder.none,
+                                        hintText: 'Escreva aqui...', hintStyle: TextStyle(color: Colors.black26)
+                                    ),
+                                    onChanged: (val) => tb.text = val, // O texto atualiza na memória em tempo real
+                                  ),
+                                )
+                                // 🔥 ESTADO 2: QUANDO É TEXTO MORTO/GUARDADO (Visual limpo)
+                                    : Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(border: _currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withOpacity(0.2)) : null),
+                                  child: Text(
+                                    tb.text,
+                                    style: GoogleFonts.inter(
+                                      fontSize: tb.fontSize,
+                                      fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                      fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                      decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                      color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          )),
+                            );
+                          }),
 
                           // 🚀 CAMADA 3: Título Dinâmico
                           Positioned(
@@ -1029,6 +1113,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
   }
 
   Widget _buildFloatingToolbar(LocalPage currentPage) {
+    if (_editingTextBlock != null) {
+      return _buildTextEditingToolbar(currentPage);
+    }
+
+    // 🚀 O RADAR DE ECRÃ: Menos de 600px é considerado Telemóvel.
+    final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1045,20 +1136,161 @@ class _CanvasScreenState extends State<CanvasScreen> {
         crossAxisAlignment: WrapCrossAlignment.center,
         alignment: WrapAlignment.center,
         children: [
+          // 🚀 1. AS FERRAMENTAS PRINCIPAIS (Sempre visíveis)
           _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
+          _buildToolButton(Icons.backspace_outlined, ToolMode.eraser, 'Borracha'),
           _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover/Zoom'),
           _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
-          _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
-          _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
           _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar'),
-          _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? _undo : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
-          _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? _redo : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
-          _buildCompactIconButton(Icons.delete_sweep, currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null, 'Apagar Tudo', currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey.withOpacity(0.5)),
 
+          // 🚀 2. A SEPARAÇÃO INTELIGENTE (Telemóvel vs PC)
+          if (isSmallScreen)
+          // MENU COMPACTO PARA TELEMÓVEIS (Agora inclui o Zoom!)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Color(0xFF1A1A24)),
+              tooltip: 'Mais opções',
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: const Color(0xFFFDFBF7),
+              onSelected: (value) {
+                if (value == 'zoom_out') _zoom(0.8);
+                if (value == 'zoom_in') _zoom(1.2);
+                if (value == 'undo' && currentPage.strokes.isNotEmpty) _undo();
+                if (value == 'redo' && currentPage.redoHistory.isNotEmpty) _redo();
+                if (value == 'clear' && currentPage.strokes.isNotEmpty) _confirmClearPage(currentPage);
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'zoom_in',
+                  child: Row(
+                    children: [
+                      Icon(Icons.zoom_in, color: Color(0xFF1A1A24)),
+                      SizedBox(width: 8),
+                      Text('Aproximar', style: TextStyle(color: Colors.black87)),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'zoom_out',
+                  child: Row(
+                    children: [
+                      Icon(Icons.zoom_out, color: Color(0xFF1A1A24)),
+                      SizedBox(width: 8),
+                      Text('Afastar', style: TextStyle(color: Colors.black87)),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'undo',
+                  enabled: currentPage.strokes.isNotEmpty,
+                  child: Row(
+                    children: [
+                      Icon(Icons.undo, color: currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey),
+                      const SizedBox(width: 8),
+                      Text('Desfazer', style: TextStyle(color: currentPage.strokes.isNotEmpty ? Colors.black87 : Colors.grey)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'redo',
+                  enabled: currentPage.redoHistory.isNotEmpty,
+                  child: Row(
+                    children: [
+                      Icon(Icons.redo, color: currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey),
+                      const SizedBox(width: 8),
+                      Text('Avançar', style: TextStyle(color: currentPage.redoHistory.isNotEmpty ? Colors.black87 : Colors.grey)),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'clear',
+                  enabled: currentPage.strokes.isNotEmpty,
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_sweep, color: currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey),
+                      const SizedBox(width: 8),
+                      Text('Apagar Tudo', style: TextStyle(color: currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey)),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            // 🚀 PAINEL EXPANDIDO PARA TABLETS/COMPUTADORES
+            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+            _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
+            _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
+            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+            _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? _undo : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+            _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? _redo : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+            _buildCompactIconButton(Icons.delete_sweep, currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null, 'Apagar Tudo', currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey.withOpacity(0.5)),
+          ],
+
+          // 🚀 3. FERRAMENTAS DE CANETA (Aparecem apenas se a Caneta estiver selecionada)
           if (_currentTool == ToolMode.draw) ...[
+            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
             _buildColorButton(),
             _buildThicknessButton(),
           ],
+        ],
+      ),
+    );
+  }
+
+  // 🚀 A NOVA BARRA EXCLUSIVA PARA EDIÇÃO DE TEXTO
+  Widget _buildTextEditingToolbar(LocalPage currentPage) {
+    final tb = _editingTextBlock!;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDFBF7), // Um tom ligeiramente diferente para destacar
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: const Color(0xFF0F4C5C).withOpacity(0.3)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: Wrap(
+        spacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        alignment: WrapAlignment.center,
+        children: [
+          _buildCompactIconButton(Icons.format_bold, () => setState(() => tb.isBold = !tb.isBold), 'Negrito', tb.isBold ? const Color(0xFF0F4C5C) : Colors.black45),
+          _buildCompactIconButton(Icons.format_italic, () => setState(() => tb.isItalic = !tb.isItalic), 'Itálico', tb.isItalic ? const Color(0xFF0F4C5C) : Colors.black45),
+          _buildCompactIconButton(Icons.format_underlined, () => setState(() => tb.isUnderline = !tb.isUnderline), 'Sublinhado', tb.isUnderline ? const Color(0xFF0F4C5C) : Colors.black45),
+          Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+
+          // Controlo de Tamanho de Letra Inline
+          _buildCompactIconButton(Icons.text_decrease, () => setState(() => tb.fontSize = (tb.fontSize - 2).clamp(10.0, 64.0)), 'Diminuir', Colors.black87),
+          Text('${tb.fontSize.toInt()}', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold)),
+          _buildCompactIconButton(Icons.text_increase, () => setState(() => tb.fontSize = (tb.fontSize + 2).clamp(10.0, 64.0)), 'Aumentar', Colors.black87),
+          Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+
+          // Cores Rápidas (Para não tapar o teclado com diálogos)
+          ...['#1A1A24', '#E74C3C', '#27AE60', '#1976D2'].map((hex) {
+            final isSelected = tb.textColorHex == hex;
+            return GestureDetector(
+              onTap: () => setState(() => tb.textColorHex = hex),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2)),
+                child: CircleAvatar(radius: 8, backgroundColor: Color(int.parse(hex.replaceFirst('#', '0xFF')))),
+              ),
+            );
+          }),
+
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F4C5C),
+                shape: const StadiumBorder(),
+                minimumSize: const Size(50, 30),
+                padding: const EdgeInsets.symmetric(horizontal: 12)
+            ),
+            onPressed: () => _finishEditingText(currentPage),
+            child: const Text('OK', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          )
         ],
       ),
     );

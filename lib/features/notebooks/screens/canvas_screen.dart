@@ -618,7 +618,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
         children: [
           PageView.builder(
             controller: _pageController,
-            physics: _currentTool == ToolMode.pan ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
+            physics: const NeverScrollableScrollPhysics(),
             itemCount: _pages.length,
             onPageChanged: (index) => setState(() => _currentPageIndex = index),
             itemBuilder: (context, index) {
@@ -1166,19 +1166,47 @@ class NotebookPainter extends CustomPainter {
       ..strokeWidth = 1.0;
 
     if (lineType == 'ruled') {
-      for (double y = 40; y < size.height; y += 28) {
-        canvas.drawLine(Offset(0, y), Offset(size.width, y), backgroundPaint);
+      // 🚀 AS TUAS MEDIDAS DE LUXO (Padding Profissional)
+      const double leftMargin = 60.0;   // Espaço para furar/encadernar
+      const double rightMargin = 20.0;  // Margem direita para o texto não colar na borda
+      const double topMargin = 90.0;    // Cabeçalho livre para o Título
+      const double bottomMargin = 60.0; // Espaço reservado para o Rodapé
+
+      final marginPaint = Paint()
+        ..color = Colors.redAccent.withOpacity(0.4)
+        ..strokeWidth = 1.5;
+
+      // Linha vermelha vertical (mantemos do topo até ao fundo para dar o look clássico)
+      canvas.drawLine(const Offset(leftMargin, 0), Offset(leftMargin, size.height), marginPaint);
+
+      // Linhas horizontais (Limitadas pela direita e pelo rodapé!)
+      for (double y = topMargin; y < size.height - bottomMargin; y += 28) {
+        canvas.drawLine(
+            Offset(leftMargin, y),
+            Offset(size.width - rightMargin, y), // 🚀 Para antes de bater na direita
+            backgroundPaint
+        );
       }
     } else if (lineType == 'grid') {
+      // 🚀 APLICANDO O MESMO LUXO À GRELHA
+      const double margin = 20.0;       // Margem lateral
+      const double topMargin = 90.0;    // Cabeçalho
+      const double bottomMargin = 60.0; // Rodapé
       const double gridSize = 25.0;
-      for (double y = gridSize; y < size.height; y += gridSize) {
-        canvas.drawLine(Offset(0, y), Offset(size.width, y), backgroundPaint);
+
+      // Linhas Horizontais da Grelha
+      for (double y = topMargin; y < size.height - bottomMargin; y += gridSize) {
+        canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), backgroundPaint);
       }
-      for (double x = gridSize; x < size.width; x += gridSize) {
-        canvas.drawLine(Offset(x, 0), Offset(x, size.height), backgroundPaint);
+      // Linhas Verticais da Grelha
+      for (double x = margin; x < size.width - margin; x += gridSize) {
+        canvas.drawLine(Offset(x, topMargin), Offset(x, size.height - bottomMargin), backgroundPaint);
       }
     }
 
+    // =========================================================================
+    // O CÓDIGO ABAIXO MANTÉM-SE IGUAL (Desenho dos traços e seleções)
+    // =========================================================================
     for (final stroke in strokes) {
       final isSelected = selectedStrokeIds.contains(stroke.id);
 

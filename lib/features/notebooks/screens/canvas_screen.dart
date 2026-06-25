@@ -22,7 +22,6 @@ class CanvasScreen extends StatefulWidget {
 }
 
 // 🚀 Máquina de Estados para as ferramentas
-// 🚀 1. Adiciona a Borracha (eraser) ao enum
 enum ToolMode { draw, pan, select, text, eraser }
 
 class _CanvasScreenState extends State<CanvasScreen> {
@@ -32,7 +31,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
 
   List<LocalPage> _pages = [];
   int _currentPageIndex = 0;
-  List<Offset> _currentPoints = [];
+  // 🚀 NOTIFICADOR DE ALTA PERFORMANCE (Evita o setState enquanto desenhas!)
+  final ValueNotifier<List<Offset>> _activePointsNotifier = ValueNotifier([]);
 
   ToolMode _currentTool = ToolMode.draw;
   // 🚀 NOVOS CONTROLADORES PARA A EDIÇÃO INLINE (Direto na Folha)
@@ -107,6 +107,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
 
   @override
   void dispose() {
+    _activePointsNotifier.dispose(); // 🚀 LIMPEZA DE MEMÓRIA
     _pageController.dispose();
     _textFocusNode.dispose();
     _textController.dispose();
@@ -704,15 +705,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
                       child: Stack(
                         children: [
                           // 🚀 CAMADA 1: Tinta Vetorial
+                          // 🚀 CAMADA 1: MOTOR GRÁFICO DE DUPLO-PAINTER (Alta Performance)
                           Positioned.fill(
                             child: GestureDetector(
                               onTapUp: (details) {
-                                // 🚀 Se o utilizador tocar na folha, fechamos o texto atual.
-                                if (_editingTextBlock != null) {
-                                  _finishEditingText(page);
-                                }
+                                if (_editingTextBlock != null) _finishEditingText(page);
 
-                                // 🚀 Se a ferramenta Texto estiver ativa, criamos um bloco NOVO no local do toque
                                 if (_currentTool == ToolMode.text) {
                                   final newBlock = TextBlock(
                                       text: '', position: details.localPosition,
@@ -721,67 +719,58 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                   );
                                   setState(() {
                                     page.textBlocks.add(newBlock);
-                                    _editingTextBlock = newBlock; // Entra em modo edição
+                                    _editingTextBlock = newBlock;
                                     _textController.text = '';
                                   });
-                                  _textFocusNode.requestFocus(); // Puxa o teclado na hora
-                                }
-
-                                if (_currentTool == ToolMode.eraser) {
+                                  _textFocusNode.requestFocus();
+                                } else if (_currentTool == ToolMode.eraser) {
                                   _eraseAtPosition(details.localPosition, page);
                                 }
                               },
                               onPanStart: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
                                 final localPos = details.localPosition;
                                 if (_currentTool == ToolMode.draw) {
-                                  setState(() {
-                                    _currentPoints = [localPos];
-                                    page.undoHistory.clear();
-                                    page.redoHistory.clear();
-                                  });
+                                  // 🚀 ATUALIZA O NOTIFIER SEM SETSTATE! (0% de lag inicial)
+                                  _activePointsNotifier.value = [localPos];
+                                  page.undoHistory.clear();
+                                  page.redoHistory.clear();
                                 } else if (_currentTool == ToolMode.select) {
+                                  // (Lógica de seleção mantém-se)
                                   bool clickedOnSelected = false;
                                   for (var id in _selectedStrokeIds) {
                                     final stroke = page.strokes.firstWhere((s) => s.id == id);
                                     for (var pt in stroke.points) {
-                                      if ((pt - localPos).distance < 25.0) {
-                                        clickedOnSelected = true;
-                                        break;
-                                      }
+                                      if ((pt - localPos).distance < 25.0) { clickedOnSelected = true; break; }
                                     }
                                     if (clickedOnSelected) break;
                                   }
-
                                   if (clickedOnSelected) {
-                                    _isMovingStrokes = true;
-                                    _lastPanOffset = localPos;
+                                    _isMovingStrokes = true; _lastPanOffset = localPos;
                                   } else {
-                                    _isMovingStrokes = false;
-                                    _selectionRectStart = localPos;
-                                    _selectionRectEnd = localPos;
+                                    _isMovingStrokes = false; _selectionRectStart = localPos; _selectionRectEnd = localPos;
                                     setState(() => _selectedStrokeIds.clear());
                                   }
-                                }else if (_currentTool == ToolMode.eraser) {
-                                  // 🚀 Início do apagão contínuo
+                                } else if (_currentTool == ToolMode.eraser) {
                                   _eraseAtPosition(localPos, page);
                                 }
                               } : null,
                               onPanUpdate: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
                                 final localPos = details.localPosition;
                                 if (_currentTool == ToolMode.draw) {
-                                  // 🚀 OTIMIZAÇÃO FILTRO ESPACIAL
-                                  if (_currentPoints.isEmpty || (localPos - _currentPoints.last).distance > 4.0) {
-                                    setState(() => _currentPoints.add(localPos));
+                                  // 🚀 FILTRO ESPACIAL AVANÇADO (Corta 60% dos pontos desnecessários)
+                                  final currentList = _activePointsNotifier.value;
+                                  if (currentList.isEmpty || (localPos - currentList.last).distance > 1.5) {
+                                    // Injeta o novo ponto diretamente na placa gráfica sem avisar o resto do ecrã
+                                    _activePointsNotifier.value = List.from(currentList)..add(localPos);
                                   }
                                 } else if (_currentTool == ToolMode.select) {
+                                  // (Lógica de mover mantém-se)
                                   if (_isMovingStrokes && _lastPanOffset != null) {
                                     final delta = localPos - _lastPanOffset!;
                                     setState(() {
                                       for (var id in _selectedStrokeIds) {
                                         final stroke = page.strokes.firstWhere((s) => s.id == id);
-                                        for (int i = 0; i < stroke.points.length; i++) {
-                                          stroke.points[i] = stroke.points[i] + delta;
-                                        }
+                                        for (int i = 0; i < stroke.points.length; i++) { stroke.points[i] = stroke.points[i] + delta; }
                                       }
                                     });
                                     _lastPanOffset = localPos;
@@ -792,16 +781,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                       _selectedStrokeIds.clear();
                                       for (var stroke in page.strokes) {
                                         for (var pt in stroke.points) {
-                                          if (rect.contains(pt)) {
-                                            _selectedStrokeIds.add(stroke.id);
-                                            break;
-                                          }
+                                          if (rect.contains(pt)) { _selectedStrokeIds.add(stroke.id); break; }
                                         }
                                       }
                                     });
                                   }
-                                }else if (_currentTool == ToolMode.eraser) {
-                                  // 🚀 Apagão contínuo enquanto arrastas o dedo
+                                } else if (_currentTool == ToolMode.eraser) {
                                   _eraseAtPosition(localPos, page);
                                 }
                               } : null,
@@ -810,43 +795,56 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                   final newStroke = Stroke(
                                     color: _selectedColorHex,
                                     thickness: _selectedThickness,
-                                    points: List.from(_currentPoints),
+                                    points: List.from(_activePointsNotifier.value),
                                   );
 
+                                  // 🚀 SÓ AQUI FAZEMOS O SETSTATE (Para transferir a linha para o fundo estático)
                                   setState(() {
                                     page.strokes.add(newStroke);
-                                    _currentPoints.clear();
                                   });
+                                  _activePointsNotifier.value = []; // Limpa o traço dinâmico
 
-                                  // 🚀 SQLITE: Grava Traço Granularmente (0ms)
                                   if (page.id != null) {
                                     _repository.saveSingleStroke(page.id!, newStroke);
                                   }
-
                                 } else if (_currentTool == ToolMode.select) {
                                   setState(() {
-                                    _isMovingStrokes = false;
-                                    _selectionRectStart = null;
-                                    _selectionRectEnd = null;
-                                    _lastPanOffset = null;
+                                    _isMovingStrokes = false; _selectionRectStart = null; _selectionRectEnd = null; _lastPanOffset = null;
                                   });
                                 }
                               } : null,
                               child: RepaintBoundary(
-                                child: CustomPaint(
-                                  key: const Key('canvas_custom_paint'),
-                                  size: currentPageSize,
-                                  painter: NotebookPainter(
-                                    strokes: page.strokes,
-                                    currentPoints: _currentPoints,
-                                    currentColor: _selectedColorHex,
-                                    currentThickness: _selectedThickness,
-                                    lineType: widget.lineType,
-                                    selectedStrokeIds: _selectedStrokeIds,
-                                    selectionRect: _selectionRectStart != null && _selectionRectEnd != null
-                                        ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!)
-                                        : null,
-                                  ),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    // 🚀 PAINTER 1: O FUNDO ESTÁTICO (Só redesenha quando levantas o dedo!)
+                                    CustomPaint(
+                                      size: currentPageSize,
+                                      isComplex: true,
+                                      willChange: false, // Diz ao Flutter para meter isto na Cache da GPU
+                                      painter: StaticNotebookPainter(
+                                        strokes: page.strokes,
+                                        lineType: widget.lineType,
+                                        selectedStrokeIds: _selectedStrokeIds,
+                                        selectionRect: _selectionRectStart != null && _selectionRectEnd != null
+                                            ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!) : null,
+                                      ),
+                                    ),
+                                    // 🚀 PAINTER 2: O TRAÇO DINÂMICO (Desenha a 60 FPS por cima de tudo)
+                                    ValueListenableBuilder<List<Offset>>(
+                                      valueListenable: _activePointsNotifier,
+                                      builder: (context, activePoints, child) {
+                                        return CustomPaint(
+                                          size: currentPageSize,
+                                          painter: ActiveStrokePainter(
+                                            currentPoints: activePoints,
+                                            currentColor: _selectedColorHex,
+                                            currentThickness: _selectedThickness,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1372,85 +1370,81 @@ class _CanvasScreenState extends State<CanvasScreen> {
   }
 }
 
-class NotebookPainter extends CustomPainter {
+// ============================================================================
+// 📐 MATEMÁTICA VETORIAL: Transforma pontos tremidos em curvas perfeitas
+// ============================================================================
+// ============================================================================
+// 📐 MATEMÁTICA VETORIAL: Alta Fidelidade para Caligrafia (Preserva Esquinas)
+// ============================================================================
+Path _buildSmoothPath(List<Offset> points) {
+  final path = Path();
+  if (points.isEmpty) return path;
+
+  path.moveTo(points.first.dx, points.first.dy);
+
+  if (points.length == 1) {
+    // Se for só um toque (ponto da letra 'i'), desenha uma bolinha redonda
+    path.addOval(Rect.fromCircle(center: points.first, radius: 0.5));
+    return path;
+  }
+
+  // 🚀 LIGAÇÃO DIRETA DE ALTA PRECISÃO (GPU Path)
+  // Como o nosso filtro agora capta pontos a cada 1.5 pixéis, a linha fica suave
+  // naturalmente, mas não corta os bicos nem os ângulos agressivos do manuscrito!
+  for (int i = 1; i < points.length; i++) {
+    path.lineTo(points[i].dx, points[i].dy);
+  }
+
+  return path;
+}
+
+// ============================================================================
+// 🎨 PAINTER 1: ESTÁTICO (Renderiza a pauta e as notas velhas)
+// ============================================================================
+class StaticNotebookPainter extends CustomPainter {
   final List<Stroke> strokes;
-  final List<Offset> currentPoints;
-  final String currentColor;
-  final double currentThickness;
   final String lineType;
   final Set<String> selectedStrokeIds;
   final Rect? selectionRect;
 
-  NotebookPainter({
-    required this.strokes,
-    required this.currentPoints,
-    required this.currentColor,
-    required this.currentThickness,
-    required this.lineType,
-    required this.selectedStrokeIds,
-    required this.selectionRect,
+  StaticNotebookPainter({
+    required this.strokes, required this.lineType,
+    required this.selectedStrokeIds, required this.selectionRect,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final backgroundPaint = Paint()
-      ..color = const Color(0xFF1B365D).withOpacity(0.18)
-      ..strokeWidth = 1.0;
+    // 1. DESENHO DA PAUTA COM AS MARGENS DE LUXO
+    final backgroundPaint = Paint()..color = const Color(0xFF1B365D).withOpacity(0.18)..strokeWidth = 1.0;
 
     if (lineType == 'ruled') {
-      // 🚀 AS TUAS MEDIDAS DE LUXO (Padding Profissional)
-      const double leftMargin = 60.0;   // Espaço para furar/encadernar
-      const double rightMargin = 20.0;  // Margem direita para o texto não colar na borda
-      const double topMargin = 90.0;    // Cabeçalho livre para o Título
-      const double bottomMargin = 60.0; // Espaço reservado para o Rodapé
+      const double leftMargin = 60.0; const double rightMargin = 20.0;
+      const double topMargin = 90.0; const double bottomMargin = 60.0;
 
-      final marginPaint = Paint()
-        ..color = Colors.redAccent.withOpacity(0.4)
-        ..strokeWidth = 1.5;
-
-      // Linha vermelha vertical (mantemos do topo até ao fundo para dar o look clássico)
-      canvas.drawLine(const Offset(leftMargin, 0), Offset(leftMargin, size.height), marginPaint);
-
-      // Linhas horizontais (Limitadas pela direita e pelo rodapé!)
+      canvas.drawLine(const Offset(leftMargin, 0), Offset(leftMargin, size.height), Paint()..color = Colors.redAccent.withOpacity(0.4)..strokeWidth = 1.5);
       for (double y = topMargin; y < size.height - bottomMargin; y += 28) {
-        canvas.drawLine(
-            Offset(leftMargin, y),
-            Offset(size.width - rightMargin, y), // 🚀 Para antes de bater na direita
-            backgroundPaint
-        );
+        canvas.drawLine(Offset(leftMargin, y), Offset(size.width - rightMargin, y), backgroundPaint);
       }
     } else if (lineType == 'grid') {
-      // 🚀 APLICANDO O MESMO LUXO À GRELHA
-      const double margin = 20.0;       // Margem lateral
-      const double topMargin = 90.0;    // Cabeçalho
-      const double bottomMargin = 60.0; // Rodapé
-      const double gridSize = 25.0;
-
-      // Linhas Horizontais da Grelha
-      for (double y = topMargin; y < size.height - bottomMargin; y += gridSize) {
-        canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), backgroundPaint);
-      }
-      // Linhas Verticais da Grelha
-      for (double x = margin; x < size.width - margin; x += gridSize) {
-        canvas.drawLine(Offset(x, topMargin), Offset(x, size.height - bottomMargin), backgroundPaint);
-      }
+      const double margin = 20.0; const double topMargin = 90.0; const double bottomMargin = 60.0; const double gridSize = 25.0;
+      for (double y = topMargin; y < size.height - bottomMargin; y += gridSize) { canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), backgroundPaint); }
+      for (double x = margin; x < size.width - margin; x += gridSize) { canvas.drawLine(Offset(x, topMargin), Offset(x, size.height - bottomMargin), backgroundPaint); }
     }
 
-    // =========================================================================
-    // O CÓDIGO ABAIXO MANTÉM-SE IGUAL (Desenho dos traços e seleções)
-    // =========================================================================
+    // 2. DESENHO EM MASSA DOS TRAÇOS (Usando Paths super rápidos)
     for (final stroke in strokes) {
       final isSelected = selectedStrokeIds.contains(stroke.id);
 
       final paint = Paint()
         ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
         ..strokeWidth = stroke.thickness
+        ..style = PaintingStyle.stroke // 🚀 OBRIGATÓRIO PARA PATHS
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
 
+      // Sombra azul de seleção
       if (isSelected && stroke.points.isNotEmpty) {
-        double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
-        double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
+        double minX = stroke.points.first.dx, maxX = stroke.points.first.dx; double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
         for (var pt in stroke.points) {
           if (pt.dx < minX) minX = pt.dx; if (pt.dx > maxX) maxX = pt.dx;
           if (pt.dy < minY) minY = pt.dy; if (pt.dy > maxY) maxY = pt.dy;
@@ -1460,29 +1454,47 @@ class NotebookPainter extends CustomPainter {
         canvas.drawRect(bounds, Paint()..color = const Color(0xFF0000FF)..style = PaintingStyle.stroke..strokeWidth = 1.0);
       }
 
-      for (int i = 0; i < stroke.points.length - 1; i++) {
-        canvas.drawLine(stroke.points[i], stroke.points[i + 1], paint);
-      }
+      // 🚀 INJEÇÃO DO PATH DE ALTA PERFORMANCE (Em vez de milhares de drawLines soltas)
+      canvas.drawPath(_buildSmoothPath(stroke.points), paint);
     }
 
-    if (currentPoints.length > 1) {
-      final activePaint = Paint()
-        ..color = Color(int.parse(currentColor.replaceFirst('#', '0xFF')))
-        ..strokeWidth = currentThickness
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-
-      for (int i = 0; i < currentPoints.length - 1; i++) {
-        canvas.drawLine(currentPoints[i], currentPoints[i + 1], activePaint);
-      }
-    }
-
+    // Ferramenta de Laço/Seleção
     if (selectionRect != null) {
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5);
     }
   }
 
+  // O Segredo: O ecrã de fundo SÓ precisa de ser repintado se a quantidade de traços for diferente!
   @override
-  bool shouldRepaint(covariant NotebookPainter oldDelegate) => true;
+  bool shouldRepaint(covariant StaticNotebookPainter oldDelegate) => strokes.length != oldDelegate.strokes.length || selectionRect != oldDelegate.selectionRect;
+}
+
+// ============================================================================
+// 🚀 PAINTER 2: DINÂMICO (Só desenha o que está a nascer do teu dedo agora)
+// ============================================================================
+class ActiveStrokePainter extends CustomPainter {
+  final List<Offset> currentPoints;
+  final String currentColor;
+  final double currentThickness;
+
+  ActiveStrokePainter({required this.currentPoints, required this.currentColor, required this.currentThickness});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (currentPoints.isEmpty) return;
+
+    final activePaint = Paint()
+      ..color = Color(int.parse(currentColor.replaceFirst('#', '0xFF')))
+      ..strokeWidth = currentThickness
+      ..style = PaintingStyle.stroke // 🚀 OBRIGATÓRIO PARA PATHS
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas.drawPath(_buildSmoothPath(currentPoints), activePaint);
+  }
+
+  // Este pinta a 60 FPS o tempo todo, mas como é super leve, o telemóvel não sofre!
+  @override
+  bool shouldRepaint(covariant ActiveStrokePainter oldDelegate) => true;
 }

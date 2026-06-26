@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
 
 class Stroke {
   final String id;
@@ -40,7 +42,6 @@ class Stroke {
   String toJsonString() => jsonEncode(toMap());
   factory Stroke.fromJsonString(String jsonStr) => Stroke.fromMap(jsonDecode(jsonStr));
 }
-
 // 🚀 ATUALIZADO: Bloco de Texto com Suporte a Tamanho de Fonte (fontSize)
 class TextBlock {
   final String id;
@@ -91,6 +92,28 @@ class TextBlock {
   );
 }
 
+// 🚀 O NOVO MODELO PARA IMAGENS INSERIDAS NA FOLHA
+class ImageBlock {
+  final String id;
+  final File imageFile;
+  Offset position;
+  double width;  // 🚀 Largura real em pixéis na folha
+  double height; // 🚀 Altura real em pixéis na folha
+  double rotation;
+
+  double baseScale = 1.0;
+  double baseRotation = 0.0;
+
+  ImageBlock({
+    required this.id,
+    required this.imageFile,
+    required this.position,
+    this.width = 300.0,  // Tamanho padrão inicial
+    this.height = 200.0,
+    this.rotation = 0.0,
+  });
+}
+
 class LocalPage {
   int? id;             // 🚀 ID Local (INTEGER AUTOINCREMENT do teu SQLite)
   int? serverId;       // server_id vindo do Laravel
@@ -105,6 +128,7 @@ class LocalPage {
   String title;
   String footer;
   List<TextBlock> textBlocks;
+  List<ImageBlock> imageBlocks;
 
   int syncedWithCloud;       // 🚀 0 = Não sincronizado, 1 = Sincronizado (Seguindo o teu padrão)
   int updatedAt;             // Timestamp para controlo de modificação
@@ -123,8 +147,10 @@ class LocalPage {
     List<TextBlock>? textBlocks,
     this.syncedWithCloud = 0,
     int? updatedAt,
+    List<ImageBlock>? imageBlocks,
   })  : strokes = strokes ?? <Stroke>[],
         textBlocks = textBlocks ?? <TextBlock>[],
+        imageBlocks = imageBlocks ?? [],
         updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch {
     transformationController = TransformationController();
   }

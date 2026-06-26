@@ -179,4 +179,20 @@ class NotebookRepository {
       whereArgs: [clientStrokeId, pageId],
     );
   }
+
+  // 🚀 GRAVA UMA IMAGEM NA BASE DE DADOS
+  Future<void> saveSingleImageBlock(int pageId, ImageBlock img) async {
+    if (kIsWeb) return;
+    final db = await _dbHelper.database;
+
+    await db.insert('canvas_image_blocks', {
+      'client_image_id': img.id,
+      'page_id': pageId,
+      'image_path': img.imageFile.path,
+      'pos_x': img.position.dx,
+      'pos_y': img.position.dy,
+      'scale': img.width,       // 🚀 Guardamos a largura no campo antigo scale
+      'rotation': img.height,   // 🚀 Guardamos a altura no campo antigo rotation (ou cria novas colunas se preferires, mas usar as antigas evita quebrar a BD)
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
 }

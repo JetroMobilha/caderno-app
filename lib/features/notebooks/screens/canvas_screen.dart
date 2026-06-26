@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/drawing_point_model.dart';
 import '../repositories/notebook_repository.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart'; // Certifica-te de que tens o pacote uuid no pubspec.yaml
 
 class CanvasScreen extends StatefulWidget {
   final int notebookId;
@@ -22,7 +25,7 @@ class CanvasScreen extends StatefulWidget {
 }
 
 // 🚀 Máquina de Estados para as ferramentas
-enum ToolMode { draw, pan, select, text, eraser }
+enum ToolMode { draw, pan, select, text, eraser, insertImage, imageEdit }
 
 class _CanvasScreenState extends State<CanvasScreen> {
   // 🚀 INSTÂNCIA DO REPOSITÓRIO E CONTROLO DE CARREGAMENTO
@@ -602,6 +605,49 @@ class _CanvasScreenState extends State<CanvasScreen> {
     }
   }
 
+  // 🚀 MÉTODO REFATORADO: Importa a imagem com dimensões base e grava no SQLite
+  Future<void> _pickAndInsertImage(LocalPage page) async {
+    final ImagePicker picker = ImagePicker();
+
+    // Abre a galeria nativa
+    final XFile? pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85, // Comprime para não estourar a RAM do telemóvel
+    );
+
+    if (pickedFile != null) {
+      final File imageFile = File(pickedFile.path);
+
+      // 🚀 ATUALIZADO: Criamos o bloco com a nova estrutura de largura e altura
+      final newImageBlock = ImageBlock(
+        id: const Uuid().v4(), // ID único String
+        imageFile: imageFile,
+        position: const Offset(100, 150),
+        width: 300.0,
+        height: 200.0,
+      );
+
+      setState(() {
+        page.imageBlocks.add(newImageBlock);
+        _currentTool = ToolMode.imageEdit; //
+      });
+
+      // 🚀 CIMENTAÇÃO IMEDIATA: Grava a nova imagem diretamente no teu SQLite v3
+      if (page.id != null) {
+        await _repository.saveSingleImageBlock(page.id!, newImageBlock);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Imagem inserida e guardada na base de dados!'),
+              backgroundColor: Color(0xFF0F4C5C)
+          ),
+        );
+      }
+    }
+  }
+
   void _undo() {
     if (_pages.isEmpty) return;
     final currentPage = _pages[_currentPageIndex];
@@ -659,6 +705,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
         ),
       );
     }
+
+    // 🚀 BLINDagem DE ARENA: Se estivermos a mover imagem, a escrever texto ou a fazer Pan,
+    // o chão vetorial fica 100% bloqueado para não roubar os cliques!
+    final bool isBackgroundBlocked = _currentTool == ToolMode.pan ||
+        _currentTool == ToolMode.text ||
+        _currentTool == ToolMode.imageEdit;
+
     final bool hasPages = _pages.isNotEmpty;
     final LocalPage? currentPage = hasPages ? _pages[_currentPageIndex] : null;
 
@@ -706,16 +759,23 @@ class _CanvasScreenState extends State<CanvasScreen> {
                         children: [
                           // 🚀 CAMADA 1: Tinta Vetorial
                           // 🚀 CAMADA 1: MOTOR GRÁFICO DE DUPLO-PAINTER (Alta Performance)
+                          // 🚀 CAMADA 1: MOTOR GRÁFICO (A "Sanduíche" de Imagem)
                           Positioned.fill(
                             child: GestureDetector(
-                              onTapUp: (details) {
+                              // 🚀 Bloqueia os gestos do fundo se estivermos a editar imagens, texto ou em PAN
+                              onTapUp: !isBackgroundBlocked
+                                  ? (details) {
                                 if (_editingTextBlock != null) _finishEditingText(page);
 
                                 if (_currentTool == ToolMode.text) {
                                   final newBlock = TextBlock(
-                                      text: '', position: details.localPosition,
-                                      isBold: false, isItalic: false, isUnderline: false,
-                                      textColorHex: _selectedColorHex, fontSize: 18.0
+                                    text: '',
+                                    position: details.localPosition,
+                                    isBold: false,
+                                    isItalic: false,
+                                    isUnderline: false,
+                                    textColorHex: _selectedColorHex,
+                                    fontSize: 18.0,
                                   );
                                   setState(() {
                                     page.textBlocks.add(newBlock);
@@ -726,51 +786,58 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                 } else if (_currentTool == ToolMode.eraser) {
                                   _eraseAtPosition(details.localPosition, page);
                                 }
-                              },
-                              onPanStart: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
+                              }
+                                  : null,
+                              onPanStart: !isBackgroundBlocked
+                                  ? (details) {
                                 final localPos = details.localPosition;
                                 if (_currentTool == ToolMode.draw) {
-                                  // 🚀 ATUALIZA O NOTIFIER SEM SETSTATE! (0% de lag inicial)
                                   _activePointsNotifier.value = [localPos];
                                   page.undoHistory.clear();
                                   page.redoHistory.clear();
                                 } else if (_currentTool == ToolMode.select) {
-                                  // (Lógica de seleção mantém-se)
                                   bool clickedOnSelected = false;
                                   for (var id in _selectedStrokeIds) {
                                     final stroke = page.strokes.firstWhere((s) => s.id == id);
                                     for (var pt in stroke.points) {
-                                      if ((pt - localPos).distance < 25.0) { clickedOnSelected = true; break; }
+                                      if ((pt - localPos).distance < 25.0) {
+                                        clickedOnSelected = true;
+                                        break;
+                                      }
                                     }
                                     if (clickedOnSelected) break;
                                   }
                                   if (clickedOnSelected) {
-                                    _isMovingStrokes = true; _lastPanOffset = localPos;
+                                    _isMovingStrokes = true;
+                                    _lastPanOffset = localPos;
                                   } else {
-                                    _isMovingStrokes = false; _selectionRectStart = localPos; _selectionRectEnd = localPos;
+                                    _isMovingStrokes = false;
+                                    _selectionRectStart = localPos;
+                                    _selectionRectEnd = localPos;
                                     setState(() => _selectedStrokeIds.clear());
                                   }
                                 } else if (_currentTool == ToolMode.eraser) {
                                   _eraseAtPosition(localPos, page);
                                 }
-                              } : null,
-                              onPanUpdate: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
+                              }
+                                  : null,
+                              onPanUpdate: !isBackgroundBlocked
+                                  ? (details) {
                                 final localPos = details.localPosition;
                                 if (_currentTool == ToolMode.draw) {
-                                  // 🚀 FILTRO ESPACIAL AVANÇADO (Corta 60% dos pontos desnecessários)
                                   final currentList = _activePointsNotifier.value;
                                   if (currentList.isEmpty || (localPos - currentList.last).distance > 1.5) {
-                                    // Injeta o novo ponto diretamente na placa gráfica sem avisar o resto do ecrã
                                     _activePointsNotifier.value = List.from(currentList)..add(localPos);
                                   }
                                 } else if (_currentTool == ToolMode.select) {
-                                  // (Lógica de mover mantém-se)
                                   if (_isMovingStrokes && _lastPanOffset != null) {
                                     final delta = localPos - _lastPanOffset!;
                                     setState(() {
                                       for (var id in _selectedStrokeIds) {
                                         final stroke = page.strokes.firstWhere((s) => s.id == id);
-                                        for (int i = 0; i < stroke.points.length; i++) { stroke.points[i] = stroke.points[i] + delta; }
+                                        for (int i = 0; i < stroke.points.length; i++) {
+                                          stroke.points[i] = stroke.points[i] + delta;
+                                        }
                                       }
                                     });
                                     _lastPanOffset = localPos;
@@ -781,7 +848,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                       _selectedStrokeIds.clear();
                                       for (var stroke in page.strokes) {
                                         for (var pt in stroke.points) {
-                                          if (rect.contains(pt)) { _selectedStrokeIds.add(stroke.id); break; }
+                                          if (rect.contains(pt)) {
+                                            _selectedStrokeIds.add(stroke.id);
+                                            break;
+                                          }
                                         }
                                       }
                                     });
@@ -789,8 +859,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                 } else if (_currentTool == ToolMode.eraser) {
                                   _eraseAtPosition(localPos, page);
                                 }
-                              } : null,
-                              onPanEnd: _currentTool != ToolMode.pan && _currentTool != ToolMode.text ? (details) {
+                              }
+                                  : null,
+                              onPanEnd: !isBackgroundBlocked
+                                  ? (details) {
                                 if (_currentTool == ToolMode.draw) {
                                   final newStroke = Stroke(
                                     color: _selectedColorHex,
@@ -798,39 +870,132 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                     points: List.from(_activePointsNotifier.value),
                                   );
 
-                                  // 🚀 SÓ AQUI FAZEMOS O SETSTATE (Para transferir a linha para o fundo estático)
                                   setState(() {
                                     page.strokes.add(newStroke);
                                   });
-                                  _activePointsNotifier.value = []; // Limpa o traço dinâmico
+                                  _activePointsNotifier.value = [];
 
                                   if (page.id != null) {
                                     _repository.saveSingleStroke(page.id!, newStroke);
                                   }
                                 } else if (_currentTool == ToolMode.select) {
                                   setState(() {
-                                    _isMovingStrokes = false; _selectionRectStart = null; _selectionRectEnd = null; _lastPanOffset = null;
+                                    _isMovingStrokes = false;
+                                    _selectionRectStart = null;
+                                    _selectionRectEnd = null;
+                                    _lastPanOffset = null;
                                   });
                                 }
-                              } : null,
+                              }
+                                  : null,
                               child: RepaintBoundary(
                                 child: Stack(
                                   fit: StackFit.expand,
                                   children: [
-                                    // 🚀 PAINTER 1: O FUNDO ESTÁTICO (Só redesenha quando levantas o dedo!)
+                                    // 🍞 FATIA 1 (Fundo): A pauta do papel moleskine
+                                    CustomPaint(
+                                      size: currentPageSize,
+                                      willChange: false,
+                                      painter: StaticNotebookPainter(
+                                        strokes: const [],
+                                        lineType: widget.lineType,
+                                        selectedStrokeIds: const {},
+                                        selectionRect: null,
+                                      ),
+                                    ),
+
+                                    // 🥩 FATIA 2 (Recheio): As Imagens (Com Alças Dedicadas de UX)
+                                    ...(page.imageBlocks ?? []).map((img) {
+                                      final isEditMode = _currentTool == ToolMode.imageEdit;
+
+                                      return Positioned(
+                                        left: img.position.dx,
+                                        top: img.position.dy,
+                                        child: Stack(
+                                          clipBehavior: Clip.none, // Permite que os botões saltem para fora da borda
+                                          children: [
+                                            // 🖼️ A FOTOGRAFIA REAL
+                                            Container(
+                                              width: img.width,
+                                              height: img.height,
+                                              decoration: BoxDecoration(
+                                                border: isEditMode
+                                                    ? Border.all(color: const Color(0xFF0F4C5C), width: 2.5)
+                                                    : null,
+                                              ),
+                                              child: Image.file(img.imageFile, fit: BoxFit.fill),
+                                            ),
+
+                                            // 🕹️ ALÇAS DE CONTROLO (Apenas visíveis se ToolMode.imageEdit estiver ativo)
+                                            if (isEditMode) ...[
+
+                                              // 🎯 A) PONTO CENTRAL DEDICADO PARA MOVER (CircleAvatar Azul)
+                                              Positioned(
+                                                left: (img.width / 2) - 22, // Centro exato
+                                                top: (img.height / 2) - 22,
+                                                child: GestureDetector(
+                                                  behavior: HitTestBehavior.opaque,
+                                                  onPanUpdate: (details) {
+                                                    setState(() {
+                                                      img.position += details.delta; // Move apenas ao arrastar a bolinha azul
+                                                    });
+                                                  },
+                                                  onPanEnd: (details) {
+                                                    if (page.id != null) _repository.saveSingleImageBlock(page.id!, img);
+                                                  },
+                                                  child: const CircleAvatar(
+                                                    radius: 22,
+                                                    backgroundColor: Color(0xFF0F4C5C),
+                                                    child: Icon(Icons.open_with, size: 22, color: Colors.white),
+                                                  ),
+                                                ),
+                                              ),
+
+                                              // 📐 B) ALÇA NO CANTO INFERIOR DIREITO PARA REDIMENSIONAR (CircleAvatar Laranja)
+                                              Positioned(
+                                                left: img.width - 15,
+                                                top: img.height - 15,
+                                                child: GestureDetector(
+                                                  behavior: HitTestBehavior.opaque,
+                                                  onPanUpdate: (details) {
+                                                    setState(() {
+                                                      // Redimensiona esticando a borda com limites de segurança
+                                                      img.width = (img.width + details.delta.dx).clamp(80.0, 900.0);
+                                                      img.height = (img.height + details.delta.dy).clamp(80.0, 900.0);
+                                                    });
+                                                  },
+                                                  onPanEnd: (details) {
+                                                    if (page.id != null) _repository.saveSingleImageBlock(page.id!, img);
+                                                  },
+                                                  child: const CircleAvatar(
+                                                    radius: 15,
+                                                    backgroundColor: Colors.orange,
+                                                    child: Icon(Icons.open_in_full, size: 14, color: Colors.white),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      );
+                                    }),
+
+                                    // 🍞 FATIA 3 (Topo): A Tinta Vetorial Antiga Guardada (Passa por CIMA da foto)
                                     CustomPaint(
                                       size: currentPageSize,
                                       isComplex: true,
-                                      willChange: false, // Diz ao Flutter para meter isto na Cache da GPU
+                                      willChange: false,
                                       painter: StaticNotebookPainter(
                                         strokes: page.strokes,
-                                        lineType: widget.lineType,
+                                        lineType: 'none', // Mágico: Desliga as pautas para não duplicar a Fatia 1!
                                         selectedStrokeIds: _selectedStrokeIds,
                                         selectionRect: _selectionRectStart != null && _selectionRectEnd != null
-                                            ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!) : null,
+                                            ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!)
+                                            : null,
                                       ),
                                     ),
-                                    // 🚀 PAINTER 2: O TRAÇO DINÂMICO (Desenha a 60 FPS por cima de tudo)
+
+                                    // ⚡ FATIA 4 (Dinâmica): A caneta a desenhar no milissegundo atual (A 60 FPS)
                                     ValueListenableBuilder<List<Offset>>(
                                       valueListenable: _activePointsNotifier,
                                       builder: (context, activePoints, child) {
@@ -1140,7 +1305,15 @@ class _CanvasScreenState extends State<CanvasScreen> {
           _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover/Zoom'),
           _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
           _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar'),
-
+          // 🚀 ATUALIZADO: O botão agora abre a galeria diretamente ao ser clicado!
+          _buildCompactIconButton(
+              Icons.add_photo_alternate_outlined,
+                  () => _pickAndInsertImage(currentPage),
+              'Adicionar Imagem',
+              const Color(0xFF1A1A24)
+          ),
+          // 🚀 NOVO BOTÃO: Ativa o modo exclusivo de edição de foto
+          _buildToolButton(Icons.transform, ToolMode.imageEdit, 'Editar Imagem'),
           // 🚀 2. A SEPARAÇÃO INTELIGENTE (Telemóvel vs PC)
           if (isSmallScreen)
           // MENU COMPACTO PARA TELEMÓVEIS (Agora inclui o Zoom!)

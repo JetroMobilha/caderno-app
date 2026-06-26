@@ -5,7 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // O nosso tradutor de Des
 import 'package:path/path.dart';
 
 class DatabaseHelper {
-  static const _databaseName = "caderno_digital_offline_v2.db";
+  static const _databaseName = "caderno_digital_offline_v3.db";
   static const _databaseVersion = 2;
 
   DatabaseHelper._privateConstructor();
@@ -164,5 +164,18 @@ class DatabaseHelper {
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');
+
+    await db.execute('''
+        CREATE TABLE canvas_image_blocks (
+          client_image_id TEXT PRIMARY KEY,
+          page_id INTEGER,
+          image_path TEXT,
+          pos_x REAL,
+          pos_y REAL,
+          scale REAL,
+          rotation REAL,
+          synced_with_cloud INTEGER
+        )
+      ''');
   }
 }

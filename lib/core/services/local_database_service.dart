@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui';
 import 'package:sqflite/sqflite.dart';
 import '../database/database_helper.dart'; // Importa o teu DatabaseHelper real
 import '../../features/notebooks/models/drawing_point_model.dart';
@@ -86,6 +88,19 @@ class LocalDatabaseService {
           final data = jsonDecode(t['text_data'] as String);
           return TextBlock.fromMap(data);
         }).toList();
+
+        // Vai buscar as imagens desta página
+        final imgMaps = await db.query('canvas_image_blocks', where: 'page_id = ?', whereArgs: [pId]);
+        final loadedImages = imgMaps.map((m) => ImageBlock(
+          id: m['client_image_id'] as String,
+          imageFile: File(m['image_path'] as String),
+          position: Offset(m['pos_x'] as double, m['pos_y'] as double),
+          width: m['scale'] as double,       // 🚀 Recupera a largura
+          height: m['rotation'] as double,   // 🚀 Recupera a altura
+          rotation: 0.0, // Rotação simplificada temporariamente para focar nas bordas
+        )).toList();
+
+        page.imageBlocks = loadedImages; // Injeta na memória
       }
 
       fullPages.add(page);

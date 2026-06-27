@@ -47,66 +47,62 @@ class NotebookRepository {
   // ============================================================================
   Future<void> saveFullNotebook(int notebookId, List<LocalPage> pages) async {
     if (kIsWeb) return;
-
     final db = await _dbHelper.database;
 
-    try {
-      await db.transaction((txn) async {
+    await db.transaction((txn) async {
+      for (var page in pages) {
+        int currentPageId;
 
-        // 🚀 1. LIMPEZA MANUAL SEGURA: Primeiro vamos buscar as páginas atuais deste caderno
-        final oldPages = await txn.query('pages', columns: ['id'], where: 'notebook_id = ?', whereArgs: [notebookId]);
-
-        // 🚀 2. Destruímos os traços velhos manualmente (contorna o bug das Foreign Keys desligadas)
-        for (var p in oldPages) {
-          await txn.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [p['id']]);
-          await txn.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [p['id']]);
+        // 1. SE A FOLHA ACABOU DE NASCER NA RAM, CIMENTA O ID NELA AGORA!
+        if (page.id == null) {
+          currentPageId = await txn.insert('pages', page.toDatabaseMap());
+          page.id = currentPageId;
+        } else {
+          currentPageId = page.id!;
+          await txn.update('pages', page.toDatabaseMap(), where: 'id = ?', whereArgs: [currentPageId]);
         }
 
-        // 🚀 3. Apagamos as páginas antigas
-        await txn.delete('pages', where: 'notebook_id = ?', whereArgs: [notebookId]);
-
-        // 🚀 4. RECONSTRUÇÃO LIMPA
-        for (int i = 0; i < pages.length; i++) {
-          final page = pages[i];
-
-          // Insere a página e captura o ID novo
-          final pageId = await txn.insert('pages', {
-            'notebook_id': notebookId,
-            'page_number': i + 1,
-            'is_landscape': page.isLandscape ? 1 : 0,
-            'header_data': page.title,
-            'footer_data': page.footer,
+        // 2. GRAVA OS TRAÇOS DA CANETA (Corrigido para client_stroke_id)
+        await txn.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [currentPageId]);
+        for (var stroke in page.strokes) {
+          await txn.insert('canvas_strokes', {
+            'client_stroke_id': stroke.id, // 🚀 ERA stroke_id -> CORRIGIDO
+            'page_id': currentPageId,
+            'stroke_data': stroke.toJsonString(),
+            'is_deleted': 0,
             'synced_with_cloud': 0,
           });
-
-          page.id = pageId; // Atualiza a memória RAM
-
-          // Salva os traços forçando a substituição em caso de erro (ConflictAlgorithm)
-          for (var stroke in page.strokes) {
-            await txn.insert('canvas_strokes', {
-              'client_stroke_id': stroke.id,
-              'page_id': pageId,
-              'stroke_data': jsonEncode(stroke.toMap()),
-              'synced_with_cloud': 0,
-            }, conflictAlgorithm: ConflictAlgorithm.replace); // <-- SALVA-VIDAS
-          }
-
-          // Salva os textos
-          for (var block in page.textBlocks) {
-            await txn.insert('canvas_text_blocks', {
-              'client_text_id': block.id,
-              'page_id': pageId,
-              'text_data': jsonEncode(block.toMap()),
-              'synced_with_cloud': 0,
-            }, conflictAlgorithm: ConflictAlgorithm.replace); // <-- SALVA-VIDAS
-          }
         }
-      });
-      print("✅ Caderno guardado com sucesso na base de dados!");
-    } catch (e) {
-      // 🚀 Se a aplicação tentar esconder um erro, ele vai gritar no terminal!
-      print("🚨 ERRO GRAVE AO GUARDAR CADERNO: $e");
-    }
+
+        // 3. GRAVA OS TEXTOS (Corrigido para client_text_id)
+        await txn.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
+        for (var tb in page.textBlocks) {
+          await txn.insert('canvas_text_blocks', {
+            'client_text_id': tb.id,       // 🚀 ERA block_id -> CORRIGIDO
+            'page_id': currentPageId,
+            'text_data': jsonEncode(tb.toMap()),
+            'is_deleted': 0,
+            'synced_with_cloud': 0,
+          });
+        }
+
+        // 4. GRAVA AS FOTOGRAFIAS
+        await txn.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
+        for (var img in page.imageBlocks) {
+          await txn.insert('canvas_image_blocks', {
+            'client_image_id': img.id,
+            'page_id': currentPageId,
+            'image_path': img.imageFile.path,
+            'pos_x': img.position.dx,
+            'pos_y': img.position.dy,
+            'scale': img.width,
+            'rotation': img.height,
+            'is_deleted': 0,
+            'synced_with_cloud': 0,
+          });
+        }
+      }
+    });
   }
   // 🚀 NOVO: Método para o Ecrã buscar as folhas quando abre!
   Future<List<LocalPage>> getFullPagesForNotebook(int notebookId) async {
@@ -167,7 +163,7 @@ class NotebookRepository {
     );
   }
 
-// 🚀 APAGA UM TRAÇO ISOLADO (Soft Delete para sincronizar com a Nuvem depois)
+
   Future<void> deleteSingleStroke(int pageId, String clientStrokeId) async {
     if (kIsWeb) return;
     final db = await _dbHelper.database;
@@ -180,19 +176,9 @@ class NotebookRepository {
     );
   }
 
-  // 🚀 GRAVA UMA IMAGEM NA BASE DE DADOS
-  Future<void> saveSingleImageBlock(int pageId, ImageBlock img) async {
-    if (kIsWeb) return;
-    final db = await _dbHelper.database;
 
-    await db.insert('canvas_image_blocks', {
-      'client_image_id': img.id,
-      'page_id': pageId,
-      'image_path': img.imageFile.path,
-      'pos_x': img.position.dx,
-      'pos_y': img.position.dy,
-      'scale': img.width,       // 🚀 Guardamos a largura no campo antigo scale
-      'rotation': img.height,   // 🚀 Guardamos a altura no campo antigo rotation (ou cria novas colunas se preferires, mas usar as antigas evita quebrar a BD)
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  Future<void> saveSingleImageBlock(int pageId, ImageBlock img) async {
+    final localDb = LocalDatabaseService();
+    await localDb.saveImageBlockLocally(pageId, img); // <--- Tem de chamar o nome exato!
   }
 }

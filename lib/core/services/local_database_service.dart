@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:sqflite/sqflite.dart';
-import '../database/database_helper.dart'; // Importa o teu DatabaseHelper real
+import '../database/database_helper.dart';
 import '../../features/notebooks/models/drawing_point_model.dart';
 
 class LocalDatabaseService {
@@ -24,7 +24,7 @@ class LocalDatabaseService {
     }
   }
 
-  // 📥 SALVA UM TRAÇO VETORIAL ISOLADO (Otimização granular em tempo real)
+  // 📥 SALVA UM TRAÇO VETORIAL ISOLADO
   Future<void> saveStrokeLocally(int pageId, Stroke stroke) async {
     final db = await _dbHelper.database;
     await db.insert(
@@ -32,7 +32,7 @@ class LocalDatabaseService {
       {
         'client_stroke_id': stroke.id,
         'page_id': pageId,
-        'stroke_data': jsonEncode(stroke.toMap()), // Converte os pontos e espessura em string JSON
+        'stroke_data': jsonEncode(stroke.toMap()),
         'is_deleted': 0,
         'synced_with_cloud': 0,
       },
@@ -48,9 +48,32 @@ class LocalDatabaseService {
       {
         'client_text_id': block.id,
         'page_id': pageId,
-        'text_data': jsonEncode(block.toMap()), // Converte o Rich Text completo em string JSON
+        'text_data': jsonEncode(block.toMap()),
         'is_deleted': 0,
         'synced_with_cloud': 0,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // =========================================================================
+  // 🚀 NOVO: SALVA UM BLOCO DE IMAGEM ISOLADO (O que te faltava!)
+  // =========================================================================
+  Future<void> saveImageBlockLocally(int pageId, ImageBlock img) async {
+    final db = await _dbHelper.database;
+    await db.insert(
+      'canvas_image_blocks',
+      {
+        'client_image_id': img.id,
+        'page_id': pageId,
+        'image_path': img.imageFile.path,
+        'pos_x': img.position.dx,
+        'pos_y': img.position.dy,
+        'scale': img.width,       // Guardamos a largura no campo scale
+        'rotation': img.height,   // Guardamos a altura no campo rotation
+        'is_deleted': 0,
+        'synced_with_cloud': 0,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -60,7 +83,6 @@ class LocalDatabaseService {
   Future<List<LocalPage>> getFullPagesForNotebook(int notebookId) async {
     final db = await _dbHelper.database;
 
-    // 1. Busca todas as páginas do caderno
     final pageMaps = await db.query(
         'pages',
         where: 'notebook_id = ?',
@@ -75,32 +97,48 @@ class LocalDatabaseService {
       final pId = page.id;
 
       if (pId != null) {
-        // 2. Busca os traços desta página específica
+        // 1. Busca Traços
         final strokeMaps = await db.query('canvas_strokes', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pId]);
         page.strokes = strokeMaps.map((s) {
           final data = jsonDecode(s['stroke_data'] as String);
           return Stroke.fromMap(data);
         }).toList();
 
-        // 3. Busca os blocos de texto desta página específica
+        // 2. Busca Textos
         final textMaps = await db.query('canvas_text_blocks', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pId]);
         page.textBlocks = textMaps.map((t) {
           final data = jsonDecode(t['text_data'] as String);
           return TextBlock.fromMap(data);
         }).toList();
 
-        // Vai buscar as imagens desta página
-        final imgMaps = await db.query('canvas_image_blocks', where: 'page_id = ?', whereArgs: [pId]);
-        final loadedImages = imgMaps.map((m) => ImageBlock(
-          id: m['client_image_id'] as String,
-          imageFile: File(m['image_path'] as String),
-          position: Offset(m['pos_x'] as double, m['pos_y'] as double),
-          width: m['scale'] as double,       // 🚀 Recupera a largura
-          height: m['rotation'] as double,   // 🚀 Recupera a altura
-          rotation: 0.0, // Rotação simplificada temporariamente para focar nas bordas
-        )).toList();
+        // 3. 🚀 Busca Imagens (BLINDADO CONTRA CRASHES DE TIPO)
+        final imgMaps = await db.query('canvas_image_blocks', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pId]);
 
-        page.imageBlocks = loadedImages; // Injeta na memória
+        final List<ImageBlock> safeImages = [];
+
+        for (var m in imgMaps) {
+          final String path = m['image_path'].toString();
+          final File f = File(path);
+
+          // Só desenha se a foto física ainda existir no disco do telemóvel!
+          if (f.existsSync()) {
+            safeImages.add(
+                ImageBlock(
+                  id: m['client_image_id'].toString(),
+                  imageFile: f,
+                  position: Offset(
+                    (m['pos_x'] as num).toDouble(), // 🛡️ Imune ao corte de decimais do Android
+                    (m['pos_y'] as num).toDouble(),
+                  ),
+                  width: (m['scale'] as num).toDouble(),
+                  height: (m['rotation'] as num).toDouble(),
+                  rotation: 0.0,
+                )
+            );
+          }
+        }
+
+        page.imageBlocks = safeImages;
       }
 
       fullPages.add(page);

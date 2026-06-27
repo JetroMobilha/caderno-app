@@ -1,12 +1,13 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart'; // Para sabermos se estamos na Web
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // O nosso tradutor de Desktop
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 class DatabaseHelper {
-  static const _databaseName = "caderno_digital_offline_v3.db";
-  static const _databaseVersion = 2;
+  // 🚀 FORÇA TÁTICA: Mudámos para v4. O Android vai recriar o ficheiro do zero hoje!
+  static const _databaseName = "caderno_digital_offline_v4.db";
+  static const _databaseVersion = 1;
 
   DatabaseHelper._privateConstructor();
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -20,18 +21,15 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
-
     if (kIsWeb) {
-      throw Exception("O SQLite local não é suportado diretamente na Web. Precisamos de outra estratégia (ex: API direta) para a Web.");
+      throw Exception("O SQLite local não é suportado diretamente na Web.");
     }
 
-    // 2. Se estivermos no Windows ou Linux, inicializamos o tradutor FFI
     if (Platform.isWindows || Platform.isLinux) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
 
-    // 3. Abertura normal da Base de Dados para TODAS as plataformas
     String path = join(await getDatabasesPath(), _databaseName);
     return await openDatabase(
       path,
@@ -88,7 +86,6 @@ class DatabaseHelper {
     ''');
 
     // 4. Tabela de Páginas (pages)
-    // 🚀 ATUALIZADO: header_data e footer_data vão receber o nosso Título e Rodapé dinâmicos
     await db.execute('''
       CREATE TABLE pages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,14 +115,13 @@ class DatabaseHelper {
       )
     ''');
 
-    // 🚀 5.1 NOVO: Motor de Tipografia (canvas_text_blocks)
-    // Segue a tua arquitetura de granularidade fina. Cada bloco de texto viaja sozinho para o servidor.
+    // 5.1 Motor de Tipografia (canvas_text_blocks)
     await db.execute('''
       CREATE TABLE canvas_text_blocks (
         client_text_id TEXT PRIMARY KEY,
         server_id INTEGER NULL,
         page_id INTEGER NOT NULL,
-        text_data TEXT NOT NULL, -- JSON com o texto, fontSize, isBold, textColorHex, dx, dy
+        text_data TEXT NOT NULL, 
         is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
@@ -165,17 +161,24 @@ class DatabaseHelper {
       )
     ''');
 
+    // =========================================================================
+    // 🚀 8. MOTOR DE MULTIMÉDIA (canvas_image_blocks) - PURIFICADO E ALINHADO
+    // =========================================================================
     await db.execute('''
-        CREATE TABLE canvas_image_blocks (
-          client_image_id TEXT PRIMARY KEY,
-          page_id INTEGER,
-          image_path TEXT,
-          pos_x REAL,
-          pos_y REAL,
-          scale REAL,
-          rotation REAL,
-          synced_with_cloud INTEGER
-        )
-      ''');
+      CREATE TABLE canvas_image_blocks (
+        client_image_id TEXT PRIMARY KEY,
+        server_id INTEGER NULL,
+        page_id INTEGER NOT NULL,
+        image_path TEXT NOT NULL,
+        pos_x REAL NOT NULL,
+        pos_y REAL NOT NULL,
+        scale REAL NOT NULL,
+        rotation REAL NOT NULL,
+        is_deleted INTEGER DEFAULT 0,
+        synced_with_cloud INTEGER DEFAULT 0,
+        updated_at INTEGER DEFAULT 0,
+        FOREIGN KEY (page_id) REFERENCES pages (id) ON DELETE CASCADE
+      )
+    ''');
   }
 }

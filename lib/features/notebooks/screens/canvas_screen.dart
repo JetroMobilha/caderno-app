@@ -4,7 +4,7 @@ import '../models/drawing_point_model.dart';
 import '../repositories/notebook_repository.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart'; // Certifica-te de que tens o pacote uuid no pubspec.yaml
+import 'package:uuid/uuid.dart';
 
 class CanvasScreen extends StatefulWidget {
   final int notebookId;
@@ -706,11 +706,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
       );
     }
 
-    // 🚀 BLINDagem DE ARENA: Se estivermos a mover imagem, a escrever texto ou a fazer Pan,
-    // o chão vetorial fica 100% bloqueado para não roubar os cliques!
-    final bool isBackgroundBlocked = _currentTool == ToolMode.pan ||
-        _currentTool == ToolMode.text ||
-        _currentTool == ToolMode.imageEdit;
 
     final bool hasPages = _pages.isNotEmpty;
     final LocalPage? currentPage = hasPages ? _pages[_currentPageIndex] : null;
@@ -736,6 +731,12 @@ class _CanvasScreenState extends State<CanvasScreen> {
               final page = _pages[index];
               final Size currentPageSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
 
+              // 🚀 O CÉREBRO DA ARENA: Se estivermos em Pan, Texto ou Edição de Imagem,
+              // o vidro da caneta fica 100% permeável aos dedos!
+              final bool isBackgroundBlocked = _currentTool == ToolMode.pan ||
+                  _currentTool == ToolMode.text ||
+                  _currentTool == ToolMode.imageEdit;
+
               return InteractiveViewer.builder(
                 scaleEnabled: _currentTool == ToolMode.pan,
                 panEnabled: _currentTool == ToolMode.pan,
@@ -744,6 +745,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
                 transformationController: page.transformationController,
                 boundaryMargin: const EdgeInsets.all(3000),
                 builder: (context, viewport) {
+
+                  // 🚀 O CÉREBRO DA ARENA: Se estivermos a editar imagens, a escrever texto ou em Pan,
+                  // a antena vetorial da caneta adormece!
+                  final bool isBackgroundBlocked = _currentTool == ToolMode.pan ||
+                      _currentTool == ToolMode.text ||
+                      _currentTool == ToolMode.imageEdit;
+
                   return Center(
                     child: Container(
                       width: currentPageSize.width,
@@ -755,375 +763,223 @@ class _CanvasScreenState extends State<CanvasScreen> {
                           BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8)),
                         ],
                       ),
-                      child: Stack(
-                        children: [
-                          // 🚀 CAMADA 1: Tinta Vetorial
-                          // 🚀 CAMADA 1: MOTOR GRÁFICO DE DUPLO-PAINTER (Alta Performance)
-                          // 🚀 CAMADA 1: MOTOR GRÁFICO (A "Sanduíche" de Imagem)
-                          Positioned.fill(
-                            child: GestureDetector(
-                              // 🚀 Bloqueia os gestos do fundo se estivermos a editar imagens, texto ou em PAN
-                              onTapUp: !isBackgroundBlocked
-                                  ? (details) {
-                                if (_editingTextBlock != null) _finishEditingText(page);
+                      child: ClipRect(
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
 
-                                if (_currentTool == ToolMode.text) {
-                                  final newBlock = TextBlock(
-                                    text: '',
-                                    position: details.localPosition,
-                                    isBold: false,
-                                    isItalic: false,
-                                    isUnderline: false,
-                                    textColorHex: _selectedColorHex,
-                                    fontSize: 18.0,
-                                  );
-                                  setState(() {
-                                    page.textBlocks.add(newBlock);
-                                    _editingTextBlock = newBlock;
-                                    _textController.text = '';
-                                  });
-                                  _textFocusNode.requestFocus();
-                                } else if (_currentTool == ToolMode.eraser) {
-                                  _eraseAtPosition(details.localPosition, page);
-                                }
-                              }
-                                  : null,
-                              onPanStart: !isBackgroundBlocked
-                                  ? (details) {
-                                final localPos = details.localPosition;
-                                if (_currentTool == ToolMode.draw) {
-                                  _activePointsNotifier.value = [localPos];
-                                  page.undoHistory.clear();
-                                  page.redoHistory.clear();
-                                } else if (_currentTool == ToolMode.select) {
-                                  bool clickedOnSelected = false;
-                                  for (var id in _selectedStrokeIds) {
-                                    final stroke = page.strokes.firstWhere((s) => s.id == id);
-                                    for (var pt in stroke.points) {
-                                      if ((pt - localPos).distance < 25.0) {
-                                        clickedOnSelected = true;
-                                        break;
-                                      }
+                            // =============================================================
+                            // 🍞 CAMADA 1: A PAUTA DO PAPEL (Fundo passivo)
+                            // =============================================================
+                            RepaintBoundary(
+                              child: CustomPaint(
+                                size: currentPageSize,
+                                willChange: false,
+                                painter: StaticNotebookPainter(
+                                  strokes: const [], lineType: widget.lineType,
+                                  selectedStrokeIds: const {}, selectionRect: null,
+                                ),
+                              ),
+                            ),
+
+                            // =============================================================
+                            // 🥩 CAMADA 2: AS IMAGENS (Ativadas exclusivamente por ToolMode.imageEdit)
+                            // =============================================================
+                            ...(page.imageBlocks ?? []).map((img) {
+                              final bool isImageMode = _currentTool == ToolMode.imageEdit;
+
+                              return Positioned(
+                                key: ValueKey('img_${img.id}'),
+                                left: img.position.dx,
+                                top: img.position.dy,
+                                child: SizedBox(
+                                  // 🚀 O SEGREDO DO FLUTTER: Damos +24px de "chão físico" invisível
+                                  // para a direita e para baixo. Agora o HitTest abrange o botão todo!
+                                  width: img.width + 24,
+                                  height: img.height + 24,
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+
+                                      // 1. A FOTOGRAFIA REAL (amarrada estritamente ao seu tamanho X/Y)
+                                      Positioned(
+                                        left: 0, top: 0,
+                                        width: img.width, height: img.height,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            border: isImageMode ? Border.all(color: const Color(0xFF0F4C5C), width: 2.0) : null,
+                                          ),
+                                          child: Image.file(img.imageFile, fit: BoxFit.fill),
+                                        ),
+                                      ),
+
+                                      if (isImageMode) ...[
+                                        // 🎯 PONTO AZUL PARA MOVER (Caixa de toque perfeita ISO: 44x44)
+                                        Positioned(
+                                          left: (img.width / 2) - 22,
+                                          top: (img.height / 2) - 22,
+                                          width: 44, height: 44,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onPanUpdate: (d) => setState(() => img.position += d.delta),
+                                            onPanEnd: (d) { if (page.id != null) _repository.saveSingleImageBlock(page.id!, img); },
+                                            child: const CircleAvatar(backgroundColor: Color(0xFF0F4C5C), child: Icon(Icons.open_with, size: 20, color: Colors.white)),
+                                          ),
+                                        ),
+
+                                        // 📐 ALÇA LARANJA PARA REDIMENSIONAR (O Íman de Dedos!)
+                                        Positioned(
+                                          // O centro exato de uma caixa de 44px a começar em (-22) bate milimetricamente na quina da foto!
+                                          left: img.width - 22,
+                                          top: img.height - 22,
+                                          width: 44, height: 44,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onPanUpdate: (d) => setState(() {
+                                              img.width = (img.width + d.delta.dx).clamp(80.0, 900.0);
+                                              img.height = (img.height + d.delta.dy).clamp(80.0, 900.0);
+                                            }),
+                                            onPanEnd: (d) { if (page.id != null) _repository.saveSingleImageBlock(page.id!, img); },
+                                            child: Center(
+                                              // Desenhamos a bolinha bonita de 30px DENTRO do íman invisível de 44px
+                                              child: Container(
+                                                width: 30, height: 30,
+                                                decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+                                                child: const Icon(Icons.open_in_full, size: 14, color: Colors.white),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+
+                            // =============================================================
+                            // ✍️ CAMADA 3: O VIDRO VETORIAL DA CANETA
+                            // =============================================================
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                // 🚀 BLINDAGEM MÁGICA: Se estás a editar a foto ou em Pan, este vidro desaparece fisicamente!
+                                ignoring: _currentTool == ToolMode.imageEdit || _currentTool == ToolMode.pan,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onTapUp: !isBackgroundBlocked ? (details) {
+                                    if (_editingTextBlock != null) _finishEditingText(page);
+
+                                    if (_currentTool == ToolMode.text) {
+                                      final newBlock = TextBlock(text: '', position: details.localPosition, isBold: false, isItalic: false, isUnderline: false, textColorHex: _selectedColorHex, fontSize: 18.0);
+                                      setState(() { page.textBlocks.add(newBlock); _editingTextBlock = newBlock; _textController.text = ''; });
+                                      _textFocusNode.requestFocus();
+                                    } else if (_currentTool == ToolMode.eraser) {
+                                      _eraseAtPosition(details.localPosition, page);
                                     }
-                                    if (clickedOnSelected) break;
-                                  }
-                                  if (clickedOnSelected) {
-                                    _isMovingStrokes = true;
-                                    _lastPanOffset = localPos;
-                                  } else {
-                                    _isMovingStrokes = false;
-                                    _selectionRectStart = localPos;
-                                    _selectionRectEnd = localPos;
-                                    setState(() => _selectedStrokeIds.clear());
-                                  }
-                                } else if (_currentTool == ToolMode.eraser) {
-                                  _eraseAtPosition(localPos, page);
-                                }
-                              }
-                                  : null,
-                              onPanUpdate: !isBackgroundBlocked
-                                  ? (details) {
-                                final localPos = details.localPosition;
-                                if (_currentTool == ToolMode.draw) {
-                                  final currentList = _activePointsNotifier.value;
-                                  if (currentList.isEmpty || (localPos - currentList.last).distance > 1.5) {
-                                    _activePointsNotifier.value = List.from(currentList)..add(localPos);
-                                  }
-                                } else if (_currentTool == ToolMode.select) {
-                                  if (_isMovingStrokes && _lastPanOffset != null) {
-                                    final delta = localPos - _lastPanOffset!;
-                                    setState(() {
+                                  } : null,
+                                  onPanStart: !isBackgroundBlocked ? (details) {
+                                    final localPos = details.localPosition;
+                                    if (_currentTool == ToolMode.draw) {
+                                      _activePointsNotifier.value = [localPos]; page.undoHistory.clear(); page.redoHistory.clear();
+                                    } else if (_currentTool == ToolMode.select) {
+                                      bool clickedOnSelected = false;
                                       for (var id in _selectedStrokeIds) {
                                         final stroke = page.strokes.firstWhere((s) => s.id == id);
-                                        for (int i = 0; i < stroke.points.length; i++) {
-                                          stroke.points[i] = stroke.points[i] + delta;
-                                        }
+                                        for (var pt in stroke.points) { if ((pt - localPos).distance < 25.0) { clickedOnSelected = true; break; } }
+                                        if (clickedOnSelected) break;
                                       }
-                                    });
-                                    _lastPanOffset = localPos;
-                                  } else if (_selectionRectStart != null) {
-                                    setState(() {
-                                      _selectionRectEnd = localPos;
-                                      final rect = Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!);
-                                      _selectedStrokeIds.clear();
-                                      for (var stroke in page.strokes) {
-                                        for (var pt in stroke.points) {
-                                          if (rect.contains(pt)) {
-                                            _selectedStrokeIds.add(stroke.id);
-                                            break;
+                                      if (clickedOnSelected) { _isMovingStrokes = true; _lastPanOffset = localPos; }
+                                      else { _isMovingStrokes = false; _selectionRectStart = localPos; _selectionRectEnd = localPos; setState(() => _selectedStrokeIds.clear()); }
+                                    } else if (_currentTool == ToolMode.eraser) { _eraseAtPosition(localPos, page); }
+                                  } : null,
+                                  onPanUpdate: !isBackgroundBlocked ? (details) {
+                                    final localPos = details.localPosition;
+                                    if (_currentTool == ToolMode.draw) {
+                                      final currentList = _activePointsNotifier.value;
+                                      if (currentList.isEmpty || (localPos - currentList.last).distance > 1.5) { _activePointsNotifier.value = List.from(currentList)..add(localPos); }
+                                    } else if (_currentTool == ToolMode.select) {
+                                      if (_isMovingStrokes && _lastPanOffset != null) {
+                                        final delta = localPos - _lastPanOffset!;
+                                        setState(() {
+                                          for (var id in _selectedStrokeIds) {
+                                            final stroke = page.strokes.firstWhere((s) => s.id == id);
+                                            for (int i = 0; i < stroke.points.length; i++) { stroke.points[i] = stroke.points[i] + delta; }
                                           }
-                                        }
+                                        });
+                                        _lastPanOffset = localPos;
+                                      } else if (_selectionRectStart != null) {
+                                        setState(() {
+                                          _selectionRectEnd = localPos; final rect = Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!); _selectedStrokeIds.clear();
+                                          for (var stroke in page.strokes) { for (var pt in stroke.points) { if (rect.contains(pt)) { _selectedStrokeIds.add(stroke.id); break; } } }
+                                        });
                                       }
-                                    });
-                                  }
-                                } else if (_currentTool == ToolMode.eraser) {
-                                  _eraseAtPosition(localPos, page);
-                                }
-                              }
-                                  : null,
-                              onPanEnd: !isBackgroundBlocked
-                                  ? (details) {
-                                if (_currentTool == ToolMode.draw) {
-                                  final newStroke = Stroke(
-                                    color: _selectedColorHex,
-                                    thickness: _selectedThickness,
-                                    points: List.from(_activePointsNotifier.value),
-                                  );
-
-                                  setState(() {
-                                    page.strokes.add(newStroke);
-                                  });
-                                  _activePointsNotifier.value = [];
-
-                                  if (page.id != null) {
-                                    _repository.saveSingleStroke(page.id!, newStroke);
-                                  }
-                                } else if (_currentTool == ToolMode.select) {
-                                  setState(() {
-                                    _isMovingStrokes = false;
-                                    _selectionRectStart = null;
-                                    _selectionRectEnd = null;
-                                    _lastPanOffset = null;
-                                  });
-                                }
-                              }
-                                  : null,
-                              child: RepaintBoundary(
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    // 🍞 FATIA 1 (Fundo): A pauta do papel moleskine
-                                    CustomPaint(
-                                      size: currentPageSize,
-                                      willChange: false,
-                                      painter: StaticNotebookPainter(
-                                        strokes: const [],
-                                        lineType: widget.lineType,
-                                        selectedStrokeIds: const {},
-                                        selectionRect: null,
-                                      ),
-                                    ),
-
-                                    // 🥩 FATIA 2 (Recheio): As Imagens (Com Alças Dedicadas de UX)
-                                    ...(page.imageBlocks ?? []).map((img) {
-                                      final isEditMode = _currentTool == ToolMode.imageEdit;
-
-                                      return Positioned(
-                                        left: img.position.dx,
-                                        top: img.position.dy,
-                                        child: Stack(
-                                          clipBehavior: Clip.none, // Permite que os botões saltem para fora da borda
-                                          children: [
-                                            // 🖼️ A FOTOGRAFIA REAL
-                                            Container(
-                                              width: img.width,
-                                              height: img.height,
-                                              decoration: BoxDecoration(
-                                                border: isEditMode
-                                                    ? Border.all(color: const Color(0xFF0F4C5C), width: 2.5)
-                                                    : null,
-                                              ),
-                                              child: Image.file(img.imageFile, fit: BoxFit.fill),
-                                            ),
-
-                                            // 🕹️ ALÇAS DE CONTROLO (Apenas visíveis se ToolMode.imageEdit estiver ativo)
-                                            if (isEditMode) ...[
-
-                                              // 🎯 A) PONTO CENTRAL DEDICADO PARA MOVER (CircleAvatar Azul)
-                                              Positioned(
-                                                left: (img.width / 2) - 22, // Centro exato
-                                                top: (img.height / 2) - 22,
-                                                child: GestureDetector(
-                                                  behavior: HitTestBehavior.opaque,
-                                                  onPanUpdate: (details) {
-                                                    setState(() {
-                                                      img.position += details.delta; // Move apenas ao arrastar a bolinha azul
-                                                    });
-                                                  },
-                                                  onPanEnd: (details) {
-                                                    if (page.id != null) _repository.saveSingleImageBlock(page.id!, img);
-                                                  },
-                                                  child: const CircleAvatar(
-                                                    radius: 22,
-                                                    backgroundColor: Color(0xFF0F4C5C),
-                                                    child: Icon(Icons.open_with, size: 22, color: Colors.white),
-                                                  ),
-                                                ),
-                                              ),
-
-                                              // 📐 B) ALÇA NO CANTO INFERIOR DIREITO PARA REDIMENSIONAR (CircleAvatar Laranja)
-                                              Positioned(
-                                                left: img.width - 15,
-                                                top: img.height - 15,
-                                                child: GestureDetector(
-                                                  behavior: HitTestBehavior.opaque,
-                                                  onPanUpdate: (details) {
-                                                    setState(() {
-                                                      // Redimensiona esticando a borda com limites de segurança
-                                                      img.width = (img.width + details.delta.dx).clamp(80.0, 900.0);
-                                                      img.height = (img.height + details.delta.dy).clamp(80.0, 900.0);
-                                                    });
-                                                  },
-                                                  onPanEnd: (details) {
-                                                    if (page.id != null) _repository.saveSingleImageBlock(page.id!, img);
-                                                  },
-                                                  child: const CircleAvatar(
-                                                    radius: 15,
-                                                    backgroundColor: Colors.orange,
-                                                    child: Icon(Icons.open_in_full, size: 14, color: Colors.white),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      );
-                                    }),
-
-                                    // 🍞 FATIA 3 (Topo): A Tinta Vetorial Antiga Guardada (Passa por CIMA da foto)
-                                    CustomPaint(
-                                      size: currentPageSize,
-                                      isComplex: true,
-                                      willChange: false,
-                                      painter: StaticNotebookPainter(
-                                        strokes: page.strokes,
-                                        lineType: 'none', // Mágico: Desliga as pautas para não duplicar a Fatia 1!
-                                        selectedStrokeIds: _selectedStrokeIds,
-                                        selectionRect: _selectionRectStart != null && _selectionRectEnd != null
-                                            ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!)
-                                            : null,
-                                      ),
-                                    ),
-
-                                    // ⚡ FATIA 4 (Dinâmica): A caneta a desenhar no milissegundo atual (A 60 FPS)
-                                    ValueListenableBuilder<List<Offset>>(
-                                      valueListenable: _activePointsNotifier,
-                                      builder: (context, activePoints, child) {
-                                        return CustomPaint(
-                                          size: currentPageSize,
-                                          painter: ActiveStrokePainter(
-                                            currentPoints: activePoints,
-                                            currentColor: _selectedColorHex,
-                                            currentThickness: _selectedThickness,
+                                    } else if (_currentTool == ToolMode.eraser) { _eraseAtPosition(localPos, page); }
+                                  } : null,
+                                  onPanEnd: !isBackgroundBlocked ? (details) {
+                                    if (_currentTool == ToolMode.draw) {
+                                      final newStroke = Stroke(color: _selectedColorHex, thickness: _selectedThickness, points: List.from(_activePointsNotifier.value));
+                                      setState(() => page.strokes.add(newStroke)); _activePointsNotifier.value = [];
+                                      if (page.id != null) _repository.saveSingleStroke(page.id!, newStroke);
+                                    } else if (_currentTool == ToolMode.select) {
+                                      setState(() { _isMovingStrokes = false; _selectionRectStart = null; _selectionRectEnd = null; _lastPanOffset = null; });
+                                    }
+                                  } : null,
+                                  child: RepaintBoundary(
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        CustomPaint(
+                                          size: currentPageSize, isComplex: true, willChange: false,
+                                          painter: StaticNotebookPainter(
+                                            strokes: page.strokes, lineType: 'none', selectedStrokeIds: _selectedStrokeIds,
+                                            selectionRect: _selectionRectStart != null && _selectionRectEnd != null ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!) : null,
                                           ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // 🚀 CAMADA 2: Blocos de Texto (Agora com Edição Inline!)
-                          ...page.textBlocks.map((tb) {
-                            final isEditing = tb == _editingTextBlock;
-
-                            return Positioned(
-                              left: tb.position.dx,
-                              top: tb.position.dy,
-                              child: GestureDetector(
-                                onPanUpdate: (_currentTool == ToolMode.text || _currentTool == ToolMode.select) && !isEditing ? (details) {
-                                  setState(() => tb.position += details.delta);
-                                } : null,
-                                onTap: _currentTool == ToolMode.text && !isEditing ? () {
-                                  if (_editingTextBlock != null) _finishEditingText(page);
-                                  setState(() {
-                                    _editingTextBlock = tb; // Transforma o texto normal num campo de edição
-                                    _textController.text = tb.text;
-                                  });
-                                  _textFocusNode.requestFocus();
-                                } : null,
-                                child: isEditing
-                                // 🔥 ESTADO 1: QUANDO ESTÁ A SER EDITADO (Aparece o Cursor)
-                                    ? Container(
-                                  width: 250, // Largura invisível para a escrita
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: const Color(0xFF0F4C5C).withOpacity(0.5), style: BorderStyle.solid),
-                                  ),
-                                  child: TextField(
-                                    controller: _textController,
-                                    focusNode: _textFocusNode,
-                                    maxLines: null,
-                                    autofocus: true,
-                                    style: GoogleFonts.inter(
-                                      fontSize: tb.fontSize,
-                                      fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                      fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                      decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
-                                      color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
-                                    ),
-                                    decoration: const InputDecoration(
-                                        isDense: true, contentPadding: EdgeInsets.zero, border: InputBorder.none,
-                                        hintText: 'Escreva aqui...', hintStyle: TextStyle(color: Colors.black26)
-                                    ),
-                                    onChanged: (val) => tb.text = val, // O texto atualiza na memória em tempo real
-                                  ),
-                                )
-                                // 🔥 ESTADO 2: QUANDO É TEXTO MORTO/GUARDADO (Visual limpo)
-                                    : Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(border: _currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withOpacity(0.2)) : null),
-                                  child: Text(
-                                    tb.text,
-                                    style: GoogleFonts.inter(
-                                      fontSize: tb.fontSize,
-                                      fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                      fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                      decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
-                                      color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                        ),
+                                        ValueListenableBuilder<List<Offset>>(
+                                          valueListenable: _activePointsNotifier,
+                                          builder: (context, activePoints, child) => CustomPaint(size: currentPageSize, painter: ActiveStrokePainter(currentPoints: activePoints, currentColor: _selectedColorHex, currentThickness: _selectedThickness)),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
                               ),
-                            );
-                          }),
-
-                          // 🚀 CAMADA 3: Título Dinâmico
-                          Positioned(
-                            top: 30, left: 0, right: 0,
-                            child: Center(
-                              child: GestureDetector(
-                                onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(
-                                    initialText: page.title,
-                                    title: 'Título da Folha',
-                                    onSave: (val, b, i, u, color, size) {
-                                      setState(() => page.title = val);
-                                      // 🚀 SQLITE: Atualiza Metadados
-                                      if (page.id != null) _repository.updatePageMetadata(page.id!, page.title, page.footer);
-                                    }
-                                ) : null,
-                                child: Text(
-                                  page.title.isEmpty ? (_currentTool == ToolMode.text ? 'Tocar para Título' : '') : page.title,
-                                  style: GoogleFonts.lora(fontSize: 26, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24)),
-                                ),
-                              ),
                             ),
-                          ),
 
-                          // 🚀 CAMADA 4: Rodapé Dinâmico
-                          Positioned(
-                            bottom: 30, left: 0, right: 0,
-                            child: Center(
-                              child: GestureDetector(
-                                onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(
-                                    initialText: page.footer,
-                                    title: 'Rodapé da Folha',
-                                    onSave: (val, b, i, u, color, size) {
-                                      setState(() => page.footer = val);
-                                      // 🚀 SQLITE: Atualiza Metadados
-                                      if (page.id != null) _repository.updatePageMetadata(page.id!, page.title, page.footer);
-                                    }
-                                ) : null,
-                                child: Text(
-                                  page.footer.isEmpty ? (_currentTool == ToolMode.text ? 'Tocar para Rodapé' : '') : page.footer,
-                                  style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
+                            // =============================================================
+                            // 📝 CAMADA 4: TEXTOS TECLADO
+                            // =============================================================
+                            ...page.textBlocks.map((tb) {
+                              final isEditing = tb == _editingTextBlock;
+                              return Positioned(
+                                left: tb.position.dx, top: tb.position.dy,
+                                child: GestureDetector(
+                                  onPanUpdate: _currentTool == ToolMode.text && !isEditing ? (d) => setState(() => tb.position += d.delta) : null, // 🚀 Corrigido: Textos só movem na ferramenta Texto!
+                                  onTap: _currentTool == ToolMode.text && !isEditing ? () {
+                                    if (_editingTextBlock != null) _finishEditingText(page);
+                                    setState(() { _editingTextBlock = tb; _textController.text = tb.text; });
+                                    _textFocusNode.requestFocus();
+                                  } : null,
+                                  child: isEditing
+                                      ? Container(width: 250, padding: const EdgeInsets.all(4), decoration: BoxDecoration(border: Border.all(color: const Color(0xFF0F4C5C).withOpacity(0.5))), child: TextField(controller: _textController, focusNode: _textFocusNode, maxLines: null, autofocus: true, style: GoogleFonts.inter(fontSize: tb.fontSize, fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal, fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal, decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none, color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF')))), decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.zero, border: InputBorder.none, hintText: 'Escreva aqui...'), onChanged: (val) => tb.text = val))
+                                      : Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(border: _currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withOpacity(0.2)) : null), child: Text(tb.text, style: GoogleFonts.inter(fontSize: tb.fontSize, fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal, fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal, decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none, color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF')))))),
                                 ),
-                              ),
+                              );
+                            }),
+
+                            // =============================================================
+                            // 📄 CAMADA 5: TÍTULO E RODAPÉ
+                            // =============================================================
+                            Positioned(
+                              top: 30, left: 0, right: 0,
+                              child: Center(child: GestureDetector(onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(initialText: page.title, title: 'Título', onSave: (v, b, i, u, c, s) { setState(() => page.title = v); if (page.id != null) _repository.updatePageMetadata(page.id!, page.title, page.footer); }) : null, child: Text(page.title.isEmpty ? (_currentTool == ToolMode.text ? 'Tocar para Título' : '') : page.title, style: GoogleFonts.lora(fontSize: 26, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24))))),
                             ),
-                          ),
-                        ],
+                            Positioned(
+                              bottom: 30, left: 0, right: 0,
+                              child: Center(child: GestureDetector(onTap: _currentTool == ToolMode.text ? () => _showTextInputDialog(initialText: page.footer, title: 'Rodapé', onSave: (v, b, i, u, c, s) { setState(() => page.footer = v); if (page.id != null) _repository.updatePageMetadata(page.id!, page.title, page.footer); }) : null, child: Text(page.footer.isEmpty ? (_currentTool == ToolMode.text ? 'Tocar para Rodapé' : '') : page.footer, style: GoogleFonts.inter(fontSize: 12, color: Colors.black54)))),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
@@ -1132,14 +988,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
             },
           ),
 
-          // CÁPSULA FLUTUANTE
           Positioned(
-            bottom: 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: _buildFloatingToolbar(currentPage!),
-            ),
+            bottom: 20, left: 0, right: 0,
+            child: Center(child: _buildFloatingToolbar(currentPage!)),
           ),
         ],
       ),
@@ -1280,8 +1131,15 @@ class _CanvasScreenState extends State<CanvasScreen> {
       return _buildTextEditingToolbar(currentPage);
     }
 
-    // 🚀 O RADAR DE ECRÃ: Menos de 600px é considerado Telemóvel.
+    // 🚀 RADAR: Menos de 600px é Telemóvel
     final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
+
+    // 🚀 UI CONDICIONAL: A folha atual tem pelo menos 1 imagem guardada?
+    final bool hasImages = currentPage.imageBlocks.isNotEmpty;
+
+    // 🚀 REGRA CAMALEÃO: Se no telemóvel ele ativou uma ferramenta escondida, ela mostra-se!
+    final bool isEraserActive = _currentTool == ToolMode.eraser;
+    final bool isSelectActive = _currentTool == ToolMode.select;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -1299,106 +1157,94 @@ class _CanvasScreenState extends State<CanvasScreen> {
         crossAxisAlignment: WrapCrossAlignment.center,
         alignment: WrapAlignment.center,
         children: [
-          // 🚀 1. AS FERRAMENTAS PRINCIPAIS (Sempre visíveis)
+          // 1. CANETA (Sempre visível)
           _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
-          _buildToolButton(Icons.backspace_outlined, ToolMode.eraser, 'Borracha'),
-          _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover/Zoom'),
+
+          // 2. BORRACHA (PC: Sempre visível | Mobile: Só aparece se estiver a ser usada!)
+          if (!isSmallScreen || isEraserActive)
+            _buildToolButton(Icons.backspace_outlined, ToolMode.eraser, 'Borracha'),
+
+          // 3. MOVER FOLHA / PAN (Sempre visível)
+          _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha'),
+
+          // 4. TEXTO (Sempre visível)
           _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
-          _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar'),
-          // 🚀 ATUALIZADO: O botão agora abre a galeria diretamente ao ser clicado!
-          _buildCompactIconButton(
-              Icons.add_photo_alternate_outlined,
-                  () => _pickAndInsertImage(currentPage),
-              'Adicionar Imagem',
-              const Color(0xFF1A1A24)
-          ),
-          // 🚀 NOVO BOTÃO: Ativa o modo exclusivo de edição de foto
-          _buildToolButton(Icons.transform, ToolMode.imageEdit, 'Editar Imagem'),
-          // 🚀 2. A SEPARAÇÃO INTELIGENTE (Telemóvel vs PC)
+
+          // 5. SELECIONAR TINTA (PC: Sempre visível | Mobile: Só aparece se ativa)
+          if (!isSmallScreen || isSelectActive)
+            _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar Tinta'),
+
+          // 6. ADICIONAR IMAGEM (PC: Sempre visível | Mobile: Escondido no menu)
+          if (!isSmallScreen)
+            _buildCompactIconButton(
+                Icons.add_photo_alternate_outlined,
+                    () => _pickAndInsertImage(currentPage),
+                'Adicionar Imagem',
+                const Color(0xFF1A1A24)),
+
+          // 7. 🚀 MOVER/EDITAR IMAGEM (Só nasce na barra se a folha tiver fotos!)
+          if (hasImages)
+            _buildToolButton(Icons.transform, ToolMode.imageEdit, 'Editar Imagem'),
+
+          // 8. 🚀 DESFAZER EVIDENCIADO (No Mobile salta para a barra principal!)
           if (isSmallScreen)
-          // MENU COMPACTO PARA TELEMÓVEIS (Agora inclui o Zoom!)
+            _buildCompactIconButton(
+                Icons.undo,
+                currentPage.strokes.isNotEmpty ? _undo : null,
+                'Desfazer',
+                currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
+
+          // =================================================================
+          // 9. GAVETA DE TRANSBORDO MOBILE (Onde escondemos o resto)
+          // =================================================================
+          if (isSmallScreen)
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: Color(0xFF1A1A24)),
-              tooltip: 'Mais opções',
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              tooltip: 'Mais ferramentas',
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               color: const Color(0xFFFDFBF7),
               onSelected: (value) {
-                if (value == 'zoom_out') _zoom(0.8);
-                if (value == 'zoom_in') _zoom(1.2);
-                if (value == 'undo' && currentPage.strokes.isNotEmpty) _undo();
+                if (value == 'insert_image') _pickAndInsertImage(currentPage);
+                if (value == 'eraser') setState(() => _currentTool = ToolMode.eraser);
+                if (value == 'select') setState(() => _currentTool = ToolMode.select);
                 if (value == 'redo' && currentPage.redoHistory.isNotEmpty) _redo();
                 if (value == 'clear' && currentPage.strokes.isNotEmpty) _confirmClearPage(currentPage);
               },
               itemBuilder: (context) => [
                 const PopupMenuItem(
-                  value: 'zoom_in',
-                  child: Row(
-                    children: [
-                      Icon(Icons.zoom_in, color: Color(0xFF1A1A24)),
-                      SizedBox(width: 8),
-                      Text('Aproximar', style: TextStyle(color: Colors.black87)),
-                    ],
-                  ),
+                  value: 'insert_image',
+                  child: Row(children: [Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Inserir Imagem')]),
                 ),
                 const PopupMenuItem(
-                  value: 'zoom_out',
-                  child: Row(
-                    children: [
-                      Icon(Icons.zoom_out, color: Color(0xFF1A1A24)),
-                      SizedBox(width: 8),
-                      Text('Afastar', style: TextStyle(color: Colors.black87)),
-                    ],
-                  ),
+                  value: 'eraser',
+                  child: Row(children: [Icon(Icons.backspace_outlined, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Borracha')]),
+                ),
+                const PopupMenuItem(
+                  value: 'select',
+                  child: Row(children: [Icon(Icons.highlight_alt, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Selecionar Tinta')]),
                 ),
                 const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'undo',
-                  enabled: currentPage.strokes.isNotEmpty,
-                  child: Row(
-                    children: [
-                      Icon(Icons.undo, color: currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey),
-                      const SizedBox(width: 8),
-                      Text('Desfazer', style: TextStyle(color: currentPage.strokes.isNotEmpty ? Colors.black87 : Colors.grey)),
-                    ],
-                  ),
-                ),
                 PopupMenuItem(
                   value: 'redo',
                   enabled: currentPage.redoHistory.isNotEmpty,
-                  child: Row(
-                    children: [
-                      Icon(Icons.redo, color: currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey),
-                      const SizedBox(width: 8),
-                      Text('Avançar', style: TextStyle(color: currentPage.redoHistory.isNotEmpty ? Colors.black87 : Colors.grey)),
-                    ],
-                  ),
+                  child: Row(children: [Icon(Icons.redo, color: currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey), const SizedBox(width: 12), const Text('Avançar (Redo)')]),
                 ),
-                const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'clear',
                   enabled: currentPage.strokes.isNotEmpty,
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_sweep, color: currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey),
-                      const SizedBox(width: 8),
-                      Text('Apagar Tudo', style: TextStyle(color: currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey)),
-                    ],
-                  ),
+                  child: Row(children: [Icon(Icons.delete_sweep, color: currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey), const SizedBox(width: 12), const Text('Apagar Tudo', style: TextStyle(color: Colors.redAccent))]),
                 ),
               ],
             )
           else ...[
-            // 🚀 PAINEL EXPANDIDO PARA TABLETS/COMPUTADORES
-            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
-            _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
+            // 🖥️ COMPORTAMENTO PC / TABLET (Mantém o painel expandido)
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
             _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? _undo : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
             _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? _redo : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
             _buildCompactIconButton(Icons.delete_sweep, currentPage.strokes.isNotEmpty ? () => _confirmClearPage(currentPage) : null, 'Apagar Tudo', currentPage.strokes.isNotEmpty ? Colors.redAccent : Colors.grey.withOpacity(0.5)),
           ],
 
-          // 🚀 3. FERRAMENTAS DE CANETA (Aparecem apenas se a Caneta estiver selecionada)
+          // 10. ESTÚDIO DE CORES DA CANETA
           if (_currentTool == ToolMode.draw) ...[
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
             _buildColorButton(),

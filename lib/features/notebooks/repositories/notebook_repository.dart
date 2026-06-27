@@ -45,28 +45,76 @@ class NotebookRepository {
   // ============================================================================
   // 📥 ESTRATÉGIA 1: BULK SAVE (100% Blindado contra falhas de Transação)
   // ============================================================================
+  // 🚀 MOTOR DE SALVAMENTO EM MASSA BLINDADO (Com Remoção de Páginas Fantasma e Reordenação)
   Future<void> saveFullNotebook(int notebookId, List<LocalPage> pages) async {
     if (kIsWeb) return;
     final db = await _dbHelper.database;
 
     await db.transaction((txn) async {
-      for (var page in pages) {
+      // =======================================================================
+      // 🕵️‍♂️ PASSO 1: DETECTAR E ELIMINAR AS FOLHAS QUE FORAM RASGADAS
+      // =======================================================================
+
+      // 1. Busca todos os IDs de páginas que estão atualmente gravados no SQLite para este caderno
+      final List<Map<String, dynamic>> existingRows = await txn.query(
+        'pages',
+        columns: ['id'],
+        where: 'notebook_id = ?',
+        whereArgs: [notebookId],
+      );
+
+      final List<int> existingIds = existingRows
+          .map((row) => row['id'] as int)
+          .toList();
+
+      // 2. Recolhe os IDs das páginas que continuam vivas na memória RAM
+      final List<int> currentIds = pages
+          .map((page) => page.id)
+          .whereType<int>()
+          .toList();
+
+      // 3. Se um ID existe na base de dados mas não está na RAM, significa que a folha foi rasgada!
+      for (final int id in existingIds) {
+        if (!currentIds.contains(id)) {
+          // O ON DELETE CASCADE configurado no DatabaseHelper limpa os filhos automaticamente!
+          await txn.delete(
+            'pages',
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
+      }
+
+      // =======================================================================
+      // 💾 PASSO 2: ATUALIZAR AS FOLHAS SOBREVIVENTES E REORDENAR A PAGINAÇÃO
+      // =======================================================================
+      for (int i = 0; i < pages.length; i++) {
+        final page = pages[i];
         int currentPageId;
 
-        // 1. SE A FOLHA ACABOU DE NASCER NA RAM, CIMENTA O ID NELA AGORA!
+        // 🛡️ CORREÇÃO DE LACUNAS: Forçamos o 'page_number' a ser o índice real + 1.
+        // Se apagares a Folha 2 de 3, a antiga Folha 3 passa a ser matematicamente a Folha 2 no SQLite!
+        final Map<String, dynamic> pageMap = page.toDatabaseMap();
+        pageMap['page_number'] = i + 1;
+
         if (page.id == null) {
-          currentPageId = await txn.insert('pages', page.toDatabaseMap());
+          currentPageId = await txn.insert('pages', pageMap);
           page.id = currentPageId;
         } else {
           currentPageId = page.id!;
-          await txn.update('pages', page.toDatabaseMap(), where: 'id = ?', whereArgs: [currentPageId]);
+          await txn.update(
+            'pages',
+            pageMap,
+            where: 'id = ?',
+            whereArgs: [currentPageId],
+          );
         }
 
-        // 2. GRAVA OS TRAÇOS DA CANETA (Corrigido para client_stroke_id)
+        // 5. GRAVA OS TRAÇOS DA CANETA VETORIAL
         await txn.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [currentPageId]);
         for (var stroke in page.strokes) {
           await txn.insert('canvas_strokes', {
-            'client_stroke_id': stroke.id, // 🚀 ERA stroke_id -> CORRIGIDO
+            'client_stroke_id': stroke.id,
             'page_id': currentPageId,
             'stroke_data': stroke.toJsonString(),
             'is_deleted': 0,
@@ -74,11 +122,11 @@ class NotebookRepository {
           });
         }
 
-        // 3. GRAVA OS TEXTOS (Corrigido para client_text_id)
+        // 6. GRAVA OS BLOCOS DE TEXTO TECLADO
         await txn.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
         for (var tb in page.textBlocks) {
           await txn.insert('canvas_text_blocks', {
-            'client_text_id': tb.id,       // 🚀 ERA block_id -> CORRIGIDO
+            'client_text_id': tb.id,
             'page_id': currentPageId,
             'text_data': jsonEncode(tb.toMap()),
             'is_deleted': 0,
@@ -86,7 +134,7 @@ class NotebookRepository {
           });
         }
 
-        // 4. GRAVA AS FOTOGRAFIAS
+        // 7. GRAVA AS FOTOGRAFIAS MANIPULÁVEIS
         await txn.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
         for (var img in page.imageBlocks) {
           await txn.insert('canvas_image_blocks', {
@@ -104,6 +152,7 @@ class NotebookRepository {
       }
     });
   }
+
   // 🚀 NOVO: Método para o Ecrã buscar as folhas quando abre!
   Future<List<LocalPage>> getFullPagesForNotebook(int notebookId) async {
     if (kIsWeb) return [];

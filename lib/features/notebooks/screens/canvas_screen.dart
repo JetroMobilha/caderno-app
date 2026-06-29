@@ -42,6 +42,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
   ToolMode _currentTool = ToolMode.draw;
   InlineTarget _activeInlineTarget = InlineTarget.none;
   TextBlock? _activeTextBlock;
+  late String _liveLineType; // <--- NOVA VARIÁVEL MUTÁVEL
 
   final FocusNode _textFocusNode = FocusNode();
   final TextEditingController _textController = TextEditingController();
@@ -89,6 +90,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
   @override
   void initState() {
     super.initState();
+    _liveLineType = widget.lineType;
     _loadSavedPages();
   }
 
@@ -487,7 +489,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                 willChange: false,
                                 painter: StaticNotebookPainter(
                                   strokes: const [],
-                                  lineType: widget.lineType,
+                                  lineType: _liveLineType,
                                   selectedStrokeIds: const {},
                                   selectionRect: null,
                                 ),
@@ -748,11 +750,23 @@ class _CanvasScreenState extends State<CanvasScreen> {
                               ),
                             ),
 
+                            // =======================================================
+                            // 📝 CAMADA 4: BLOCOS DE TEXTO LIVRE (Calibrado ISO Moleskine)
+                            // =======================================================
                             ...page.textBlocks.map((tb) {
                               final bool isEditing = tb == _activeTextBlock && _activeInlineTarget == InlineTarget.block;
+
+                              // 🚀 CÁLCULO 1: O passo matemático exato da pauta física
+                              final double physicalLineStep = _liveLineType == 'grid' ? 25.0 : 28.0;
+                              final double exactLineMulti = physicalLineStep / tb.fontSize;
+
+                              // 🚀 CÁLCULO 2: Estica a caixa até à margem direita (com trava mínima de segurança de 60px)
+                              final double paperRightEnd = (currentPageSize.width - tb.position.dx - 20.0).clamp(60.0, currentPageSize.width);
+
                               return Positioned(
                                 left: tb.position.dx,
                                 top: tb.position.dy,
+                                width: paperRightEnd, // <--- O SEGREDO DA LINHA INTEIRA
                                 child: GestureDetector(
                                   onPanUpdate: _currentTool == ToolMode.text && !isEditing
                                       ? (details) => setState(() => tb.position += details.delta)
@@ -768,8 +782,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                   } : null,
                                   child: isEditing
                                       ? Container(
-                                    width: 250,
-                                    padding: const EdgeInsets.all(4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 2),
                                     decoration: BoxDecoration(
                                       border: Border.all(color: const Color(0xFF0F4C5C).withOpacity(0.5)),
                                     ),
@@ -780,6 +793,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                       autofocus: true,
                                       style: GoogleFonts.inter(
                                         fontSize: tb.fontSize,
+                                        height: exactLineMulti, // <--- O ÍMAN MÁGICO DE PAUTA
                                         fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
                                         fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
                                         decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
@@ -789,13 +803,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                         isDense: true,
                                         contentPadding: EdgeInsets.zero,
                                         border: InputBorder.none,
-                                        hintText: 'Escreva aqui...',
+                                        hintText: 'Escreva aqui na linha...',
                                       ),
                                       onChanged: (val) => tb.text = val,
                                     ),
                                   )
                                       : Container(
-                                    padding: const EdgeInsets.all(4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 2),
                                     decoration: BoxDecoration(
                                       border: _currentTool == ToolMode.text
                                           ? Border.all(color: Colors.blueAccent.withOpacity(0.2))
@@ -805,6 +819,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                       tb.text,
                                       style: GoogleFonts.inter(
                                         fontSize: tb.fontSize,
+                                        height: exactLineMulti, // <--- O ÍMAN MÁGICO DE PAUTA
                                         fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
                                         fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
                                         decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
@@ -1095,6 +1110,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                 if (val == 'zoom_out') _zoom(0.8);
                 if (val == 'redo' && currentPage.redoHistory.isNotEmpty) _redo();
                 if (val == 'delete_page') _confirmDeletePage(currentPage, _currentPageIndex);
+                if (val == 'change_paper') _showPaperStyleStudioDialog();
               },
               itemBuilder: (context) => [
                 const PopupMenuItem(value: 'insert_image', child: Row(children: [Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Inserir Imagem')])),
@@ -1104,11 +1120,22 @@ class _CanvasScreenState extends State<CanvasScreen> {
                 const PopupMenuItem(value: 'zoom_in', child: Row(children: [Icon(Icons.zoom_in, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Aproximar (+)')])),
                 const PopupMenuItem(value: 'zoom_out', child: Row(children: [Icon(Icons.zoom_out, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Afastar (-)')])),
                 const PopupMenuDivider(),
+                const PopupMenuItem( value: 'change_paper',  child: Row(children: [Icon(Icons.grid_on, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Mudar Pauta do Papel')]),),
                 PopupMenuItem(value: 'redo', enabled: currentPage.redoHistory.isNotEmpty, child: Row(children: [Icon(Icons.redo, color: currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey), const SizedBox(width: 12), const Text('Avançar')])),
                 const PopupMenuItem(value: 'delete_page', child: Row(children: [Icon(Icons.delete_forever, color: Colors.redAccent), SizedBox(width: 12), Text('Rasgar Folha', style: TextStyle(color: Colors.redAccent))])),
               ],
             )
           else ...[
+            // 🖥️ COMPORTAMENTO PC / TABLET (Ecrãs largos > 600px)
+            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+
+            // 🚀 O BOTÃO QUE FALTAVA NO COMPUTADOR:
+            _buildCompactIconButton(
+              Icons.grid_on,
+              _showPaperStyleStudioDialog,
+              'Mudar Pauta do Papel',
+              const Color(0xFF0F4C5C),
+            ),
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
             _buildCompactIconButton(Icons.zoom_out, () => _zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
             _buildCompactIconButton(Icons.zoom_in, () => _zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
@@ -1236,6 +1263,58 @@ class _CanvasScreenState extends State<CanvasScreen> {
   void _showThicknessStudioDialog() { /* ... */ }
   Widget _buildColorButton() => InkWell(onTap: _showColorStudioDialog, customBorder: const CircleBorder(), child: Container(width: 36, height: 36, alignment: Alignment.center, child: CircleAvatar(radius: 11, backgroundColor: Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF'))))));
   Widget _buildThicknessButton() => InkWell(onTap: _showThicknessStudioDialog, customBorder: const CircleBorder(), child: Container(width: 36, height: 36, alignment: Alignment.center, child: CircleAvatar(radius: 11, backgroundColor: Colors.black12, child: CircleAvatar(radius: (_selectedThickness / 1.5).clamp(2.0, 9.0), backgroundColor: const Color(0xFF1A1A24)))));
+  // =========================================================================
+  // 📐 ESTÚDIO DE PAUTA EM TEMPO REAL
+  // =========================================================================
+  void _showPaperStyleStudioDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDFBF7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Pauta do Papel', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildPaperOption('ruled', 'Pautado (28px)', Icons.view_headline),
+            const SizedBox(height: 8),
+            _buildPaperOption('grid', 'Quadriculado (25px)', Icons.grid_4x4),
+            const SizedBox(height: 8),
+            _buildPaperOption('blank', 'Liso / Em Branco', Icons.check_box_outline_blank),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaperOption(String type, String label, IconData icon) {
+    final bool isSelected = _liveLineType == type;
+    return InkWell(
+      onTap: () {
+        setState(() => _liveLineType = type);
+        Navigator.pop(context);
+        _repository.updateLineType(widget.notebookId, type); // Cimenta na Base de Dados!
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54),
+            const SizedBox(width: 12),
+            Text(label, style: GoogleFonts.inter(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: const Color(0xFF1A1A24))),
+            const Spacer(),
+            if (isSelected) const Icon(Icons.check_circle, color: Color(0xFF0F4C5C), size: 18),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 Path _buildSmoothPath(List<Offset> points) {
@@ -1248,7 +1327,7 @@ Path _buildSmoothPath(List<Offset> points) {
 }
 
 // =========================================================================
-// 🎨 PAINTER ESTÁTICO (Rigorosamente completo com Laço e Sombra Azul)
+// 🎨 PAINTER ESTÁTICO (Completo: Pautado, Quadriculado, Traços e Laço!)
 // =========================================================================
 class StaticNotebookPainter extends CustomPainter {
   final List<Stroke> strokes;
@@ -1265,7 +1344,11 @@ class StaticNotebookPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Desenho da Pauta
+    final Paint bgPaint = Paint()
+      ..color = const Color(0xFF1B365D).withOpacity(0.18)
+      ..strokeWidth = 1.0;
+
+    // 1. Pauta Pautada (Linhas horizontais clássicas)
     if (lineType == 'ruled') {
       canvas.drawLine(
         const Offset(60, 0),
@@ -1273,15 +1356,27 @@ class StaticNotebookPainter extends CustomPainter {
         Paint()..color = Colors.redAccent.withOpacity(0.4)..strokeWidth = 1.5,
       );
       for (double y = 90; y < size.height - 60; y += 28) {
-        canvas.drawLine(
-          Offset(60, y),
-          Offset(size.width - 20, y),
-          Paint()..color = const Color(0xFF1B365D).withOpacity(0.18),
-        );
+        canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
+      }
+    }
+    // 🚀 2. Pauta Quadriculada (Grelha X/Y restaurada!)
+    else if (lineType == 'grid') {
+      const double margin = 20.0;
+      const double topMargin = 90.0;
+      const double bottomMargin = 60.0;
+      const double gridSize = 25.0;
+
+      // Linhas Horizontais
+      for (double y = topMargin; y < size.height - bottomMargin; y += gridSize) {
+        canvas.drawLine(Offset(margin, y), Offset(size.width - margin, y), bgPaint);
+      }
+      // Linhas Verticais
+      for (double x = margin; x < size.width - margin; x += gridSize) {
+        canvas.drawLine(Offset(x, topMargin), Offset(x, size.height - bottomMargin), bgPaint);
       }
     }
 
-    // 2. Desenho dos Traços + Efeito Neon de Seleção
+    // 3. Desenho dos Traços + Efeito Neon de Seleção
     for (final stroke in strokes) {
       final bool isSelected = selectedStrokeIds.contains(stroke.id);
 
@@ -1292,7 +1387,6 @@ class StaticNotebookPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
 
-      // Sombra azul à volta da linha selecionada
       if (isSelected && stroke.points.isNotEmpty) {
         double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
         double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
@@ -1312,14 +1406,13 @@ class StaticNotebookPainter extends CustomPainter {
       canvas.drawPath(_buildSmoothPath(stroke.points), paint);
     }
 
-    // 3. O Quadrado Azul do Laço de Seleção
+    // 4. O Quadrado Azul do Laço de Seleção
     if (selectionRect != null) {
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5);
     }
   }
 
-  // 🚀 O SEGREDO SKIA: Forçar 'true' garante que arrastar o dedo repinta a caixa milissegundo a milissegundo!
   @override
   bool shouldRepaint(covariant StaticNotebookPainter oldDelegate) => true;
 }

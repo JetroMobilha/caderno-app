@@ -99,14 +99,18 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
     );
   }
 
+  // =========================================================================
+  // 📚 RENDERIZADOR DE CAPA DE CADERNO (Com Sincronização Ativa pós-Canvas)
+  // =========================================================================
   Widget _buildNotebookCard(BuildContext context, Notebook notebook) {
     final cardColor = notebook.color != null
         ? Color(int.parse(notebook.color!.replaceFirst('#', '0xFF')))
         : const Color(0xFF8B0000);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      // 🚀 SEGREDO TÁTICO: Transformado em ASYNC para escutar o retorno
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => CanvasScreen(
@@ -117,6 +121,12 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
             ),
           ),
         );
+
+        // 🚀 O REFORÇO: No exato segundo em que o utilizador faz "Voltar" e sai
+        // do caderno, a estante acorda e obriga o Riverpod a ler o SQLite de novo!
+        if (mounted) {
+          ref.read(notebookProvider.notifier).loadNotebooks(widget.subjectId);
+        }
       },
       child: Container(
         decoration: BoxDecoration(

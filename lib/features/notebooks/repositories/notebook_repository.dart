@@ -230,4 +230,16 @@ class NotebookRepository {
     final localDb = LocalDatabaseService();
     await localDb.saveImageBlockLocally(pageId, img); // <--- Tem de chamar o nome exato!
   }
+
+  // 🚀 ATUALIZA A PAUTA DO CADERNO EM TEMPO REAL NO SQLITE
+  Future<void> updateLineType(int notebookId, String newLineType) async {
+    if (kIsWeb) return;
+    final db = await _dbHelper.database;
+    await db.update(
+      'notebooks',
+      {'line_type': newLineType, 'updated_at': DateTime.now().millisecondsSinceEpoch},
+      where: 'id = ?',
+      whereArgs: [notebookId],
+    );
+  }
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
@@ -214,6 +215,10 @@ class DatabaseHelper {
         print('⚠️ Tabela [$tabela] ignorada (provavelmente ainda não foi criada).');
       }
     }
+
+    // Limpa o carimbo de tempo do radar de disciplinas
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('last_subjects_sync');
 
     print('🧹 Quartel-General purificado com sucesso!');
   }

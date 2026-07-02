@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart'; // 🚀 IMPORTANTE: O Escudo que detet
 import 'package:sqflite/sqflite.dart';
 import '../database/database_helper.dart';
 import 'api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SyncService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
@@ -67,25 +68,39 @@ class SyncService {
     }
   }
 
-  // 📥 INICIAR OPERAÇÃO PULL (Receber do Servidor)
-  Future<void> pullSubjects() async {
-    // 🌐 ESCUDO WEB: No Chrome não há SQLite para preencher. O Provider já lê direto do servidor!
-    if (kIsWeb) {
-      print('🌐 [Web] Operação PULL local ignorada: O Chrome lê os dados em tempo real.');
-      return;
-    }
+  // 📥 INICIAR OPERAÇÃO PULL (Rastreio Inteligente por Timestamp)
+  Future<bool> pullSubjects() async {
+    if (kIsWeb) return false;
 
     final db = await _dbHelper.database;
+    final prefs = await SharedPreferences.getInstance();
+
+    // 🚀 LER O ÚLTIMO CARIMBO: Vai buscar a data do último rastreio guardada no disco
+    final String? lastSynced = prefs.getString('last_subjects_sync');
 
     try {
-      final response = await _apiService.get('/sync/pull');
+      // Constrói o link. Se houver carimbo, anexa-o à rota: ex: /sync/pull?last_synced_at=2026-07-01...
+      final String endpoint = lastSynced != null
+          ? '/sync/pull?last_synced_at=$lastSynced'
+          : '/sync/pull';
+
+      final response = await _apiService.get(endpoint);
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
         final List<dynamic> serverSubjects = responseData['subjects'];
+        final String? serverTime = responseData['server_time'];
+
+        if (serverSubjects.isEmpty) {
+          print('📡 [Rastreio] Nenhuma novidade detetada na nuvem.');
+          // Mesmo sem dados novos, atualiza o tempo com o do servidor para precisão
+          if (serverTime != null) await prefs.setString('last_subjects_sync', serverTime);
+          return false; // Não houve alterações
+        }
+
+        print('📡 [Rastreio] Detetadas ${serverSubjects.length} novidades na nuvem! A processar...');
 
         for (var serverSub in serverSubjects) {
-          // 1. Verifica se a disciplina já existe no telemóvel usando o server_id
           final existing = await db.query(
             'subjects',
             where: 'server_id = ?',
@@ -93,17 +108,15 @@ class SyncService {
           );
 
           if (existing.isEmpty) {
-            // 2. Se não existir, INSERE UMA NOVA no SQLite
             await db.insert('subjects', {
               'server_id': serverSub['id'],
               'user_id': serverSub['user_id'],
               'name': serverSub['name'],
               'color': serverSub['color'],
               'icon': serverSub['icon'],
-              'synced_with_cloud': 1, // Já veio da nuvem, logo está sincronizado!
+              'synced_with_cloud': 1,
             });
           } else {
-            // 3. Se já existir, ATUALIZA (para caso o utilizador tenha mudado o nome noutro dispositivo)
             await db.update('subjects', {
               'name': serverSub['name'],
               'color': serverSub['color'],
@@ -112,12 +125,17 @@ class SyncService {
             }, where: 'server_id = ?', whereArgs: [serverSub['id']]);
           }
         }
-        print('☁️ Sincronização PULL concluída com sucesso!');
-      } else {
-        print('🚨 Falha no PULL: Servidor retornou ${response.statusCode}');
+
+        // 🚀 GRAVAR NOVO CARIMBO: Guarda a hora do servidor para o próximo ciclo automático
+        if (serverTime != null) {
+          await prefs.setString('last_subjects_sync', serverTime);
+        }
+
+        return true; // Dados novos injetados com sucesso!
       }
     } catch (e) {
-      print('🚨 Erro crítico na Sincronização PULL: $e');
+      print('🚨 Erro no rastreio automático PULL: $e');
     }
+    return false;
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart'; // 🚀 IMPORTANTE: Traz a variável kIsWeb
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,7 +9,53 @@ import '../../../core/network/sync_service.dart';
 import '../models/subject_model.dart';
 
 class SubjectNotifier extends StateNotifier<List<Subject>> {
-  SubjectNotifier() : super([]);
+  Timer? _syncTimer;
+
+  SubjectNotifier() : super([]) {
+    loadSubjects();
+    _startAutomaticTracker(); // 🚀 ATIVA O RADAR AUTOMÁTICO LOGO NO ARRANQUE
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel(); // Desliga o radar se o provider for destruído
+    super.dispose();
+  }
+
+  // 🚀 O CRONÓMETRO AUTOMÁTICO (Roda silenciosamente em segundo plano)
+  void _startAutomaticTracker() {
+    if (kIsWeb) return; // O Chrome não precisa de sincronizar disco local
+
+    // Dispara a cada 30 segundos (Podes mudar para 1 minuto ou mais tarde para poupar dados)
+    _syncTimer = Timer.periodic(const Duration(seconds: 280), (timer) async {
+      print('⏱️ [Radar Silencioso] A executar varrimento automático de rede...');
+
+      final syncService = SyncService();
+
+      // 1. Envia o que o aluno criou localmente em modo offline (Push)
+      await syncService.pushOfflineData();
+
+      // 2. Procura novidades na nuvem (Pull Delta)
+      final bool houveNovidades = await syncService.pullSubjects();
+
+      // 3. Se o radar detetou dados novos vindos do Laravel, recarrega a UI na hora!
+      if (houveNovidades) {
+        print('🔄 [Radar Silencioso] Novidades injetadas! A atualizar a estante...');
+        // Lê o SQLite atualizado e força o Flutter a desenhar as novas disciplinas
+        final db = await DatabaseHelper.instance.database;
+        final maps = await db.query('subjects', orderBy: 'id DESC');
+
+        state = maps.map((s) => Subject(
+          id: s['id'] as int,
+          serverId: s['server_id'] as int,
+          userId: s['user_id'] as int,
+          name: s['name'] as String,
+          color: s['color'] as String,
+          icon: s['icon'] as String?,
+        )).toList();
+      }
+    });
+  }
 
   // 📥 CARREGAR DISCIPLINAS
   Future<void> loadSubjects() async {

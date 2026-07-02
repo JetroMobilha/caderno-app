@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import 'package:flutter/foundation.dart'; // Para o kIsWeb
+import '../../../core/database/database_helper.dart'; // Ajusta o caminho se necessário
+
 import '../../../core/network/api_service.dart';
-import '../../../core/theme/app_profile_provider.dart';
-import '../../agenda/screens/quick_notes_screen.dart';
+import '../../../core/network/sync_service.dart';
 import '../../auth/providers/user_provider.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../auth/screens/profile_screen.dart';
@@ -15,121 +18,118 @@ import '../providers/subject_provider.dart';
 class SubjectsScreen extends ConsumerWidget {
   const SubjectsScreen({super.key});
 
+  // 🚀 TÁTICA: Definimos a cor principal da aplicação diretamente aqui
+  static const Color primaryColor = Color(0xFF0F4C5C);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentProfile = ref.watch(appProfileProvider);
-    // 🚀 1. ESCUTA O UTILIZADOR ATUAL:
+    // Escuta o utilizador atual para manter a gaveta atualizada
     final currentUser = ref.watch(userProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
-        title: Text('Os meus Cadernos', style: currentProfile.titleStyle),
-        backgroundColor: currentProfile.primaryColor,
+        title: Text('Os meus Cadernos', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 22)),
+        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       drawer: Drawer(
         backgroundColor: const Color(0xFFFDFBF7),
-
-        // 🚀 1. TROCAMOS A COLUMN PELO LISTVIEW
         child: ListView(
-          // 🚀 2. ADICIONAMOS O PADDING ZERO
           padding: EdgeInsets.zero,
           children: [
-            // 1. CABEÇALHO DO UTILIZADOR
-            UserAccountsDrawerHeader(
-              decoration: BoxDecoration(color: currentProfile.primaryColor),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Colors.white,
-
-                // 🚀 TÁTICA BLINDADA: Só pede à Net se tiver a certeza que é um Link (http)
-                backgroundImage: (currentUser != null &&
-                    currentUser.avatar != null)
-                    ? NetworkImage("${ApiService.baseUrlImagem}${currentUser.avatar!}")
-                    : null,
-
-                // 🚀 Se a imagem falhar ou não existir, mostra o Ícone Azul
-                child: (currentUser == null ||
-                    currentUser.avatar == null ||
-                    !currentUser.avatar!.startsWith('http'))
-                    ? const Icon(Icons.person, size: 40, color: Color(0xFF2C3E50))
-                    : null,
-              ),
-              // Nome e Email vindos do modelo User!
-              accountName: Text(
-                currentUser?.name ?? 'A carregar...',
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              accountEmail: Text(
-                currentUser?.email ?? '',
-                style: const TextStyle(color: Colors.white70),
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('MODO DE TRABALHO', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-              ),
-            ),
-            ...AppProfile.values.map((profile) {
-              final isSelected = currentProfile == profile;
-              return ListTile(
-                leading: Icon(profile.icon, color: isSelected ? profile.primaryColor : Colors.black54),
-                title: Text(
-                  profile.name,
-                  style: GoogleFonts.inter(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? profile.primaryColor : Colors.black87),
-                ),
-                trailing: isSelected ? Icon(Icons.check_circle, color: profile.primaryColor) : null,
-                selected: isSelected,
-                onTap: () {
-                  ref.read(appProfileProvider.notifier).changeProfile(profile);
-                  Navigator.pop(context);
-                  if (profile == AppProfile.agenda) {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const QuickNotesScreen()));
-                  }
-                },
-              );
-            }),
-
-            const Divider(),
-
-            Padding(
-              padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('CONTA & DEFINIÇÕES', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_outline, color: Colors.black87),
-              title: Text('Meu Perfil', style: GoogleFonts.inter(color: Colors.black87)),
+            // 🚀 CABEÇALHO CLICÁVEL (Botão gigante para o Perfil)
+            InkWell(
               onTap: () {
-                Navigator.pop(context);
-                // 🚀 LIGAÇÃO REAL AO PERFIL
+                Navigator.pop(context); // Fecha a gaveta
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
               },
+              child: UserAccountsDrawerHeader(
+                decoration: const BoxDecoration(color: primaryColor),
+                margin: EdgeInsets.zero,
+                currentAccountPicture: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  backgroundImage: (currentUser != null && currentUser.avatar != null)
+                      ? NetworkImage(
+                      currentUser.avatar!.startsWith('http')
+                          ? currentUser.avatar!
+                          : "${ApiService.baseUrlImagem}${currentUser.avatar!}"
+                  )
+                      : null,
+                  child: (currentUser == null || currentUser.avatar == null)
+                      ? const Icon(Icons.person, size: 40, color: primaryColor)
+                      : null,
+                ),
+                accountName: Text(
+                  currentUser?.name ?? 'A carregar...',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                accountEmail: Row(
+                  children: [
+                    Text(
+                      currentUser?.email ?? '',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.edit_rounded, size: 14, color: Colors.white54),
+                  ],
+                ),
+              ),
             ),
+
+            const SizedBox(height: 16),
+
+            // 🚀 MENU INFERIOR LIMPO E DIRETO
+            Padding(
+              padding: const EdgeInsets.only(left: 16.0, bottom: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('DEFINIÇÕES', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+              ),
+            ),
+
             ListTile(
               leading: const Icon(Icons.cloud_sync_outlined, color: Colors.black87),
-              title: Text('Sincronização', style: GoogleFonts.inter(color: Colors.black87)),
-              onTap: () => Navigator.pop(context),
+              title: Text('Sincronização', style: GoogleFonts.inter(color: Colors.black87, fontWeight: FontWeight.w500)),
+              onTap: () async {
+                // 1. Fecha a gaveta imediatamente
+                Navigator.pop(context);
+
+                // 2. Avisa o soldado que a operação começou
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('A comunicar com o Quartel-General... ☁️'), duration: Duration(seconds: 2)),
+                );
+
+                // 3. INICIA A BATERIA DE SINCRONIZAÇÃO
+                final syncService = SyncService();
+                await syncService.pushOfflineData(); // Envia as novas para o Laravel
+                await syncService.pullSubjects();    // Recebe as que faltavam do Laravel
+
+                // 4. ATUALIZA A TELA (Diz ao Riverpod para ler o SQLite de novo)
+                // Isto faz com que as disciplinas que acabaram de chegar da nuvem apareçam na hora!
+                ref.invalidate(subjectProvider);
+
+                // 5. Sucesso!
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Tudo sincronizado!'), backgroundColor: Colors.green),
+                  );
+                }
+              },
             ),
 
-            // 🚀 3. O 'const Spacer(),' FOI APAGADO DAQUI!
+            const Divider(height: 32),
 
-            const Divider(),
-
-            // 4. ZONA DE PERIGO (LOGOUT)
+            // ZONA DE PERIGO (LOGOUT)
             ListTile(
               leading: const Icon(Icons.exit_to_app_rounded, color: Colors.redAccent),
               title: Text('Terminar Sessão', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.redAccent)),
-              onTap: () => _handleLogout(context,ref),
+              onTap: () => _handleLogout(context, ref),
             ),
 
             const Padding(
-              padding: EdgeInsets.only(bottom: 24.0, top: 8.0), // Dei um pouco mais de margem no fundo
+              padding: EdgeInsets.only(bottom: 24.0, top: 16.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -143,12 +143,12 @@ class SubjectsScreen extends ConsumerWidget {
         ),
       ),
       body: const SubjectsListBody(),
-      // 🚀 ADICIONADO: O Botão Flutuante que estava em falta para os testes e UI!
       floatingActionButton: FloatingActionButton(
-        backgroundColor: currentProfile.primaryColor,
+        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
+        elevation: 4,
         onPressed: () => _showAddSubjectDialog(context, ref),
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, size: 28),
       ),
     );
   }
@@ -166,6 +166,7 @@ class SubjectsScreen extends ConsumerWidget {
       'calculate': Icons.calculate,
       'biotech': Icons.biotech,
       'gavel': Icons.gavel,
+      'calendar_month': Icons.calendar_month, // 🚀 Ícone novo para usares na "Agenda" se quiseres
     };
 
     showDialog(
@@ -188,13 +189,19 @@ class SubjectsScreen extends ConsumerWidget {
                 const SizedBox(height: 15),
                 Text('Ícone Representativo:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
                   children: availableIcons.entries.map((entry) {
                     final isSelected = selectedIcon == entry.key;
-                    return IconButton(
-                      icon: Icon(entry.value, color: isSelected ? Colors.blue : Colors.black54),
-                      onPressed: () => setModalState(() => selectedIcon = entry.key),
+                    return Container(
+                      decoration: isSelected
+                          ? BoxDecoration(color: primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8))
+                          : null,
+                      child: IconButton(
+                        icon: Icon(entry.value, color: isSelected ? primaryColor : Colors.black54),
+                        onPressed: () => setModalState(() => selectedIcon = entry.key),
+                      ),
                     );
                   }).toList(),
                 ),
@@ -219,14 +226,12 @@ class SubjectsScreen extends ConsumerWidget {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.black54))),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
+              style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
               onPressed: () {
                 if (formKey.currentState!.validate()) {
-
                   final currentUser = ref.read(userProvider);
-
                   if (currentUser == null) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro: Identidade não encontrada.')));
                     return;
@@ -234,6 +239,7 @@ class SubjectsScreen extends ConsumerWidget {
                   ref.read(subjectProvider.notifier).addSubject(
                     Subject(
                       userId: currentUser.id ?? currentUser.serverId ?? 0,
+                      serverId: currentUser.serverId ?? currentUser.serverId ?? 0,
                       name: nameController.text.trim(),
                       color: pickedColorHex,
                       icon: selectedIcon,
@@ -250,39 +256,33 @@ class SubjectsScreen extends ConsumerWidget {
     );
   }
 
-  // 🔐 PROCEDIMENTO DE ABANDONO DO QUARTEL
-  // 🔐 PROCEDIMENTO DE ABANDONO DO QUARTEL
   Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
-    // 1. Fecha a gaveta lateral
     Navigator.pop(context);
-
-    // 2. Avisa o utilizador
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('A terminar sessão e encriptar dados...'),
-        duration: Duration(seconds: 2),
-      ),
+      const SnackBar(content: Text('A terminar sessão e encriptar dados...'), duration: Duration(seconds: 2)),
     );
 
-    // 3. Chama o motor para destruir os tokens
+    if (!kIsWeb) {
+      await DatabaseHelper.instance.clearAllData();
+    }
+
+    ref.invalidate(subjectProvider);
+    ref.invalidate(notebookProvider);
     ref.read(userProvider.notifier).clearUser();
+
     final api = ApiService();
     await api.logout();
 
-    // 4. Se a app ainda estiver aberta, expulsa o utilizador para o Login
+
+
     if (context.mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false, // O 'false' destrói o botão de "Voltar atrás" do Android
-      );
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
     }
   }
 }
 
 class SubjectsListBody extends ConsumerStatefulWidget {
   const SubjectsListBody({super.key});
-
   @override
   ConsumerState<SubjectsListBody> createState() => _SubjectsListBodyState();
 }
@@ -297,12 +297,8 @@ class _SubjectsListBodyState extends ConsumerState<SubjectsListBody> {
   }
 
   Future<void> _loadSubjects() async {
-    // Se tiveres um método loadSubjects no provider, chama-o aqui.
-    // O delay garante que a UI nunca pisca mensagens erradas enquanto o SQLite arranca.
     await Future.delayed(const Duration(milliseconds: 400));
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -312,12 +308,9 @@ class _SubjectsListBodyState extends ConsumerState<SubjectsListBody> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(color: Color(0xFF2C3E50), strokeWidth: 3),
+            const CircularProgressIndicator(color: SubjectsScreen.primaryColor, strokeWidth: 3),
             const SizedBox(height: 16),
-            Text(
-              'A carregar disciplinas...',
-              style: GoogleFonts.inter(color: Colors.black54, fontSize: 14, fontWeight: FontWeight.w500),
-            ),
+            Text('A carregar disciplinas...', style: GoogleFonts.inter(color: Colors.black54, fontSize: 14, fontWeight: FontWeight.w500)),
           ],
         ),
       );
@@ -326,10 +319,20 @@ class _SubjectsListBodyState extends ConsumerState<SubjectsListBody> {
     final subjects = ref.watch(subjectProvider);
 
     if (subjects.isEmpty) {
-      return const Center(child: Text('Nenhuma disciplina criada.'));
+      return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.menu_book_rounded, size: 64, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text('Nenhuma disciplina criada.', style: GoogleFonts.inter(color: Colors.grey, fontSize: 16)),
+            ],
+          )
+      );
     }
 
     return ListView.builder(
+      padding: const EdgeInsets.only(top: 8, bottom: 80), // Margem de fundo para não colar no botão flutuante
       itemCount: subjects.length,
       itemBuilder: (context, index) {
         return _buildSubjectCard(context, ref, subjects[index]);
@@ -347,6 +350,7 @@ class _SubjectsListBodyState extends ConsumerState<SubjectsListBody> {
         case 'calculate': return Icons.calculate;
         case 'biotech': return Icons.biotech;
         case 'gavel': return Icons.gavel;
+        case 'calendar_month': return Icons.calendar_month;
         case 'book':
         default: return Icons.book;
       }
@@ -356,9 +360,14 @@ class _SubjectsListBodyState extends ConsumerState<SubjectsListBody> {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 1, // Reduzi a elevação para parecer mais "plano" e moderno
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.black.withOpacity(0.05)), // Borda muito subtil
+      ),
+      color: Colors.white,
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         onTap: () {
           Navigator.push(
             context,
@@ -372,31 +381,30 @@ class _SubjectsListBodyState extends ConsumerState<SubjectsListBody> {
         },
         leading: Container(
           width: 6,
-          height: 40,
-          decoration: BoxDecoration(
-            color: subjectColor,
-            borderRadius: BorderRadius.circular(4),
-          ),
+          height: double.infinity,
+          decoration: BoxDecoration(color: subjectColor, borderRadius: BorderRadius.circular(4)),
         ),
         title: Row(
           children: [
             Icon(getIconData(subject.icon), color: Colors.black54, size: 20),
             const SizedBox(width: 10),
-            Text(
-              subject.name,
-              style: GoogleFonts.lora(fontSize: 16, fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                subject.name,
+                style: GoogleFonts.lora(fontSize: 17, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50)),
+              ),
             ),
           ],
         ),
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
+            color: const Color(0xFFF8F9FA), // Fundo mais leve no contador
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             '$notebookCount ${notebookCount == 1 ? 'caderno' : 'cadernos'}',
-            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54),
           ),
         ),
       ),

@@ -6,6 +6,7 @@ void main() {
     final mockSubject = Subject(
       id: 1,
       userId: 1,
+      serverId: 1,
       name: 'Matemática',
       color: '#FF0000',
       icon: 'book',

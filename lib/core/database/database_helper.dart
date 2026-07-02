@@ -182,4 +182,39 @@ class DatabaseHelper {
       )
     ''');
   }
+
+  // 🧹 PROTOCOLO TERRA ARRASADA (Versão Blindada Anti-Falhas)
+  Future<void> clearAllData() async {
+    if (kIsWeb) return;
+
+    final db = await database;
+
+    // Lista de todos os alvos a abater
+    final List<String> alvos = [
+      'canvas_image_blocks',
+      'canvas_text_blocks',
+      'canvas_strokes',
+      'pages',
+      'notebook_user',
+      'notebooks',
+      'subjects',
+      'payments',
+      'users'
+    ];
+
+    print('🧨 A INICIAR PROTOCOLO TERRA ARRASADA...');
+
+    for (String tabela in alvos) {
+      try {
+        // Tenta destruir os registos da tabela
+        await db.delete(tabela);
+        print('✅ Tabela [$tabela] limpa com sucesso.');
+      } catch (e) {
+        // Se a tabela ainda não existir no código, ignora silenciosamente e avança!
+        print('⚠️ Tabela [$tabela] ignorada (provavelmente ainda não foi criada).');
+      }
+    }
+
+    print('🧹 Quartel-General purificado com sucesso!');
+  }
 }

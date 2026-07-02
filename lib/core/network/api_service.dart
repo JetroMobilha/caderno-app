@@ -13,11 +13,11 @@ class ApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   static String get baseUrl {
-    return 'http://127.0.0.1:8000/api';
+    return 'http://35.205.132.251:8080/api';
   }
 
   static String get baseUrlImagem {
-    return 'http://127.0.0.1/storage/';
+    return 'http://35.205.132.251:8080/storage/';
   }
   // =========================================================================
   // 🔐 GESTÃO DO COFRE DE SESSÃO (Sanctum Token)

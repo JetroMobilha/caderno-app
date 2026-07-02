@@ -15,7 +15,7 @@ class MockWebSubjectRepository {
 void main() {
   test('Deve simular o comportamento de guardar dados na Web em memória', () async {
     final repository = MockWebSubjectRepository();
-    final subject = Subject(userId: 1, name: 'Web Design', color: '#000');
+    final subject = Subject(userId: 1,serverId: 1, name: 'Web Design', color: '#000');
 
     await repository.saveSubject(subject);
     final list = await repository.fetchSubjects();

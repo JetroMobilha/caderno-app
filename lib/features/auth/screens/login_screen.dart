@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/network/api_service.dart';
+import '../../../core/network/sync_service.dart';
+import '../../subjects/providers/subject_provider.dart';
 import '../../subjects/screens/subjects_screen.dart';
 import '../models/user_model.dart';
 import 'forgot_password_screen.dart';
@@ -73,10 +75,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Sessão iniciada como ${userMap['name']}!'), backgroundColor: const Color(0xFF27AE60)),
           );
+          try {
+            final syncService = SyncService();
+            await syncService.pullSubjects(); // Puxa do servidor para o SQLite local
+
+            // 4. Obriga o Riverpod a ler o SQLite atualizado
+            ref.invalidate(subjectProvider);
+          } catch (e) {
+            print('⚠️ Pull inicial falhou (sem internet?), a prosseguir offline: $e');
+          }
           // 🚀 REDIRECIONAMENTO REAL: Destrói o ecrã de login e abre as disciplinas
-          Navigator.pushReplacement(
+          Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => SubjectsScreen()),
+            MaterialPageRoute(builder: (_) => const SubjectsScreen()),
+                (route) => false,
           );
         }
       } else if (response.statusCode == 422) {

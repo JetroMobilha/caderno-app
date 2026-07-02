@@ -161,7 +161,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             backgroundImage: _selectedImage != null
                                 ? FileImage(_selectedImage!)
                                 : (currentUser?.avatar != null
-                                ? NetworkImage(currentUser!.avatar!)
+                                ? NetworkImage("${ApiService.baseUrlImagem}${currentUser!.avatar!}")
                                 : null) as ImageProvider?,
                             child: _selectedImage == null && currentUser?.avatar == null
                                 ? const Icon(Icons.person, size: 64, color: Color(0xFFBDC3C7))

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_profile_provider.dart';
 import '../../agenda/screens/quick_notes_screen.dart';
+import '../../auth/providers/user_provider.dart';
+import '../../auth/screens/login_screen.dart';
+import '../../auth/screens/profile_screen.dart';
 import '../../notebooks/screens/notebooks_screen.dart';
 import '../../notebooks/providers/notebook_provider.dart';
 import '../models/subject_model.dart';
@@ -14,6 +18,8 @@ class SubjectsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentProfile = ref.watch(appProfileProvider);
+    // 🚀 1. ESCUTA O UTILIZADOR ATUAL:
+    final currentUser = ref.watch(userProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
@@ -23,70 +29,117 @@ class SubjectsScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
       ),
       drawer: Drawer(
-        child: Container(
-          color: const Color(0xFFFDFBF7),
-          child: Column(
-            children: [
-              UserAccountsDrawerHeader(
-                decoration: BoxDecoration(color: currentProfile.primaryColor),
-                currentAccountPicture: const CircleAvatar(
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 40, color: Color(0xFF2C3E50)),
-                ),
-                accountName: const Text('Comandante Jetro', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                accountEmail: const Text('modo.offline@cadernodigital.local', style: TextStyle(color: Colors.white70)),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'MODO DE TRABALHO',
-                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                  ),
-                ),
-              ),
-              ...AppProfile.values.map((profile) {
-                final isSelected = currentProfile == profile;
-                return ListTile(
-                  leading: Icon(profile.icon, color: isSelected ? profile.primaryColor : Colors.black54),
-                  title: Text(
-                    profile.name,
-                    style: GoogleFonts.inter(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? profile.primaryColor : Colors.black87,
-                    ),
-                  ),
-                  trailing: isSelected ? Icon(Icons.check_circle, color: profile.primaryColor) : null,
-                  selected: isSelected,
-                  onTap: () {
-                    ref.read(appProfileProvider.notifier).changeProfile(profile);
-                    Navigator.pop(context); // Fecha a gaveta
+        backgroundColor: const Color(0xFFFDFBF7),
 
-                    // 🚀 REDIRECIONAMENTO DINÂMICO DE LAYOUT:
-                    if (profile == AppProfile.agenda) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const QuickNotesScreen()),
-                      );
-                    }
-                  },
-                );
-              }).toList(),
-              const Spacer(),
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.cloud_off, size: 16, color: Colors.green),
-                    SizedBox(width: 6),
-                    Text('Motor Local Ativo (100% Offline)', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
+        // 🚀 1. TROCAMOS A COLUMN PELO LISTVIEW
+        child: ListView(
+          // 🚀 2. ADICIONAMOS O PADDING ZERO
+          padding: EdgeInsets.zero,
+          children: [
+            // 1. CABEÇALHO DO UTILIZADOR
+            UserAccountsDrawerHeader(
+              decoration: BoxDecoration(color: currentProfile.primaryColor),
+              currentAccountPicture: CircleAvatar(
+                backgroundColor: Colors.white,
+
+                // 🚀 TÁTICA BLINDADA: Só pede à Net se tiver a certeza que é um Link (http)
+                backgroundImage: (currentUser != null &&
+                    currentUser.avatar != null)
+                    ? NetworkImage("${ApiService.baseUrlImagem}${currentUser.avatar!}")
+                    : null,
+
+                // 🚀 Se a imagem falhar ou não existir, mostra o Ícone Azul
+                child: (currentUser == null ||
+                    currentUser.avatar == null ||
+                    !currentUser.avatar!.startsWith('http'))
+                    ? const Icon(Icons.person, size: 40, color: Color(0xFF2C3E50))
+                    : null,
+              ),
+              // Nome e Email vindos do modelo User!
+              accountName: Text(
+                currentUser?.name ?? 'A carregar...',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              accountEmail: Text(
+                currentUser?.email ?? '',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('MODO DE TRABALHO', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+              ),
+            ),
+            ...AppProfile.values.map((profile) {
+              final isSelected = currentProfile == profile;
+              return ListTile(
+                leading: Icon(profile.icon, color: isSelected ? profile.primaryColor : Colors.black54),
+                title: Text(
+                  profile.name,
+                  style: GoogleFonts.inter(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? profile.primaryColor : Colors.black87),
                 ),
-              )
-            ],
-          ),
+                trailing: isSelected ? Icon(Icons.check_circle, color: profile.primaryColor) : null,
+                selected: isSelected,
+                onTap: () {
+                  ref.read(appProfileProvider.notifier).changeProfile(profile);
+                  Navigator.pop(context);
+                  if (profile == AppProfile.agenda) {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const QuickNotesScreen()));
+                  }
+                },
+              );
+            }),
+
+            const Divider(),
+
+            Padding(
+              padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('CONTA & DEFINIÇÕES', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline, color: Colors.black87),
+              title: Text('Meu Perfil', style: GoogleFonts.inter(color: Colors.black87)),
+              onTap: () {
+                Navigator.pop(context);
+                // 🚀 LIGAÇÃO REAL AO PERFIL
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync_outlined, color: Colors.black87),
+              title: Text('Sincronização', style: GoogleFonts.inter(color: Colors.black87)),
+              onTap: () => Navigator.pop(context),
+            ),
+
+            // 🚀 3. O 'const Spacer(),' FOI APAGADO DAQUI!
+
+            const Divider(),
+
+            // 4. ZONA DE PERIGO (LOGOUT)
+            ListTile(
+              leading: const Icon(Icons.exit_to_app_rounded, color: Colors.redAccent),
+              title: Text('Terminar Sessão', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+              onTap: () => _handleLogout(context,ref),
+            ),
+
+            const Padding(
+              padding: EdgeInsets.only(bottom: 24.0, top: 8.0), // Dei um pouco mais de margem no fundo
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.cloud_off, size: 16, color: Colors.green),
+                  SizedBox(width: 6),
+                  Text('Motor Local Ativo (100% Offline)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            )
+          ],
         ),
       ),
       body: const SubjectsListBody(),
@@ -171,9 +224,16 @@ class SubjectsScreen extends ConsumerWidget {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50)),
               onPressed: () {
                 if (formKey.currentState!.validate()) {
+
+                  final currentUser = ref.read(userProvider);
+
+                  if (currentUser == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro: Identidade não encontrada.')));
+                    return;
+                  }
                   ref.read(subjectProvider.notifier).addSubject(
                     Subject(
-                      userId: 1,
+                      userId: currentUser.id ?? currentUser.serverId ?? 0,
                       name: nameController.text.trim(),
                       color: pickedColorHex,
                       icon: selectedIcon,
@@ -188,6 +248,35 @@ class SubjectsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  // 🔐 PROCEDIMENTO DE ABANDONO DO QUARTEL
+  // 🔐 PROCEDIMENTO DE ABANDONO DO QUARTEL
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
+    // 1. Fecha a gaveta lateral
+    Navigator.pop(context);
+
+    // 2. Avisa o utilizador
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('A terminar sessão e encriptar dados...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    // 3. Chama o motor para destruir os tokens
+    ref.read(userProvider.notifier).clearUser();
+    final api = ApiService();
+    await api.logout();
+
+    // 4. Se a app ainda estiver aberta, expulsa o utilizador para o Login
+    if (context.mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false, // O 'false' destrói o botão de "Voltar atrás" do Android
+      );
+    }
   }
 }
 

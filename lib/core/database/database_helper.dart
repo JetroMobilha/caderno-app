@@ -6,7 +6,7 @@ import 'package:path/path.dart';
 
 class DatabaseHelper {
   // 🚀 FORÇA TÁTICA: Mudámos para v4. O Android vai recriar o ficheiro do zero hoje!
-  static const _databaseName = "caderno_digital_offline_v4.db";
+  static const _databaseName = "caderno_digital_offline_v5.db";
   static const _databaseVersion = 1;
 
   DatabaseHelper._privateConstructor();
@@ -46,6 +46,7 @@ class DatabaseHelper {
         server_id INTEGER NULL,
         name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
+        avatar TEXT,
         plan_type TEXT DEFAULT 'free',
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0

@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/drawing_point_model.dart';
 import '../repositories/notebook_repository.dart';
+import 'share_notebook_sheet.dart';
 
 class CanvasScreen extends StatefulWidget {
   final int notebookId;
@@ -42,7 +43,21 @@ class _CanvasScreenState extends State<CanvasScreen> {
   ToolMode _currentTool = ToolMode.draw;
   InlineTarget _activeInlineTarget = InlineTarget.none;
   TextBlock? _activeTextBlock;
-  late String _liveLineType; // <--- NOVA VARIÁVEL MUTÁVEL
+  late String _liveLineType;
+
+  // =========================================================================
+  // 🎭 MOCKS DE COLABORAÇÃO VISUAL (Para desenhar a UI antes da rede real)
+  // =========================================================================
+  bool _isInVoiceCall = false;
+  bool _isMuted = false;
+  bool _isSpeakerOn = true;
+
+  final List<Map<String, dynamic>> _mockOnlineStudents = [
+    {'name': 'Jetro', 'color': const Color(0xFFE67E22), 'isTalking': true},
+    {'name': 'Jetricia', 'color': const Color(0xFF9B59B6), 'isTalking': false},
+    {'name': 'Chissola', 'color': const Color(0xFFB66159), 'isTalking': false},
+    {'name': 'Eliana', 'color': const Color(0xFF65B659), 'isTalking': false},
+  ];
 
   final FocusNode _textFocusNode = FocusNode();
   final TextEditingController _textController = TextEditingController();
@@ -725,7 +740,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                           willChange: false,
                                           painter: StaticNotebookPainter(
                                             strokes: page.strokes,
-                                            lineType: 'none',
+                                            lineType: _liveLineType,
                                             selectedStrokeIds: _selectedStrokeIds,
                                             selectionRect: _selectionRectStart != null && _selectionRectEnd != null
                                                 ? Rect.fromPoints(_selectionRectStart!, _selectionRectEnd!)
@@ -910,6 +925,15 @@ class _CanvasScreenState extends State<CanvasScreen> {
             right: 0,
             child: Center(child: _buildFloatingToolbar(currentPage!)),
           ),
+
+          // 🚀 CÁPSULA DE VOZ WEBRTC (Desliza do topo quando a chamada está ativa)
+          if (_isInVoiceCall)
+            Positioned(
+              top: 16,
+              left: 0,
+              right: 0,
+              child: Center(child: _buildLiveVoiceCockpit()),
+            ),
         ],
       ),
       floatingActionButton: hasPages
@@ -933,12 +957,54 @@ class _CanvasScreenState extends State<CanvasScreen> {
           : Text(
         widget.notebookTitle,
         style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
+        overflow: TextOverflow.ellipsis, // Blindado caso o título sozinho seja gigante
       ),
       actions: [
-        if (hasPages)
+        if (hasPages) ...[
+          // 1. Radar de Presença
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: const Color(0xFFF0F4F8), borderRadius: BorderRadius.circular(20)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF27AE60), shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  Text('${_mockOnlineStudents.length + 1}', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24))),
+                ],
+              ),
+            ),
+          ),
+
+          // 2. Gatilho de Voz WebRTC (Com ícone oficial blindado)
+          IconButton(
+            icon: Icon(
+              _isInVoiceCall ? Icons.phone_in_talk : Icons.add_ic_call_outlined,
+              color: _isInVoiceCall ? const Color(0xFF27AE60) : const Color(0xFF0F4C5C),
+            ),
+            tooltip: _isInVoiceCall ? 'Chamada em curso' : 'Iniciar Áudio WebRTC',
+            onPressed: () => setState(() => _isInVoiceCall = !_isInVoiceCall),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF0F4C5C)),
+            tooltip: 'Convidar Colaboradores',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true, // Fundamental para o teclado não tapar o input
+                backgroundColor: Colors.transparent,
+                builder: (context) => ShareNotebookBottomSheet(
+                  notebookId: widget.notebookId,
+                  notebookTitle: widget.notebookTitle,
+                ),
+              );
+            },
+          ),
+          // 3. Guardar
           IconButton(
             icon: const Icon(Icons.save, color: Color(0xFF27AE60)),
-            tooltip: 'Guardar Caderno',
             onPressed: () async {
               await _repository.saveFullNotebook(widget.notebookId, _pages);
               if (mounted) {
@@ -948,22 +1014,53 @@ class _CanvasScreenState extends State<CanvasScreen> {
               }
             },
           ),
+        ]
       ],
     );
   }
 
   Widget _buildAppBarDropdown() {
+    // 🚀 O RADAR ESPACIAL DO FLUTTER
+    final double screenWidth = MediaQuery.of(context).size.width;
+
     return DropdownButtonHideUnderline(
       child: DropdownButton<int>(
+        isExpanded: true, // Garante que a caixa respeite os limites físicos da barra
         value: _currentPageIndex,
         icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
         selectedItemBuilder: (BuildContext context) {
           final List<Widget> selectedItems = _pages.asMap().entries.map<Widget>((entry) {
+
+            String label;
+            double fontSize = 16.0;
+
+            // 📐 ESCALÃO 3: Telemóvel minúsculo (< 400px) -> Esconde o Título do Caderno!
+            if (screenWidth < 400) {
+              label = 'Folha ${entry.key + 1} de ${_pages.length}';
+              fontSize = 15.0;
+            }
+            // 📐 ESCALÃO 2: Telemóvel normal (400px a 599px)
+            else if (screenWidth < 600) {
+              label = '${widget.notebookTitle} • F. ${entry.key + 1}/${_pages.length}';
+              fontSize = 15.0;
+            }
+            // 📐 ESCALÃO 1: Computador / Tablet (>= 600px) -> Luxo total
+            else {
+              label = '${widget.notebookTitle} — Folha ${entry.key + 1} de ${_pages.length}';
+              fontSize = 17.0;
+            }
+
             return Container(
               alignment: Alignment.centerLeft,
               child: Text(
-                '${widget.notebookTitle} - Folha ${entry.key + 1}/${_pages.length}',
-                style: GoogleFonts.lora(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
+                label,
+                style: GoogleFonts.lora(
+                  color: const Color(0xFF1A1A24),
+                  fontWeight: FontWeight.bold,
+                  fontSize: fontSize,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             );
           }).toList();
@@ -1259,10 +1356,248 @@ class _CanvasScreenState extends State<CanvasScreen> {
     );
   }
 
-  void _showColorStudioDialog() { /* ... */ }
-  void _showThicknessStudioDialog() { /* ... */ }
+  // =========================================================================
+  // 🎨 ESTÚDIO DE COR DA CANETA
+  // =========================================================================
+  void _showColorStudioDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFDFBF7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Cor da Caneta', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            alignment: WrapAlignment.center,
+            children: _colorPalette.entries.map((entry) {
+              final hex = '#${entry.value.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final isSelected = _selectedColorHex == hex;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _selectedColorHex = hex);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2),
+                  ),
+                  child: CircleAvatar(radius: 16, backgroundColor: entry.value),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =========================================================================
+  // 📐 ESTÚDIO DE ESPESSURA COMPACTO (5 Presets + Pré-visualização Inline)
+  // =========================================================================
+  void _showThicknessStudioDialog() {
+    double tempThickness = _selectedThickness;
+    final List<double> quickPresets = [1.0, 3.0, 5.0, 8.0, 14.0];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final Color currentColor = Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF')));
+
+          return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+            backgroundColor: const Color(0xFFFDFBF7),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('Espessura', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF0F4C5C))),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      alignment: Alignment.center,
+                      child: CircleAvatar(
+                        radius: (tempThickness / 1.5).clamp(1.5, 14.0),
+                        backgroundColor: currentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 55,
+                      child: Text(
+                        '${tempThickness.toInt()} px',
+                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4.0,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8.0),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 16.0),
+                  ),
+                  child: Slider(
+                    value: tempThickness,
+                    min: 1.0,
+                    max: 30.0,
+                    activeColor: const Color(0xFF0F4C5C),
+                    inactiveColor: Colors.black12,
+                    onChanged: (val) => setModalState(() => tempThickness = val),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: quickPresets.map((preset) {
+                    final bool isSelected = tempThickness == preset;
+                    return InkWell(
+                      onTap: () => setModalState(() => tempThickness = preset),
+                      borderRadius: BorderRadius.circular(8),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 38,
+                        height: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF0F4C5C) : Colors.black.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent),
+                        ),
+                        child: Text(
+                          '${preset.toInt()}',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected ? Colors.white : const Color(0xFF1A1A24),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.black45)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F4C5C),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  setState(() => _selectedThickness = tempThickness);
+                  Navigator.pop(context);
+                },
+                child: const Text('Aplicar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
   Widget _buildColorButton() => InkWell(onTap: _showColorStudioDialog, customBorder: const CircleBorder(), child: Container(width: 36, height: 36, alignment: Alignment.center, child: CircleAvatar(radius: 11, backgroundColor: Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF'))))));
   Widget _buildThicknessButton() => InkWell(onTap: _showThicknessStudioDialog, customBorder: const CircleBorder(), child: Container(width: 36, height: 36, alignment: Alignment.center, child: CircleAvatar(radius: 11, backgroundColor: Colors.black12, child: CircleAvatar(radius: (_selectedThickness / 1.5).clamp(2.0, 9.0), backgroundColor: const Color(0xFF1A1A24)))));
+
+  // =========================================================================
+  // 🎙️ COCKPIT FLUTUANTE DE ÁUDIO (Estilo Discord / Apple FaceTime)
+  // =========================================================================
+  Widget _buildLiveVoiceCockpit() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A24), // Preto absoluto de alto contraste
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF27AE60).withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Ondas de voz animadas (Ícone estático por agora)
+          const Icon(Icons.graphic_eq, color: Color(0xFF27AE60), size: 18),
+          const SizedBox(width: 8),
+
+          Text(
+            'Sala de Voz P2P',
+            style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+
+          Container(width: 1, height: 16, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 10)),
+
+          // Avatars miniatura dos estudantes a falar
+          ..._mockOnlineStudents.map((s) => Container(
+            margin: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.all(1.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: s['isTalking'] ? const Color(0xFF27AE60) : Colors.transparent, width: 1.5),
+            ),
+            child: CircleAvatar(
+              radius: 9,
+              backgroundColor: s['color'],
+              child: Text(s['name'][0], style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          )),
+
+          const SizedBox(width: 6),
+
+          // Botão MUTE
+          InkWell(
+            onTap: () => setState(() => _isMuted = !_isMuted),
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: _isMuted ? Colors.redAccent : Colors.white12, shape: BoxShape.circle),
+              child: Icon(_isMuted ? Icons.mic_off : Icons.mic, size: 14, color: Colors.white),
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
+          // Botão COLOCAR EM VIVA-VOZ
+          InkWell(
+            onTap: () => setState(() => _isSpeakerOn = !_isSpeakerOn),
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
+              child: Icon(_isSpeakerOn ? Icons.volume_up : Icons.headphones, size: 14, color: Colors.white),
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
+          // Botão DESLIGAR
+          InkWell(
+            onTap: () => setState(() => _isInVoiceCall = false),
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+              child: const Icon(Icons.call_end, size: 14, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // =========================================================================
   // 📐 ESTÚDIO DE PAUTA EM TEMPO REAL
   // =========================================================================

@@ -27,7 +27,7 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
     if (kIsWeb) return; // O Chrome não precisa de sincronizar disco local
 
     // Dispara a cada 30 segundos (Podes mudar para 1 minuto ou mais tarde para poupar dados)
-    _syncTimer = Timer.periodic(const Duration(seconds: 280), (timer) async {
+    _syncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
       print('⏱️ [Radar Silencioso] A executar varrimento automático de rede...');
 
       final syncService = SyncService();

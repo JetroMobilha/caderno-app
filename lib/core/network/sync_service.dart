@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart'; // 🚀 IMPORTANTE: O Escudo que deteta o Chrome (kIsWeb)
 import 'package:sqflite/sqflite.dart';
+import '../../features/notebooks/models/local_page_model.dart';
 import '../database/database_helper.dart';
+import '../services/local_database_service.dart';
 import 'api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -138,4 +140,141 @@ class SyncService {
     }
     return false;
   }
+
+  Future<void> pushNotebooks() async {
+    if (kIsWeb) return; // Web já opera na nuvem
+    final db = await _dbHelper.database;
+
+    try {
+      // 1. Procura cadernos não sincronizados no SQLite
+      final List<Map<String, dynamic>> unsynced = await db.query(
+        'notebooks',
+        where: 'synced_with_cloud = ?',
+        whereArgs: [0],
+      );
+
+      if (unsynced.isEmpty) {
+        debugPrint('✅ [Sync] Todos os cadernos já estão na nuvem.');
+        return;
+      }
+
+      debugPrint('📡 [Sync] A disparar ${unsynced.length} cadernos para o Laravel...');
+
+      // 2. Dispara para a rota da nuvem
+      final response = await _apiService.post('/sync/notebooks/push', {
+        'notebooks': unsynced,
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> syncedList = data['synced_notebooks'] ?? [];
+
+        // 3. Atualiza o SQLite com os IDs oficiais do servidor
+        for (var item in syncedList) {
+          await db.update(
+            'notebooks',
+            {
+              'server_id': item['server_id'],
+              'synced_with_cloud': 1, // 🚀 Missão Cumprida!
+            },
+            where: 'id = ?',
+            whereArgs: [item['client_id']],
+          );
+        }
+        debugPrint('☁️ [Sync] Cadernos sincronizados com sucesso!');
+      }
+    } catch (e) {
+      debugPrint('🚨 [Sync] Erro no PUSH dos cadernos: $e');
+    }
+  }
+
+  // =========================================================================
+  // 📤 FASE 3: ENVIAR FOLHAS COM DESENHOS E FOTOS BASE64 (PUSH)
+  // =========================================================================
+  Future<void> pushPages() async {
+    if (kIsWeb) return;
+    final db = await _dbHelper.database;
+
+    try {
+      // 1. Procura as folhas não sincronizadas
+      final List<Map<String, dynamic>> unsyncedPages = await db.query(
+        'pages',
+        where: 'synced_with_cloud = ?',
+        whereArgs: [0],
+      );
+
+      if (unsyncedPages.isEmpty) {
+        debugPrint('✅ [Sync] Todas as folhas já estão na nuvem.');
+        return;
+      }
+
+      debugPrint('📡 [Sync] A empacotar e disparar ${unsyncedPages.length} folhas...');
+
+      // 🚀 SEGREDO TÁTICO: Recrutamos o LocalDatabaseService para montar
+      // a folha completa (com traços, textos e as imagens convertidas para Base64!)
+      final localDb = LocalDatabaseService();
+      final List<Map<String, dynamic>> payloadPages = [];
+
+      for (var pageRow in unsyncedPages) {
+        final int pageId = pageRow['id'];
+        final int notebookId = pageRow['notebook_id'];
+
+        // Puxa as folhas completas do caderno da memória e filtra a que queremos
+        final allPages = await localDb.getFullPagesForNotebook(notebookId);
+        final fullPage = allPages.firstWhere((p) => p.id == pageId, orElse: () => LocalPage.fromDatabaseMap(pageRow));
+
+        // O nosso novo toMap() vai converter as fotografias para Base64 automaticamente!
+        payloadPages.add(fullPage.toMap());
+      }
+
+      // 2. Dispara o pacote pesado para o Laravel
+      final response = await _apiService.post('/sync/pages/push', {
+        'pages': payloadPages,
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> syncedList = data['synced_pages'] ?? [];
+
+        // 3. Marca as folhas como sincronizadas no SQLite
+        for (var item in syncedList) {
+          await db.update(
+            'pages',
+            {
+              'server_id': item['server_id'],
+              'synced_with_cloud': 1, // 🚀 Carimbada na Nuvem!
+            },
+            where: 'id = ?',
+            whereArgs: [item['client_id']],
+          );
+        }
+        debugPrint('☁️ [Sync] Folhas e desenhos sincronizados com sucesso!');
+      }
+    } catch (e) {
+      debugPrint('🚨 [Sync] Erro no PUSH das folhas: $e');
+    }
+  }
+
+  // =========================================================================
+  // 🚀 COMANDO SUPREMO: SINCRONIZAÇÃO TOTAL (Offline-First para Nuvem)
+  // =========================================================================
+  Future<void> syncAll() async {
+    if (kIsWeb) return;
+
+    debugPrint('🏁 [Sync General] A iniciar ofensiva de sincronização total...');
+
+    // 1º ESCALÃO: Sobem as Disciplinas
+    await pushOfflineData();
+    await pullSubjects();
+
+    // 2º ESCALÃO: Sobem os Cadernos
+    await pushNotebooks();
+    // await pullNotebooks(); // (Podes criar este no futuro se precisares)
+
+    // 3º ESCALÃO: Sobem as Folhas e Fotografias Base64
+    await pushPages();
+
+    debugPrint('🏆 [Sync General] Sincronização total concluída com sucesso!');
+  }
+
 }

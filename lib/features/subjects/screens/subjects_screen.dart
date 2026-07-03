@@ -102,9 +102,7 @@ class SubjectsScreen extends ConsumerWidget {
                 );
 
                 // 3. INICIA A BATERIA DE SINCRONIZAÇÃO
-                final syncService = SyncService();
-                await syncService.pushOfflineData(); // Envia as novas para o Laravel
-                await syncService.pullSubjects();    // Recebe as que faltavam do Laravel
+                await SyncService().syncAll();
 
                 // 4. ATUALIZA A TELA (Diz ao Riverpod para ler o SQLite de novo)
                 // Isto faz com que as disciplinas que acabaram de chegar da nuvem apareçam na hora!

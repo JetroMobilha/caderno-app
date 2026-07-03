@@ -1,50 +1,59 @@
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../models/page_model.dart';
+import 'package:flutter/foundation.dart';
+import '../../../core/network/api_service.dart';
+import '../models/local_page_model.dart'; // Aponta para o ficheiro onde guardaste o LocalPage acima!
 
 class PageRepository {
-  // Configuração do IP do teu servidor Laravel local
-  // (Nota: No emulador Android, usa-se 10.0.2.2 em vez de localhost)
-  final String _baseUrl = 'http://127.0.0.1:8000/api';
+  // 🚀 RECRUTA A ANTENA CENTRAL BLINDADA (Singleton)
+  final ApiService _apiService = ApiService();
 
-  /// Envia e salva a página atual com todos os seus traços no Laravel
-  Future<bool> savePageToServer(NotebookPage page) async {
-    final url = Uri.parse('$_baseUrl/pages');
-
+  /// 📤 PUSH: Envia e salva uma folha (e os seus traços) no Quartel-General Laravel
+  Future<bool> savePageToServer(LocalPage page) async {
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode(page.toMap()), // Serialização do modelo
-      );
+      debugPrint('📡 [PageRepo] A disparar folha ${page.pageNumber} para a nuvem...');
+
+      // O ApiService já gere a Base URL, os Headers e o Token Sanctum automaticamente!
+      final response = await _apiService.post('/pages', page.toMap());
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return true; // Sincronizado com sucesso!
+        final responseData = jsonDecode(response.body);
+
+        // Se o Laravel devolver o ID oficial recém-criado, atualizamos a memória
+        if (responseData['id'] != null) {
+          page.serverId = int.tryParse(responseData['id'].toString());
+        }
+        page.syncedWithCloud = 1;
+
+        debugPrint('✅ [PageRepo] Folha ${page.pageNumber} sincronizada com sucesso!');
+        return true;
+      } else {
+        debugPrint('🚨 [PageRepo] O servidor recusou a folha: ${response.statusCode}');
+        return false;
       }
-      return false;
     } catch (e) {
-      // Se houver falha de rede, a app não crasha
-      print('Erro de conexão ao Laravel: $e');
+      // Falha silenciosa de rede para manter a filosofia Offline-First intacta
+      debugPrint('📴 [PageRepo] Modo Offline: Não foi possível alcançar a nuvem. $e');
       return false;
     }
   }
 
-  /// Procura as páginas de um caderno guardadas na nuvem
-  Future<List<NotebookPage>> fetchPagesFromServer(int notebookId) async {
-    final url = Uri.parse('$_baseUrl/notebooks/$notebookId/pages');
-
+  /// 📥 PULL: Procura e descarrega as folhas de um caderno guardadas no Laravel
+  Future<List<LocalPage>> fetchPagesFromServer(int notebookId) async {
     try {
-      final response = await http.get(url, headers: {'Accept': 'application/json'});
+      debugPrint('📡 [PageRepo] A requisitar folhas do caderno $notebookId ao servidor...');
+
+      final response = await _apiService.get('/notebooks/$notebookId/pages');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => NotebookPage.fromMap(json)).toList();
+        final List<LocalPage> pages = data.map((json) => LocalPage.fromMap(json)).toList();
+
+        debugPrint('📥 [PageRepo] Recebidas ${pages.length} folhas da nuvem!');
+        return pages;
       }
       return [];
     } catch (e) {
+      debugPrint('🚨 [PageRepo] Erro ao descarregar folhas: $e');
       return [];
     }
   }

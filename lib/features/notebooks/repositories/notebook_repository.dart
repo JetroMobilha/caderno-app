@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../core/services/local_database_service.dart';
+import '../models/local_page_model.dart';
 import '../models/notebook_model.dart';
 import '../models/drawing_point_model.dart';
 

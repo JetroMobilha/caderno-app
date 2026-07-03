@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:sqflite/sqflite.dart';
+import '../../features/notebooks/models/local_page_model.dart';
 import '../database/database_helper.dart';
 import '../../features/notebooks/models/drawing_point_model.dart';
 

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/drawing_point_model.dart';
+import '../models/local_page_model.dart';
 import '../repositories/notebook_repository.dart';
 import 'share_notebook_sheet.dart';
 

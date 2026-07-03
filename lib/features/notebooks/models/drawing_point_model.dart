@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/widgets.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:convert';
@@ -112,78 +114,58 @@ class ImageBlock {
     this.height = 200.0,
     this.rotation = 0.0,
   });
-}
 
-class LocalPage {
-  int? id;             // 🚀 ID Local (INTEGER AUTOINCREMENT do teu SQLite)
-  int? serverId;       // server_id vindo do Laravel
-  final int notebookId;      // notebook_id (chave estrangeira)
-  final int pageNumber;      // page_number sequencial
-  final bool isLandscape;
+  // 🚀 LINGUAGEM NUVEM (JSON): Converte a foto em Base64 para viajar na rede!
+  Map<String, dynamic> toMap() {
+    String? base64Image;
+    try {
+      if (imageFile.existsSync()) {
+        final bytes = imageFile.readAsBytesSync();
+        base64Image = base64Encode(bytes);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erro ao converter imagem para Base64: $e');
+    }
 
-  List<Stroke> strokes;
-  List<Stroke> undoHistory = [];
-  List<Stroke> redoHistory = [];
-
-  String title;
-  String footer;
-  List<TextBlock> textBlocks;
-  List<ImageBlock> imageBlocks;
-
-  int syncedWithCloud;       // 🚀 0 = Não sincronizado, 1 = Sincronizado (Seguindo o teu padrão)
-  int updatedAt;             // Timestamp para controlo de modificação
-
-  late TransformationController transformationController;
-
-  LocalPage({
-    this.id,
-    this.serverId,
-    required this.notebookId,
-    required this.pageNumber,
-    required this.isLandscape,
-    List<Stroke>? strokes,
-    this.title = '',
-    this.footer = '',
-    List<TextBlock>? textBlocks,
-    this.syncedWithCloud = 0,
-    int? updatedAt,
-    List<ImageBlock>? imageBlocks,
-  })  : strokes = strokes ?? <Stroke>[],
-        textBlocks = textBlocks ?? <TextBlock>[],
-        imageBlocks = imageBlocks ?? [],
-        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch {
-    transformationController = TransformationController();
-  }
-
-  void dispose() {
-    transformationController.dispose();
-  }
-
-  // Mapeia para corresponder exatamente à tua tabela 'pages'
-  Map<String, dynamic> toDatabaseMap() {
     return {
-      if (id != null) 'id': id,
-      'server_id': serverId,
-      'notebook_id': notebookId,
-      'page_number': pageNumber,
-      'is_landscape': isLandscape ? 1 : 0,
-      'header_data': title,        // O teu campo header_data recebe o título
-      'footer_data': footer,       // O teu campo footer_data recebe o rodapé
-      'synced_with_cloud': syncedWithCloud,
+      'id': id,
+      'dx': position.dx,
+      'dy': position.dy,
+      'width': width,
+      'height': height,
+      'rotation': rotation,
+      'image_base64': base64Image, // A fotografia convertida em texto
+      'image_path': imageFile.path,
     };
   }
 
-  // Cria o objeto a partir da tua tabela 'pages' (as listas de strokes e textBlocks serão carregadas à parte)
-  factory LocalPage.fromDatabaseMap(Map<String, dynamic> map) {
-    return LocalPage(
-      id: map['id'] as int?,
-      serverId: map['server_id'] as int?,
-      notebookId: map['notebook_id'] as int,
-      pageNumber: map['page_number'] as int,
-      isLandscape: map['is_landscape'] == 1,
-      title: map['header_data']?.toString() ?? '',
-      footer: map['footer_data']?.toString() ?? '',
-      syncedWithCloud: map['synced_with_cloud'] as int? ?? 0,
+  // 🚀 LINGUAGEM NUVEM (JSON): Recebe do Laravel e recria o ficheiro localmente
+  factory ImageBlock.fromMap(Map<String, dynamic> map) {
+    File file = File(map['image_path'] ?? '');
+
+    // Se o Laravel enviou a foto em Base64, recriamos o ficheiro no disco temporário!
+    if (map['image_base64'] != null && map['image_base64'].toString().isNotEmpty) {
+      try {
+        final Uint8List bytes = base64Decode(map['image_base64']);
+        // Cria um ficheiro temporário no telemóvel para o Image.file poder ler
+        final tempDir = Directory.systemTemp;
+        file = File('${tempDir.path}/sync_img_${map['id']}.png');
+        file.writeAsBytesSync(bytes);
+      } catch (e) {
+        debugPrint('⚠️ Erro ao recriar imagem do Base64: $e');
+      }
+    }
+
+    return ImageBlock(
+      id: map['id']?.toString() ?? '',
+      imageFile: file,
+      position: Offset(
+        (map['dx'] as num?)?.toDouble() ?? 0.0,
+        (map['dy'] as num?)?.toDouble() ?? 0.0,
+      ),
+      width: (map['width'] as num?)?.toDouble() ?? 300.0,
+      height: (map['height'] as num?)?.toDouble() ?? 200.0,
+      rotation: (map['rotation'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

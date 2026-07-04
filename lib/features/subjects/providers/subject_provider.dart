@@ -1,177 +1,162 @@
-import 'dart:convert';
 import 'dart:async';
-import 'package:flutter/foundation.dart'; // 🚀 IMPORTANTE: Traz a variável kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/api_service.dart';
-import '../../../core/database/database_helper.dart'; // O teu ficheiro local
 import '../../../core/network/sync_service.dart';
+import '../../../core/database/database_helper.dart';
 import '../models/subject_model.dart';
+import '../../notebooks/providers/notebook_provider.dart';
 
 class SubjectNotifier extends StateNotifier<List<Subject>> {
-  Timer? _syncTimer;
+  final Ref ref;
 
-  SubjectNotifier() : super([]) {
+  SubjectNotifier(this.ref) : super([]) {
     loadSubjects();
-    _startAutomaticTracker(); // 🚀 ATIVA O RADAR AUTOMÁTICO LOGO NO ARRANQUE
+    _startAutomaticTracker();
   }
 
-  @override
-  void dispose() {
-    _syncTimer?.cancel(); // Desliga o radar se o provider for destruído
-    super.dispose();
-  }
-
-  // 🚀 O CRONÓMETRO AUTOMÁTICO (Roda silenciosamente em segundo plano)
+  // =========================================================================
+  // 🚀 O CRONÓMETRO AUTOMÁTICO (O nosso Radar de Fundo)
+  // =========================================================================
   void _startAutomaticTracker() {
-    if (kIsWeb) return; // O Chrome não precisa de sincronizar disco local
+    if (kIsWeb) return;
 
-    // Dispara a cada 30 segundos (Podes mudar para 1 minuto ou mais tarde para poupar dados)
-    _syncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+    Timer.periodic(const Duration(seconds: 30), (timer) async {
       print('⏱️ [Radar Silencioso] A executar varrimento automático de rede...');
+      try {
+        final syncService = SyncService();
+        await syncService.pushOfflineData();
+        await syncService.pullSubjects();
 
-      final syncService = SyncService();
+        await syncService.pushNotebooks();
+        final bool novosCadernosChegaram = await syncService.pullNotebooks();
+        await syncService.pushPages();
+        final bool novasFolhasChegaram = await syncService.pullPages();
 
-      // 1. Envia o que o aluno criou localmente em modo offline (Push)
-      await syncService.pushOfflineData();
+        // Atualiza a lista de disciplinas se houver novidades
+        await loadSubjects();
 
-      // 2. Procura novidades na nuvem (Pull Delta)
-      final bool houveNovidades = await syncService.pullSubjects();
-
-      // 3. Se o radar detetou dados novos vindos do Laravel, recarrega a UI na hora!
-      if (houveNovidades) {
-        print('🔄 [Radar Silencioso] Novidades injetadas! A atualizar a estante...');
-        // Lê o SQLite atualizado e força o Flutter a desenhar as novas disciplinas
-        final db = await DatabaseHelper.instance.database;
-        final maps = await db.query('subjects', orderBy: 'id DESC');
-
-        state = maps.map((s) => Subject(
-          id: s['id'] as int,
-          serverId: s['server_id'] as int,
-          userId: s['user_id'] as int,
-          name: s['name'] as String,
-          color: s['color'] as String,
-          icon: s['icon'] as String?,
-        )).toList();
+        // Se chegaram cadernos ou folhas novas, força a releitura da interface
+        if (novosCadernosChegaram || novasFolhasChegaram) {
+          print('🔄 [Radar Silencioso] Novidades na estante! A atualizar UI...');
+          ref.read(notebookProvider.notifier).refreshCurrent();
+        }
+      } catch (e) {
+        print('📴 [Radar Silencioso] Modo Offline ou erro no ciclo de sync: $e');
       }
     });
   }
 
-  // 📥 CARREGAR DISCIPLINAS
+  // =========================================================================
+  // 📥 LER DISCIPLINAS DO SQLITE LOCAL
+  // =========================================================================
   Future<void> loadSubjects() async {
-    if (kIsWeb) {
-      // ========================================================
-      // 🌐 MODO CHROME: Vai direto à Nuvem (Laravel)
-      // ========================================================
-      try {
-        final api = ApiService();
-        final response = await api.get('/sync/pull');
+    final db = await DatabaseHelper.instance.database;
+    final maps = await db.query('subjects', orderBy: 'id DESC');
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final List<dynamic> serverSubjects = data['subjects'];
+    final lista = maps.map((s) => Subject(
+      id: s['id'] as int,
+      serverId: s['server_id'] as int,
+      userId: s['user_id'] as int,
+      name: s['name'] as String,
+      color: s['color'] as String,
+      icon: s['icon'] as String?,
+      syncedWithCloud: s['synced_with_cloud'] as int? ?? 0,
+    )).toList();
 
-          // Converte o JSON que veio do Laravel em objetos Subject
-          state = serverSubjects.map((s) => Subject(
-            id: s['id'],
-            userId: s['user_id'],
-            serverId: s['id'],
-            name: s['name'],
-            color: s['color'],
-            icon: s['icon'],
-          )).toList();
-        }
-      } catch (e) {
-        print('🚨 Erro a carregar disciplinas na Web: $e');
-      }
-    } else {
-      // ========================================================
-      // 💻 MODO WINDOWS/ANDROID: Vai ao SQLite Local
-      // ========================================================
-      final db = await DatabaseHelper.instance.database;
-      final maps = await db.query('subjects', orderBy: 'id DESC');
-
-      state = maps.map((s) => Subject(
-        id: s['id'] as int,
-        userId: s['user_id'] as int,
-        serverId: s['server_id'] as int,
-        name: s['name'] as String,
-        color: s['color'] as String,
-        icon: s['icon'] as String?,
-      )).toList();
-
-      try {
-        final syncService = SyncService();
-        await syncService.pushOfflineData(); // Envia o que foi criado offline
-        await syncService.pullSubjects();    // Puxa o que foi criado noutros PCs
-
-        // 3. Verifica se chegaram dados novos ao SQLite
-        final updatedMaps = await db.query('subjects', orderBy: 'id DESC');
-        if (updatedMaps.length != maps.length) {
-          // Se o número de disciplinas mudou, atualiza a tela suavemente!
-          state = updatedMaps.map((s) => Subject(
-            id: s['id'] as int,
-            serverId: s['server_id'] as int,
-            userId: s['user_id'] as int,
-            name: s['name'] as String,
-            color: s['color'] as String,
-            icon: s['icon'] as String?,
-          )).toList();
-          print('🔄 Tela atualizada automaticamente com reforços da nuvem!');
-        }
-      } catch (e) {
-        print('📴 Modo 100% Offline ativo. Sem ligação à nuvem no momento.');
-      }
+    // Só atualiza se houver mudanças para evitar piscadas desnecessárias na tela
+    if (lista.length != state.length || _hasChanges(lista, state)) {
+      state = lista;
     }
   }
 
-  // 📤 CRIAR NOVA DISCIPLINA
-  Future<void> addSubject(Subject subject) async {
-    if (kIsWeb) {
-      // ========================================================
-      // 🌐 MODO CHROME: Dispara logo o Push para o Laravel
-      // ========================================================
-      final api = ApiService();
-      // Simula o formato que o Laravel espera
-      await api.post('/sync/push', {
-        'subjects': [{
-          'id': 0, // Temporário
-          'server_id': null,
-          'name': subject.name,
-          'color': subject.color,
-          'icon': subject.icon,
-        }]
-      });
-      // Recarrega tudo do servidor para atualizar a UI
-      await loadSubjects();
+  bool _hasChanges(List<Subject> a, List<Subject> b) {
+    if (a.length != b.length) return true;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id || a[i].name != b[i].name || a[i].serverId != b[i].serverId) return true;
+    }
+    return false;
+  }
 
-    } else {
-      // ========================================================
-      // 💻 MODO WINDOWS/ANDROID: Grava no SQLite local
-      // ========================================================
-      final db = await DatabaseHelper.instance.database;
-      final id = await db.insert('subjects', {
-        'user_id': subject.userId,
+  // =========================================================================
+  // 🚀 O MÉTOD EM FALTA: CRIAR NOVA DISCIPLINA (OFFLINE-FIRST)
+  // =========================================================================
+  Future<void> addSubject(Subject subject) async {
+    final db = await DatabaseHelper.instance.database;
+
+    // 1. Prepara o mapa para o SQLite (Garante que server_id entra como NULL!)
+    final map = {
+      'user_id': subject.userId,
+      'server_id': null, // Nasce offline, logo ainda não tem ID da nuvem
+      'name': subject.name,
+      'color': subject.color,
+      'icon': subject.icon,
+      'synced_with_cloud': 0, // 0 = Pendente de envio para o Laravel
+      'updated_at': DateTime.now().millisecondsSinceEpoch,
+    };
+
+    // 2. Insere na base de dados do dispositivo (SQLite) e captura o ID local gerado
+    final int insertedId = await db.insert('subjects', map);
+
+    // 3. Cria o objeto completo já com o ID local
+    final newSubject = Subject(
+      id: insertedId,
+      userId: subject.userId,
+      serverId: null,
+      name: subject.name,
+      color: subject.color,
+      icon: subject.icon,
+      syncedWithCloud: 0,
+    );
+
+    // 4. Atualiza a memória RAM na hora! A disciplina aparece na UI no mesmo milissegundo!
+    state = [newSubject, ...state];
+    print('✅ Disciplina "${newSubject.name}" criada offline com sucesso! (Local ID: $insertedId)');
+
+    // 5. (Opcional) Tenta disparar uma sincronização imediata em segundo plano
+    _tryInstantSync();
+  }
+
+  // =========================================================================
+  // 🗑️ EXTRAS TÁTICOS: APAGAR E ATUALIZAR DISCIPLINAS
+  // =========================================================================
+  Future<void> deleteSubject(int subjectId) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.delete('subjects', where: 'id = ?', whereArgs: [subjectId]);
+    state = state.where((s) => s.id != subjectId).toList();
+    print('🗑️ Disciplina $subjectId eliminada localmente.');
+  }
+
+  Future<void> updateSubject(Subject subject) async {
+    if (subject.id == null) return;
+    final db = await DatabaseHelper.instance.database;
+
+    await db.update(
+      'subjects',
+      {
         'name': subject.name,
         'color': subject.color,
         'icon': subject.icon,
-        'synced_with_cloud': 0, // Fica à espera do botão de Sincronizar!
-      });
+        'synced_with_cloud': 0, // Marcamos como 0 para o Laravel receber o novo nome/cor!
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [subject.id],
+    );
 
-      // Atualiza o estado local para a UI reagir
-      final newSubject = Subject(
-        id: id,
-        userId: subject.userId,
-        serverId: subject.serverId,
-        name: subject.name,
-        color: subject.color,
-        icon: subject.icon,
-      );
-      state = [newSubject, ...state];
+    // Atualiza o ecrã
+    state = state.map((s) => s.id == subject.id ? subject : s).toList();
+    _tryInstantSync();
+  }
+
+  void _tryInstantSync() {
+    if (!kIsWeb) {
+      SyncService().pushOfflineData().then((_) => loadSubjects());
     }
   }
 }
 
+// O nosso Provider Global que injeta a referência (ref) corretamente
 final subjectProvider = StateNotifierProvider<SubjectNotifier, List<Subject>>((ref) {
-  return SubjectNotifier()..loadSubjects(); // Carrega automaticamente ao iniciar!
+  return SubjectNotifier(ref);
 });

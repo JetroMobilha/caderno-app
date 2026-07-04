@@ -7,7 +7,7 @@ import 'package:path/path.dart';
 
 class DatabaseHelper {
   // 🚀 FORÇA TÁTICA: Mudámos para v4. O Android vai recriar o ficheiro do zero hoje!
-  static const _databaseName = "caderno_digital_offline_v5.db";
+  static const _databaseName = "caderno_digital_offline_v6.db";
   static const _databaseVersion = 1;
 
   DatabaseHelper._privateConstructor();
@@ -219,6 +219,8 @@ class DatabaseHelper {
     // Limpa o carimbo de tempo do radar de disciplinas
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('last_subjects_sync');
+    await prefs.remove('last_notebooks_sync');
+    await prefs.remove('last_pages_sync');
 
     print('🧹 Quartel-General purificado com sucesso!');
   }

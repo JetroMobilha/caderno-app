@@ -9,7 +9,7 @@ void main() {
       serverId: 1,
       name: 'Matemática',
       color: '#FF0000',
-      icon: 'book',
+      icon: 'book', syncedWithCloud: 0,
     );
 
     test('fromMap deve construir o objeto com as propriedades corretas', () {

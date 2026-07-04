@@ -141,8 +141,11 @@ class SyncService {
     return false;
   }
 
+  // =========================================================================
+  // 📤 FASE 2: ENVIAR CADERNOS PENDENTES (PUSH BLINDADO COM TRADUTOR)
+  // =========================================================================
   Future<void> pushNotebooks() async {
-    if (kIsWeb) return; // Web já opera na nuvem
+    if (kIsWeb) return;
     final db = await _dbHelper.database;
 
     try {
@@ -158,11 +161,54 @@ class SyncService {
         return;
       }
 
-      debugPrint('📡 [Sync] A disparar ${unsynced.length} cadernos para o Laravel...');
+      debugPrint('📡 [Sync] A processar ${unsynced.length} cadernos para envio...');
 
-      // 2. Dispara para a rota da nuvem
+      final List<Map<String, dynamic>> payloadNotebooks = [];
+
+      for (var notebookRow in unsynced) {
+        final int localNotebookId = notebookRow['id'];
+        final int localSubjectId = notebookRow['subject_id'];
+
+        // =====================================================================
+        // 🚀 O TRADUTOR TÁTICO DE IDs (Local -> Nuvem)
+        // =====================================================================
+        // Consulta o SQLite para descobrir qual é o ID oficial desta Disciplina no Laravel
+        final subjectQuery = await db.query(
+          'subjects',
+          columns: ['server_id'],
+          where: 'id = ?',
+          whereArgs: [localSubjectId],
+        );
+
+        // Se a disciplina ainda não tiver subido para a nuvem, o caderno não pode ir!
+        if (subjectQuery.isEmpty || subjectQuery.first['server_id'] == null) {
+          debugPrint('⚠️ [Sync] A disciplina local $localSubjectId ainda não subiu para a nuvem. Caderno $localNotebookId adiado.');
+          continue;
+        }
+
+        // Capturamos o ID verdadeiro gerado pelo servidor da nuvem!
+        final int officialServerSubjectId = subjectQuery.first['server_id'] as int;
+
+        // Criamos uma cópia mutável do mapa para podermos alterar os dados
+        final Map<String, dynamic> notebookMap = Map<String, dynamic>.from(notebookRow);
+
+        // 🎯 O TIRO DE PRECISÃO: Substituímos o ID do Windows pelo ID da Nuvem!
+        notebookMap['subject_id'] = officialServerSubjectId;
+
+        payloadNotebooks.add(notebookMap);
+      }
+
+      // Se todos os cadernos foram adiados à espera das disciplinas, abortamos
+      if (payloadNotebooks.isEmpty) {
+        debugPrint('⏳ [Sync] Nenhum caderno pronto para envio (a aguardar sincronização das disciplinas).');
+        return;
+      }
+
+      debugPrint('📦 [Sync] A disparar ${payloadNotebooks.length} cadernos traduzidos para o Laravel...');
+
+      // 2. Dispara o pacote para a rota da nuvem
       final response = await _apiService.post('/sync/notebooks/push', {
-        'notebooks': unsynced,
+        'notebooks': payloadNotebooks,
       });
 
       if (response.statusCode == 200) {
@@ -182,21 +228,140 @@ class SyncService {
           );
         }
         debugPrint('☁️ [Sync] Cadernos sincronizados com sucesso!');
+      } else {
+        debugPrint('🚨 [Sync] Falha no servidor ao processar cadernos: ${response.statusCode} | ${response.body}');
       }
     } catch (e) {
-      debugPrint('🚨 [Sync] Erro no PUSH dos cadernos: $e');
+      debugPrint('🚨 [Sync] Erro crítico no PUSH dos cadernos: $e');
     }
   }
 
   // =========================================================================
-  // 📤 FASE 3: ENVIAR FOLHAS COM DESENHOS E FOTOS BASE64 (PUSH)
+  // 📥 FASE 2.1: RECEBER CADERNOS DA NUVEM (PULL COM TRADUTOR INVERSO)
+  // =========================================================================
+  Future<bool> pullNotebooks() async {
+    if (kIsWeb) return false; // Chrome opera online-only, ignora o SQLite
+
+    final db = await _dbHelper.database;
+    final prefs = await SharedPreferences.getInstance();
+
+    // ⏰ RELÓGIO DE DELTA SYNC: Pega na data da última sincronização de cadernos
+    final String? lastSynced = prefs.getString('last_notebooks_sync');
+
+    try {
+      // Constrói o link dinâmico: se já sincronizou antes, pede só as novidades
+      final String endpoint = lastSynced != null
+          ? '/sync/notebooks/pull?last_synced_at=$lastSynced'
+          : '/sync/notebooks/pull';
+
+      debugPrint('📡 [Sync Pull] A varrer nuvem em busca de cadernos ($endpoint)...');
+
+      final response = await _apiService.get(endpoint);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        final List<dynamic> serverNotebooks = responseData['notebooks'] ?? [];
+        final String? serverTime = responseData['server_time'];
+
+        if (serverNotebooks.isEmpty) {
+          debugPrint('📡 [Sync Pull] Nenhum caderno novo detetado na nuvem.');
+          // Atualiza o timestamp mesmo vazio para manter o relógio alinhado
+          if (serverTime != null) await prefs.setString('last_notebooks_sync', serverTime);
+          return false; // UI não precisa de atualizar
+        }
+
+        debugPrint('📥 [Sync Pull] Detetados ${serverNotebooks.length} cadernos novos na nuvem! A processar...');
+
+        for (var sNet in serverNotebooks) {
+          // ===================================================================
+          // 🧲 O TRADUTOR INVERSO (Nuvem -> Local)
+          // ===================================================================
+          // O Laravel envia o ID da disciplina dele (server_id).
+          // Temos de descobrir qual é o ID incremental do nosso SQLite local!
+          final subjectQuery = await db.query(
+            'subjects',
+            columns: ['id'],
+            where: 'server_id = ?',
+            whereArgs: [sNet['subject_id']],
+          );
+
+          // Proteção relacional: Se a disciplina mãe ainda não existe no telemóvel,
+          // ignoramos o caderno até que a disciplina seja descarregada.
+          if (subjectQuery.isEmpty) {
+            debugPrint('⚠️ [Sync Pull] A disciplina mãe (Server ID: ${sNet['subject_id']}) ainda não existe localmente. Caderno "${sNet['title']}" adiado.');
+            continue;
+          }
+
+          final int localSubjectId = subjectQuery.first['id'] as int;
+
+          // Verifica se este caderno já foi guardado localmente (pelo server_id oficial)
+          final existing = await db.query(
+            'notebooks',
+            where: 'server_id = ?',
+            whereArgs: [sNet['id']],
+          );
+
+          // Prepara o pacote de dados estritamente alinhado com o teu CREATE TABLE notebooks!
+          final Map<String, dynamic> notebookData = {
+            'server_id': sNet['id'],
+            'subject_id': localSubjectId, // 🎯 O ID LOCAL TRADUZIDO (Obrigatório!)
+            'title': sNet['title'],
+            'cover_type': sNet['cover_type'] ?? 'color',
+            'color': sNet['color'],
+            'cover_image': sNet['cover_image'],
+            'line_type': sNet['line_type'] ?? 'ruled',
+            'paper_size': sNet['paper_size'] ?? 'A4',
+            'synced_with_cloud': 1, // 🚀 Carimbado: já veio da nuvem!
+            // Converte a data do servidor para milissegundos (INTEGER), compatível com a tua coluna updated_at!
+            'updated_at': sNet['updated_at'] != null
+                ? DateTime.parse(sNet['updated_at'].toString()).millisecondsSinceEpoch
+                : DateTime.now().millisecondsSinceEpoch,
+          };
+
+          if (existing.isEmpty) {
+            // Se o caderno não existia, INSERE COM BLINDAGEM DE CONFLITO
+            await db.insert(
+              'notebooks',
+              notebookData,
+              conflictAlgorithm: ConflictAlgorithm.replace, // Evita crashes de UNIQUE constraint
+            );
+            debugPrint('✅ Caderno "${sNet['title']}" gravado no SQLite local.');
+          } else {
+            // Se já existia, ATUALIZA APENAS O ALVO CERTO
+            await db.update(
+              'notebooks',
+              notebookData,
+              where: 'server_id = ?',
+              whereArgs: [sNet['id']],
+            );
+            debugPrint('🔄 Caderno "${sNet['title']}" atualizado no SQLite local.');
+          }
+        }
+
+        // 🚀 GRAVA O NOVO CARIMBO DE TEMPO DO SERVIDOR
+        if (serverTime != null) {
+          await prefs.setString('last_notebooks_sync', serverTime);
+        }
+
+        return true; // Alerta o sistema que houve dados novos injetados!
+      } else {
+        debugPrint('🚨 [Sync Pull] O Laravel recusou o envio de cadernos: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('🚨 [Sync Pull] Erro crítico ao processar o pull de cadernos: $e');
+    }
+    return false;
+  }
+
+  // =========================================================================
+  // 📤 FASE 3: ENVIAR FOLHAS COM DESENHOS E FOTOS BASE64 (PUSH BLINDADO)
   // =========================================================================
   Future<void> pushPages() async {
     if (kIsWeb) return;
     final db = await _dbHelper.database;
 
     try {
-      // 1. Procura as folhas não sincronizadas
+      // 1. Procura as folhas não sincronizadas no SQLite
       final List<Map<String, dynamic>> unsyncedPages = await db.query(
         'pages',
         where: 'synced_with_cloud = ?',
@@ -208,26 +373,57 @@ class SyncService {
         return;
       }
 
-      debugPrint('📡 [Sync] A empacotar e disparar ${unsyncedPages.length} folhas...');
+      debugPrint('📡 [Sync] A processar ${unsyncedPages.length} folhas para envio...');
 
-      // 🚀 SEGREDO TÁTICO: Recrutamos o LocalDatabaseService para montar
-      // a folha completa (com traços, textos e as imagens convertidas para Base64!)
       final localDb = LocalDatabaseService();
       final List<Map<String, dynamic>> payloadPages = [];
 
       for (var pageRow in unsyncedPages) {
         final int pageId = pageRow['id'];
-        final int notebookId = pageRow['notebook_id'];
+        final int localNotebookId = pageRow['notebook_id'];
 
-        // Puxa as folhas completas do caderno da memória e filtra a que queremos
-        final allPages = await localDb.getFullPagesForNotebook(notebookId);
+        // =====================================================================
+        // 🚀 O TRADUTOR TÁTICO DE IDs (Local -> Nuvem)
+        // =====================================================================
+        // Consulta o SQLite para descobrir qual é o ID oficial deste caderno no Laravel
+        final notebookQuery = await db.query(
+          'notebooks',
+          columns: ['server_id'],
+          where: 'id = ?',
+          whereArgs: [localNotebookId],
+        );
+
+        // Se o caderno não existir ou ainda não tiver server_id (não subiu para a nuvem),
+        // NÃO podemos enviar a folha agora, senão o MySQL atira o Erro 1452!
+        if (notebookQuery.isEmpty || notebookQuery.first['server_id'] == null) {
+          debugPrint('⚠️ [Sync] O caderno local $localNotebookId ainda não subiu para a nuvem. Folha $pageId adiada para o próximo ciclo.');
+          continue;
+        }
+
+        // Capturamos o ID verdadeiro gerado pelo servidor da nuvem!
+        final int officialServerNotebookId = notebookQuery.first['server_id'] as int;
+
+        // Puxa a folha completa da memória (com traços, textos e fotos Base64)
+        final allPages = await localDb.getFullPagesForNotebook(localNotebookId);
         final fullPage = allPages.firstWhere((p) => p.id == pageId, orElse: () => LocalPage.fromDatabaseMap(pageRow));
 
-        // O nosso novo toMap() vai converter as fotografias para Base64 automaticamente!
-        payloadPages.add(fullPage.toMap());
+        final Map<String, dynamic> pageMap = fullPage.toMap();
+
+        // 🎯 O TIRO DE PRECISÃO: Substituímos o ID do Windows pelo ID da Nuvem!
+        pageMap['notebook_id'] = officialServerNotebookId;
+
+        payloadPages.add(pageMap);
       }
 
-      // 2. Dispara o pacote pesado para o Laravel
+      // Se todas as folhas foram adiadas à espera dos cadernos, abortamos aqui
+      if (payloadPages.isEmpty) {
+        debugPrint('⏳ [Sync] Nenhuma folha pronta para envio (a aguardar sincronização dos cadernos pais).');
+        return;
+      }
+
+      debugPrint('📦 [Sync] A disparar ${payloadPages.length} folhas empacotadas para o Laravel...');
+
+      // 2. Dispara o pacote para a nuvem
       final response = await _apiService.post('/sync/pages/push', {
         'pages': payloadPages,
       });
@@ -236,45 +432,200 @@ class SyncService {
         final data = jsonDecode(response.body);
         final List<dynamic> syncedList = data['synced_pages'] ?? [];
 
-        // 3. Marca as folhas como sincronizadas no SQLite
+        // 🚀 ATUALIZAMOS O ID OFICIAL E O NÚMERO DA PÁGINA NO SQLITE!
         for (var item in syncedList) {
           await db.update(
             'pages',
             {
               'server_id': item['server_id'],
-              'synced_with_cloud': 1, // 🚀 Carimbada na Nuvem!
+              'page_number': item['page_number'],
+              'synced_with_cloud': 1,
             },
             where: 'id = ?',
             whereArgs: [item['client_id']],
           );
         }
-        debugPrint('☁️ [Sync] Folhas e desenhos sincronizados com sucesso!');
+        debugPrint('☁️ [Sync] Folhas sincronizadas e numeração alinhada com a nuvem!');
+      } else {
+        debugPrint('🚨 [Sync] Falha no servidor ao desempacotar folhas: ${response.statusCode} | ${response.body}');
       }
     } catch (e) {
-      debugPrint('🚨 [Sync] Erro no PUSH das folhas: $e');
+      debugPrint('🚨 [Sync] Erro crítico no PUSH das folhas: $e');
     }
   }
 
   // =========================================================================
-  // 🚀 COMANDO SUPREMO: SINCRONIZAÇÃO TOTAL (Offline-First para Nuvem)
+  // 📥 FASE 3.1: RECEBER FOLHAS E DESEMPACAOTAR DESENHOS (PULL BLINDADO)
+  // =========================================================================
+  Future<bool> pullPages() async {
+    if (kIsWeb) return false;
+    final db = await _dbHelper.database;
+    final prefs = await SharedPreferences.getInstance();
+
+    // ⏰ RELÓGIO DE DELTA SYNC: Pega na data da última sincronização de folhas
+    final String? lastSynced = prefs.getString('last_pages_sync');
+
+    try {
+      final String endpoint = lastSynced != null
+          ? '/sync/pages/pull?last_synced_at=$lastSynced'
+          : '/sync/pages/pull';
+
+      debugPrint('📡 [Sync Pull] A requisitar folhas à nuvem ($endpoint)...');
+      final response = await _apiService.get(endpoint);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        final List<dynamic> serverPages = responseData['pages'] ?? [];
+        final String? serverTime = responseData['server_time'];
+
+        if (serverPages.isEmpty) {
+          debugPrint('📡 [Sync Pull] Nenhuma folha nova detetada na nuvem.');
+          if (serverTime != null) await prefs.setString('last_pages_sync', serverTime);
+          return false;
+        }
+
+        debugPrint('📥 [Sync Pull] Detetadas ${serverPages.length} folhas na nuvem! A desempacotar...');
+
+        for (var sPage in serverPages) {
+          // ===================================================================
+          // 🧲 1. TRADUTOR INVERSO DE CADERNOS (Nuvem -> Local)
+          // ===================================================================
+          final notebookQuery = await db.query(
+            'notebooks',
+            columns: ['id'],
+            where: 'server_id = ?',
+            whereArgs: [sPage['notebook_id']],
+          );
+
+          // Se o caderno mãe ainda não existe no dispositivo, adiamos a folha
+          if (notebookQuery.isEmpty) {
+            debugPrint('⚠️ [Sync Pull] Caderno mãe (Server ID: ${sPage['notebook_id']}) não encontrado localmente. Folha ${sPage['page_number']} adiada.');
+            continue;
+          }
+
+          final int localNotebookId = notebookQuery.first['id'] as int;
+
+          // Verifica se esta folha já existe localmente (pelo server_id ou par caderno+número)
+          final existingPage = await db.query(
+            'pages',
+            columns: ['id'],
+            where: 'server_id = ? OR (notebook_id = ? AND page_number = ?)',
+            whereArgs: [sPage['id'], localNotebookId, sPage['page_number']],
+          );
+
+          int localPageId;
+          final Map<String, dynamic> pageData = {
+            'server_id': sPage['id'],
+            'notebook_id': localNotebookId, // 🎯 ID LOCAL DO CADERNO TRADUZIDO!
+            'page_number': sPage['page_number'],
+            'is_landscape': (sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0,
+            'header_data': sPage['header_data'],
+            'footer_data': sPage['footer_data'],
+            'synced_with_cloud': 1,
+            'updated_at': sPage['updated_at'] != null
+                ? DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch
+                : DateTime.now().millisecondsSinceEpoch,
+          };
+
+          // ===================================================================
+          // 💾 2. GRAVAÇÃO DA FOLHA NO SQLITE
+          // ===================================================================
+          if (existingPage.isEmpty) {
+            localPageId = await db.insert('pages', pageData, conflictAlgorithm: ConflictAlgorithm.replace);
+            debugPrint('✅ Folha ${sPage['page_number']} gravada como nova (Local ID: $localPageId).');
+          } else {
+            localPageId = existingPage.first['id'] as int;
+            await db.update('pages', pageData, where: 'id = ?', whereArgs: [localPageId]);
+            debugPrint('🔄 Folha ${sPage['page_number']} atualizada (Local ID: $localPageId).');
+          }
+
+          // ===================================================================
+          // 🎨 3. DESEMPACOTAMENTO DO CANVAS (Traços, Textos e Fotos)
+          // ===================================================================
+          // Para evitar duplicações quando re-sincronizamos, limpamos os traços antigos desta folha
+          await db.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [localPageId]);
+          await db.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [localPageId]);
+          await db.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [localPageId]);
+
+          // 3.1 Injetar Traços Vetoriais (Strokes)
+          final List<dynamic> strokes = sPage['stroke_data'] ?? [];
+          for (var st in strokes) {
+            await db.insert('canvas_strokes', {
+              'client_stroke_id': st['id']?.toString() ?? uniqid(),
+              'page_id': localPageId,
+              'stroke_data': jsonEncode(st), // Guarda o JSON do traço (cor, espessura, pontos)
+              'is_deleted': 0,
+              'synced_with_cloud': 1,
+              'updated_at': DateTime.now().millisecondsSinceEpoch,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+
+          // 3.2 Injetar Blocos de Texto
+          final List<dynamic> texts = sPage['text_data'] ?? [];
+          for (var tx in texts) {
+            await db.insert('canvas_text_blocks', {
+              'client_text_id': tx['id']?.toString() ?? uniqid(),
+              'page_id': localPageId,
+              'text_data': jsonEncode(tx),
+              'is_deleted': 0,
+              'synced_with_cloud': 1,
+              'updated_at': DateTime.now().millisecondsSinceEpoch,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+
+          // 3.3 Injetar Blocos de Imagem (O URL público da nuvem fica no image_path!)
+          final List<dynamic> images = sPage['image_data'] ?? [];
+          for (var img in images) {
+            await db.insert('canvas_image_blocks', {
+              'client_image_id': img['id']?.toString() ?? uniqid(),
+              'page_id': localPageId,
+              'image_path': img['image_path'] ?? '', // <--- O link HTTP da nuvem entra aqui!
+              'pos_x': (img['dx'] as num?)?.toDouble() ?? 0.0,
+              'pos_y': (img['dy'] as num?)?.toDouble() ?? 0.0,
+              'scale': (img['scale'] as num?)?.toDouble() ?? 1.0,
+              'rotation': (img['rotation'] as num?)?.toDouble() ?? 0.0,
+              'is_deleted': 0,
+              'synced_with_cloud': 1,
+              'updated_at': DateTime.now().millisecondsSinceEpoch,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+
+        if (serverTime != null) {
+          await prefs.setString('last_pages_sync', serverTime);
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('🚨 [Sync Pull] Erro crítico ao desempacotar páginas: $e');
+    }
+    return false;
+  }
+
+  // Helper rápido para gerar um ID temporário caso algum elemento venha sem ID da nuvem
+  String uniqid() => DateTime.now().microsecondsSinceEpoch.toString();
+
+  // =========================================================================
+  // 🚀 COMANDO SUPREMO: SINCRONIZAÇÃO TOTAL (Ordem Relacional Blindada)
   // =========================================================================
   Future<void> syncAll() async {
     if (kIsWeb) return;
 
     debugPrint('🏁 [Sync General] A iniciar ofensiva de sincronização total...');
 
-    // 1º ESCALÃO: Sobem as Disciplinas
+    // 1º ESCALÃO: Disciplinas (Push e depois Pull)
     await pushOfflineData();
     await pullSubjects();
 
-    // 2º ESCALÃO: Sobem os Cadernos
+    // 2º ESCALÃO: Cadernos (Envia os locais e depois puxa os da Nuvem!)
     await pushNotebooks();
-    // await pullNotebooks(); // (Podes criar este no futuro se precisares)
+    final bool novosCadernosChegaram = await pullNotebooks(); // 🚀 AGORA OPERACIONAL!
 
-    // 3º ESCALÃO: Sobem as Folhas e Fotografias Base64
+    // 3º ESCALÃO: Folhas, Desenhos e Imagens Base64
     await pushPages();
+    final bool novasFolhasChegaram = await pullPages(); // 🚀 AGORA OPERACIONAL!
 
-    debugPrint('🏆 [Sync General] Sincronização total concluída com sucesso!');
+    debugPrint('🏆 [Sync General] Ciclo de Sincronização Concluído!');
   }
 
 }

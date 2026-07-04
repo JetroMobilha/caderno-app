@@ -230,20 +230,28 @@ class SubjectsScreen extends ConsumerWidget {
               onPressed: () {
                 if (formKey.currentState!.validate()) {
                   final currentUser = ref.read(userProvider);
+
                   if (currentUser == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro: Identidade não encontrada.')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Erro: Identidade do soldado não encontrada.')),
+                    );
                     return;
                   }
+
+                  // 🚀 INSTANCIAÇÃO PURIFICADA:
                   ref.read(subjectProvider.notifier).addSubject(
                     Subject(
-                      userId: currentUser.id ?? currentUser.serverId ?? 0,
-                      serverId: currentUser.serverId ?? currentUser.serverId ?? 0,
+                      userId: currentUser.id ?? 0,
+                      serverId: null,
                       name: nameController.text.trim(),
                       color: pickedColorHex,
                       icon: selectedIcon,
+                      // 3. Nasce com 0 para o nosso Radar de Fundo saber que tem de a enviar na próxima ofensiva
+                      syncedWithCloud: 0,
                     ),
                   );
-                  Navigator.pop(context);
+
+                  Navigator.pop(context); // Fecha o modal após recrutar
                 }
               },
               child: const Text('Criar', style: TextStyle(color: Colors.white)),

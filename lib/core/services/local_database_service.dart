@@ -9,18 +9,47 @@ import '../../features/notebooks/models/drawing_point_model.dart';
 class LocalDatabaseService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
-  // 📥 SALVA A ESTRUTURA DE METADADOS DA PÁGINA
+  // 📥 SALVA A ESTRUTURA DE METADADOS DA PÁGINA (COM ESCUDO ANTI-AMNÉSIA)
   Future<int> savePageMetadata(LocalPage page) async {
     final db = await _dbHelper.database;
+
     if (page.id != null) {
+      // =======================================================================
+      // 🛡️ O ESCUDO ANTI-AMNÉSIA: Espreitar o SQLite antes de gravar
+      // =======================================================================
+      final existing = await db.query(
+        'pages',
+        columns: ['server_id'],
+        where: 'id = ?',
+        whereArgs: [page.id],
+      );
+
+      int? officialServerId = page.serverId;
+
+      // Se o Canvas acha que o server_id é nulo, MAS o SQLite já recebeu o ID da Nuvem...
+      if (officialServerId == null && existing.isNotEmpty) {
+        officialServerId = existing.first['server_id'] as int?;
+      }
+
+      // Criamos o mapa original da página
+      final Map<String, dynamic> map = page.toDatabaseMap();
+
+      // 🎯 REFORÇO CRÍTICO: Injetamos o ID oficial para nunca mais o perdermos!
+      map['server_id'] = officialServerId;
+
+      // Como a folha sofreu alterações (novos desenhos), marcamos para o Radar atuar!
+      map['synced_with_cloud'] = 0;
+      map['updated_at'] = DateTime.now().millisecondsSinceEpoch;
+
       await db.update(
         'pages',
-        page.toDatabaseMap(),
+        map,
         where: 'id = ?',
         whereArgs: [page.id],
       );
       return page.id!;
     } else {
+      // Se a folha é 100% nova, insere normalmente
       return await db.insert('pages', page.toDatabaseMap());
     }
   }

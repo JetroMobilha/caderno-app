@@ -83,7 +83,7 @@ class LocalPage {
   Map<String, dynamic> toMap() {
     return {
       if (serverId != null) 'id': serverId,
-      'client_id': id, // Enviamos o ID local para o Laravel nos saber responder quem guardou
+      'client_id': id,
       'notebook_id': notebookId,
       'page_number': pageNumber,
       'is_landscape': isLandscape,

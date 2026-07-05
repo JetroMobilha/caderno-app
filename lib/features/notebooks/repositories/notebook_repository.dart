@@ -197,22 +197,38 @@ class NotebookRepository {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Atualiza apenas os metadados da folha (Título ou Rodapé alterados)
+  // No teu NotebookRepository
   Future<void> updatePageMetadata(int pageId, String title, String footer) async {
-    if (kIsWeb) return;
-    final db = await _dbHelper.database;
+    final db = await DatabaseHelper.instance.database;
+
+    // 🛡️ O ESCUDO ANTI-AMNÉSIA ENTRA EM AÇÃO!
+    // Ele vai procurar o server_id da página no SQLite antes de gravar.
+    final existing = await db.query(
+      'pages',
+      columns: ['server_id'],
+      where: 'id = ?',
+      whereArgs: [pageId],
+    );
+
+    int? officialServerId;
+    if (existing.isNotEmpty) {
+      officialServerId = existing.first['server_id'] as int?;
+    }
+
+    // Grava a alteração e avisa o Radar de Fundo (synced = 0)
     await db.update(
-        'pages',
-        {
-          'header_data': title,
-          'footer_data': footer,
-          'synced_with_cloud': 0,
-        },
-        where: 'id = ?',
-        whereArgs: [pageId]
+      'pages',
+      {
+        'header_data': title,
+        'footer_data': footer,
+        'server_id': officialServerId, // MANTÉM O ID DA NUVEM INTACTO!
+        'synced_with_cloud': 0,        // ACORDA O RADAR!
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [pageId],
     );
   }
-
 
   Future<void> deleteSingleStroke(int pageId, String clientStrokeId) async {
     if (kIsWeb) return;
@@ -241,6 +257,38 @@ class NotebookRepository {
       {'line_type': newLineType, 'updated_at': DateTime.now().millisecondsSinceEpoch},
       where: 'id = ?',
       whereArgs: [notebookId],
+    );
+  }
+
+  // =========================================================================
+  // 🚨 GATILHO DO AUTO-SAVE: Acorda o Radar sem reescrever a página toda!
+  // =========================================================================
+  Future<void> triggerSyncRadar(int pageId) async {
+    final db = await DatabaseHelper.instance.database;
+
+    // 🛡️ O ESCUDO ANTI-AMNÉSIA: Pega o ID da nuvem para não o perder
+    final existing = await db.query(
+      'pages',
+      columns: ['server_id'],
+      where: 'id = ?',
+      whereArgs: [pageId],
+    );
+
+    int? officialServerId;
+    if (existing.isNotEmpty) {
+      officialServerId = existing.first['server_id'] as int?;
+    }
+
+    // Apenas carimba a folha como "Precisa de ir para a nuvem"
+    await db.update(
+      'pages',
+      {
+        'server_id': officialServerId, // Mantém o ID Oficial intacto!
+        'synced_with_cloud': 0,        // ⏰ Acorda o Radar de 30 segundos!
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [pageId],
     );
   }
 }

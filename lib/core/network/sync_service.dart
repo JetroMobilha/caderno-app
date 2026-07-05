@@ -11,6 +11,12 @@ class SyncService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final ApiService _apiService = ApiService();
 
+  // =========================================================================
+  // 🚀 A ANTENA GLOBAL: Rádio para avisar qualquer ecrã que o ID da Nuvem chegou!
+  // Emite um Map onde a Chave é o [client_id] e o Valor é o [server_id].
+  // =========================================================================
+  static final ValueNotifier<Map<int, int>> syncedPagesRadio = ValueNotifier({});
+
   // 🚀 INICIAR OPERAÇÃO PUSH
   Future<void> pushOfflineData() async {
     // 🌐 ESCUDO WEB: No Chrome não existe SQLite local. Os dados já nascem na nuvem!
@@ -382,10 +388,9 @@ class SyncService {
         final int pageId = pageRow['id'];
         final int localNotebookId = pageRow['notebook_id'];
 
-        // =====================================================================
-        // 🚀 O TRADUTOR TÁTICO DE IDs (Local -> Nuvem)
-        // =====================================================================
-        // Consulta o SQLite para descobrir qual é o ID oficial deste caderno no Laravel
+        // 🚀 1. CAPTURA EXPLÍCITA DO ID DA NUVEM DIRETAMENTE DO SQLITE!
+        final int? officialServerPageId = pageRow['server_id'];
+
         final notebookQuery = await db.query(
           'notebooks',
           columns: ['server_id'],
@@ -393,28 +398,26 @@ class SyncService {
           whereArgs: [localNotebookId],
         );
 
-        // Se o caderno não existir ou ainda não tiver server_id (não subiu para a nuvem),
-        // NÃO podemos enviar a folha agora, senão o MySQL atira o Erro 1452!
         if (notebookQuery.isEmpty || notebookQuery.first['server_id'] == null) {
-          debugPrint('⚠️ [Sync] O caderno local $localNotebookId ainda não subiu para a nuvem. Folha $pageId adiada para o próximo ciclo.');
+          debugPrint('⚠️ [Sync] O caderno local $localNotebookId ainda não subiu para a nuvem. Folha $pageId adiada.');
           continue;
         }
 
-        // Capturamos o ID verdadeiro gerado pelo servidor da nuvem!
         final int officialServerNotebookId = notebookQuery.first['server_id'] as int;
 
-        // Puxa a folha completa da memória (com traços, textos e fotos Base64)
         final allPages = await localDb.getFullPagesForNotebook(localNotebookId);
         final fullPage = allPages.firstWhere((p) => p.id == pageId, orElse: () => LocalPage.fromDatabaseMap(pageRow));
 
         final Map<String, dynamic> pageMap = fullPage.toMap();
 
-        // 🎯 O TIRO DE PRECISÃO: Substituímos o ID do Windows pelo ID da Nuvem!
         pageMap['notebook_id'] = officialServerNotebookId;
+        pageMap['client_id'] = pageId;
+
+        // 🎯 2. O TIRO DE PRECISÃO: Injetamos o ID do Servidor à força no pacote!
+        pageMap['server_id'] = officialServerPageId;
 
         payloadPages.add(pageMap);
       }
-
       // Se todas as folhas foram adiadas à espera dos cadernos, abortamos aqui
       if (payloadPages.isEmpty) {
         debugPrint('⏳ [Sync] Nenhuma folha pronta para envio (a aguardar sincronização dos cadernos pais).');
@@ -432,22 +435,38 @@ class SyncService {
         final data = jsonDecode(response.body);
         final List<dynamic> syncedList = data['synced_pages'] ?? [];
 
-        // 🚀 ATUALIZAMOS O ID OFICIAL E O NÚMERO DA PÁGINA NO SQLITE!
+        // 🚀 Dicionário para guardar as atualizações e enviar pelo rádio
+        Map<int, int> newIdsMap = {};
+
+        // 🚀 A CORREÇÃO DO LOOP: Atualiza o SQLite com o ID Oficial E QUEBRA O LOOP!
         for (var item in syncedList) {
-          await db.update(
-            'pages',
-            {
-              'server_id': item['server_id'],
-              'page_number': item['page_number'],
-              'synced_with_cloud': 1,
-            },
-            where: 'id = ?',
-            whereArgs: [item['client_id']],
-          );
+          // O item['client_id'] é o ID do SQLite local. Tem de vir perfeito do Laravel!
+          if (item['client_id'] != null && item['server_id'] != null) {
+            final int cId = item['client_id'];
+            final int sId = item['server_id'];
+
+            await db.update(
+              'pages',
+              {
+                'server_id': sId, // O ID que o Laravel gerou (ex: 14)
+                'page_number': item['page_number'], // O número final da folha
+                'synced_with_cloud': 1, // 🛑 ISTO PARA O LOOP! O Radar não a apanha mais!
+                'updated_at': DateTime.now().millisecondsSinceEpoch,
+              },
+              where: 'id = ?',
+              whereArgs: [cId],
+            );
+            newIdsMap[cId] = sId;
+          }
         }
-        debugPrint('☁️ [Sync] Folhas sincronizadas e numeração alinhada com a nuvem!');
+
+        // 🚀 DISPARA O SINAL DE RÁDIO PARA O CANVAS (Se houver páginas atualizadas)
+        if (newIdsMap.isNotEmpty) {
+          syncedPagesRadio.value = Map.from(newIdsMap); // Força a notificação instantânea!
+        }
+        debugPrint('☁️ [Sync] ${syncedList.length} folhas atualizadas localmente. Loop travado!');
       } else {
-        debugPrint('🚨 [Sync] Falha no servidor ao desempacotar folhas: ${response.statusCode} | ${response.body}');
+        debugPrint('🚨 [Sync] Falha no servidor ao desempacotar folhas: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('🚨 [Sync] Erro crítico no PUSH das folhas: $e');

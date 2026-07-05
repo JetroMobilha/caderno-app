@@ -6,9 +6,11 @@ import '../../../core/network/sync_service.dart';
 import '../../../core/database/database_helper.dart';
 import '../models/subject_model.dart';
 import '../../notebooks/providers/notebook_provider.dart';
+import '../../auth/providers/user_provider.dart';
 
 class SubjectNotifier extends StateNotifier<List<Subject>> {
   final Ref ref;
+  Timer? _syncTimer;
 
   SubjectNotifier(this.ref) : super([]) {
     loadSubjects();
@@ -21,7 +23,22 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
   void _startAutomaticTracker() {
     if (kIsWeb) return;
 
-    Timer.periodic(const Duration(seconds: 30), (timer) async {
+    _syncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+
+      // 🛡️ BLINDAGEM 1: Se a classe foi destruída, desliga
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      // 🛡️ BLINDAGEM 2 (ANTI-ZOMBIE): Se não há identidade (Logout), destrói o radar!
+      final currentUser = ref.read(userProvider);
+      if (currentUser == null) {
+        print('🛑 [Radar Silencioso] Soldado fora de combate (Logout). A desligar o radar.');
+        timer.cancel();
+        return;
+      }
+
       print('⏱️ [Radar Silencioso] A executar varrimento automático de rede...');
       try {
         final syncService = SyncService();
@@ -33,10 +50,10 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
         await syncService.pushPages();
         final bool novasFolhasChegaram = await syncService.pullPages();
 
-        // Atualiza a lista de disciplinas se houver novidades
+        if (!mounted) return;
+
         await loadSubjects();
 
-        // Se chegaram cadernos ou folhas novas, força a releitura da interface
         if (novosCadernosChegaram || novasFolhasChegaram) {
           print('🔄 [Radar Silencioso] Novidades na estante! A atualizar UI...');
           ref.read(notebookProvider.notifier).refreshCurrent();
@@ -56,7 +73,7 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
 
     final lista = maps.map((s) => Subject(
       id: s['id'] as int,
-      serverId: s['server_id'] as int,
+      serverId: s['server_id'] as int?,
       userId: s['user_id'] as int,
       name: s['name'] as String,
       color: s['color'] as String,
@@ -154,6 +171,16 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
       SyncService().pushOfflineData().then((_) => loadSubjects());
     }
   }
+
+  // =========================================================================
+  // 💣 ORDEM DE DESTRUIÇÃO: Executada quando fazemos Logout!
+  // =========================================================================
+  @override
+  void dispose() {
+    _syncTimer?.cancel(); // Desativa a bomba-relógio
+    super.dispose();      // Destrói a classe em segurança
+  }
+
 }
 
 // O nosso Provider Global que injeta a referência (ref) corretamente

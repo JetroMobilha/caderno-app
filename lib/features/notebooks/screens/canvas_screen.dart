@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/network/sync_service.dart';
 import '../models/drawing_point_model.dart';
 import '../models/local_page_model.dart';
 import '../repositories/notebook_repository.dart';
@@ -108,6 +109,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
     super.initState();
     _liveLineType = widget.lineType;
     _loadSavedPages();
+
+    SyncService.syncedPagesRadio.addListener(_onPageSyncedByRadar);
   }
 
   Future<void> _loadSavedPages() async {
@@ -132,7 +135,32 @@ class _CanvasScreenState extends State<CanvasScreen> {
     for (var page in _pages) {
       page.dispose();
     }
+
+    SyncService.syncedPagesRadio.removeListener(_onPageSyncedByRadar);
     super.dispose();
+  }
+
+  // =========================================================================
+  // 🛡️ O ANTÍDOTO DA AMNÉSIA: Atualiza a RAM em tempo real!
+  // =========================================================================
+  void _onPageSyncedByRadar() {
+    if (_pages.isEmpty) return;
+
+    final Map<int, int> updates = SyncService.syncedPagesRadio.value;
+    final LocalPage activePage = _pages[_currentPageIndex];
+
+    final int? localId = activePage.id;
+
+    if (localId != null && updates.containsKey(localId)) {
+      final int novoServerId = updates[localId]!;
+
+      // 🎯 CURA DA RAM: Ensinamos a folha ativa que ela já não é nula!
+      setState(() {
+        activePage.serverId = novoServerId;
+      });
+
+      debugPrint('🎯 [Canvas] A RAM foi curada! server_id atualizado para $novoServerId.');
+    }
   }
 
   // =========================================================================
@@ -182,6 +210,11 @@ class _CanvasScreenState extends State<CanvasScreen> {
     });
 
     _textFocusNode.unfocus();
+
+    // 🚀 O GATILHO DO AUTO-SAVE: Grava e marca para enviar para a nuvem
+    if (page.id != null) {
+      _repository.updatePageMetadata(page.id!, page.title, page.footer);
+    }
   }
 
   void _resetZoomForPage(LocalPage page, String paperSize) {
@@ -378,6 +411,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
         }
       });
     }
+    // 🚀 O GATILHO DO AUTO-SAVE
+    if (page.id != null) {
+      _repository.triggerSyncRadar(page.id!);
+    }
   }
 
   Future<void> _pickAndInsertImage(LocalPage page) async {
@@ -402,6 +439,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
 
       if (page.id != null) {
         await _repository.saveSingleImageBlock(page.id!, newImageBlock);
+        await _repository.triggerSyncRadar(page.id!);
       }
     }
   }
@@ -548,7 +586,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                             behavior: HitTestBehavior.opaque,
                                             onPanUpdate: (d) => setState(() => img.position += d.delta),
                                             onPanEnd: (d) {
-                                              if (page.id != null) _repository.saveSingleImageBlock(page.id!, img);
+                                              if (page.id != null){
+                                                _repository.saveSingleImageBlock(page.id!, img);
+                                                _repository.triggerSyncRadar(page.id!);
+                                              }
                                             },
                                             child: const CircleAvatar(
                                               backgroundColor: Color(0xFF0F4C5C),
@@ -568,7 +609,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                               img.height = (img.height + d.delta.dy).clamp(80.0, 900.0);
                                             }),
                                             onPanEnd: (d) {
-                                              if (page.id != null) _repository.saveSingleImageBlock(page.id!, img);
+                                              if (page.id != null){
+                                                _repository.saveSingleImageBlock(page.id!, img);
+                                                _repository.triggerSyncRadar(page.id!);
+                                              }
                                             },
                                             child: Center(
                                               child: Container(
@@ -721,6 +765,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                       _activePointsNotifier.value = [];
                                       if (page.id != null) {
                                         _repository.saveSingleStroke(page.id!, newStroke);
+                                        _repository.triggerSyncRadar(page.id!);
                                       }
                                     } else if (_currentTool == ToolMode.select) {
                                       setState(() {
@@ -729,6 +774,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                         _selectionRectEnd = null;
                                         _lastPanOffset = null;
                                       });
+                                      // 🚀 AUTO-SAVE: Se ele moveu traços, temos de avisar o SQLite
+                                      if (page.id != null) {
+                                        _repository.updatePageMetadata(page.id!, page.title, page.footer);
+                                      }
                                     }
                                   } : null,
                                   child: RepaintBoundary(
@@ -1001,18 +1050,6 @@ class _CanvasScreenState extends State<CanvasScreen> {
                   notebookTitle: widget.notebookTitle,
                 ),
               );
-            },
-          ),
-          // 3. Guardar
-          IconButton(
-            icon: const Icon(Icons.save, color: Color(0xFF27AE60)),
-            onPressed: () async {
-              await _repository.saveFullNotebook(widget.notebookId, _pages);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Caderno guardado!'), backgroundColor: Color(0xFF27AE60)),
-                );
-              }
             },
           ),
         ]

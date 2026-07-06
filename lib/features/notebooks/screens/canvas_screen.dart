@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/network/sync_service.dart';
 import '../models/drawing_point_model.dart';
@@ -572,8 +573,18 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                           decoration: BoxDecoration(
                                             border: isImageMode ? Border.all(color: const Color(0xFF0F4C5C), width: 2.0) : null,
                                           ),
+                                          // 🚀 RENDERIZAÇÃO HÍBRIDA COM CACHE MILITAR DE ALTA PERFORMANCE
                                           child: img.imagePath.startsWith('http')
-                                              ? Image.network(img.imagePath, fit: BoxFit.fill)
+                                              ? CachedNetworkImage(
+                                            imageUrl: img.imagePath,
+                                            fit: BoxFit.fill,
+                                            placeholder: (context, url) => const Center(
+                                              child: CircularProgressIndicator(color: Color(0xFF0F4C5C), strokeWidth: 2),
+                                            ),
+                                            errorWidget: (context, url, error) => const Center(
+                                              child: Icon(Icons.broken_image, color: Colors.redAccent),
+                                            ),
+                                          )
                                               : Image.file(File(img.imagePath), fit: BoxFit.fill),
                                         ),
                                       ),

@@ -97,10 +97,10 @@ class TextBlock {
 // 🚀 O NOVO MODELO PARA IMAGENS INSERIDAS NA FOLHA
 class ImageBlock {
   final String id;
-  final File imageFile;
+  final String imagePath; // 🚀 MUDANÇA: Agora é uma String que aceita local e nuvem!
   Offset position;
-  double width;  // 🚀 Largura real em pixéis na folha
-  double height; // 🚀 Altura real em pixéis na folha
+  double width;
+  double height;
   double rotation;
 
   double baseScale = 1.0;
@@ -108,19 +108,20 @@ class ImageBlock {
 
   ImageBlock({
     required this.id,
-    required this.imageFile,
+    required this.imagePath, // 🚀 MUDANÇA
     required this.position,
-    this.width = 300.0,  // Tamanho padrão inicial
+    this.width = 300.0,
     this.height = 200.0,
     this.rotation = 0.0,
   });
 
-  // 🚀 LINGUAGEM NUVEM (JSON): Converte a foto em Base64 para viajar na rede!
+  // 🚀 LINGUAGEM NUVEM (JSON)
   Map<String, dynamic> toMap() {
     String? base64Image;
     try {
-      if (imageFile.existsSync()) {
-        final bytes = imageFile.readAsBytesSync();
+      // 🛡️ Só converte para Base64 se a imagem for LOCAL! (Se já for HTTP, não mexe)
+      if (!imagePath.startsWith('http') && File(imagePath).existsSync()) {
+        final bytes = File(imagePath).readAsBytesSync();
         base64Image = base64Encode(bytes);
       }
     } catch (e) {
@@ -134,23 +135,22 @@ class ImageBlock {
       'width': width,
       'height': height,
       'rotation': rotation,
-      'image_base64': base64Image, // A fotografia convertida em texto
-      'image_path': imageFile.path,
+      'image_base64': base64Image,
+      'image_path': imagePath,
     };
   }
 
-  // 🚀 LINGUAGEM NUVEM (JSON): Recebe do Laravel e recria o ficheiro localmente
   factory ImageBlock.fromMap(Map<String, dynamic> map) {
-    File file = File(map['image_path'] ?? '');
+    String path = map['image_path']?.toString() ?? '';
 
-    // Se o Laravel enviou a foto em Base64, recriamos o ficheiro no disco temporário!
+    // Se o Laravel enviou a foto em Base64, recriamos o ficheiro no disco temporário
     if (map['image_base64'] != null && map['image_base64'].toString().isNotEmpty) {
       try {
         final Uint8List bytes = base64Decode(map['image_base64']);
-        // Cria um ficheiro temporário no telemóvel para o Image.file poder ler
         final tempDir = Directory.systemTemp;
-        file = File('${tempDir.path}/sync_img_${map['id']}.png');
+        File file = File('${tempDir.path}/sync_img_${map['id']}.png');
         file.writeAsBytesSync(bytes);
+        path = file.path;
       } catch (e) {
         debugPrint('⚠️ Erro ao recriar imagem do Base64: $e');
       }
@@ -158,7 +158,7 @@ class ImageBlock {
 
     return ImageBlock(
       id: map['id']?.toString() ?? '',
-      imageFile: file,
+      imagePath: path, // 🚀 MUDANÇA
       position: Offset(
         (map['dx'] as num?)?.toDouble() ?? 0.0,
         (map['dy'] as num?)?.toDouble() ?? 0.0,

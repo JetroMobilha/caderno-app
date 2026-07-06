@@ -425,7 +425,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
       final File imageFile = File(pickedFile.path);
       final newImageBlock = ImageBlock(
         id: const Uuid().v4(),
-        imageFile: imageFile,
+        imagePath: pickedFile.path, // 🚀 MUDANÇA: Passa apenas o path
         position: const Offset(100, 150),
         width: 300.0,
         height: 200.0,
@@ -572,7 +572,9 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                           decoration: BoxDecoration(
                                             border: isImageMode ? Border.all(color: const Color(0xFF0F4C5C), width: 2.0) : null,
                                           ),
-                                          child: Image.file(img.imageFile, fit: BoxFit.fill),
+                                          child: img.imagePath.startsWith('http')
+                                              ? Image.network(img.imagePath, fit: BoxFit.fill)
+                                              : Image.file(File(img.imagePath), fit: BoxFit.fill),
                                         ),
                                       ),
 

@@ -96,7 +96,7 @@ class LocalDatabaseService {
       {
         'client_image_id': img.id,
         'page_id': pageId,
-        'image_path': img.imageFile.path,
+        'image_path': img.imagePath,
         'pos_x': img.position.dx,
         'pos_y': img.position.dy,
         'scale': img.width,       // Guardamos a largura no campo scale
@@ -148,16 +148,17 @@ class LocalDatabaseService {
 
         for (var m in imgMaps) {
           final String path = m['image_path'].toString();
-          final File f = File(path);
 
-          // Só desenha se a foto física ainda existir no disco do telemóvel!
-          if (f.existsSync()) {
+          // 🛡️ O NOVO ESCUDO: É válido se for um link da internet OU um ficheiro físico no disco!
+          final bool isValidImage = path.startsWith('http') || File(path).existsSync();
+
+          if (isValidImage) {
             safeImages.add(
                 ImageBlock(
                   id: m['client_image_id'].toString(),
-                  imageFile: f,
+                  imagePath: path, // 🚀 MUDANÇA
                   position: Offset(
-                    (m['pos_x'] as num).toDouble(), // 🛡️ Imune ao corte de decimais do Android
+                    (m['pos_x'] as num).toDouble(),
                     (m['pos_y'] as num).toDouble(),
                   ),
                   width: (m['scale'] as num).toDouble(),

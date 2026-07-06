@@ -141,7 +141,7 @@ class NotebookRepository {
           await txn.insert('canvas_image_blocks', {
             'client_image_id': img.id,
             'page_id': currentPageId,
-            'image_path': img.imageFile.path,
+            'image_path': img.imagePath, // 🚀 CORREÇÃO CIRÚRGICA AQUI: Usa imagePath!
             'pos_x': img.position.dx,
             'pos_y': img.position.dy,
             'scale': img.width,
@@ -241,7 +241,6 @@ class NotebookRepository {
       whereArgs: [clientStrokeId, pageId],
     );
   }
-
 
   Future<void> saveSingleImageBlock(int pageId, ImageBlock img) async {
     final localDb = LocalDatabaseService();

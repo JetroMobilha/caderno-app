@@ -598,11 +598,12 @@ class SyncService {
             await db.insert('canvas_image_blocks', {
               'client_image_id': img['id']?.toString() ?? uniqid(),
               'page_id': localPageId,
-              'image_path': img['image_path'] ?? '', // <--- O link HTTP da nuvem entra aqui!
+              'image_path': img['image_path'] ?? '',
               'pos_x': (img['dx'] as num?)?.toDouble() ?? 0.0,
               'pos_y': (img['dy'] as num?)?.toDouble() ?? 0.0,
-              'scale': (img['scale'] as num?)?.toDouble() ?? 1.0,
-              'rotation': (img['rotation'] as num?)?.toDouble() ?? 0.0,
+              // 🚀 CORREÇÃO DO RAIO ENCOLHEDOR: Lemos 'width' e 'height' vindos do JSON!
+              'scale': (img['width'] as num?)?.toDouble() ?? 300.0,    // Guarda a largura
+              'rotation': (img['height'] as num?)?.toDouble() ?? 200.0, // Guarda a altura
               'is_deleted': 0,
               'synced_with_cloud': 1,
               'updated_at': DateTime.now().millisecondsSinceEpoch,

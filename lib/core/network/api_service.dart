@@ -1,16 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 🚀 O NOVO COFRE UNIVERSAL
 
 class ApiService {
   // Singleton Pattern: Garante que só existe 1 antena de internet na app toda
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
-
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   static String get baseUrl {
     return 'http://35.205.132.251:8080/api';
@@ -19,16 +17,33 @@ class ApiService {
   static String get baseUrlImagem {
     return 'http://35.205.132.251:8080/storage/';
   }
-  // =========================================================================
-  // 🔐 GESTÃO DO COFRE DE SESSÃO (Sanctum Token)
-  // =========================================================================
-  Future<void> saveToken(String token) async => await _storage.write(key: 'sanctum_token', value: token);
-  Future<String?> getToken() async => await _storage.read(key: 'sanctum_token');
-  Future<void> deleteToken() async => await _storage.delete(key: 'sanctum_token');
 
-  Future<void> saveUserData(Map<String, dynamic> userMap) async => await _storage.write(key: 'user_data', value: jsonEncode(userMap));
+  // =========================================================================
+  // 🔐 GESTÃO DO COFRE DE SESSÃO (100% Compatível com Web, Android e Windows)
+  // =========================================================================
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('sanctum_token', token);
+  }
+
+  Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('sanctum_token');
+  }
+
+  Future<void> deleteToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('sanctum_token');
+  }
+
+  Future<void> saveUserData(Map<String, dynamic> userMap) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_data', jsonEncode(userMap));
+  }
+
   Future<Map<String, dynamic>?> getUserData() async {
-    final str = await _storage.read(key: 'user_data');
+    final prefs = await SharedPreferences.getInstance();
+    final str = prefs.getString('user_data');
     return str != null ? jsonDecode(str) : null;
   }
 
@@ -59,15 +74,12 @@ class ApiService {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
 
-    // 🕵️‍♂️ 1. LOG DE SAÍDA (O que o Flutter está a enviar)
-    print('🛫 POST $url');
-    print('📦 DADOS: ${jsonEncode(body)}');
+    debugPrint('🛫 POST $url');
+    debugPrint('📦 DADOS: ${jsonEncode(body)}');
 
     final response = await http.post(url, headers: headers, body: jsonEncode(body));
 
-    // 🕵️‍♂️ 2. LOG DE ENTRADA (O que o Laravel respondeu)
-    print('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
-
+    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
   }
 
@@ -76,25 +88,43 @@ class ApiService {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
 
-    // 🕵️‍♂️ 1. LOG DE SAÍDA (O que o Flutter está a enviar)
-    print('🛫 POST $url');
-    print('📦 DADOS: ${jsonEncode(headers)}');
+    debugPrint('🛫 GET $url');
 
     final response = await http.get(url, headers: headers);
 
-    // 🕵️‍♂️ 2. LOG DE ENTRADA (O que o Laravel respondeu)
-    print('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
-
+    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
-
   }
 
-  // DELETE (Para Soft Delete de Cadernos)
+  // =========================================================================
+  // 🔄 ATUALIZAR DADOS (PUT)
+  // =========================================================================
+  Future<http.Response> put(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    final headers = await _getHeaders(requireAuth: requireAuth);
+
+    debugPrint('🔄 PUT $url');
+    debugPrint('📦 DADOS: ${jsonEncode(body)}');
+
+    final response = await http.put(url, headers: headers, body: jsonEncode(body));
+
+    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
+    return response;
+  }
+
+  // =========================================================================
+  // 🗑️ APAGAR DADOS (DELETE)
+  // =========================================================================
   Future<http.Response> delete(String endpoint, {bool requireAuth = true}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
 
-    return await http.delete(url, headers: headers);
+    debugPrint('🗑️ DELETE $url');
+
+    final response = await http.delete(url, headers: headers);
+
+    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
+    return response;
   }
 
   // =========================================================================
@@ -105,14 +135,13 @@ class ApiService {
       // 1. Avisa o Laravel para destruir o token no servidor (Requer Auth)
       await post('/logout', {}, requireAuth: true);
     } catch (e) {
-      print('🚨 Erro a avisar o servidor do logout: $e');
+      debugPrint('🚨 Erro a avisar o servidor do logout: $e');
     } finally {
-      // 2. INDEPENDENTEMENTE de o servidor responder ou não (ex: sem internet),
-      // apagamos o token e os dados do utilizador do telemóvel!
-      // NOTA: Usa os teus métodos exatos que limpam o SharedPreferences/SecureStorage
+      // 2. Apaga as credenciais locais com Segurança Absoluta (Universal)
+      await deleteToken();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
       await prefs.remove('user_data');
+      debugPrint('🛑 Tokens locais eliminados com sucesso!');
     }
   }
 
@@ -141,15 +170,18 @@ class ApiService {
         'email': email.trim(),
         'code': code.trim(),
         'password': newPassword,
-        'password_confirmation': newPassword, // Laravel exige esta confirmação
+        'password_confirmation': newPassword,
       },
       requireAuth: false,
     );
   }
 
-  Future<http.Response> updateProfile({required String name, File? imageFile}) async {
+  // =========================================================================
+  // 👤 4. ATUALIZAR PERFIL E AVATAR (MULTIPART / HÍBRIDO)
+  // =========================================================================
+  Future<http.Response> updateProfile({required String name, dynamic imageFile}) async {
     final url = Uri.parse('$baseUrl/user/update');
-    final token = await getToken(); // Recupera o token guardado no login
+    final token = await getToken();
 
     var request = http.MultipartRequest('POST', url);
     request.headers.addAll({
@@ -160,17 +192,21 @@ class ApiService {
     request.fields['name'] = name;
 
     if (imageFile != null) {
-      request.files.add(await http.MultipartFile.fromPath('avatar', imageFile.path));
+      if (kIsWeb) {
+        // 🌐 NA WEB: Envia Bytes
+        final bytes = await imageFile.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes('avatar', bytes, filename: imageFile.name));
+      } else {
+        // 📱 NO MOBILE: Lê Ficheiro
+        request.files.add(await http.MultipartFile.fromPath('avatar', imageFile.path));
+      }
     }
 
+    debugPrint('🛫 MULTIPART POST $url');
     final streamedResponse = await request.send();
-
-
     final response = await http.Response.fromStream(streamedResponse);
 
-    // 🕵️‍♂️ 2. LOG DE ENTRADA (O que o Laravel respondeu)
-    print('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
-
+    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
   }
 }

@@ -3,18 +3,32 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../../core/database/database_helper.dart';
 import '../../../core/services/local_database_service.dart';
+import '../../../core/network/api_service.dart'; // 🚀 IMPORTAÇÃO VITAL PARA A WEB
 import '../models/local_page_model.dart';
 import '../models/notebook_model.dart';
 import '../models/drawing_point_model.dart';
 
 class NotebookRepository {
   final _dbHelper = DatabaseHelper.instance;
-  final List<Notebook> _webCache = [];
+  final ApiService _apiService = ApiService(); // 🚀 Rádio de comunicação direta para Web
 
+  // =========================================================================
+  // 📚 LISTAR CADERNOS
+  // =========================================================================
   Future<List<Notebook>> getNotebooksBySubject(int subjectId) async {
+    // 🌐 ROTA WEB: O Consumidor Direto (Lê direto da API Laravel)
     if (kIsWeb) {
-      return _webCache.where((notebook) => notebook.subject_id == subjectId).toList();
-    } else {
+      debugPrint('🌐 [Web] A carregar cadernos diretamente do Laravel...');
+      final response = await _apiService.get('/subjects/$subjectId/notebooks');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((map) => Notebook.fromMap(map)).toList();
+      }
+      return [];
+    }
+    // 📱 ROTA MOBILE/WINDOWS: O Tanque Offline (Lê do SQLite)
+    else {
       final db = await _dbHelper.database;
       final List<Map<String, dynamic>> maps = await db.query(
         'notebooks',
@@ -25,76 +39,92 @@ class NotebookRepository {
     }
   }
 
-  /// Insere um novo caderno e DEVOLVE o ID gerado!
+  // =========================================================================
+  // 📓 CRIAR NOVO CADERNO
+  // =========================================================================
   Future<int> insertNotebook(Notebook notebook) async {
+    // 🌐 ROTA WEB: Dispara direto para o Laravel
     if (kIsWeb) {
-      _webCache.add(notebook);
-      return _webCache.length; // Retorna um ID falso para a Web
-    } else {
+      debugPrint('🌐 [Web] A criar caderno diretamente no Laravel...');
+      final response = await _apiService.post(
+        '/subjects/${notebook.subject_id}/notebooks',
+        notebook.toMap(),
+      );
+
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['id'] as int; // Devolve o ID oficial da Nuvem!
+      }
+      return 0;
+    }
+    // 📱 ROTA MOBILE/WINDOWS: Grava no SQLite e espera pelo Radar
+    else {
       final db = await _dbHelper.database;
-
-      // 🚀 SQLite insere e devolve o ID real
       final id = await db.insert('notebooks', notebook.toMap());
-
-      // Atualiza a memória RAM
       notebook.id = id;
-
       return id;
     }
   }
 
+  // =========================================================================
+  // 🗑️ APAGAR CADERNO (Soft Delete)
+  // =========================================================================
+  Future<void> deleteNotebook(int notebookId) async {
+    if (kIsWeb) {
+      await _apiService.delete('/notebooks/$notebookId');
+    } else {
+      final db = await _dbHelper.database;
+      await db.delete('notebooks', where: 'id = ?', whereArgs: [notebookId]);
+      // Opcional: Acordar o SyncService para avisar o Laravel da eliminação
+    }
+  }
+
+  // =========================================================================
+  // 📖 LER FOLHAS DO CADERNO (Ao abrir o Canvas)
+  // =========================================================================
+  Future<List<LocalPage>> getFullPagesForNotebook(int notebookId) async {
+    // 🌐 ROTA WEB: Lê as páginas da API (Com suporte a paginação 'data' da doc!)
+    if (kIsWeb) {
+      debugPrint('🌐 [Web] A carregar folhas e desenhos diretamente do Laravel...');
+      final response = await _apiService.get('/notebooks/$notebookId/pages');
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        // A API devolve paginação, os dados reais estão dentro de 'data'
+        final List<dynamic> pagesData = jsonResponse['data'] ?? [];
+        return pagesData.map((pMap) => LocalPage.fromMap(pMap)).toList();
+      }
+      return [];
+    }
+    // 📱 ROTA MOBILE/WINDOWS: Lê do SQLite via LocalDatabaseService
+    else {
+      final localDb = LocalDatabaseService();
+      return await localDb.getFullPagesForNotebook(notebookId);
+    }
+  }
+
   // ============================================================================
-  // 📥 ESTRATÉGIA 1: BULK SAVE (100% Blindado contra falhas de Transação)
+  // 📥 ESTRATÉGIA 1: BULK SAVE (Mobile Only)
   // ============================================================================
-  // 🚀 MOTOR DE SALVAMENTO EM MASSA BLINDADO (Com Remoção de Páginas Fantasma e Reordenação)
   Future<void> saveFullNotebook(int notebookId, List<LocalPage> pages) async {
-    if (kIsWeb) return;
+    if (kIsWeb) return; // A Web usa micro-saves diretos (Estratégia 2)
+
     final db = await _dbHelper.database;
-
     await db.transaction((txn) async {
-      // =======================================================================
-      // 🕵️‍♂️ PASSO 1: DETECTAR E ELIMINAR AS FOLHAS QUE FORAM RASGADAS
-      // =======================================================================
+      final List<Map<String, dynamic>> existingRows = await txn.query('pages', columns: ['id'], where: 'notebook_id = ?', whereArgs: [notebookId]);
+      final List<int> existingIds = existingRows.map((row) => row['id'] as int).toList();
+      final List<int> currentIds = pages.map((page) => page.id).whereType<int>().toList();
 
-      // 1. Busca todos os IDs de páginas que estão atualmente gravados no SQLite para este caderno
-      final List<Map<String, dynamic>> existingRows = await txn.query(
-        'pages',
-        columns: ['id'],
-        where: 'notebook_id = ?',
-        whereArgs: [notebookId],
-      );
-
-      final List<int> existingIds = existingRows
-          .map((row) => row['id'] as int)
-          .toList();
-
-      // 2. Recolhe os IDs das páginas que continuam vivas na memória RAM
-      final List<int> currentIds = pages
-          .map((page) => page.id)
-          .whereType<int>()
-          .toList();
-
-      // 3. Se um ID existe na base de dados mas não está na RAM, significa que a folha foi rasgada!
       for (final int id in existingIds) {
         if (!currentIds.contains(id)) {
-          // O ON DELETE CASCADE configurado no DatabaseHelper limpa os filhos automaticamente!
-          await txn.delete(
-            'pages',
-            where: 'id = ?',
-            whereArgs: [id],
-          );
+          await txn.delete('pages', where: 'id = ?', whereArgs: [id]);
         }
       }
 
-      // =======================================================================
-      // 💾 PASSO 2: ATUALIZAR AS FOLHAS SOBREVIVENTES E REORDENAR A PAGINAÇÃO
-      // =======================================================================
       for (int i = 0; i < pages.length; i++) {
         final page = pages[i];
         int currentPageId;
 
-        // 🛡️ CORREÇÃO DE LACUNAS: Forçamos o 'page_number' a ser o índice real + 1.
-        // Se apagares a Folha 2 de 3, a antiga Folha 3 passa a ser matematicamente a Folha 2 no SQLite!
         final Map<String, dynamic> pageMap = page.toDatabaseMap();
         pageMap['page_number'] = i + 1;
 
@@ -103,191 +133,114 @@ class NotebookRepository {
           page.id = currentPageId;
         } else {
           currentPageId = page.id!;
-          await txn.update(
-            'pages',
-            pageMap,
-            where: 'id = ?',
-            whereArgs: [currentPageId],
-          );
+          await txn.update('pages', pageMap, where: 'id = ?', whereArgs: [currentPageId]);
         }
 
-        // 5. GRAVA OS TRAÇOS DA CANETA VETORIAL
         await txn.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [currentPageId]);
         for (var stroke in page.strokes) {
-          await txn.insert('canvas_strokes', {
-            'client_stroke_id': stroke.id,
-            'page_id': currentPageId,
-            'stroke_data': stroke.toJsonString(),
-            'is_deleted': 0,
-            'synced_with_cloud': 0,
-          });
+          await txn.insert('canvas_strokes', {'client_stroke_id': stroke.id, 'page_id': currentPageId, 'stroke_data': stroke.toJsonString(), 'is_deleted': 0, 'synced_with_cloud': 0});
         }
 
-        // 6. GRAVA OS BLOCOS DE TEXTO TECLADO
         await txn.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
         for (var tb in page.textBlocks) {
-          await txn.insert('canvas_text_blocks', {
-            'client_text_id': tb.id,
-            'page_id': currentPageId,
-            'text_data': jsonEncode(tb.toMap()),
-            'is_deleted': 0,
-            'synced_with_cloud': 0,
-          });
+          await txn.insert('canvas_text_blocks', {'client_text_id': tb.id, 'page_id': currentPageId, 'text_data': jsonEncode(tb.toMap()), 'is_deleted': 0, 'synced_with_cloud': 0});
         }
 
-        // 7. GRAVA AS FOTOGRAFIAS MANIPULÁVEIS
         await txn.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
         for (var img in page.imageBlocks) {
-          await txn.insert('canvas_image_blocks', {
-            'client_image_id': img.id,
-            'page_id': currentPageId,
-            'image_path': img.imagePath, // 🚀 CORREÇÃO CIRÚRGICA AQUI: Usa imagePath!
-            'pos_x': img.position.dx,
-            'pos_y': img.position.dy,
-            'scale': img.width,
-            'rotation': img.height,
-            'is_deleted': 0,
-            'synced_with_cloud': 0,
-          });
+          await txn.insert('canvas_image_blocks', {'client_image_id': img.id, 'page_id': currentPageId, 'image_path': img.imagePath, 'pos_x': img.position.dx, 'pos_y': img.position.dy, 'scale': img.width, 'rotation': img.height, 'is_deleted': 0, 'synced_with_cloud': 0});
         }
       }
     });
   }
 
-  // 🚀 NOVO: Método para o Ecrã buscar as folhas quando abre!
-  Future<List<LocalPage>> getFullPagesForNotebook(int notebookId) async {
-    if (kIsWeb) return [];
-
-    // Isto chama o método que criámos no LocalDatabaseService
-    final localDb = LocalDatabaseService();
-    return await localDb.getFullPagesForNotebook(notebookId);
-  }
-
   // ============================================================================
   // ⚡ ESTRATÉGIA 2: MICRO-SAVES (Para máxima performance no onPanEnd)
   // ============================================================================
-
-  /// Salva apenas UM novo traço de forma cirúrgica (0ms de lag no ecrã)
   Future<void> saveSingleStroke(int pageId, Stroke stroke) async {
-    if (kIsWeb) {
-      debugPrint("Web: Traço salvo em cache.");
-      return;
-    }
+    if (kIsWeb) return;
     final db = await _dbHelper.database;
-    await db.insert('canvas_strokes', {
-      'client_stroke_id': stroke.id,
-      'page_id': pageId,
-      'stroke_data': jsonEncode(stroke.toMap()),
-      'synced_with_cloud': 0,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert('canvas_strokes', {'client_stroke_id': stroke.id, 'page_id': pageId, 'stroke_data': jsonEncode(stroke.toMap()), 'synced_with_cloud': 0}, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Salva apenas UM bloco de texto atualizado/novo
   Future<void> saveSingleTextBlock(int pageId, TextBlock block) async {
-    if (kIsWeb) {
-      debugPrint("Web: Bloco de texto salvo em cache.");
-      return;
-    }
+    if (kIsWeb) return;
     final db = await _dbHelper.database;
-    await db.insert('canvas_text_blocks', {
-      'client_text_id': block.id,
-      'page_id': pageId,
-      'text_data': jsonEncode(block.toMap()),
-      'synced_with_cloud': 0,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  // No teu NotebookRepository
-  Future<void> updatePageMetadata(int pageId, String title, String footer) async {
-    final db = await DatabaseHelper.instance.database;
-
-    // 🛡️ O ESCUDO ANTI-AMNÉSIA ENTRA EM AÇÃO!
-    // Ele vai procurar o server_id da página no SQLite antes de gravar.
-    final existing = await db.query(
-      'pages',
-      columns: ['server_id'],
-      where: 'id = ?',
-      whereArgs: [pageId],
-    );
-
-    int? officialServerId;
-    if (existing.isNotEmpty) {
-      officialServerId = existing.first['server_id'] as int?;
-    }
-
-    // Grava a alteração e avisa o Radar de Fundo (synced = 0)
-    await db.update(
-      'pages',
-      {
-        'header_data': title,
-        'footer_data': footer,
-        'server_id': officialServerId, // MANTÉM O ID DA NUVEM INTACTO!
-        'synced_with_cloud': 0,        // ACORDA O RADAR!
-        'updated_at': DateTime.now().millisecondsSinceEpoch,
-      },
-      where: 'id = ?',
-      whereArgs: [pageId],
-    );
+    await db.insert('canvas_text_blocks', {'client_text_id': block.id, 'page_id': pageId, 'text_data': jsonEncode(block.toMap()), 'synced_with_cloud': 0}, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> deleteSingleStroke(int pageId, String clientStrokeId) async {
     if (kIsWeb) return;
     final db = await _dbHelper.database;
-
-    await db.update(
-      'canvas_strokes',
-      {'is_deleted': 1, 'synced_with_cloud': 0}, // 1 = Apagado (O Painter vai ignorar)
-      where: 'client_stroke_id = ? AND page_id = ?',
-      whereArgs: [clientStrokeId, pageId],
-    );
+    await db.update('canvas_strokes', {'is_deleted': 1, 'synced_with_cloud': 0}, where: 'client_stroke_id = ? AND page_id = ?', whereArgs: [clientStrokeId, pageId]);
   }
 
   Future<void> saveSingleImageBlock(int pageId, ImageBlock img) async {
+    if (kIsWeb) return; // Na Web a imagem deve subir via API direto com os metadados
     final localDb = LocalDatabaseService();
-    await localDb.saveImageBlockLocally(pageId, img); // <--- Tem de chamar o nome exato!
+    await localDb.saveImageBlockLocally(pageId, img);
   }
 
-  // 🚀 ATUALIZA A PAUTA DO CADERNO EM TEMPO REAL NO SQLITE
   Future<void> updateLineType(int notebookId, String newLineType) async {
     if (kIsWeb) return;
     final db = await _dbHelper.database;
-    await db.update(
-      'notebooks',
-      {'line_type': newLineType, 'updated_at': DateTime.now().millisecondsSinceEpoch},
-      where: 'id = ?',
-      whereArgs: [notebookId],
-    );
+    await db.update('notebooks', {'line_type': newLineType, 'updated_at': DateTime.now().millisecondsSinceEpoch}, where: 'id = ?', whereArgs: [notebookId]);
+  }
+
+  Future<void> updatePageMetadata(int pageId, String title, String footer) async {
+    if (kIsWeb) return;
+    final db = await DatabaseHelper.instance.database;
+    final existing = await db.query('pages', columns: ['server_id'], where: 'id = ?', whereArgs: [pageId]);
+    int? officialServerId;
+    if (existing.isNotEmpty) officialServerId = existing.first['server_id'] as int?;
+
+    await db.update('pages', {'header_data': title, 'footer_data': footer, 'server_id': officialServerId, 'synced_with_cloud': 0, 'updated_at': DateTime.now().millisecondsSinceEpoch}, where: 'id = ?', whereArgs: [pageId]);
   }
 
   // =========================================================================
-  // 🚨 GATILHO DO AUTO-SAVE: Acorda o Radar sem reescrever a página toda!
+  // 🚨 GATILHO DO AUTO-SAVE PARA WEB E MOBILE
   // =========================================================================
-  Future<void> triggerSyncRadar(int pageId) async {
-    final db = await DatabaseHelper.instance.database;
+  Future<void> triggerSyncRadar(int pageId, {LocalPage? webPagePayload}) async {
+    // 🌐 ROTA WEB: Atira a folha completa para a nuvem em tempo real!
+    if (kIsWeb && webPagePayload != null) {
+      debugPrint('🌐 [Web] A gravar traço/imagem diretamente na Nuvem...');
 
-    // 🛡️ O ESCUDO ANTI-AMNÉSIA: Pega o ID da nuvem para não o perder
-    final existing = await db.query(
-      'pages',
-      columns: ['server_id'],
-      where: 'id = ?',
-      whereArgs: [pageId],
-    );
+      // 🚀 ALTERAÇÃO VITAL AQUI: Usa o toMapAsync e aguarda!
+      final payload = await webPagePayload.toMapAsync();
 
-    int? officialServerId;
-    if (existing.isNotEmpty) {
-      officialServerId = existing.first['server_id'] as int?;
+      await _apiService.post(
+        '/notebooks/${webPagePayload.notebookId}/pages',
+        payload,
+      );
+      return;
     }
 
-    // Apenas carimba a folha como "Precisa de ir para a nuvem"
-    await db.update(
-      'pages',
-      {
-        'server_id': officialServerId, // Mantém o ID Oficial intacto!
-        'synced_with_cloud': 0,        // ⏰ Acorda o Radar de 30 segundos!
-        'updated_at': DateTime.now().millisecondsSinceEpoch,
-      },
-      where: 'id = ?',
-      whereArgs: [pageId],
-    );
+    // 📱 ROTA MOBILE: Acorda o radar local
+    final db = await DatabaseHelper.instance.database;
+    final existing = await db.query('pages', columns: ['server_id'], where: 'id = ?', whereArgs: [pageId]);
+    int? officialServerId;
+    if (existing.isNotEmpty) officialServerId = existing.first['server_id'] as int?;
+
+    await db.update('pages', {'server_id': officialServerId, 'synced_with_cloud': 0, 'updated_at': DateTime.now().millisecondsSinceEpoch}, where: 'id = ?', whereArgs: [pageId]);
   }
+
+  Future<bool> shareNotebookWithFriend({required int notebookId, required String email, required String role}) async {
+    try {
+      final response = await ApiService().post(
+        '/notebooks/$notebookId/share',
+        {
+          'email': email,
+          'role': role,
+        },
+        requireAuth: true,
+      );
+
+      // Devolve true apenas se o Laravel responder status 200 OK
+      return response.statusCode == 200;
+    } catch (e) {
+      print('🚨 Erro ao partilhar nas rotas da API: $e');
+      return false;
+    }
+  }
+
 }

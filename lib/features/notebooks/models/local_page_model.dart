@@ -96,6 +96,30 @@ class LocalPage {
     };
   }
 
+  // =========================================================================
+  // ☁️ LINGUAGEM 2: COMUNICAÇÃO COM O QUARTEL-GENERAL (Laravel API / JSON)
+  // =========================================================================
+  Future<Map<String, dynamic>> toMapAsync() async {
+    // 🚀 Extrai todas as imagens de forma assíncrona primeiro
+    final List<Map<String, dynamic>> asyncImages = [];
+    for (var img in imageBlocks) {
+      asyncImages.add(await img.toMapAsync());
+    }
+
+    return {
+      if (serverId != null) 'id': serverId,
+      'client_id': id,
+      'notebook_id': notebookId,
+      'page_number': pageNumber,
+      'is_landscape': isLandscape,
+      'header_data': title,
+      'footer_data': footer,
+      'stroke_data': strokes.map((s) => s.toMap()).toList(),
+      'text_data': textBlocks.map((t) => t.toMap()).toList(),
+      'image_data': asyncImages, // 🚀 Imagens prontas com Base64 injetado!
+    };
+  }
+
   factory LocalPage.fromMap(Map<String, dynamic> map) {
     final List<dynamic> strokesList = map['stroke_data'] ?? [];
     final List<dynamic> textList = map['text_data'] ?? [];

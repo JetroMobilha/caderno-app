@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart'; // 🚀 O ESCUDO WEB
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -6,9 +7,8 @@ import '../../../core/network/api_service.dart';
 import '../../subjects/screens/subjects_screen.dart';
 import '../models/user_model.dart';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // 🚀 O Rádio
-import '../providers/user_provider.dart';                 // 🚀 O Transmissor
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/user_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -52,7 +52,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     try {
       final api = ApiService();
 
-      // CUMPRINDO O CONTRATO OFICIAL: Apenas name, email e password
       final response = await api.post('/register', {
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
@@ -62,8 +61,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Sucesso absoluto! A API criou o utilizador e devolveu o passaporte.
-        final String token = responseData['token'];
+
+        final String token = responseData['token'] ?? responseData['access_token'];
         final Map<String, dynamic> userMap = responseData['user'];
 
         await api.saveToken(token);
@@ -80,23 +79,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
           );
 
-          // 🧹 LIMPEZA DE HISTÓRICO: Apaga as telas de Login e Registo da memória
-          // para o utilizador não conseguir voltar atrás com o botão do Android.
+          // 🚀 SALTO TÁTICO HÍBRIDO
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => SubjectsScreen()),
+            MaterialPageRoute(builder: (_) => const SubjectsScreen()),
                 (route) => false,
           );
         }
       } else if (response.statusCode == 422) {
-        // Erro de validação do Laravel (Ex: E-mail já existe na base de dados)
         final Map<String, dynamic> errors = responseData['errors'];
         setState(() => _serverErrorMessage = errors.values.first[0]);
       } else {
         setState(() => _serverErrorMessage = responseData['message'] ?? 'Não foi possível concluir o registo.');
       }
     } catch (e) {
-      setState(() => _serverErrorMessage = 'Sem ligação ao servidor local em ${ApiService.baseUrl}.');
+      debugPrint('🚨 ERRO INTERNO (Registo): $e');
+      setState(() => _serverErrorMessage = 'Sem ligação ao Quartel-General. Verifique a internet.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -122,61 +120,41 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
-                // CABEÇALHO VISUAL
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F4C5C).withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: BoxDecoration(color: const Color(0xFF0F4C5C).withOpacity(0.08), shape: BoxShape.circle),
                   child: const Icon(Icons.person_add_alt_1_rounded, size: 48, color: Color(0xFF0F4C5C)),
                 ),
                 const SizedBox(height: 16),
-
-                Text(
-                  'Criar Caderno',
-                  style: GoogleFonts.lora(fontSize: 30, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24)),
-                ),
+                Text('Criar Caderno', style: GoogleFonts.lora(fontSize: 30, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24))),
                 const SizedBox(height: 6),
-                Text(
-                  'Preencha os seus dados institucionais.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w500),
-                ),
-
+                Text('Preencha os seus dados institucionais.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 32),
 
-                // FORMULÁRIO BLINDADO
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.black.withOpacity(0.06)),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10)),
-                    ],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))],
                   ),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
-                        // 1. NOME COMPLETO
                         Text('Nome Completo', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50))),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _nameController,
                           textCapitalization: TextCapitalization.words,
                           style: GoogleFonts.inter(fontSize: 14),
-                          decoration: _buildInputDecoration('Jetro Domingos', Icons.person_outline_rounded),
+                          decoration: _buildInputDecoration('Ex: Jetro Domingos', Icons.person_outline_rounded),
                           validator: (val) => val == null || val.trim().length < 3 ? 'Introduza o seu nome completo' : null,
                         ),
                         const SizedBox(height: 16),
 
-                        // 2. E-MAIL
                         Text('E-mail institucional', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50))),
                         const SizedBox(height: 8),
                         TextFormField(
@@ -193,41 +171,30 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        // 3. PALAVRA-PASSE
                         Text('Palavra-passe', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50))),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
                           style: GoogleFonts.inter(fontSize: 14),
-                          decoration: _buildPasswordDecoration(
-                            'Mínimo 8 caracteres',
-                            _obscurePassword,
-                                () => setState(() => _obscurePassword = !_obscurePassword),
-                          ),
+                          decoration: _buildPasswordDecoration('Mínimo 8 caracteres', _obscurePassword, () => setState(() => _obscurePassword = !_obscurePassword)),
                           validator: (val) => val == null || val.length < 6 ? 'A senha deve ter pelo menos 8 caracteres' : null,
                         ),
                         const SizedBox(height: 16),
 
-                        // 4. CONFIRMAR PALAVRA-PASSE (Validação estritamente local!)
                         Text('Confirmar Palavra-passe', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50))),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _confirmPasswordController,
                           obscureText: _obscureConfirmPassword,
                           style: GoogleFonts.inter(fontSize: 14),
-                          decoration: _buildPasswordDecoration(
-                            'Repita a senha',
-                            _obscureConfirmPassword,
-                                () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                          ),
+                          decoration: _buildPasswordDecoration('Repita a senha', _obscureConfirmPassword, () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword)),
                           validator: (val) {
                             if (val != _passwordController.text) return 'As palavras-passe não coincidem';
                             return null;
                           },
                         ),
 
-                        // BANNER DE ERRO DA API
                         if (_serverErrorMessage != null) ...[
                           const SizedBox(height: 16),
                           Container(
@@ -246,7 +213,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                         const SizedBox(height: 28),
 
-                        // BOTÃO SUBMIT
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -270,7 +236,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                 const SizedBox(height: 20),
 
-                // VOLTAR AO LOGIN
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

@@ -1,5 +1,6 @@
 class Notebook {
-  int? id;                 // 🚀 SEM O 'final'
+  int? id;
+  int? server_id;
   final int subject_id;
   final String title;
   final String cover_type;
@@ -11,6 +12,7 @@ class Notebook {
 
   Notebook({
     this.id,
+    this.server_id,
     required this.subject_id,
     required this.title,
     required this.cover_type,
@@ -24,6 +26,7 @@ class Notebook {
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id, // 🚀 SÓ ENVIA O ID SE ELE EXISTIR
+      'server_id': server_id,
       'subject_id': subject_id,
       'title': title,
       'cover_type': cover_type,
@@ -38,6 +41,7 @@ class Notebook {
   factory Notebook.fromMap(Map<String, dynamic> map) {
     return Notebook(
       id: map['id'] as int?,
+      server_id: map['server_id'] as int?,
       subject_id: map['subject_id'] as int,
       title: map['title'] as String,
       cover_type: map['cover_type'] as String,

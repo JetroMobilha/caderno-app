@@ -6,7 +6,7 @@ void main() {
   testWidgets('Deve iniciar vazio, sem canvas e sem botão de rotação', (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: CanvasScreen(notebookId: 1,notebookTitle: 'Física', paperSize: 'A4'),
+        home: CanvasScreen(notebookId: 1,notebookSid:null,notebookTitle: 'Física', paperSize: 'A4'),
       ),
     );
     await tester.pumpAndSettle();
@@ -18,7 +18,7 @@ void main() {
   testWidgets('Deve adicionar múltiplas folhas e navegar via Dropdown', (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: CanvasScreen(notebookId: 1,notebookTitle: 'História', paperSize: 'A4'),
+        home: CanvasScreen(notebookId: 1,notebookSid:null,notebookTitle: 'História', paperSize: 'A4'),
       ),
     );
     await tester.pumpAndSettle();

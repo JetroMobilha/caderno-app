@@ -1,35 +1,136 @@
-import 'package:flutter/foundation.dart'; // Contém o kIsWeb
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import '../../../core/database/database_helper.dart';
+import '../../../core/network/api_service.dart';
 import '../models/subject_model.dart';
 
 class SubjectRepository {
-  final _dbHelper = DatabaseHelper.instance;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final ApiService _apiService = ApiService();
 
-  // Simulador de cache para a Web enquanto não ligamos o Laravel via API
-  final List<Subject> _webCache = [];
-
-  /// Procura todas as disciplinas dependendo da plataforma
+  // =========================================================================
+  // 📚 LER DISCIPLINAS
+  // =========================================================================
   Future<List<Subject>> getSubjects() async {
     if (kIsWeb) {
-      // NA WEB: No futuro, isto será um 'http.get' para o teu servidor Laravel
-      return _webCache;
+      final response = await _apiService.get('/subjects');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((s) => Subject(
+          id: s['id'],
+          serverId: s['id'],
+          userId: s['user_id'] ?? 0,
+          name: s['name'],
+          color: s['color'],
+          icon: s['icon'],
+          syncedWithCloud: 1,
+        )).toList();
+      }
+      return [];
     } else {
-      // NO MOBILE/DESKTOP: Usa o SQLite estável que já criámos
       final db = await _dbHelper.database;
-      final List<Map<String, dynamic>> maps = await db.query('subjects');
-      return maps.map((map) => Subject.fromMap(map)).toList();
+      final maps = await db.query('subjects', orderBy: 'id DESC');
+      return maps.map((s) => Subject(
+        id: s['id'] as int,
+        serverId: s['server_id'] as int?,
+        userId: s['user_id'] as int,
+        name: s['name'] as String,
+        color: s['color'] as String,
+        icon: s['icon'] as String?,
+        syncedWithCloud: s['synced_with_cloud'] as int? ?? 0,
+      )).toList();
     }
   }
 
-  /// Grava uma disciplina de forma adaptativa
-  Future<void> insertSubject(Subject subject) async {
+  // =========================================================================
+  // ➕ CRIAR DISCIPLINA
+  // =========================================================================
+  Future<Subject?> addSubject(Subject subject) async {
     if (kIsWeb) {
-      // NA WEB: No futuro, envia um 'http.post' para o Laravel
-      _webCache.add(subject);
+      final payload = {
+        'name': subject.name,
+        'color': subject.color,
+        'icon': subject.icon,
+      };
+      final response = await _apiService.post('/subjects', payload);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return Subject(
+          id: data['id'],
+          serverId: data['id'],
+          userId: data['user_id'] ?? subject.userId,
+          name: data['name'],
+          color: data['color'],
+          icon: data['icon'],
+          syncedWithCloud: 1,
+        );
+      }
+      return null;
     } else {
-      // NO MOBILE/DESKTOP: Grava no SQL local
       final db = await _dbHelper.database;
-      await db.insert('subjects', subject.toMap());
+      final map = {
+        'user_id': subject.userId,
+        'server_id': null,
+        'name': subject.name,
+        'color': subject.color,
+        'icon': subject.icon,
+        'synced_with_cloud': 0,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      };
+      final int insertedId = await db.insert('subjects', map);
+
+      return Subject(
+        id: insertedId,
+        userId: subject.userId,
+        serverId: null,
+        name: subject.name,
+        color: subject.color,
+        icon: subject.icon,
+        syncedWithCloud: 0,
+      );
+    }
+  }
+
+  // =========================================================================
+  // ✏️ ATUALIZAR DISCIPLINA
+  // =========================================================================
+  Future<void> updateSubject(Subject subject) async {
+    if (kIsWeb) {
+      final payload = {
+        'name': subject.name,
+        'color': subject.color,
+        'icon': subject.icon,
+      };
+      await _apiService.put('/subjects/${subject.serverId ?? subject.id}', payload);
+    } else {
+      if (subject.id == null) return;
+      final db = await _dbHelper.database;
+      await db.update(
+        'subjects',
+        {
+          'name': subject.name,
+          'color': subject.color,
+          'icon': subject.icon,
+          'synced_with_cloud': 0,
+          'updated_at': DateTime.now().millisecondsSinceEpoch,
+        },
+        where: 'id = ?',
+        whereArgs: [subject.id],
+      );
+    }
+  }
+
+  // =========================================================================
+  // 🗑️ APAGAR DISCIPLINA
+  // =========================================================================
+  Future<void> deleteSubject(Subject subject) async {
+    if (kIsWeb) {
+      await _apiService.delete('/subjects/${subject.serverId ?? subject.id}');
+    } else {
+      if (subject.id == null) return;
+      final db = await _dbHelper.database;
+      await db.delete('subjects', where: 'id = ?', whereArgs: [subject.id]);
     }
   }
 }

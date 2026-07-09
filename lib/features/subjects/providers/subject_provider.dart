@@ -3,35 +3,30 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/sync_service.dart';
-import '../../../core/database/database_helper.dart';
-import '../models/subject_model.dart';
-import '../../notebooks/providers/notebook_provider.dart';
 import '../../auth/providers/user_provider.dart';
+import '../models/subject_model.dart';
+import '../repositories/subject_repository.dart'; // 🚀 IMPORTA O REPOSITÓRIO
+import '../../notebooks/providers/notebook_provider.dart';
 
 class SubjectNotifier extends StateNotifier<List<Subject>> {
   final Ref ref;
   Timer? _syncTimer;
+  final SubjectRepository _repository = SubjectRepository(); // 🚀 INJETA O REPOSITÓRIO
 
   SubjectNotifier(this.ref) : super([]) {
     loadSubjects();
     _startAutomaticTracker();
   }
 
-  // =========================================================================
-  // 🚀 O CRONÓMETRO AUTOMÁTICO (O nosso Radar de Fundo)
-  // =========================================================================
   void _startAutomaticTracker() {
     if (kIsWeb) return;
 
     _syncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
-
-      // 🛡️ BLINDAGEM 1: Se a classe foi destruída, desliga
       if (!mounted) {
         timer.cancel();
         return;
       }
 
-      // 🛡️ BLINDAGEM 2 (ANTI-ZOMBIE): Se não há identidade (Logout), destrói o radar!
       final currentUser = ref.read(userProvider);
       if (currentUser == null) {
         print('🛑 [Radar Silencioso] Soldado fora de combate (Logout). A desligar o radar.');
@@ -65,23 +60,12 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
   }
 
   // =========================================================================
-  // 📥 LER DISCIPLINAS DO SQLITE LOCAL
+  // 📥 CARREGAR DISCIPLINAS
   // =========================================================================
   Future<void> loadSubjects() async {
-    final db = await DatabaseHelper.instance.database;
-    final maps = await db.query('subjects', orderBy: 'id DESC');
+    // 🚀 DELEGA TUDO PARA O REPOSITÓRIO
+    final lista = await _repository.getSubjects();
 
-    final lista = maps.map((s) => Subject(
-      id: s['id'] as int,
-      serverId: s['server_id'] as int?,
-      userId: s['user_id'] as int,
-      name: s['name'] as String,
-      color: s['color'] as String,
-      icon: s['icon'] as String?,
-      syncedWithCloud: s['synced_with_cloud'] as int? ?? 0,
-    )).toList();
-
-    // Só atualiza se houver mudanças para evitar piscadas desnecessárias na tela
     if (lista.length != state.length || _hasChanges(lista, state)) {
       state = lista;
     }
@@ -96,73 +80,42 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
   }
 
   // =========================================================================
-  // 🚀 O MÉTOD EM FALTA: CRIAR NOVA DISCIPLINA (OFFLINE-FIRST)
+  // 🚀 CRIAR NOVA DISCIPLINA
   // =========================================================================
   Future<void> addSubject(Subject subject) async {
-    final db = await DatabaseHelper.instance.database;
+    final newSubject = await _repository.addSubject(subject);
 
-    // 1. Prepara o mapa para o SQLite (Garante que server_id entra como NULL!)
-    final map = {
-      'user_id': subject.userId,
-      'server_id': null, // Nasce offline, logo ainda não tem ID da nuvem
-      'name': subject.name,
-      'color': subject.color,
-      'icon': subject.icon,
-      'synced_with_cloud': 0, // 0 = Pendente de envio para o Laravel
-      'updated_at': DateTime.now().millisecondsSinceEpoch,
-    };
-
-    // 2. Insere na base de dados do dispositivo (SQLite) e captura o ID local gerado
-    final int insertedId = await db.insert('subjects', map);
-
-    // 3. Cria o objeto completo já com o ID local
-    final newSubject = Subject(
-      id: insertedId,
-      userId: subject.userId,
-      serverId: null,
-      name: subject.name,
-      color: subject.color,
-      icon: subject.icon,
-      syncedWithCloud: 0,
-    );
-
-    // 4. Atualiza a memória RAM na hora! A disciplina aparece na UI no mesmo milissegundo!
-    state = [newSubject, ...state];
-    print('✅ Disciplina "${newSubject.name}" criada offline com sucesso! (Local ID: $insertedId)');
-
-    // 5. (Opcional) Tenta disparar uma sincronização imediata em segundo plano
-    _tryInstantSync();
+    if (newSubject != null) {
+      state = [newSubject, ...state];
+      print('✅ Disciplina "${newSubject.name}" gerada com sucesso!');
+      _tryInstantSync();
+    }
   }
 
   // =========================================================================
-  // 🗑️ EXTRAS TÁTICOS: APAGAR E ATUALIZAR DISCIPLINAS
+  // 🗑️ APAGAR E ATUALIZAR DISCIPLINAS
   // =========================================================================
-  Future<void> deleteSubject(int subjectId) async {
-    final db = await DatabaseHelper.instance.database;
-    await db.delete('subjects', where: 'id = ?', whereArgs: [subjectId]);
-    state = state.where((s) => s.id != subjectId).toList();
-    print('🗑️ Disciplina $subjectId eliminada localmente.');
+  Future<void> deleteSubject(Subject subject) async {
+    await _repository.deleteSubject(subject);
+    state = state.where((s) => s.id != subject.id).toList();
+    print('🗑️ Disciplina ${subject.name} eliminada.');
   }
 
   Future<void> updateSubject(Subject subject) async {
-    if (subject.id == null) return;
-    final db = await DatabaseHelper.instance.database;
+    await _repository.updateSubject(subject);
 
-    await db.update(
-      'subjects',
-      {
-        'name': subject.name,
-        'color': subject.color,
-        'icon': subject.icon,
-        'synced_with_cloud': 0, // Marcamos como 0 para o Laravel receber o novo nome/cor!
-        'updated_at': DateTime.now().millisecondsSinceEpoch,
-      },
-      where: 'id = ?',
-      whereArgs: [subject.id],
+    // Atualiza a memória RAM
+    final updatedSubject = Subject(
+      id: subject.id,
+      serverId: subject.serverId,
+      userId: subject.userId,
+      name: subject.name,
+      color: subject.color,
+      icon: subject.icon,
+      syncedWithCloud: kIsWeb ? 1 : 0,
     );
 
-    // Atualiza o ecrã
-    state = state.map((s) => s.id == subject.id ? subject : s).toList();
+    state = state.map((s) => s.id == subject.id ? updatedSubject : s).toList();
     _tryInstantSync();
   }
 
@@ -172,18 +125,13 @@ class SubjectNotifier extends StateNotifier<List<Subject>> {
     }
   }
 
-  // =========================================================================
-  // 💣 ORDEM DE DESTRUIÇÃO: Executada quando fazemos Logout!
-  // =========================================================================
   @override
   void dispose() {
-    _syncTimer?.cancel(); // Desativa a bomba-relógio
-    super.dispose();      // Destrói a classe em segurança
+    _syncTimer?.cancel();
+    super.dispose();
   }
-
 }
 
-// O nosso Provider Global que injeta a referência (ref) corretamente
 final subjectProvider = StateNotifierProvider<SubjectNotifier, List<Subject>>((ref) {
   return SubjectNotifier(ref);
 });

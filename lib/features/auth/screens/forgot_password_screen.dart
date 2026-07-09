@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // 🚀 O ESCUDO WEB
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/api_service.dart';
@@ -47,6 +48,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         });
       }
     } catch (e) {
+      debugPrint('🚨 ERRO INTERNO (Forgot Password): $e');
       setState(() {
         _isError = true;
         _serverMessage = 'Falha ao contactar o quartel-general (Servidor).';

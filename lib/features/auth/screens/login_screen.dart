@@ -1,7 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart'; // 🚀 IMPORTAÇÃO VITAL PARA O ESCUDO WEB
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../core/network/api_service.dart';
 import '../../../core/network/sync_service.dart';
@@ -9,10 +9,10 @@ import '../../subjects/providers/subject_provider.dart';
 import '../../subjects/screens/subjects_screen.dart';
 import '../models/user_model.dart';
 import 'forgot_password_screen.dart';
-import 'register_screen.dart'; // Requer o pacote 'http' no pubspec.yaml
+import 'register_screen.dart';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // 🚀 O Rádio
-import '../providers/user_provider.dart';                 // 🚀 O Transmissor
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/user_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -37,9 +37,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  // =========================================================================
-  // 🔐 DISPARADOR DE AUTENTICAÇÃO LARAVEL SANCTUM / JWT
-  // =========================================================================
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -51,7 +48,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final api = ApiService();
 
-      // 🚀 CUMPRINDO O CONTRATO LARAVEL: Chave 'login_id' e requireAuth: false
       final response = await api.post('/login', {
         'login_id': _emailController.text.trim(),
         'password': _passwordController.text,
@@ -64,7 +60,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         final String token = responseData['access_token'];
         final Map<String, dynamic> userMap = responseData['user'];
 
-        // 💾 GRAVA NO COFRE CRIPTOGRAFADO DO SISTEMA OPERACIONAL
         await api.saveToken(token);
         await api.saveUserData(userMap);
 
@@ -75,16 +70,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Sessão iniciada como ${userMap['name']}!'), backgroundColor: const Color(0xFF27AE60)),
           );
-          try {
-            final syncService = SyncService();
-            await syncService.pullSubjects(); // Puxa do servidor para o SQLite local
 
-            // 4. Obriga o Riverpod a ler o SQLite atualizado
+          try {
+            // 🚀 O ESCUDO WEB: Ignora o SQLite no Chrome e atualiza só a RAM!
+            if (!kIsWeb) {
+              final syncService = SyncService();
+              await syncService.pullSubjects();
+            }
             ref.invalidate(subjectProvider);
           } catch (e) {
-            print('⚠️ Pull inicial falhou (sem internet?), a prosseguir offline: $e');
+            debugPrint('⚠️ Sincronização inicial falhou: $e');
           }
-          // 🚀 REDIRECIONAMENTO REAL: Destrói o ecrã de login e abre as disciplinas
+
+          // 🚀 SALTO TÁTICO (Agora vai executar na perfeição)
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (_) => const SubjectsScreen()),
@@ -100,27 +98,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         setState(() => _serverErrorMessage = responseData['message'] ?? 'Credenciais inválidas.');
       }
     } catch (e) {
-      // 🕵️‍♂️ NOVO RADAR: Imprime o erro real do Dart na consola preta para nunca mais seres enganado!
-      print('🚨 ERRO INTERNO DO FLUTTER: $e');
+      debugPrint('🚨 ERRO INTERNO DO FLUTTER: $e');
       setState(() => _serverErrorMessage = 'Erro de sistema: Servidor ou leitura de dados falhou.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7), // O fundo creme clássico do nosso papel
+      backgroundColor: const Color(0xFFFDFBF7),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 40.0),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420), // Trava tática para ficar elegante no Windows/PC
+            constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
-                // 1. LOGOTIPO EDITORIAL
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -144,7 +140,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 const SizedBox(height: 40),
 
-                // 2. CARTÃO DE FORMULÁRIO
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -160,7 +155,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
                         Text('E-mail institucional', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50))),
                         const SizedBox(height: 8),
                         TextFormField(
@@ -216,7 +210,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           },
                         ),
 
-                        // BANNER DE ERRO DO SERVIDOR
                         if (_serverErrorMessage != null) ...[
                           const SizedBox(height: 16),
                           Container(
@@ -235,7 +228,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                         const SizedBox(height: 28),
 
-                        // BOTÃO PRINCIPAL DE ACESSO
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -259,14 +251,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 const SizedBox(height: 24),
 
-                // RODAPÉ DE REGISTO
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text('É um novo estudante?', style: GoogleFonts.inter(fontSize: 13, color: Colors.black54)),
                     TextButton(
                       onPressed: () {
-                        // 🚀 LIGAÇÃO FÍSICA AO NOVO ECRÃ
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const RegisterScreen()),
@@ -282,13 +272,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Text('Esqueceu a senha?', style: GoogleFonts.inter(fontSize: 13, color: Colors.black54)),
                     TextButton(
                       onPressed: () {
-                        // 🚀 LIGAÇÃO FÍSICA AO NOVO ECRÃ
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
                         );
                       },
-                      child: Text('Recuper conta', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+                      child: Text('Recuperar conta', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
                     ),
                   ],
                 ),

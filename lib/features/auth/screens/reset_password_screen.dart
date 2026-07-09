@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // 🚀 O ESCUDO WEB
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/api_service.dart';
@@ -47,6 +48,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         setState(() => _serverError = 'Código inválido ou expirado.');
       }
     } catch (e) {
+      debugPrint('🚨 ERRO INTERNO (Reset Password): $e');
       setState(() => _serverError = 'Erro ao comunicar com o servidor.');
     } finally {
       if (mounted) setState(() => _isLoading = false);

@@ -115,6 +115,7 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
           MaterialPageRoute(
             builder: (context) => CanvasScreen(
               notebookId: notebook.id ?? 0,
+              notebookSid: notebook.server_id ?? 0,
               notebookTitle: notebook.title,
               lineType: notebook.line_type ?? 'ruled',
               paperSize: notebook.paper_size ?? 'A4',
@@ -295,6 +296,7 @@ class _NotebooksScreenState extends ConsumerState<NotebooksScreen> {
                       MaterialPageRoute(
                         builder: (context) => CanvasScreen(
                           notebookId: realId,
+                          notebookSid: null,
                           notebookTitle: newNotebook.title,
                           // 🚀 Acedendo às propriedades também com sublinhado
                           lineType: newNotebook.line_type ?? 'ruled',

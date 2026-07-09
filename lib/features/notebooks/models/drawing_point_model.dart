@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -136,6 +138,36 @@ class ImageBlock {
       'height': height,
       'rotation': rotation,
       'image_base64': base64Image,
+      'image_path': imagePath,
+    };
+  }
+
+  // 🚀 LINGUAGEM NUVEM (JSON) AGORA ASSÍNCRONA!
+  Future<Map<String, dynamic>> toMapAsync() async {
+    String? base64Image;
+    try {
+      // 🛡️ SE FOR WEB E FOR UM BLOB (Ficheiro recém-carregado no Chrome)
+      if (kIsWeb && imagePath.startsWith('blob:')) {
+        final response = await http.get(Uri.parse(imagePath));
+        base64Image = base64Encode(response.bodyBytes);
+      }
+      // 🛡️ SE FOR MOBILE E FOR UM FICHEIRO FÍSICO (/data/user/...)
+      else if (!kIsWeb && !imagePath.startsWith('http') && File(imagePath).existsSync()) {
+        final bytes = File(imagePath).readAsBytesSync();
+        base64Image = base64Encode(bytes);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erro ao converter imagem para Base64: $e');
+    }
+
+    return {
+      'id': id,
+      'dx': position.dx,
+      'dy': position.dy,
+      'width': width,
+      'height': height,
+      'rotation': rotation,
+      'image_base64': base64Image, // 🚀 Agora vai sempre com os pixeis blindados!
       'image_path': imagePath,
     };
   }

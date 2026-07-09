@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../../core/network/realtime_service.dart';
 import '../../../core/network/sync_service.dart';
 import '../models/drawing_point_model.dart';
 import '../models/local_page_model.dart';
@@ -15,6 +16,7 @@ import 'share_notebook_sheet.dart';
 
 class CanvasScreen extends StatefulWidget {
   final int notebookId;
+  final int? notebookSid;
   final String notebookTitle;
   final String lineType;
   final String paperSize;
@@ -22,6 +24,7 @@ class CanvasScreen extends StatefulWidget {
   const CanvasScreen({
     super.key,
     required this.notebookId,
+    required this.notebookSid,
     required this.notebookTitle,
     this.lineType = 'ruled',
     required this.paperSize,
@@ -37,6 +40,9 @@ enum InlineTarget { none, block, title, footer }
 class _CanvasScreenState extends State<CanvasScreen> {
   final NotebookRepository _repository = NotebookRepository();
   bool _isLoading = true;
+
+  // 🎯 O SEGREDO: A variável mutável que o Radar vai curar vive aqui agora!
+  int? _liveNotebookSid;
 
   List<LocalPage> _pages = [];
   int _currentPageIndex = 0;
@@ -70,6 +76,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
   Offset? _selectionRectEnd;
   bool _isMovingStrokes = false;
   Offset? _lastPanOffset;
+
+  bool _isRealtimeActive = false; // 👈 Começa a falso!
 
   String _selectedColorHex = '#2C3E50';
   double _selectedThickness = 3.0;
@@ -110,8 +118,63 @@ class _CanvasScreenState extends State<CanvasScreen> {
     super.initState();
     _liveLineType = widget.lineType;
     _loadSavedPages();
+    _liveNotebookSid = widget.notebookSid;
+
+
 
     SyncService.syncedPagesRadio.addListener(_onPageSyncedByRadar);
+    SyncService.syncedNoteBooksRadio.addListener(_onNoteBookSyncedByRadar);
+  }
+
+  void _initRealtimeCollaboration() async {
+    final realtime = RealtimeService();
+    await realtime.initConnection();
+
+    realtime.joinNotebookChannel(
+
+      notebookId:  kIsWeb ? widget.notebookId :(_liveNotebookSid != null && _liveNotebookSid != 0)
+          ? _liveNotebookSid!
+          : widget.notebookId,
+      // 👥 1. Atualizar o número do radar no topo do ecrã
+      onUsersUpdated: (users) {
+        if (mounted) {
+          setState(() {
+            // Atualiza a sua lista visual de colegas online
+            // Pode mapear o array 'users' para o seu formato do _mockOnlineStudents
+          });
+        }
+      },
+      // 🎨 2. Receber tinta em tempo real!
+      onStrokeReceived: (data) {
+        if (!mounted) return;
+
+        final int incomingPageNum = data['page_number'];
+        final List<dynamic> rawStrokes = data['strokes'];
+
+        // Verificar se estamos a olhar para a mesma folha onde o colega desenhou
+        if (_pages.isNotEmpty && _pages[_currentPageIndex].pageNumber == incomingPageNum) {
+          setState(() {
+            for (var strokeMap in rawStrokes) {
+              // Converte o JSON que veio do Reverb para o seu modelo local Stroke
+              final List<Offset> points = (strokeMap['points'] as List).map((pt) {
+                return Offset(pt['x'].toDouble(), pt['y'].toDouble());
+              }).toList();
+
+              final receivedStroke = Stroke(
+                id: strokeMap['id'] ?? '',
+                color: strokeMap['color'],
+                thickness: strokeMap['thickness'].toDouble(),
+                points: points,
+              );
+
+              // Adiciona ao canvas APENAS VISUALMENTE!
+              // Não chamamos _triggerAutoSave() aqui para a tinta não entrar em eco.
+              _pages[_currentPageIndex].strokes.add(receivedStroke);
+            }
+          });
+        }
+      },
+    );
   }
 
   Future<void> _loadSavedPages() async {
@@ -136,8 +199,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
     for (var page in _pages) {
       page.dispose();
     }
-
+    // 🚀 DESCONECTAR DO CANAL AO FECHAR O CADERNO
+    RealtimeService().leaveNotebookChannel(widget.notebookId);
     SyncService.syncedPagesRadio.removeListener(_onPageSyncedByRadar);
+    SyncService.syncedNoteBooksRadio.removeListener(_onNoteBookSyncedByRadar);
     super.dispose();
   }
 
@@ -161,6 +226,45 @@ class _CanvasScreenState extends State<CanvasScreen> {
       });
 
       debugPrint('🎯 [Canvas] A RAM foi curada! server_id atualizado para $novoServerId.');
+    }
+  }
+
+  // =========================================================================
+  // 🛡️ O ANTÍDOTO DA AMNÉSIA DOS CADERNOS: Atualiza o ID da Nuvem na RAM!
+  // =========================================================================
+  void _onNoteBookSyncedByRadar() {
+    // Se o caderno já tem um Server ID válido na nuvem, não faz nada
+    if (_liveNotebookSid != null && _liveNotebookSid != 0 && !kIsWeb) return;
+
+
+    final Map<int, int> updates = SyncService.syncedNoteBooksRadio.value;
+
+    if (updates.containsKey(widget.notebookId)) {
+      final int novoServerId = updates[widget.notebookId]!;
+
+      setState(() {
+        _liveNotebookSid = novoServerId; // 🎯 CURA DA RAM CORRETA!
+      });
+
+      // 🔄 SALTO DE FREQUÊNCIA EM TEMPO REAL:
+      // Sai da sala provisória antiga e entra na sala oficial definitiva da nuvem!
+      RealtimeService().leaveNotebookChannel(widget.notebookId);
+      _initRealtimeCollaboration();
+
+      debugPrint('🎯 [Canvas] O Radar curou este caderno! _liveNotebookSid agora é $novoServerId.');
+    }
+  }
+
+  // =========================================================================
+  // 🚀 GATILHO INTELIGENTE DE AUTO-SAVE (MISTURA WEB & MOBILE)
+  // =========================================================================
+  Future<void> _triggerAutoSave(LocalPage page) async {
+    if (kIsWeb) {
+      // Na Web, o ID local pode ser nulo. Enviamos a folha inteira na hora!
+      await _repository.triggerSyncRadar(page.id ?? 0, webPagePayload: page);
+    } else if (page.id != null) {
+      // No Mobile, basta acordar o radar local
+      await _repository.triggerSyncRadar(page.id!);
     }
   }
 
@@ -192,30 +296,26 @@ class _CanvasScreenState extends State<CanvasScreen> {
         if (cleanText.isEmpty) {
           page.textBlocks.remove(_activeTextBlock);
         } else if (page.id != null) {
-          _repository.saveSingleTextBlock(page.id!, _activeTextBlock!);
+          if (!kIsWeb) _repository.saveSingleTextBlock(page.id!, _activeTextBlock!);
         }
       } else if (_activeInlineTarget == InlineTarget.title) {
         page.title = cleanText;
         if (page.id != null) {
-          _repository.updatePageMetadata(page.id!, page.title, page.footer);
+          if (!kIsWeb) _repository.updatePageMetadata(page.id!, page.title, page.footer);
         }
       } else if (_activeInlineTarget == InlineTarget.footer) {
         page.footer = cleanText;
         if (page.id != null) {
-          _repository.updatePageMetadata(page.id!, page.title, page.footer);
+          if (!kIsWeb) _repository.updatePageMetadata(page.id!, page.title, page.footer);
         }
       }
-
       _activeInlineTarget = InlineTarget.none;
       _activeTextBlock = null;
     });
 
     _textFocusNode.unfocus();
-
-    // 🚀 O GATILHO DO AUTO-SAVE: Grava e marca para enviar para a nuvem
-    if (page.id != null) {
-      _repository.updatePageMetadata(page.id!, page.title, page.footer);
-    }
+    if (page.id != null && !kIsWeb) _repository.updatePageMetadata(page.id!, page.title, page.footer);
+    _triggerAutoSave(page);
   }
 
   void _resetZoomForPage(LocalPage page, String paperSize) {
@@ -407,15 +507,13 @@ class _CanvasScreenState extends State<CanvasScreen> {
         for (var stroke in strokesToRemove) {
           page.strokes.remove(stroke);
           if (page.id != null) {
-            _repository.deleteSingleStroke(page.id!, stroke.id);
+            if (!kIsWeb)  _repository.deleteSingleStroke(page.id!, stroke.id);
           }
         }
       });
     }
     // 🚀 O GATILHO DO AUTO-SAVE
-    if (page.id != null) {
-      _repository.triggerSyncRadar(page.id!);
-    }
+     _triggerAutoSave(page);
   }
 
   Future<void> _pickAndInsertImage(LocalPage page) async {
@@ -438,10 +536,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
         _selectedStrokeIds.clear(); // Limpa seleções antigas ao focar na foto nova
       });
 
-      if (page.id != null) {
-        await _repository.saveSingleImageBlock(page.id!, newImageBlock);
-        await _repository.triggerSyncRadar(page.id!);
-      }
+      if (!kIsWeb && page.id != null) await _repository.saveSingleImageBlock(page.id!, newImageBlock);
+      await _triggerAutoSave(page);
     }
   }
 
@@ -573,8 +669,10 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                           decoration: BoxDecoration(
                                             border: isImageMode ? Border.all(color: const Color(0xFF0F4C5C), width: 2.0) : null,
                                           ),
-                                          // 🚀 RENDERIZAÇÃO HÍBRIDA COM CACHE MILITAR DE ALTA PERFORMANCE
-                                          child: img.imagePath.startsWith('http')
+                                          // 🚀 RENDERIZAÇÃO HÍBRIDA BLINDADA (WEB + MOBILE + CACHE)
+                                          child: kIsWeb
+                                              ? Image.network(img.imagePath, fit: BoxFit.fill) // A Web resolve nativamente Blobs e HTTPs!
+                                              : (img.imagePath.startsWith('http')
                                               ? CachedNetworkImage(
                                             imageUrl: img.imagePath,
                                             fit: BoxFit.fill,
@@ -585,7 +683,7 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                               child: Icon(Icons.broken_image, color: Colors.redAccent),
                                             ),
                                           )
-                                              : Image.file(File(img.imagePath), fit: BoxFit.fill),
+                                              : Image.file(File(img.imagePath), fit: BoxFit.fill)), // Mobile Offline
                                         ),
                                       ),
 
@@ -599,10 +697,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                             behavior: HitTestBehavior.opaque,
                                             onPanUpdate: (d) => setState(() => img.position += d.delta),
                                             onPanEnd: (d) {
-                                              if (page.id != null){
-                                                _repository.saveSingleImageBlock(page.id!, img);
-                                                _repository.triggerSyncRadar(page.id!);
-                                              }
+                                              if ( page.id != null && !kIsWeb) _repository.saveSingleImageBlock(page.id!, img);
+                                              _triggerAutoSave(page);
                                             },
                                             child: const CircleAvatar(
                                               backgroundColor: Color(0xFF0F4C5C),
@@ -622,10 +718,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                               img.height = (img.height + d.delta.dy).clamp(80.0, 900.0);
                                             }),
                                             onPanEnd: (d) {
-                                              if (page.id != null){
-                                                _repository.saveSingleImageBlock(page.id!, img);
-                                                _repository.triggerSyncRadar(page.id!);
-                                              }
+                                              if ( page.id != null && !kIsWeb) _repository.saveSingleImageBlock(page.id!, img);
+                                              _triggerAutoSave(page);
                                             },
                                             child: Center(
                                               child: Container(
@@ -776,10 +870,8 @@ class _CanvasScreenState extends State<CanvasScreen> {
                                       );
                                       setState(() => page.strokes.add(newStroke));
                                       _activePointsNotifier.value = [];
-                                      if (page.id != null) {
-                                        _repository.saveSingleStroke(page.id!, newStroke);
-                                        _repository.triggerSyncRadar(page.id!);
-                                      }
+                                      if (page.id != null && !kIsWeb) _repository.saveSingleStroke(page.id!, newStroke);
+                                      _triggerAutoSave(page);
                                     } else if (_currentTool == ToolMode.select) {
                                       setState(() {
                                         _isMovingStrokes = false;
@@ -1053,15 +1145,70 @@ class _CanvasScreenState extends State<CanvasScreen> {
           IconButton(
             icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF0F4C5C)),
             tooltip: 'Convidar Colaboradores',
-            onPressed: () {
-              showModalBottomSheet(
+            onPressed: () async {
+              // 🛡️ A TRAVA DE SEGURANÇA: Se não tiver ID da nuvem, avisa o estudante!
+              if ((_liveNotebookSid == null || _liveNotebookSid == 0) && !kIsWeb ) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Row(
+                      children: [
+                        Icon(Icons.cloud_upload_outlined, color: Colors.white),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text('Este caderno ainda está a subir para a nuvem. Aguarda uns segundos e tenta novamente! 📡'),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: const Color(0xFFE67E22), // Cor de aviso (Laranja)
+                    duration: const Duration(seconds: 4),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+                return; // 🛑 Bloqueia a abertura do modal
+              }
+
+              // 📡 CAPTURA ATIVA: Aguarda que o modal feche para ler o número devolvido
+              final int? convidadosCount = await showModalBottomSheet<int>(
                 context: context,
-                isScrollControlled: true, // Fundamental para o teclado não tapar o input
+                isScrollControlled: true,
                 backgroundColor: Colors.transparent,
                 builder: (context) => ShareNotebookBottomSheet(
-                  notebookId: widget.notebookId,
+                  notebookId: kIsWeb ? widget.notebookId :(_liveNotebookSid != null && _liveNotebookSid != 0)
+                      ? _liveNotebookSid!
+                      : widget.notebookId,
                   notebookTitle: widget.notebookTitle,
                 ),
+              );
+// 🎯         DECISÃO ARQUITETÓNICA INTENCIONAL:
+              // Se o modal devolveu um número maior que 0, significa que existem alunos convidados!
+              if (convidadosCount != null && convidadosCount > 0) {
+                debugPrint('🚀 [Canvas] Detetámos $convidadosCount aluno(s) convidado(s). A iniciar canais Reverb...');
+
+                // Dispara o motor WebSocket apenas se o utilizador de facto tiver convidados
+                _initRealtimeCollaboration();
+
+                setState(() {
+                  _isRealtimeActive = true; // Muda o estado visual do ecrã
+                });
+              }else{
+                setState(() {
+                  _isRealtimeActive = true; // Muda o estado visual do ecrã
+                });
+                RealtimeService().leaveNotebookChannel(_liveNotebookSid!);
+              }
+            },
+          ),
+          // Dentro dos actions da AppBar:
+          if (widget.notebookSid != null && !_isRealtimeActive)
+          IconButton(
+            icon: const Icon(Icons.cloud_off, color: Colors.orange),
+            tooltip: 'Entrar na Sala em Tempo Real',
+            onPressed: () {
+              _initRealtimeCollaboration();
+              setState(() => _isRealtimeActive = true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('🟢 Ligado à sala de colaboração em tempo real!')),
               );
             },
           ),

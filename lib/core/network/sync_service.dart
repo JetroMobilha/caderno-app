@@ -16,6 +16,7 @@ class SyncService {
   // Emite um Map onde a Chave é o [client_id] e o Valor é o [server_id].
   // =========================================================================
   static final ValueNotifier<Map<int, int>> syncedPagesRadio = ValueNotifier({});
+  static final ValueNotifier<Map<int, int>> syncedNoteBooksRadio = ValueNotifier({});
 
   // 🚀 INICIAR OPERAÇÃO PUSH
   Future<void> pushOfflineData() async {
@@ -221,6 +222,8 @@ class SyncService {
         final data = jsonDecode(response.body);
         final List<dynamic> syncedList = data['synced_notebooks'] ?? [];
 
+        // 🚀 Dicionário para guardar as atualizações e enviar pelo rádio
+        Map<int, int> newIdsMap = {};
         // 3. Atualiza o SQLite com os IDs oficiais do servidor
         for (var item in syncedList) {
           await db.update(
@@ -232,6 +235,11 @@ class SyncService {
             where: 'id = ?',
             whereArgs: [item['client_id']],
           );
+          newIdsMap[item['client_id']] = item['server_id'];
+        }
+        // 🚀 DISPARA O SINAL DE RÁDIO PARA O CANVAS (Se houver páginas atualizadas)
+        if (newIdsMap.isNotEmpty) {
+          syncedNoteBooksRadio.value = Map.from(newIdsMap); // Força a notificação instantânea!
         }
         debugPrint('☁️ [Sync] Cadernos sincronizados com sucesso!');
       } else {

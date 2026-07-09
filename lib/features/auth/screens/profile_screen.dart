@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart'; // 🚀 ESCUDO WEB
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,7 +19,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _nameController = TextEditingController();
-  File? _selectedImage;
+  XFile? _selectedImage; // 🚀 MUDANÇA: Usa XFile para ser Web-Safe
   bool _isUpdating = false;
   String? _errorMessage;
 
@@ -44,13 +45,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 50,
-      maxWidth: 800,     // 🚀 Limite de largura
-      maxHeight: 800,    // 🚀 Limite de altura adicionado
+      maxWidth: 800,
+      maxHeight: 800,
     );
 
     if (pickedFile != null) {
       setState(() {
-        _selectedImage = File(pickedFile.path);
+        _selectedImage = pickedFile; // 🚀 Agora guarda o XFile!
       });
     }
   }
@@ -67,7 +68,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final api = ApiService();
       final response = await api.updateProfile(
         name: _nameController.text.trim(),
-        imageFile: _selectedImage,
+        imageFile: _selectedImage, // Passamos o XFile híbrido!
       );
 
       final responseData = jsonDecode(response.body);
@@ -84,7 +85,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SnackBar(
               content: Text('Perfil atualizado com sucesso!'),
               backgroundColor: Color(0xFF27AE60),
-              behavior: SnackBarBehavior.floating, // Estilo flutuante
+              behavior: SnackBarBehavior.floating,
             ),
           );
           Navigator.pop(context);
@@ -120,11 +121,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 🚀 CABEÇALHO CURVO COM FOTO SOBREPOSTA
             Stack(
               alignment: Alignment.topCenter,
               children: [
-                // Fundo Azul Curvo
                 Container(
                   height: 120,
                   decoration: const BoxDecoration(
@@ -135,18 +134,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ),
                 ),
-
-                // Espaçador invisível para a Stack ter altura suficiente
                 const SizedBox(height: 190),
 
-                // Avatar
                 Positioned(
                   top: 40,
                   child: GestureDetector(
                     onTap: _isUpdating ? null : _pickImage,
                     child: Stack(
                       children: [
-                        // Borda branca grossa com sombra
                         Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
@@ -158,8 +153,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: CircleAvatar(
                             radius: 64,
                             backgroundColor: const Color(0xFFFDFBF7),
+                            // 🚀 BLINDAGEM DE FOTO HÍBRIDA
                             backgroundImage: _selectedImage != null
-                                ? FileImage(_selectedImage!)
+                                ? (kIsWeb ? NetworkImage(_selectedImage!.path) : FileImage(File(_selectedImage!.path))) as ImageProvider
                                 : (currentUser?.avatar != null
                                 ? NetworkImage("${ApiService.baseUrlImagem}${currentUser!.avatar!}")
                                 : null) as ImageProvider?,
@@ -168,14 +164,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 : null,
                           ),
                         ),
-                        // Botão flutuante de edição
                         Positioned(
                           bottom: 4,
                           right: 4,
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFD35400), // Laranja tático de destaque
+                              color: const Color(0xFFD35400),
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
@@ -192,7 +187,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ],
             ),
 
-            // 🚀 CORPO DO FORMULÁRIO
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28.0),
               child: ConstrainedBox(
@@ -201,8 +195,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 10),
-
-                    // NOME DO ALUNO NO CENTRO (Opcional, dá um toque premium)
                     Center(
                       child: Text(
                         currentUser?.name ?? 'Estudante',
@@ -211,13 +203,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // CARTÃO DE IDENTIFICAÇÃO (E-MAIL BLINDADO)
                     Text('Credencial de Acesso', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45)),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200.withOpacity(0.6), // Cinza bem suave
+                        color: Colors.grey.shade200.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.black.withOpacity(0.04)),
                       ),
@@ -242,14 +233,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ],
                             ),
                           ),
-                          const Icon(Icons.lock_outline, size: 16, color: Colors.black26), // Símbolo de inalterável
+                          const Icon(Icons.lock_outline, size: 16, color: Colors.black26),
                         ],
                       ),
                     ),
 
                     const SizedBox(height: 24),
 
-                    // CAMPO DE EDIÇÃO DO NOME
                     Text('Informações Pessoais', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45)),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -272,7 +262,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
 
-                    // MENSAGEM DE ERRO
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 20),
                       Container(
@@ -290,10 +279,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
                     const SizedBox(height: 40),
 
-                    // 🚀 BOTÃO DE AÇÃO
                     SizedBox(
                       width: double.infinity,
-                      height: 54, // Botão um pouco mais alto e imponente
+                      height: 54,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F4C5C),

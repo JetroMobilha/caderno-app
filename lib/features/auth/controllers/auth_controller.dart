@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/sync_service.dart';
 import '../models/user_model.dart';
 import '../../../core/database/database_helper.dart';
 import '../repositories/auth_repository.dart';
@@ -68,6 +69,8 @@ class AuthController extends ChangeNotifier {
         await prefs.setString('sanctum_token', _token!);
         await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));
 
+        await SyncService().syncAll();
+
         _isLoading = false;
         notifyListeners();
         return true;
@@ -112,6 +115,8 @@ class AuthController extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('sanctum_token', _token!);
         await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));
+
+        await SyncService().syncAll();
 
         _isLoading = false;
         notifyListeners();

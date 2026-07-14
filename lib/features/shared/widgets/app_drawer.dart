@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/network/sync_service.dart';
 import '../../../core/network/api_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/models/user_model.dart';
@@ -41,11 +39,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Future<void> _handleManualSync() async {
     setState(() => _isSyncing = true);
     try {
-      if (!kIsWeb) {
-        await SyncService().syncAll();
-      }
-      ref.invalidate(subjectsProvider);
-      ref.invalidate(notebooksProvider);
+      // 🚀 Chama a Sincronização centralizada e blindada
+      await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sincronização concluída! ☁️✨'), backgroundColor: Color(0xFF27AE60)));
       }
@@ -71,15 +67,19 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
-              Navigator.pop(ctx);
+              // 🚀 NAVEGAÇÃO SUPREMA (Sem crashes!)
+              // 1. Capturamos a rota "raíz" da app ANTES de qualquer await
+              final rootNavigator = Navigator.of(context, rootNavigator: true);
               final authCtrl = ref.read(authProvider);
-              Navigator.pop(context); // Fecha a gaveta
 
+              // 2. Apagamos a Base de Dados
               await authCtrl.logout();
 
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
-              }
+              // 3. Forçamos a App a ir para o Login destruindo TUDO pelo caminho (Diálogo + Gaveta)
+              rootNavigator.pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      (route) => false
+              );
             },
             child: const Text('Sair', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -100,9 +100,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
-              Navigator.pop(ctx);
               final subNotifier = ref.read(subjectsProvider.notifier);
-              Navigator.pop(context);
+
+              Navigator.pop(ctx); // Fecha modal
+              if (context.mounted) Navigator.pop(context); // Fecha Gaveta
+
               await subNotifier.deleteSubject(subject);
             },
             child: const Text('Apagar Tudo', style: TextStyle(color: Colors.white)),
@@ -118,7 +120,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final subjectsList = ref.watch(subjectsProvider);
     final activeSubject = ref.watch(activeSubjectProvider);
 
-    // 🚀 BLINDAGEM DO AVATAR: Se for caminho do Windows "C:/", ignora no Android!
     ImageProvider? userAvatarProvider;
     if (user?.avatar != null && user!.avatar!.isNotEmpty) {
       if (!user.avatar!.contains('C:/') && !user.avatar!.startsWith('file://')) {
@@ -167,7 +168,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
                     onTap: () {
-                      // 🚀 NÃO FECHA A GAVETA AQUI. O modal abre por cima, protegendo o "ref".
                       if (user != null) _showSubjectModal(context, ref, user, isEditing: false);
                     },
                     child: Container(
@@ -228,7 +228,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             color: AppColors.paper,
                             onSelected: (value) {
                               if (value == 'edit') {
-                                // Abre o modal por cima sem destruir a gaveta!
                                 if (user != null) _showSubjectModal(context, ref, user, isEditing: true, subjectToEdit: sub);
                               } else if (value == 'delete') {
                                 _confirmDeleteSubject(context, sub);
@@ -256,7 +255,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           ),
 
           const Divider(height: 1, color: Colors.black12),
-          // 🚀 SOLUÇÃO DO ERRO AMARELO DO RODAPÉ (Material ao invés de ColoredBox)
           Material(
             color: Colors.black.withOpacity(0.02),
             child: Padding(
@@ -308,7 +306,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (contextDialog) {
         return StatefulBuilder(
             builder: (context, setModalState) {
               return AlertDialog(
@@ -400,7 +398,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 actionsPadding: const EdgeInsets.only(right: 20, bottom: 20),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(contextDialog),
                     child: Text('Cancelar', style: GoogleFonts.inter(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                   ),
                   ElevatedButton(
@@ -411,16 +409,19 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     ),
                     onPressed: () async {
                       if (formKey.currentState!.validate()) {
+                        final subNotifier = ref.read(subjectsProvider.notifier);
+                        final activeNotifier = ref.read(activeSubjectProvider.notifier);
+                        final currentActive = ref.read(activeSubjectProvider);
+
                         if (isEditing) {
                           final disciplinaEditada = subjectToEdit!.copyWith(
                             name: nameController.text.trim(),
                             color: pickedColorHex,
                             icon: pickedIconName,
                           );
-                          await ref.read(subjectsProvider.notifier).updateSubject(disciplinaEditada);
-                          final currActive = ref.read(activeSubjectProvider);
-                          if (currActive?.id == subjectToEdit.id) {
-                            ref.read(activeSubjectProvider.notifier).setSubject(disciplinaEditada);
+                          await subNotifier.updateSubject(disciplinaEditada);
+                          if (currentActive?.id == subjectToEdit.id) {
+                            activeNotifier.setSubject(disciplinaEditada);
                           }
                         } else {
                           final novaDisciplina = Subject(
@@ -430,14 +431,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             icon: pickedIconName,
                             syncedWithCloud: 0,
                           );
-                          await ref.read(subjectsProvider.notifier).addSubject(novaDisciplina);
-                          ref.read(activeSubjectProvider.notifier).setSubject(novaDisciplina);
+                          await subNotifier.addSubject(novaDisciplina);
+                          activeNotifier.setSubject(novaDisciplina);
                         }
 
-                        if (context.mounted) {
-                          Navigator.pop(context); // Fecha só o Modal
-                          Navigator.pop(context); // E agora sim, fecha a Gaveta!
-                        }
+                        // Fecha o Modal (sem forçar contextos destruídos)
+                        Navigator.pop(contextDialog);
                       }
                     },
                     child: Text(isEditing ? 'Atualizar' : 'Criar', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),

@@ -23,15 +23,42 @@ class AppDrawer extends ConsumerStatefulWidget {
 class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _isSyncing = false;
 
+  // =========================================================================
+  // 🧭 TRADUTOR DE ÍCONES (24 Categorias Híbridas: Trabalho + Estudos + Artes)
+  // =========================================================================
   IconData _getIconData(String? iconName) {
     switch (iconName) {
+    // 🎓 ACADÉMICO & EDUCAÇÃO
+      case 'school': return Icons.school_rounded;
       case 'science': return Icons.science_rounded;
       case 'math': return Icons.calculate_rounded;
       case 'language': return Icons.language_rounded;
       case 'history': return Icons.history_edu_rounded;
-      case 'art': return Icons.palette_rounded;
+      case 'law': return Icons.gavel_rounded;
+      case 'health': return Icons.medical_services_rounded;
+      case 'psychology': return Icons.psychology_rounded;
+
+    // 💼 CORPORATIVO & NEGÓCIOS
+      case 'business': return Icons.business_center_rounded;
+      case 'analytics': return Icons.analytics_rounded;
+      case 'workspaces': return Icons.workspaces_rounded;
+      case 'team': return Icons.groups_rounded;
+      case 'presentation': return Icons.present_to_all_rounded;
+      case 'security': return Icons.security_rounded;
+
+    // 💻 TECNOLOGIA & CRIATIVIDADE
       case 'computer': return Icons.computer_rounded;
+      case 'code': return Icons.code_rounded;
+      case 'idea': return Icons.lightbulb_rounded;
+      case 'art': return Icons.palette_rounded;
+      case 'music': return Icons.music_note_rounded;
+
+    // 🗓️ ORGANIZAÇÃO & DESPORTO
+      case 'calendar': return Icons.calendar_month_rounded;
+      case 'notes': return Icons.sticky_note_2_rounded;
+      case 'folder': return Icons.folder_special_rounded;
       case 'sport': return Icons.sports_basketball_rounded;
+
       case 'book':
       default: return Icons.menu_book_rounded;
     }
@@ -142,7 +169,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final subjectsList = ref.watch(subjectsProvider);
     final activeSubject = ref.watch(activeSubjectProvider);
 
-    // 🎨 CAPTURA A COR DINÂMICA ATIVA PARA PINTAR O DRAWER ONDE FOR PRECISO!
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
     ImageProvider? userAvatarProvider;
@@ -164,7 +190,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
             child: UserAccountsDrawerHeader(
-              // 🚀 DINÂMICO: O fundo do perfil agora assume a cor viva da matéria!
               decoration: BoxDecoration(color: dynamicColor),
               accountName: Text(user?.name ?? 'Estudante', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 18)),
               accountEmail: Row(
@@ -178,7 +203,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               currentAccountPicture: CircleAvatar(
                 backgroundColor: Colors.white,
                 backgroundImage: userAvatarProvider,
-                // 🚀 DINÂMICO: Ícone padrão herda a cor viva também
                 child: userAvatarProvider == null ? Icon(Icons.person, color: dynamicColor, size: 40) : null,
               ),
             ),
@@ -199,7 +223,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     },
                     child: Container(
                       padding: const EdgeInsets.all(6),
-                      // 🚀 DINÂMICO: O botão (+) ganha um tom suave da cor ativa
                       decoration: BoxDecoration(color: dynamicColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
                       child: Icon(Icons.add_rounded, color: dynamicColor, size: 18),
                     ),
@@ -262,7 +285,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                               }
                             },
                             itemBuilder: (context) => [
-                              // 🚀 DINÂMICO: O ícone de editar dentro do popup acompanha a cor da app
                               PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
                               PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
                             ],
@@ -295,7 +317,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     leading: _isSyncing
                         ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: dynamicColor))
                         : Icon(Icons.cloud_sync_outlined, color: dynamicColor, size: 22),
-                    // 🚀 DINÂMICO: O título de sincronização assume a cor viva da app
                     title: Text(_isSyncing ? 'A sincronizar...' : 'Sincronizar Nuvem', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: dynamicColor)),
                     onTap: _isSyncing ? null : _handleManualSync,
                   ),
@@ -319,17 +340,48 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final TextEditingController nameController = TextEditingController(text: isEditing ? subjectToEdit!.name : '');
     final formKey = GlobalKey<FormState>();
 
-    final List<String> availableColors = ['#0F4C5C', '#2C3E50', '#1E8449', '#D35400', '#6C3483', '#B03A2E'];
+    final List<String> availableColors = [
+      '#0F4C5C', '#1F4E79', '#3F51B5', '#6C3483',
+      '#9B59B6', '#D81B60', '#E91E63', '#B03A2E',
+      '#E67E22', '#D35400', '#F1C40F', '#1E8449',
+      '#27AE60', '#16A085', '#4E342E', '#607D8B',
+    ];
     String pickedColorHex = isEditing ? subjectToEdit!.color : availableColors[0];
 
+    // =========================================================================
+    // 🧭 CURADORIA DE 24 ÍCONES (Académico + Corporativo + Tecnologia + Pessoal)
+    // =========================================================================
     final List<Map<String, dynamic>> availableIcons = [
+      // 🎓 ACADÉMICO & ESTUDOS
       {'name': 'book', 'icon': Icons.menu_book_rounded},
+      {'name': 'school', 'icon': Icons.school_rounded},
       {'name': 'science', 'icon': Icons.science_rounded},
       {'name': 'math', 'icon': Icons.calculate_rounded},
       {'name': 'language', 'icon': Icons.language_rounded},
       {'name': 'history', 'icon': Icons.history_edu_rounded},
-      {'name': 'art', 'icon': Icons.palette_rounded},
+      {'name': 'law', 'icon': Icons.gavel_rounded},
+      {'name': 'health', 'icon': Icons.medical_services_rounded},
+      {'name': 'psychology', 'icon': Icons.psychology_rounded},
+
+      // 💼 CORPORATIVO & NEGÓCIOS
+      {'name': 'business', 'icon': Icons.business_center_rounded},
+      {'name': 'analytics', 'icon': Icons.analytics_rounded},
+      {'name': 'workspaces', 'icon': Icons.workspaces_rounded},
+      {'name': 'team', 'icon': Icons.groups_rounded},
+      {'name': 'presentation', 'icon': Icons.present_to_all_rounded},
+      {'name': 'security', 'icon': Icons.security_rounded},
+
+      // 💻 TECNOLOGIA & CRIATIVIDADE
       {'name': 'computer', 'icon': Icons.computer_rounded},
+      {'name': 'code', 'icon': Icons.code_rounded},
+      {'name': 'idea', 'icon': Icons.lightbulb_rounded},
+      {'name': 'art', 'icon': Icons.palette_rounded},
+      {'name': 'music', 'icon': Icons.music_note_rounded},
+
+      // 🗓️ ORGANIZAÇÃO & PESSOAL
+      {'name': 'calendar', 'icon': Icons.calendar_month_rounded},
+      {'name': 'notes', 'icon': Icons.sticky_note_2_rounded},
+      {'name': 'folder', 'icon': Icons.folder_special_rounded},
       {'name': 'sport', 'icon': Icons.sports_basketball_rounded},
     ];
     String pickedIconName = isEditing ? (subjectToEdit!.icon ?? 'book') : 'book';
@@ -345,7 +397,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 title: Row(
                   children: [
-                    // 🚀 DINÂMICO: Ícones e Títulos dos modais herdam o tema vivo
                     Icon(isEditing ? Icons.edit_rounded : Icons.library_add_rounded, color: themeColor),
                     const SizedBox(width: 10),
                     Text(isEditing ? 'Editar Matéria' : 'Nova Disciplina', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor)),
@@ -365,18 +416,18 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           autofocus: !isEditing,
                           textCapitalization: TextCapitalization.words,
                           decoration: InputDecoration(
-                            hintText: 'Ex: Matemática...',
+                            hintText: 'Ex: Finanças ou Química...',
                             filled: true,
                             fillColor: Colors.white,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            // 🚀 DINÂMICO: A borda de foco acompanha a cor viva
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: themeColor, width: 1.5)),
                           ),
                           validator: (value) => value == null || value.trim().isEmpty ? 'Insira um nome válido' : null,
                         ),
                         const SizedBox(height: 24),
-                        Text('Ícone', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                        Text('Ícone Representativo (24 Opções)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
                         const SizedBox(height: 12),
+                        // 🚀 O WRAP DISTRIBUI OS 24 ÍCONES EM GRID SEM QUEBRAR O ECRÃ
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,
@@ -388,8 +439,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                 duration: const Duration(milliseconds: 200),
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  // 🚀 DINÂMICO: Seleção de ícones usa a cor viva
-                                  color: isSelected ? themeColor.withOpacity(0.1) : Colors.transparent,
+                                  color: isSelected ? themeColor.withOpacity(0.15) : Colors.transparent,
                                   border: isSelected ? Border.all(color: themeColor, width: 2) : Border.all(color: Colors.grey.shade300),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -399,7 +449,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           }).toList(),
                         ),
                         const SizedBox(height: 24),
-                        Text('Cor de Destaque', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                        Text('Cor de Destaque (16 Tons)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
                         const SizedBox(height: 12),
                         Wrap(
                           spacing: 12,
@@ -436,7 +486,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      // 🚀 DINÂMICO: O botão de submissão do modal assume a cor viva
                       backgroundColor: themeColor,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),

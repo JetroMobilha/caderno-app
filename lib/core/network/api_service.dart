@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 🚀 O NOVO COFRE UNIVERSAL
 
 class ApiService {
@@ -180,33 +182,57 @@ class ApiService {
   // 👤 4. ATUALIZAR PERFIL E AVATAR (MULTIPART / HÍBRIDO)
   // =========================================================================
   Future<http.Response> updateProfile({required String name, dynamic imageFile}) async {
-    final url = Uri.parse('$baseUrl/user/update');
-    final token = await getToken();
+    final String? token = await getToken();
+    final Uri url = Uri.parse('$baseUrl/user/update');
 
-    var request = http.MultipartRequest('POST', url);
+    debugPrint('📢 [API] 1. A iniciar preparação do pedido Multipart...');
+    final request = http.MultipartRequest('POST', url);
+
     request.headers.addAll({
-      'Authorization': 'Bearer $token',
       'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
     });
 
     request.fields['name'] = name;
+    debugPrint('📢 [API] 2. Campo Nome anexado: $name');
 
     if (imageFile != null) {
-      if (kIsWeb) {
-        // 🌐 NA WEB: Envia Bytes
-        final bytes = await imageFile.readAsBytes();
-        request.files.add(http.MultipartFile.fromBytes('avatar', bytes, filename: imageFile.name));
-      } else {
-        // 📱 NO MOBILE: Lê Ficheiro
-        request.files.add(await http.MultipartFile.fromPath('avatar', imageFile.path));
+      try {
+        debugPrint('📢 [API] 3. Foto detetada! A processar ficheiro no Windows...');
+        final String path = (imageFile is XFile) ? imageFile.path : imageFile.toString();
+        debugPrint('📢 [API]    ↳ Caminho do ficheiro: $path');
+
+        String fileName = path.split('\\').last.split('/').last; // Limpa barras de Windows e Unix
+        String extension = fileName.split('.').last.toLowerCase();
+        if (extension != 'png' && extension != 'jpg' && extension != 'jpeg' && extension != 'gif') {
+          extension = 'jpeg';
+        }
+        debugPrint('📢 [API]    ↳ Nome: $fileName | Extensão forçada: $extension');
+
+        final multipartFile = await http.MultipartFile.fromPath(
+          'avatar',
+          path,
+          filename: fileName,
+          // Se o editor reclamar de MediaType, comenta a linha abaixo por agora:
+          contentType: MediaType('image', extension),
+        );
+
+        request.files.add(multipartFile);
+        debugPrint('📢 [API] 4. Ficheiro anexado com sucesso ao pedido!');
+      } catch (e, stack) {
+        debugPrint('🚨 [API ERRO FATAL AO LER FICHEIRO]: $e');
+        debugPrint(stack.toString());
+        rethrow; // Força o erro a subir para ser visto!
       }
     }
 
-    debugPrint('🛫 MULTIPART POST $url');
+    debugPrint('📢 [API] 5. A disparar para o servidor Laravel...');
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
 
-    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
+    debugPrint('📢 [API] 6. Resposta recebida! Status: ${response.statusCode}');
+    debugPrint('📢 [API]    ↳ Corpo da resposta: ${response.body}');
+
     return response;
   }
 }

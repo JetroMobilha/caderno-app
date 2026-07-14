@@ -17,23 +17,23 @@ void main() {
       final notebook = Notebook.fromMap(mockMap);
 
       expect(notebook.id, 1);
-      expect(notebook.subject_id, 10);
+      expect(notebook.subjectId, 10);
       expect(notebook.title, 'Álgebra Linear');
-      expect(notebook.cover_type, 'leather');
+      expect(notebook.coverType, 'leather');
       expect(notebook.color, '#2C3E50');
-      expect(notebook.cover_image, isNull);
-      expect(notebook.line_type, 'ruled');
+      expect(notebook.coverImage, isNull);
+      expect(notebook.lineType, 'ruled');
     });
 
     test('Deve converter corretamente um Objeto Notebook para Map (toMap)', () {
       final notebook = Notebook(
         id: 2,
-        subject_id: 10,
+        subjectId: 10,
         title: 'Geometria Analítica',
-        cover_type: 'classic',
+        coverType: 'classic',
         color: null,
-        cover_image: 'assets/covers/geo.png',
-        line_type: 'grid',
+        coverImage: 'assets/covers/geo.png',
+        lineType: 'grid',
       );
 
       final map = notebook.toMap();

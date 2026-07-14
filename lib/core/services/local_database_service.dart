@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:sqflite/sqflite.dart';
-import '../../features/notebooks/models/local_page_model.dart';
+import '../../features/canvas/models/image_block_model.dart';
+import '../../features/canvas/models/local_page_model.dart';
+import '../../features/canvas/models/stroke_model.dart';
+import '../../features/canvas/models/text_block_model.dart';
 import '../database/database_helper.dart';
-import '../../features/notebooks/models/drawing_point_model.dart';
 
 class LocalDatabaseService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;

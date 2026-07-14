@@ -11,7 +11,7 @@ class SubjectRepository {
   // =========================================================================
   // 📚 LER DISCIPLINAS
   // =========================================================================
-  Future<List<Subject>> getSubjects() async {
+  Future<List<Subject>> getAllSubjects() async {
     if (kIsWeb) {
       final response = await _apiService.get('/subjects');
       if (response.statusCode == 200) {
@@ -29,16 +29,14 @@ class SubjectRepository {
       return [];
     } else {
       final db = await _dbHelper.database;
-      final maps = await db.query('subjects', orderBy: 'id DESC');
-      return maps.map((s) => Subject(
-        id: s['id'] as int,
-        serverId: s['server_id'] as int?,
-        userId: s['user_id'] as int,
-        name: s['name'] as String,
-        color: s['color'] as String,
-        icon: s['icon'] as String?,
-        syncedWithCloud: s['synced_with_cloud'] as int? ?? 0,
-      )).toList();
+      final List<Map<String, dynamic>> maps = await db.query(
+        'subjects',
+        where: 'is_deleted = ?',
+        whereArgs: [0],
+        orderBy: 'name ASC', // Ordena alfabeticamente
+      );
+
+      return maps.map((map) => Subject.fromMap(map)).toList();
     }
   }
 
@@ -130,7 +128,15 @@ class SubjectRepository {
     } else {
       if (subject.id == null) return;
       final db = await _dbHelper.database;
-      await db.delete('subjects', where: 'id = ?', whereArgs: [subject.id]);
+      await db.update(
+        'subjects',
+        {
+        'is_deleted': 1,
+        'synced_with_cloud': 0 // O SyncService vai ver isto e avisar o Laravel!
+        },
+        where: 'id = ?',
+        whereArgs: [subject.id],
+      );
     }
   }
 }

@@ -7,7 +7,7 @@ import 'package:path/path.dart';
 
 class DatabaseHelper {
   // 🚀 FORÇA TÁTICA: Mudámos para v4. O Android vai recriar o ficheiro do zero hoje!
-  static const _databaseName = "caderno_digital_offline_v6.db";
+  static const _databaseName = "caderno_digital_offline_v7.db";
   static const _databaseVersion = 1;
 
   DatabaseHelper._privateConstructor();
@@ -16,6 +16,9 @@ class DatabaseHelper {
   static Database? _database;
 
   Future<Database> get database async {
+    if (kIsWeb) {
+      throw UnsupportedError('SQLite não é suportado na Web. Usa a API direta.');
+    }
     if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
@@ -63,6 +66,7 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         color TEXT NOT NULL,
         icon TEXT,
+        is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -81,6 +85,7 @@ class DatabaseHelper {
         cover_image TEXT,
         line_type TEXT,
         paper_size TEXT,
+        is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
@@ -97,6 +102,7 @@ class DatabaseHelper {
         is_landscape INTEGER DEFAULT 0, 
         header_data TEXT, 
         footer_data TEXT,
+        is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE

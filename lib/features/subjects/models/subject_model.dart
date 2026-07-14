@@ -1,44 +1,81 @@
 class Subject {
   final int? id;
-  final int userId;
-  final int? serverId; // 🚀 1. AGORA TEM '?': Já aceita null perfeitamente!
+  final int? serverId;
+  final int? userId;
   final String name;
   final String color;
   final String? icon;
   final int syncedWithCloud;
+  final int isDeleted; // 🚀 A NOSSA VARIÁVEL DE CONTROLO FANTASMA!
+  final int updatedAt;
 
   Subject({
     this.id,
-    required this.userId,
-    this.serverId, // 🚀 2. Removemos o 'required' para poderes omitir ou passar null à vontade
+    this.serverId,
+    this.userId,
     required this.name,
     required this.color,
     this.icon,
-    required this.syncedWithCloud,
+    this.syncedWithCloud = 0,
+    this.isDeleted = 0,
+    this.updatedAt = 0,
   });
 
-  factory Subject.fromMap(Map<String, dynamic> map) {
+  // =========================================================================
+  // 🚀 MÉTODO CLONAR PARA EDIÇÃO (Resolve o erro do Editor!)
+  // =========================================================================
+  Subject copyWith({
+    int? id,
+    int? serverId,
+    int? userId,
+    String? name,
+    String? color,
+    String? icon,
+    int? syncedWithCloud,
+    int? isDeleted,
+    int? updatedAt,
+  }) {
     return Subject(
-      id: map['id'] as int?,
-      userId: map['user_id'] as int? ?? 0,
-      // 🚀 3. SEM FALSOS IDs: Se vier null da BD local, fica null! Não metas '?? 1'.
-      serverId: map['server_id'] as int?,
-      name: map['name'] as String? ?? '',
-      color: map['color'] as String? ?? '#000000',
-      icon: map['icon'] as String?,
-      syncedWithCloud: map['synced_with_cloud'] as int? ?? 0,
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      color: color ?? this.color,
+      icon: icon ?? this.icon,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
+  // =========================================================================
+  // 💾 CONVERSÃO PARA A BASE DE DADOS LOCAL
+  // =========================================================================
   Map<String, dynamic> toMap() {
     return {
-      if (id != null) 'id': id,
+      'id': id,
+      'server_id': serverId,
       'user_id': userId,
-      'server_id': serverId, // Se for null, o SQLite e o JSON enviam null com sucesso!
       'name': name,
       'color': color,
       'icon': icon,
       'synced_with_cloud': syncedWithCloud,
+      'is_deleted': isDeleted,
+      'updated_at': updatedAt,
     };
+  }
+
+  factory Subject.fromMap(Map<String, dynamic> map) {
+    return Subject(
+      id: map['id'],
+      serverId: map['server_id'],
+      userId: map['user_id'],
+      name: map['name'] ?? '',
+      color: map['color'] ?? '#1976D2',
+      icon: map['icon'],
+      syncedWithCloud: map['synced_with_cloud'] ?? 0,
+      isDeleted: map['is_deleted'] ?? 0,
+      updatedAt: map['updated_at'] ?? 0,
+    );
   }
 }

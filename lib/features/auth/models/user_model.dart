@@ -4,6 +4,7 @@ class User {
   final String name;
   final String email;
   final String? avatar; // 🚀 O caminho ou Link da foto!
+  final String? phone;
   final String planType;
 
   User({
@@ -12,6 +13,7 @@ class User {
     required this.name,
     required this.email,
     this.avatar,
+    this.phone,
     this.planType = 'free',
   });
 
@@ -22,6 +24,7 @@ class User {
       name: json['name'],
       email: json['email'],
       avatar:json['avatar'],
+      phone: json['phone'] as String?,
       planType: json['plan_type'] ?? 'free',
     );
   }
@@ -34,6 +37,7 @@ class User {
       name: map['name'],
       email: map['email'],
       avatar: map['avatar'],
+      phone: map['phone'],
       planType: map['plan_type'],
     );
   }
@@ -48,6 +52,18 @@ class User {
       'avatar': avatar,
       'plan_type': planType,
       'updated_at': DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'server_id': serverId,
+      'name': name,
+      'email': email,
+      'avatar': avatar,
+      'phone': phone,
+      'plan_type': planType,
     };
   }
 }

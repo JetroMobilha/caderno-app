@@ -11,59 +11,68 @@ class RealtimeService {
 
   PusherChannelsClient? _pusher;
   PresenceChannel? _notebookChannel;
-  StreamSubscription? _eventSubscription;
   bool _isConnected = false;
+  final Map<String, dynamic> _estudantesNaSala = {};
 
-  // 🚀 INICIALIZAR LIGAÇÃO UNIVERSAL (WIN, WEB, ANDROID, IOS)
+  // 📡 AS NOSSAS ANTENAS DE RÁDIO (Streams Broadcast)
+  final _strokeStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _usersStreamController = StreamController<List<dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
+  Stream<List<dynamic>> get onUsersUpdated => _usersStreamController.stream;
+
+  bool get isConnected => _isConnected;
+
+  // =========================================================================
+  // 🔌 1. INICIAR CONEXÃO WEBSOCKET (Laravel Reverb / Pusher)
+  // =========================================================================
   Future<void> initConnection() async {
-    if (_isConnected) return;
+    if (_isConnected && _pusher != null) return;
 
-    // 1. Configurar opções com protocolo WebSocket puro para o Apache/Reverb
     final options = PusherChannelsOptions.fromHost(
-      scheme: 'ws', // Usa 'wss' quando tiver HTTPS no servidor
+      scheme: 'ws',
       host: '35.205.132.251',
-      port: 6001,
       key: '6572db37e0db7615a423',
+      port: 6001,
+      shouldSupplyMetadataQueries: true,
+      metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
     );
 
-    // 2. Inicializar o cliente
     _pusher = PusherChannelsClient.websocket(
       options: options,
       connectionErrorHandler: (exception, trace, refresh) {
-        debugPrint('⚠️ [Reverb Erro]: $exception');
-        refresh(); // Tenta reconectar automaticamente
+        debugPrint('⚠️ [Realtime] Erro na conexão, a tentar reconectar...');
+        refresh();
       },
     );
 
     try {
       _pusher!.connect();
       _isConnected = true;
-      debugPrint('⚡ [Reverb] Motor Pure Dart ligado a 35.205.132.251:8080!');
+      debugPrint('✅ [Realtime] Conectado com sucesso ao servidor Reverb!');
     } catch (e) {
-      debugPrint('❌ Erro crítico de rede: $e');
+      debugPrint('❌ [Realtime] Erro de rede Reverb: $e');
     }
   }
 
-  // 🚀 ENTRAR NA SALA DE DESENHO (Presence Channel)
-  Future<void> joinNotebookChannel({
-    required int notebookId,
-    required Function(Map<String, dynamic>) onStrokeReceived,
-    required Function(List<dynamic>) onUsersUpdated,
-  }) async {
+  // =========================================================================
+  // 📡 2. ENTRAR NA SALA DO CADERNO (Presence Channel via Sanctum)
+  // =========================================================================
+  Future<void> joinNotebookChannel({required int notebookId}) async {
+    if (_pusher == null) await initConnection();
     if (_pusher == null) return;
+
+    // Se já estava num canal anterior, sai primeiro para não sobrepor áudios/tintas
+    if (_notebookChannel != null) {
+      _notebookChannel!.unsubscribe();
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('sanctum_token');
-
-    if (token == null) {
-      debugPrint('❌ Erro: Token Sanctum não encontrado para entrar na sala.');
-      return;
-    }
-
     final channelName = 'presence-notebook.$notebookId';
-    debugPrint('📡 A pedir autorização ao Sanctum: $channelName');
 
-    // 3. Autorizador Nativo (Pede o passe de entrada ao Laravel)
+    debugPrint('📡 [Realtime] A tentar autenticar e subscrever na sala: $channelName');
+
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPresenceChannel(
       authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
       headers: {
@@ -72,54 +81,78 @@ class RealtimeService {
       },
     );
 
-    // 4. Criar e subscrever à sala
-    _notebookChannel = _pusher!.presenceChannel(
-      channelName,
-      authorizationDelegate: authDelegate,
-    );
+    _notebookChannel = _pusher!.presenceChannel(channelName, authorizationDelegate: authDelegate);
 
-    _notebookChannel!.subscribeIfNotUnsubscribed();
-
-    // 5. O Ouvinte Inteligente (A Mágica da Colaboração)
-    // 5. O Ouvinte Inteligente (A Mágica da Colaboração)
-
-    // A) Escutar Sucesso de Entrada na Sala
-    _notebookChannel!.bind('pusher_internal:subscription_succeeded').listen((event) {
-      debugPrint('🟢 Autorizado! A tua aplicação está na sala.');
-      final data = jsonDecode(event.data);
-      if (data['presence'] != null && data['presence']['hash'] != null) {
-        final users = data['presence']['hash'].values.toList();
-        onUsersUpdated(users);
+    // 👥 Quando a subscrição tem sucesso (Carrega a lista inicial dos colegas presentes)
+    _notebookChannel!.whenSubscriptionSucceeded().listen((event) {
+      final payload = jsonDecode(event.data);
+      if (payload['presence'] != null && payload['presence']['hash'] != null) {
+        _estudantesNaSala.clear();
+        _estudantesNaSala.addAll(Map<String, dynamic>.from(payload['presence']['hash']));
+        _usersStreamController.add(_estudantesNaSala.values.toList()); // 📢 Dispara na Stream
+        debugPrint('👥 [Realtime] Sucesso! Estão ${_estudantesNaSala.length} pessoa(s) nesta sala.');
       }
     });
 
-    // B) Escutar Alguém a Entrar na Sala
-    _notebookChannel!.bind('pusher_internal:member_added').listen((event) {
-      debugPrint('👥 Um colega acabou de entrar!');
-      // onUsersUpdated(...); // Pode atualizar a UI se desejar
+    // ➕ Quando um colega entra na sala
+    _notebookChannel!.whenMemberAdded().listen((event) {
+      final payload = jsonDecode(event.data);
+      _estudantesNaSala[payload['user_id'].toString()] = payload['user_info'];
+      _usersStreamController.add(_estudantesNaSala.values.toList());
+      debugPrint('🟢 [Realtime] Entrou um colega! ID: ${payload['user_id']}');
     });
 
-    // C) 🎨 Tinta na tela! Escutar o evento do Laravel
-    // No Dart Pusher, ouvimos diretamente o nome exato do evento.
-    // Tentamos ouvir a versão com e sem ponto para garantir compatibilidade.
+    // ➖ Quando um colega sai ou fecha a App
+    _notebookChannel!.whenMemberRemoved().listen((event) {
+      final payload = jsonDecode(event.data);
+      _estudantesNaSala.remove(payload['user_id'].toString());
+      _usersStreamController.add(_estudantesNaSala.values.toList());
+      debugPrint('🔴 [Realtime] Um colega saiu! ID: ${payload['user_id']}');
+    });
 
-    void handleStrokeEvent(ChannelReadEvent event) {
-      debugPrint('🎨 [Tempo Real] Recebemos Tinta: ${event.data}');
-      final data = jsonDecode(event.data);
-      onStrokeReceived(data);
+    // 🎨 Quando um colega desenha um traço na tela!
+    _notebookChannel!.bind('client-ink-stroke').listen((event) {
+      if (event.data != null) {
+        final rawData = event.data;
+        Map<String, dynamic> parsedData = rawData is Map
+            ? Map<String, dynamic>.from(rawData)
+            : jsonDecode(rawData.toString());
+
+        _strokeStreamController.add(parsedData); // 📢 Dispara a tinta para o CanvasController
+      }
+    });
+
+    _notebookChannel!.subscribe();
+  }
+
+  // =========================================================================
+  // 🛫 3. DISPARAR TRAÇO PARA OS COLEGAS (Broadcast P2P)
+  // =========================================================================
+  Future<bool> broadcastStroke({required int notebookId, required Map<String, dynamic> strokeData}) async {
+    if (_notebookChannel == null) return false;
+    try {
+      _notebookChannel!.trigger(eventName: 'client-ink-stroke', data: jsonEncode(strokeData));
+      return true;
+    } catch (e) {
+      debugPrint('🚨 [Realtime] Falha ao disparar traço via Reverb: $e');
+      return false;
     }
-
-    _notebookChannel!.bind('page.strokes.added').listen(handleStrokeEvent);
-    _notebookChannel!.bind('.page.strokes.added').listen(handleStrokeEvent);
   }
 
-  // 🚀 SAIR DA SALA E POUPAR BATERIA / MEMÓRIA
+  // =========================================================================
+  // 🚪 4. SAIR DA SALA DO CADERNO
+  // =========================================================================
   void leaveNotebookChannel(int notebookId) {
-    _eventSubscription?.cancel();
+    debugPrint('🚪 [Realtime] A sair da sala do caderno $notebookId');
     _notebookChannel?.unsubscribe();
-    debugPrint('🔌 Saímos ordenadamente da sala do caderno $notebookId.');
+    _notebookChannel = null;
+    _estudantesNaSala.clear();
+    _usersStreamController.add([]); // Avisa a UI para limpar a lista de avatares
   }
 
+  // =========================================================================
+  // 🛑 5. DESCONECTAR TOTALMENTE
+  // =========================================================================
   void disconnect() {
     _pusher?.disconnect();
     _isConnected = false;

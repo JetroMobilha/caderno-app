@@ -1,0 +1,71 @@
+lib/
+ ┣ 📂 core/                          👈 (O Coração do Sistema / Ferramentas Globais)
+ ┃ ┣ 📂 network/
+ ┃ ┃  ┣ 📄 api_service.dart
+ ┃ ┃  ┣ 📄 realtime_service.dart
+ ┃ ┃  ┗ 📄 sync_service.dart
+ ┃ ┣ 📂 database/
+ ┃ ┃  ┗ 📄 database_helper.dart      👈 (Onde o SQLite é iniciado)
+ ┃ ┗ 📂 theme/
+ ┃    ┗ 📄 app_colors.dart           👈 (Cores globais para manter o design consistente)
+ ┃
+ ┣ 📂 features/
+ ┃ ┣ 📂 shared/                      👈 (Widgets que aparecem em vários ecrãs)
+ ┃ ┃  ┗ 📂 widgets/
+ ┃ ┃     ┗ 📄 app_drawer.dart        👈 (O teu novo Menu de Gaveta Mágico!)👈 (Os Bairros da Aplicação)
+ ┃ ┃
+ ┃ ┣ 📂 auth/                        🔐 (Tudo o que envolve Entrar/Sair do App)
+ ┃ ┃  ┣ 📂 controllers/
+ ┃ ┃  ┃  ┗ 📄 auth_controller.dart   👈 (Gere os tokens, logins e desvios de ecrã)
+ ┃ ┃  ┣ 📂 models/
+ ┃ ┃  ┃  ┗ 📄 user_model.dart        👈 (Nome, email, avatar do utilizador)
+ ┃ ┃  ┣ 📂 repositories/
+ ┃ ┃  ┃  ┗ 📄 auth_repository.dart   👈 (Faz os pedidos POST ao Laravel para login/register)
+ ┃ ┃  ┣ 📂 views/
+ ┃ ┃  ┃  ┣ 📄 splash_screen.dart     👈 (Animação inicial e verificação se já tem token)
+ ┃ ┃  ┃  ┣ 📄 login_screen.dart
+ ┃ ┃  ┃  ┣ 📄 register_screen.dart
+ ┃ ┃  ┃  ┣ 📄 forgot_password_screen.dart
+ ┃ ┃  ┃  ┣ 📄 reset_password_screen.dart
+ ┃ ┃  ┃  ┗ 📄 profile_screen.dart    👈 (Onde o aluno edita o perfil/avatar)
+ ┃ ┃  ┗ 📂 widgets/
+ ┃ ┃     ┗ 📄 auth_text_field.dart   👈 (Um input de texto reutilizável para não repetires código)
+ ┃ ┃
+ ┃ ┣ 📂 subjects/                    📚 (As Disciplinas / Pastas Principais)
+ ┃ ┃  ┣ 📂 controllers/
+ ┃ ┃  ┃  ┗ 📄 subjects_controller.dart
+ ┃ ┃  ┣ 📂 models/
+ ┃ ┃  ┃  ┗ 📄 subject_model.dart     👈 (ID, Nome, Cor, Ícone da disciplina)
+ ┃ ┃  ┣ 📂 repositories/
+ ┃ ┃  ┃  ┗ 📄 subject_repository.dart
+ ┃ ┃  ┣ 📂 views/
+ ┃ ┃  ┃  ┗ 📄 subjects_list_screen.dart 👈 (A "Estante" principal após o login)
+ ┃ ┃  ┗ 📂 widgets/
+ ┃ ┃     ┗ 📄 subject_card.dart      👈 (O cartão bonito que mostra a disciplina)
+ ┃ ┃
+ ┃ ┣ 📂 notebooks/                   📓 (Os Cadernos dentro das Disciplinas)
+ ┃ ┃  ┣ 📂 controllers/
+ ┃ ┃  ┃  ┗ 📄 notebooks_controller.dart
+ ┃ ┃  ┣ 📂 models/
+ ┃ ┃  ┃  ┣ 📄 notebook_model.dart
+ ┃ ┃  ┃  ┣ 📄 local_page_model.dart
+ ┃ ┃  ┃  ┣ 📄 drawing_point_model.dart
+ ┃ ┃  ┃  ┗ 📄 text_block_model.dart
+ ┃ ┃  ┣ 📂 repositories/
+ ┃ ┃  ┃  ┗ 📄 notebook_repository.dart
+ ┃ ┃  ┣ 📂 views/
+ ┃ ┃  ┃  ┗ 📄 notebooks_list_screen.dart 👈 (Mostra os cadernos de uma disciplina)
+ ┃ ┃  ┗ 📂 widgets/
+ ┃ ┃     ┗ 📄 notebook_cover.dart    👈 (Desenha a capa do caderno com a cor escolhida)
+ ┃ ┃
+ ┃ ┗ 📂 canvas/                      🎨 (O Motor de Desenho que refatorámos hoje!)
+ ┃    ┣ 📂 controllers/
+ ┃    ┃  ┗ 📄 canvas_controller.dart
+ ┃    ┣ 📂 views/
+ ┃    ┃  ┗ 📄 canvas_screen.dart
+ ┃    ┗ 📂 widgets/
+ ┃       ┣ 📄 canvas_painter.dart
+ ┃       ┣ 📄 canvas_toolbar.dart
+ ┃       ┗ 📄 live_voice_cockpit.dart
+ ┃
+ ┗ 📄 main.dart                      👈 (Apenas inicia o App e os Providers globais)

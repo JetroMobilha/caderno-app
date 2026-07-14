@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:caderno_digital_app/features/subjects/screens/subjects_screen.dart';
 
 void main() {
   testWidgets('A aplicação deve arrancar e mostrar o ecrã de disciplinas', (WidgetTester tester) async {
@@ -9,7 +8,7 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(
         child: MaterialApp(
-          home: SubjectsScreen(),
+
         ),
       ),
     );

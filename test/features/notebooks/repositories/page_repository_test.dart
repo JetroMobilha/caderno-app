@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:http/http.dart' as http;
-import 'package:caderno_digital_app/features/notebooks/models/local_page_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 // (Assume que criamos a classe PageRepository abaixo)
 
 void main() {

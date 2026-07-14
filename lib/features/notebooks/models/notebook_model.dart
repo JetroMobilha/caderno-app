@@ -1,55 +1,58 @@
 class Notebook {
-  int? id;
-  int? server_id;
-  final int subject_id;
+    int? id; // ID local do SQLite (Mobile)
+    int? serverId; // ID oficial do Laravel (Nuvem)
+  final int subjectId; // ID da disciplina a que pertence
   final String title;
-  final String cover_type;
-  final String? color;
-  final String? cover_image;
-  final String? line_type;
-  final String? paper_size;
-  int synced_with_cloud;
+  final String coverType; // 'color' ou 'image'
+  final String? color; // Código Hex da capa
+  final String? coverImage; // Path ou URL da imagem de capa
+  final String lineType; // 'ruled', 'grid', 'blank'
+  final String paperSize; // 'A4', 'A5', 'A3', etc.
+  final int syncedWithCloud;
 
   Notebook({
     this.id,
-    this.server_id,
-    required this.subject_id,
+    this.serverId,
+    required this.subjectId,
     required this.title,
-    required this.cover_type,
-    this.color,
-    this.cover_image,
-    this.line_type,
-    this.paper_size,
-    this.synced_with_cloud = 0,
+    this.coverType = 'color',
+    this.color = '#0F4C5C',
+    this.coverImage,
+    this.lineType = 'ruled',
+    this.paperSize = 'A4',
+    this.syncedWithCloud = 0,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      if (id != null) 'id': id, // 🚀 SÓ ENVIA O ID SE ELE EXISTIR
-      'server_id': server_id,
-      'subject_id': subject_id,
-      'title': title,
-      'cover_type': cover_type,
-      'color': color,
-      'cover_image': cover_image,
-      'line_type': line_type,
-      'paper_size': paper_size,
-      'synced_with_cloud': synced_with_cloud,
-    };
-  }
-
+  // Converte a linha do SQLite num Objeto Dart
   factory Notebook.fromMap(Map<String, dynamic> map) {
     return Notebook(
-      id: map['id'] as int?,
-      server_id: map['server_id'] as int?,
-      subject_id: map['subject_id'] as int,
-      title: map['title'] as String,
-      cover_type: map['cover_type'] as String,
-      color: map['color'] as String?,
-      cover_image: map['cover_image'] as String?,
-      line_type: map['line_type'] as String?,
-      paper_size: map['paper_size'] as String?,
-      synced_with_cloud: map['synced_with_cloud'] as int? ?? 0,
+      id: map['id'],
+      serverId: map['server_id'],
+      subjectId: map['subject_id'] as int,
+      title: map['title'] ?? 'Sem Título',
+      coverType: map['cover_type'] ?? 'color',
+      color: map['color'],
+      coverImage: map['cover_image'],
+      lineType: map['line_type'] ?? 'ruled',
+      paperSize: map['paper_size'] ?? 'A4',
+      syncedWithCloud: map['synced_with_cloud'] ?? 0,
     );
+  }
+
+  // Prepara o Objeto Caderno para ser escrito no SQLite
+  Map<String, dynamic> toMap() {
+    final map = {
+      'subject_id': subjectId,
+      'title': title,
+      'cover_type': coverType,
+      'color': color,
+      'cover_image': coverImage,
+      'line_type': lineType,
+      'paper_size': paperSize,
+      'synced_with_cloud': syncedWithCloud,
+    };
+    if (id != null) map['id'] = id;
+    if (serverId != null) map['server_id'] = serverId;
+    return map;
   }
 }

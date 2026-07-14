@@ -25,7 +25,7 @@ class SubjectsController extends StateNotifier<List<Subject>> {
   void _startAutomaticTracker() {
     if (kIsWeb) return;
 
-    _syncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+    _syncTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
@@ -81,7 +81,7 @@ class SubjectsController extends StateNotifier<List<Subject>> {
     final newSubject = await _repository.addSubject(subject);
     if (newSubject != null) {
       state = [newSubject, ...state];
-      _tryInstantSync();
+      // 🚀 Removido o _tryInstantSync daqui! Foco 100% offline local.
     }
   }
 
@@ -97,27 +97,22 @@ class SubjectsController extends StateNotifier<List<Subject>> {
       syncedWithCloud: kIsWeb ? 1 : 0,
     );
     state = state.map((s) => s.id == subject.id ? updatedSubject : s).toList();
-    _tryInstantSync();
+    // 🚀 Removido o _tryInstantSync daqui!
   }
 
+  // =========================================================================
+  // 🗑️ APAGAR DISCIPLINA (Purificado e sem dependências circulares!)
+  // =========================================================================
   Future<void> deleteSubject(Subject subject) async {
+    // 1. Executa o Soft Delete no Repositório (Muda is_deleted para 1 no SQLite)
     await _repository.deleteSubject(subject);
+
+    // 2. 🚀 ATUALIZAÇÃO OTIMISTA INSTANTÂNEA: Remove o item da memória RAM
+    // Removida por completo a leitura do 'activeSubjectProvider' e do 'invalidateSelf()'.
+    // O loop circular foi completamente destruído!
     state = state.where((s) => s.id != subject.id).toList();
-
-    final currentActive = ref.read(activeSubjectProvider);
-    if (currentActive?.id == subject.id) {
-      ref.read(activeSubjectProvider.notifier).setSubject(null);
-    }
-    ref.invalidateSelf();
   }
 
-  void _tryInstantSync() {
-    if (!kIsWeb) {
-      SyncService().pushOfflineSubjects().then((_) => loadSubjects());
-    }
-  }
-
-  // 🚀 NOVO: Sincronização manual segura acionada pelo botão da Gaveta!
   Future<void> syncManuallyWithCloud() async {
     if (!kIsWeb) {
       final syncService = SyncService();
@@ -139,14 +134,15 @@ final subjectsProvider = StateNotifierProvider<SubjectsController, List<Subject>
 });
 
 // ============================================================================
-// 🎯 PROVIDER DA DISCIPLINA ATIVA (Totalmente Blindado contra Crashes!)
+// 🎯 PROVIDER DA DISCIPLINA ATIVA (Gere a sua reatividade de forma limpa)
 // ============================================================================
 class ActiveSubjectNotifier extends Notifier<Subject?> {
   bool _isLoaded = false;
-  Subject? _cachedSubject; // 🚀 MEMÓRIA PRIVADA (Evita ler o 'state' no build)
+  Subject? _cachedSubject;
 
   @override
   Subject? build() {
+    // Escuta a lista geral de disciplinas de forma passiva
     final subjects = ref.watch(subjectsProvider);
 
     if (subjects.isEmpty) {
@@ -161,7 +157,8 @@ class ActiveSubjectNotifier extends Notifier<Subject?> {
       return _cachedSubject;
     }
 
-    // Proteção se a matéria que estava a ser vista for apagada
+    // 🧠 REATIVIDADE AUTÓNOMA: Se a disciplina focada sumir da lista geral
+    // (porque o utilizador a apagou), esta antena percebe sozinha e foca-se na primeira!
     if (_cachedSubject != null && !subjects.any((s) => s.id == _cachedSubject!.id)) {
       _cachedSubject = subjects.first;
       return _cachedSubject;

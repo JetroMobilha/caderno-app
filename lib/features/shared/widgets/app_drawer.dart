@@ -1,16 +1,17 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/network/api_service.dart';
-import '../../auth/controllers/auth_controller.dart';
-import '../../auth/models/user_model.dart';
-import '../../auth/views/profile_screen.dart';
-import '../../auth/views/login_screen.dart';
-import '../../subjects/controllers/subjects_controller.dart';
-import '../../subjects/models/subject_model.dart';
-import '../../notebooks/controllers/notebooks_controller.dart';
+import 'package:caderno_digital_app/core/theme/app_colors.dart';
+import 'package:caderno_digital_app/core/network/api_service.dart';
+import 'package:caderno_digital_app/features/auth/controllers/auth_controller.dart';
+import 'package:caderno_digital_app/features/auth/models/user_model.dart';
+import 'package:caderno_digital_app/features/auth/views/profile_screen.dart';
+import 'package:caderno_digital_app/features/auth/views/login_screen.dart';
+import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
+import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
+import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({super.key});
@@ -39,13 +40,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Future<void> _handleManualSync() async {
     setState(() => _isSyncing = true);
     try {
-      // 🚀 Chama a Sincronização centralizada e blindada
       await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sincronização concluída! ☁️✨'), backgroundColor: Color(0xFF27AE60)));
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('🚨 [SYNC MANUAL] ERRO FATAL: $e');
+      debugPrint('🚨 [RASTRO]: $stackTrace');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao sincronizar. Verifica a internet.'), backgroundColor: Colors.redAccent));
       }
@@ -61,21 +63,17 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         backgroundColor: AppColors.paper,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Terminar Sessão?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: AppColors.textDark)),
-        content: Text('Tens a certeza que desejas sair? O teu conteúdo local será limpo por segurança.', style: GoogleFonts.inter(color: AppColors.textMuted)),
+        content: Text('Tens a certeza? O teu conteúdo local será limpo por segurança.', style: GoogleFonts.inter(color: AppColors.textMuted)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: AppColors.textMuted))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
-              // 🚀 NAVEGAÇÃO SUPREMA (Sem crashes!)
-              // 1. Capturamos a rota "raíz" da app ANTES de qualquer await
               final rootNavigator = Navigator.of(context, rootNavigator: true);
               final authCtrl = ref.read(authProvider);
 
-              // 2. Apagamos a Base de Dados
               await authCtrl.logout();
 
-              // 3. Forçamos a App a ir para o Login destruindo TUDO pelo caminho (Diálogo + Gaveta)
               rootNavigator.pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                       (route) => false
@@ -94,20 +92,44 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.paper,
         title: Text('Apagar Disciplina?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.redAccent)),
-        content: Text('A disciplina "${subject.name}" e todos os seus cadernos serão eliminados do dispositivo.', style: GoogleFonts.inter()),
+        content: Text('A disciplina "${subject.name}" e os cadernos serão apagados.', style: GoogleFonts.inter()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
               final subNotifier = ref.read(subjectsProvider.notifier);
+              final drawerNavigator = Navigator.of(context);
+              final snackBarMessenger = ScaffoldMessenger.of(context);
 
-              Navigator.pop(ctx); // Fecha modal
-              if (context.mounted) Navigator.pop(context); // Fecha Gaveta
+              Navigator.pop(ctx);
 
-              await subNotifier.deleteSubject(subject);
+              try {
+                await subNotifier.deleteSubject(subject);
+                drawerNavigator.pop();
+                snackBarMessenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Disciplina eliminada! 🗑️'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 2),
+                    )
+                );
+              } catch (e, stackTrace) {
+                debugPrint('🚨 [GAVETA] Erro capturado no clique de eliminação: $e');
+                debugPrint('🚨 [GAVETA] Rastro do colapso: $stackTrace');
+
+                snackBarMessenger.showSnackBar(
+                    SnackBar(
+                        content: Text('Erro interno no controlador: $e'),
+                        backgroundColor: Colors.redAccent
+                    )
+                );
+              }
             },
-            child: const Text('Apagar Tudo', style: TextStyle(color: Colors.white)),
+            child: const Text('Apagar Tudo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -119,6 +141,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final user = ref.watch(authProvider).currentUser;
     final subjectsList = ref.watch(subjectsProvider);
     final activeSubject = ref.watch(activeSubjectProvider);
+
+    // 🎨 CAPTURA A COR DINÂMICA ATIVA PARA PINTAR O DRAWER ONDE FOR PRECISO!
+    final dynamicColor = Theme.of(context).colorScheme.primary;
 
     ImageProvider? userAvatarProvider;
     if (user?.avatar != null && user!.avatar!.isNotEmpty) {
@@ -139,7 +164,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
             child: UserAccountsDrawerHeader(
-              decoration: const BoxDecoration(color: AppColors.primary),
+              // 🚀 DINÂMICO: O fundo do perfil agora assume a cor viva da matéria!
+              decoration: BoxDecoration(color: dynamicColor),
               accountName: Text(user?.name ?? 'Estudante', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 18)),
               accountEmail: Row(
                 children: [
@@ -152,7 +178,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               currentAccountPicture: CircleAvatar(
                 backgroundColor: Colors.white,
                 backgroundImage: userAvatarProvider,
-                child: userAvatarProvider == null ? const Icon(Icons.person, color: AppColors.primary, size: 40) : null,
+                // 🚀 DINÂMICO: Ícone padrão herda a cor viva também
+                child: userAvatarProvider == null ? Icon(Icons.person, color: dynamicColor, size: 40) : null,
               ),
             ),
           ),
@@ -168,12 +195,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
                     onTap: () {
-                      if (user != null) _showSubjectModal(context, ref, user, isEditing: false);
+                      if (user != null) _showSubjectModal(context, ref, user, isEditing: false, themeColor: dynamicColor);
                     },
                     child: Container(
                       padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.add_rounded, color: AppColors.primary, size: 18),
+                      // 🚀 DINÂMICO: O botão (+) ganha um tom suave da cor ativa
+                      decoration: BoxDecoration(color: dynamicColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                      child: Icon(Icons.add_rounded, color: dynamicColor, size: 18),
                     ),
                   ),
                 ),
@@ -228,13 +256,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             color: AppColors.paper,
                             onSelected: (value) {
                               if (value == 'edit') {
-                                if (user != null) _showSubjectModal(context, ref, user, isEditing: true, subjectToEdit: sub);
+                                if (user != null) _showSubjectModal(context, ref, user, isEditing: true, subjectToEdit: sub, themeColor: dynamicColor);
                               } else if (value == 'delete') {
                                 _confirmDeleteSubject(context, sub);
                               }
                             },
                             itemBuilder: (context) => [
-                              PopupMenuItem(value: 'edit', child: Row(children: [const Icon(Icons.edit, size: 18, color: AppColors.primary), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
+                              // 🚀 DINÂMICO: O ícone de editar dentro do popup acompanha a cor da app
+                              PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
                               PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
                             ],
                           ),
@@ -264,9 +293,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   ListTile(
                     dense: true,
                     leading: _isSyncing
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                        : const Icon(Icons.cloud_sync_outlined, color: AppColors.primary, size: 22),
-                    title: Text(_isSyncing ? 'A sincronizar...' : 'Sincronizar Nuvem', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                        ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: dynamicColor))
+                        : Icon(Icons.cloud_sync_outlined, color: dynamicColor, size: 22),
+                    // 🚀 DINÂMICO: O título de sincronização assume a cor viva da app
+                    title: Text(_isSyncing ? 'A sincronizar...' : 'Sincronizar Nuvem', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: dynamicColor)),
                     onTap: _isSyncing ? null : _handleManualSync,
                   ),
                   ListTile(
@@ -285,7 +315,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     );
   }
 
-  void _showSubjectModal(BuildContext context, WidgetRef ref, User user, {required bool isEditing, Subject? subjectToEdit}) {
+  void _showSubjectModal(BuildContext context, WidgetRef ref, User user, {required bool isEditing, Subject? subjectToEdit, required Color themeColor}) {
     final TextEditingController nameController = TextEditingController(text: isEditing ? subjectToEdit!.name : '');
     final formKey = GlobalKey<FormState>();
 
@@ -315,9 +345,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 title: Row(
                   children: [
-                    Icon(isEditing ? Icons.edit_rounded : Icons.library_add_rounded, color: AppColors.primary),
+                    // 🚀 DINÂMICO: Ícones e Títulos dos modais herdam o tema vivo
+                    Icon(isEditing ? Icons.edit_rounded : Icons.library_add_rounded, color: themeColor),
                     const SizedBox(width: 10),
-                    Text(isEditing ? 'Editar Matéria' : 'Nova Disciplina', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    Text(isEditing ? 'Editar Matéria' : 'Nova Disciplina', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor)),
                   ],
                 ),
                 content: SingleChildScrollView(
@@ -338,7 +369,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             filled: true,
                             fillColor: Colors.white,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+                            // 🚀 DINÂMICO: A borda de foco acompanha a cor viva
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: themeColor, width: 1.5)),
                           ),
                           validator: (value) => value == null || value.trim().isEmpty ? 'Insira um nome válido' : null,
                         ),
@@ -356,11 +388,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                 duration: const Duration(milliseconds: 200),
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
-                                  border: isSelected ? Border.all(color: AppColors.primary, width: 2) : Border.all(color: Colors.grey.shade300),
+                                  // 🚀 DINÂMICO: Seleção de ícones usa a cor viva
+                                  color: isSelected ? themeColor.withOpacity(0.1) : Colors.transparent,
+                                  border: isSelected ? Border.all(color: themeColor, width: 2) : Border.all(color: Colors.grey.shade300),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Icon(item['icon'] as IconData, color: isSelected ? AppColors.primary : Colors.grey, size: 24),
+                                child: Icon(item['icon'] as IconData, color: isSelected ? themeColor : Colors.grey, size: 24),
                               ),
                             );
                           }).toList(),
@@ -403,7 +436,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      // 🚀 DINÂMICO: O botão de submissão do modal assume a cor viva
+                      backgroundColor: themeColor,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
@@ -427,7 +461,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           final novaDisciplina = Subject(
                             name: nameController.text.trim(),
                             color: pickedColorHex,
-                            userId: user.serverId,
+                            userId: user.id ?? 1,
                             icon: pickedIconName,
                             syncedWithCloud: 0,
                           );
@@ -435,8 +469,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           activeNotifier.setSubject(novaDisciplina);
                         }
 
-                        // Fecha o Modal (sem forçar contextos destruídos)
-                        Navigator.pop(contextDialog);
+                        if (contextDialog.mounted) Navigator.pop(contextDialog);
                       }
                     },
                     child: Text(isEditing ? 'Atualizar' : 'Criar', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),

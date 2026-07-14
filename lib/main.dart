@@ -1,37 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart' hide ChangeNotifierProvider;
-
-import 'core/theme/app_colors.dart';
-import 'features/auth/views/splash_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:caderno_digital_app/core/theme/app_theme.dart'; // 🚀 Importa o tema unificado
+import 'package:caderno_digital_app/features/auth/views/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // 🚀 PROVIDERSCOPE: A redoma mágica que guarda o estado de toda a aplicação!
   runApp(
     const ProviderScope(
-      child: CadernoDigitalApp(),
+      child: MyApp(),
     ),
   );
 }
 
-class CadernoDigitalApp extends StatelessWidget {
-  const CadernoDigitalApp({super.key});
+class MyApp extends ConsumerWidget {
+  const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 🚀 O SEGUIDOR: Escuta o provedor híbrido.
+    // Se mudar o perfil OU a cor da disciplina, a app re-pinta-se na hora!
+    final dynamicTheme = ref.watch(appThemeProvider);
+
     return MaterialApp(
       title: 'Caderno Digital',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: AppColors.primary,
-        scaffoldBackgroundColor: AppColors.background,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-      ),
-      // O ecrã de Splash vai decidir se vai para o Login ou para as Disciplinas
+      theme: dynamicTheme, // Injeta o motor dinâmico
       home: const SplashScreen(),
     );
   }

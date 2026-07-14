@@ -31,7 +31,6 @@ class SubjectsListScreen extends ConsumerWidget {
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
         title: Text('Os meus Cadernos', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 22)),
-        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
       ),

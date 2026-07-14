@@ -30,7 +30,7 @@ class SyncService {
   Future<void> syncAll() async {
     if (kIsWeb) return;
 
-    if (isCollaborationActive) {
+    if (false) {
       debugPrint('🛑 [SyncService] Sincronização automática pausada para colaboração.');
       return;
     }

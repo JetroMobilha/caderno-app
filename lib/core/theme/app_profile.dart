@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 enum AppProfile { corporativo, academico, desenho, notas, agenda }
 
 class AppProfileNotifier extends StateNotifier<AppProfile> {
+  // O perfil padrão arranca no Académico
   AppProfileNotifier() : super(AppProfile.academico);
 
   void changeProfile(AppProfile newProfile) => state = newProfile;
@@ -14,6 +15,7 @@ final appProfileProvider = StateNotifierProvider<AppProfileNotifier, AppProfile>
   return AppProfileNotifier();
 });
 
+/// Extensão utilitária para extrair configurações visuais com base no perfil ativo
 extension AppProfileExtension on AppProfile {
   String get name {
     switch (this) {
@@ -45,13 +47,13 @@ extension AppProfileExtension on AppProfile {
     }
   }
 
-  // 🚀 NOVO: Entrega o nome limpo e cru da fonte para blindar o tema
+  // 🚀 SUBSTITUÍMOS A FONTE SERIFADA (LORA) PELA SANS-SERIF (INTER)
   String get fontFamilyName {
     switch (this) {
       case AppProfile.corporativo: return 'Inter';
-      case AppProfile.academico: return 'Lora';
+      case AppProfile.academico: return 'Inter'; // 🔥 Agora é Sans-Serif!
       case AppProfile.desenho: return 'Poppins';
-      case AppProfile.notas: return 'Caveat';
+      case AppProfile.notas: return 'Nunito'; // Substituído por Nunito (Sans-Serif arredondada)
       case AppProfile.agenda: return 'Ubuntu';
     }
   }
@@ -59,9 +61,9 @@ extension AppProfileExtension on AppProfile {
   TextStyle get titleStyle {
     switch (this) {
       case AppProfile.corporativo: return GoogleFonts.inter(fontWeight: FontWeight.bold);
-      case AppProfile.academico: return GoogleFonts.lora(fontWeight: FontWeight.bold);
+      case AppProfile.academico: return GoogleFonts.inter(fontWeight: FontWeight.bold); // 🔥 Agora é Sans-Serif!
       case AppProfile.desenho: return GoogleFonts.poppins(fontWeight: FontWeight.w600);
-      case AppProfile.notas: return GoogleFonts.caveat(fontWeight: FontWeight.bold, fontSize: 24);
+      case AppProfile.notas: return GoogleFonts.nunito(fontWeight: FontWeight.bold, fontSize: 24);
       case AppProfile.agenda: return GoogleFonts.ubuntu(fontWeight: FontWeight.w500, letterSpacing: 0.5);
     }
   }

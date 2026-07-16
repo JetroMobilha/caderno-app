@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -414,7 +415,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               }
               final int? convidados = await showModalBottomSheet<int>(
                 context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-                builder: (context) => ShareNotebookBottomSheet(notebookId: kIsWeb ? widget.notebookId : (controller.liveNotebookSid ?? widget.notebookId), notebookTitle: widget.notebookTitle),
+                builder: (context) => ShareNotebookBottomSheet(notebook: Notebook(title: widget.notebookTitle, coverType: widget.lineType, lineType: widget.lineType, paperSize: widget.paperSize,id: widget.notebookId,serverId: widget.notebookSid),),
               );
               if (convidados != null && convidados > 0) {
                 controller.initRealtimeCollaboration();

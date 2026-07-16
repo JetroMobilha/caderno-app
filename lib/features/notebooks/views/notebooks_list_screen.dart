@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../canvas/widgets/share_notebook_sheet.dart';
 import '../../shared/widgets/app_drawer.dart';
 import '../../subjects/controllers/subjects_controller.dart';
 import '../../canvas/views/canvas_screen.dart';
@@ -126,7 +127,8 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                 Positioned(
                   top: 8,
                   right: 4,
-                  child: PopupMenuButton<String>(
+                  child: // 1️⃣ DENTRO DO TEU BUILD, SUBSTITUI O POPUPMENUBUTTON POR ESTE:
+                  PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 20),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onSelected: (value) {
@@ -134,13 +136,34 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: true, notebookToEdit: notebook);
                       } else if (value == 'delete') {
                         _confirmDelete(context, notebook);
+                      } else if (value == 'share') {
+                        if (notebook.serverId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Sincroniza o caderno primeiro! ☁️'), backgroundColor: Colors.orange),
+                          );
+                        } else {
+                          // 🚀 CHAMA O TEU NOVO WIDGET AQUI!
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => ShareNotebookBottomSheet(notebook: notebook),
+                          );
+                        }
                       }
                     },
                     itemBuilder: (context) => [
-                      PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar Capa', style: GoogleFonts.inter(fontSize: 13))])),
-                      PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
+                      if (notebook.role == 'owner' || notebook.role == 'editor')
+                        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
+
+                      // 🌟 A MAGIA DA PARTILHA AQUI (Só o Dono pode partilhar)
+                      if (notebook.role == 'owner')
+                        PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
+
+                      if (notebook.role == 'owner')
+                        PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
                     ],
-                  ),
+                  )
                 ),
               ],
             );

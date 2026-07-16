@@ -80,19 +80,26 @@ class SyncService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final List serverSubjects = data['subjects'];
+        final List serverSubjects = data['subjects'] ?? [];
         if (data['server_time'] != null) await prefs.setString('last_subjects_sync', data['server_time']);
 
         if (serverSubjects.isEmpty) return false;
 
         for (var sub in serverSubjects) {
           final existing = await db.query('subjects', where: 'server_id = ?', whereArgs: [sub['id']]);
+
           final payload = {
-            'server_id': sub['id'], 'user_id': sub['user_id'],
-            'name': sub['name'], 'color': sub['color'],
-            'icon': sub['icon'], 'synced_with_cloud': 1,
+            'server_id': sub['id'],
+            'user_id': sub['user_id'],
+            'name': sub['name'],
+            'color': sub['color'],
+            'icon': sub['icon'],
+            // 🚀 A CORREÇÃO ANTI-FANTASMA AQUI! Lê o deleted_at da nuvem!
+            'is_deleted': sub['deleted_at'] != null ? 1 : 0,
+            'synced_with_cloud': 1,
             'updated_at': DateTime.now().millisecondsSinceEpoch,
           };
+
           if (existing.isEmpty) {
             await db.insert('subjects', payload);
           } else {
@@ -312,23 +319,37 @@ class SyncService {
             'notebook_id': localNotebookId,
             'page_number': sPage['page_number'],
             'is_landscape': (sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0,
-            'header_data': sPage['header_data'],
-            'footer_data': sPage['footer_data'],
+
+            // 🛡️ Previne Strings Null ou Inválidas nos headers
+            'header_data': sPage['header_data'] is String ? sPage['header_data'] : jsonEncode(sPage['header_data'] ?? ''),
+            'footer_data': sPage['footer_data'] is String ? sPage['footer_data'] : jsonEncode(sPage['footer_data'] ?? ''),
+
             'synced_with_cloud': 1,
             'updated_at': DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch,
           };
 
-          // Insere a página e obtém o ID local. Se já existir, usamos Replace.
           final localPageId = await db.insert('pages', pageData, conflictAlgorithm: ConflictAlgorithm.replace);
+
+          // 🚀 DESCODIFICADOR BLINDADO ANTI-STRING: Garante que os traços são tratados como Array
+          List strokeList = [];
+          if (sPage['stroke_data'] != null) {
+            if (sPage['stroke_data'] is String) {
+              try { strokeList = jsonDecode(sPage['stroke_data']); } catch (_) {}
+            } else if (sPage['stroke_data'] is Iterable) {
+              strokeList = List.from(sPage['stroke_data']);
+            }
+          }
 
           // Limpa Canvas antigo e insere os novos traços da Nuvem
           await db.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [localPageId]);
-          for (var st in sPage['stroke_data'] ?? []) {
+
+          for (var st in strokeList) {
             await db.insert('canvas_strokes', {
               'client_stroke_id': st['id']?.toString() ?? uniqid(),
               'page_id': localPageId,
-              'stroke_data': jsonEncode(st),
-              'is_deleted': 0, 'synced_with_cloud': 1,
+              'stroke_data': jsonEncode(st), // Guarda de volta como JSON seguro para o SQLite
+              'is_deleted': 0,
+              'synced_with_cloud': 1,
               'updated_at': DateTime.now().millisecondsSinceEpoch,
             }, conflictAlgorithm: ConflictAlgorithm.replace);
           }

@@ -20,6 +20,15 @@ final appThemeProvider = Provider<ThemeData>((ref) {
     }
   }
 
+  // 🚀 Força a tipografia Sans-Serif em toda a estrutura do Material Design
+  final TextTheme baseTextTheme = GoogleFonts.getTextTheme(
+    activeProfile.fontFamilyName,
+    ThemeData.light().textTheme,
+  ).apply(
+    bodyColor: AppColors.textDark,
+    displayColor: AppColors.textDark,
+  );
+
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
@@ -31,11 +40,8 @@ final appThemeProvider = Provider<ThemeData>((ref) {
       surface: AppColors.paper,
     ),
 
-    // 🚀 CORRIGIDO: Passamos o nome da String diretamente sem rasteiras de variantes
-    textTheme: GoogleFonts.getTextTheme(
-      activeProfile.fontFamilyName,
-      ThemeData.light().textTheme,
-    ),
+    // Injeta o tema de texto limpo em toda a app (Inputs, ListTiles, Textos normais)
+    textTheme: baseTextTheme,
 
     appBarTheme: AppBarTheme(
       backgroundColor: primaryColor,

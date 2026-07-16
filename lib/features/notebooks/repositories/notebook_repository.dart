@@ -107,4 +107,47 @@ class NotebookRepository {
       return false;
     }
   }
+
+  // A. Procurar e-mails para sugestões
+  Future<List<String>> searchEmails(String query) async {
+    try {
+      final response = await _apiService.get('/users/search?q=$query');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((user) => user['email'] as String).toList();
+      }
+    } catch (e) {
+      debugPrint('🚨 Erro Autocomplete: $e');
+    }
+    return [];
+  }
+
+  // B. Puxar colaboradores guardados na nuvem
+  Future<List<Map<String, String>>> fetchCollaborators(int notebookId) async {
+    try {
+      final response = await _apiService.get('/notebooks/$notebookId/collaborators');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((c) => {
+          'name': c['name'] as String,
+          'email': c['email'] as String,
+          'role': c['role'] as String,
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('🚨 Erro ao buscar colaboradores: $e');
+    }
+    return [];
+  }
+
+  // C. Deletar permissão na nuvem
+  Future<bool> removeShareWithFriend({required int notebookId, required String email}) async {
+    try {
+      final response = await _apiService.deleteWithBody('/notebooks/$notebookId/share', {'email': email});
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('🚨 Erro ao revogar acesso: $e');
+      return false;
+    }
+  }
 }

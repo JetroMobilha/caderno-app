@@ -48,30 +48,58 @@ class NotebooksController extends Notifier<List<Notebook>> {
     return generatedId;
   }
 
-  // =========================================================================
-  // 🛡️ BLINDAGEM DE EDIÇÃO: Apenas Donos e Editores alteram a capa/título
-  // =========================================================================
   Future<void> updateNotebook(Notebook notebook) async {
     if (notebook.role == 'viewer' || notebook.role == 'student') {
       debugPrint('🚨 [SEGURANÇA LOCAL] Edição bloqueada! O utilizador é apenas um ${notebook.role}.');
-      return; // 🛑 Aborta a operação!
+      return;
     }
 
     await _repository.updateNotebook(notebook);
+    // 🛡️ PREVINE O DESAPARECIMENTO: Atualiza apenas o item modificado mantendo o resto da lista intacto!
     state = state.map((n) => n.id == notebook.id ? notebook : n).toList();
   }
 
-  // =========================================================================
-  // 🛡️ BLINDAGEM DE EXCLUSÃO: Apenas o Dono Absoluto pode destruir o caderno
-  // =========================================================================
   Future<void> deleteNotebook(Notebook notebook) async {
     if (notebook.role != 'owner') {
       debugPrint('🚨 [SEGURANÇA LOCAL] Exclusão bloqueada! Apenas o owner pode apagar o caderno.');
-      return; // 🛑 Aborta a operação!
+      return;
     }
 
     await _repository.deleteNotebook(notebook);
     state = state.where((n) => n.id != notebook.id).toList();
+  }
+
+  // =========================================================================
+  // 🤝 EFETUAR PARTILHA E ATUALIZAR ACESSOS IMEDIATAMENTE
+  // =========================================================================
+  Future<bool> shareNotebook(int notebookServerId, String email, String role) async {
+    final bool success = await _repository.shareNotebookWithFriend(
+      notebookId: notebookServerId,
+      email: email,
+      role: role,
+    );
+
+    if (success) {
+      // 🚀 FORÇA O REFRESH: Atualiza os carimbos de tempo locais para que as abas se mantenham vivas e estáveis
+      await refreshCurrent();
+    }
+    return success;
+  }
+
+  Future<List<String>> getEmailSuggestions(String query) async {
+    return await _repository.searchEmails(query);
+  }
+
+  Future<List<Map<String, String>>> loadCollaborators(int notebookServerId) async {
+    return await _repository.fetchCollaborators(notebookServerId);
+  }
+
+  Future<bool> revokeAccess(int notebookServerId, String email) async {
+    final bool success = await _repository.removeShareWithFriend(notebookId: notebookServerId, email: email);
+    if (success) {
+      await refreshCurrent();
+    }
+    return success;
   }
 }
 

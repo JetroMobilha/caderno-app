@@ -8,7 +8,7 @@ class RealtimeService {
   static final RealtimeService _instance = RealtimeService._internal();
   factory RealtimeService() => _instance;
   RealtimeService._internal();
-
+  PrivateChannel? _userChannel;
   PusherChannelsClient? _pusher;
   PresenceChannel? _notebookChannel;
   bool _isConnected = false;
@@ -156,5 +156,35 @@ class RealtimeService {
   void disconnect() {
     _pusher?.disconnect();
     _isConnected = false;
+  }
+
+  // =========================================================================
+  // 📡 6. ESCUTAR ALTERAÇÕES DA PRÓPRIA CONTA (Sincronização Multi-Dispositivo)
+  // =========================================================================
+  Future<void> listenToUserAccount(int userId, Function onGlobalSyncNeeded) async {
+    if (_pusher == null) await initConnection();
+    if (_pusher == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final String? token = prefs.getString('sanctum_token');
+    final channelName = 'private-user.$userId';
+
+    final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPrivateChannel(
+      authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    );
+
+    _userChannel = _pusher!.privateChannel(channelName, authorizationDelegate: authDelegate);
+
+    // Quando o Servidor Laravel gritar "A TUA CONTA MUDOU NOURO DISPOSITIVO!"
+    _userChannel!.bind('SyncRequested').listen((event) {
+      debugPrint('⚡ [Reverb] Sincronização Global Exigida pelo Servidor!');
+      onGlobalSyncNeeded(); // Aciona o sync do SubjectsController
+    });
+
+    _userChannel!.subscribe();
   }
 }

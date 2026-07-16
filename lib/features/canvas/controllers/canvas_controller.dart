@@ -111,7 +111,7 @@ class CanvasController extends ChangeNotifier {
     currentPaperSize = paperSize;
     notifyListeners();
 
-    SyncService.isCollaborationActive = true;
+    SyncService.isCollaborationActive = false;
     debugPrint('🔒 [Canvas] Motor de Sincronização Automática DESLIGADO.');
 
     pages = await _repository.getPagesByNotebook(notebookId, liveNotebookSid);

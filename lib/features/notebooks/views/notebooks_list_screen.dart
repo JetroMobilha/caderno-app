@@ -131,23 +131,45 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 20),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onSelected: (value) {
+                    onSelected: (value) async { // 🚀 Atenção: Coloca o async aqui!
                       if (value == 'edit') {
                         _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: true, notebookToEdit: notebook);
                       } else if (value == 'delete') {
                         _confirmDelete(context, notebook);
                       } else if (value == 'share') {
-                        if (notebook.serverId == null) {
+
+                        // 🧠 LÓGICA INTELIGENTE DE PARTILHA: Se não tem ID no servidor, forçamos o push invisível!
+                        Notebook currentNotebook = notebook;
+
+                        if (currentNotebook.serverId == null) {
+                          // 1. Avisa o utilizador que estamos a preparar o caderno (Loading visual rápido)
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Sincroniza o caderno primeiro! ☁️'), backgroundColor: Colors.orange),
+                            const SnackBar(content: Text('A ligar caderno à nuvem... ☁️'), duration: Duration(seconds: 1)),
                           );
-                        } else {
-                          // 🚀 CHAMA O TEU NOVO WIDGET AQUI!
+
+                          // 2. Dispara o Sync apenas para enviar o que falta
+                          await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+
+                          // 3. Atualiza o objeto do caderno com o novo Server ID que acabou de chegar
+                          final updatedNotebooks = ref.read(notebooksProvider);
+                          currentNotebook = updatedNotebooks.firstWhere((n) => n.id == notebook.id, orElse: () => notebook);
+                        }
+
+                        // Se a internet falhou e mesmo assim não obteve serverId, aborta com graciosidade
+                        if (currentNotebook.serverId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Sem internet. Não é possível partilhar agora.'), backgroundColor: Colors.redAccent),
+                          );
+                          return;
+                        }
+
+                        // 4. Agora sim, com o caderno seguro na nuvem, abrimos o Modal de luxo!
+                        if (context.mounted) {
                           showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
-                            builder: (context) => ShareNotebookBottomSheet(notebook: notebook),
+                            builder: (context) => ShareNotebookBottomSheet(notebook: currentNotebook),
                           );
                         }
                       }

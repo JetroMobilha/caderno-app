@@ -10,54 +10,15 @@ import '../models/subject_model.dart';
 import '../repositories/subject_repository.dart';
 
 // ============================================================================
-// 🧠 CONTROLADOR COM RADAR SILENCIOSO: GERE A RAM, SQLITE E SINCRONIZAÇÃO
+// 🧠 CONTROLADOR OFFLINE-FIRST (Puro, Rápido e Sem Polling)
 // ============================================================================
 class SubjectsController extends StateNotifier<List<Subject>> {
   final Ref ref;
-  Timer? _syncTimer;
   final SubjectRepository _repository = SubjectRepository();
 
   SubjectsController(this.ref) : super([]) {
     loadSubjects();
-    _startAutomaticTracker();
-  }
-
-  void _startAutomaticTracker() {
-    if (kIsWeb) return;
-
-    _syncTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      final authState = ref.read(authProvider);
-      if (authState.currentUser == null) {
-        timer.cancel();
-        return;
-      }
-
-      if (SyncService.isCollaborationActive) return;
-
-      try {
-        final syncService = SyncService();
-        await syncService.pushOfflineSubjects();
-        await syncService.pullSubjects();
-        await syncService.pushNotebooks();
-        final bool novosCadernosChegaram = await syncService.pullNotebooks();
-        await syncService.pushPages();
-        final bool novasFolhasChegaram = await syncService.pullPages();
-
-        if (!mounted) return;
-        await loadSubjects();
-
-        if (novosCadernosChegaram || novasFolhasChegaram) {
-          ref.invalidate(notebooksProvider);
-        }
-      } catch (e) {
-        debugPrint('📴 [Radar Silencioso] Modo Offline: $e');
-      }
-    });
+    // 🚀 O Timer de 1 minuto foi ANIQUILADO! Poupamos bateria e CPU.
   }
 
   Future<void> loadSubjects() async {
@@ -81,7 +42,6 @@ class SubjectsController extends StateNotifier<List<Subject>> {
     final newSubject = await _repository.addSubject(subject);
     if (newSubject != null) {
       state = [newSubject, ...state];
-      // 🚀 Removido o _tryInstantSync daqui! Foco 100% offline local.
     }
   }
 
@@ -97,22 +57,14 @@ class SubjectsController extends StateNotifier<List<Subject>> {
       syncedWithCloud: kIsWeb ? 1 : 0,
     );
     state = state.map((s) => s.id == subject.id ? updatedSubject : s).toList();
-    // 🚀 Removido o _tryInstantSync daqui!
   }
 
-  // =========================================================================
-  // 🗑️ APAGAR DISCIPLINA (Purificado e sem dependências circulares!)
-  // =========================================================================
   Future<void> deleteSubject(Subject subject) async {
-    // 1. Executa o Soft Delete no Repositório (Muda is_deleted para 1 no SQLite)
     await _repository.deleteSubject(subject);
-
-    // 2. 🚀 ATUALIZAÇÃO OTIMISTA INSTANTÂNEA: Remove o item da memória RAM
-    // Removida por completo a leitura do 'activeSubjectProvider' e do 'invalidateSelf()'.
-    // O loop circular foi completamente destruído!
     state = state.where((s) => s.id != subject.id).toList();
   }
 
+  // 📡 Chamado manualmente pelo botão da Gaveta ou pelo Reverb (WebSocket)
   Future<void> syncManuallyWithCloud() async {
     if (!kIsWeb) {
       final syncService = SyncService();
@@ -121,18 +73,15 @@ class SubjectsController extends StateNotifier<List<Subject>> {
     await loadSubjects();
     ref.invalidate(notebooksProvider);
   }
-
-  @override
-  void dispose() {
-    _syncTimer?.cancel();
-    super.dispose();
-  }
 }
 
 final subjectsProvider = StateNotifierProvider<SubjectsController, List<Subject>>((ref) {
   return SubjectsController(ref);
 });
 
+// ============================================================================
+// 🎯 PROVIDER DA DISCIPLINA ATIVA (Gere a sua reatividade de forma limpa)
+// ============================================================================
 // ============================================================================
 // 🎯 PROVIDER DA DISCIPLINA ATIVA (Gere a sua reatividade de forma limpa)
 // ============================================================================
@@ -146,8 +95,11 @@ class ActiveSubjectNotifier extends Notifier<Subject?> {
     final subjects = ref.watch(subjectsProvider);
 
     if (subjects.isEmpty) {
-      _cachedSubject = null;
-      return null;
+      // Se não há nada no SQLite, esvazia
+      if (_cachedSubject?.id != -1) {
+        _cachedSubject = null;
+      }
+      return _cachedSubject;
     }
 
     if (!_isLoaded) {
@@ -157,11 +109,18 @@ class ActiveSubjectNotifier extends Notifier<Subject?> {
       return _cachedSubject;
     }
 
-    // 🧠 REATIVIDADE AUTÓNOMA: Se a disciplina focada sumir da lista geral
-    // (porque o utilizador a apagou), esta antena percebe sozinha e foca-se na primeira!
-    if (_cachedSubject != null && !subjects.any((s) => s.id == _cachedSubject!.id)) {
-      _cachedSubject = subjects.first;
-      return _cachedSubject;
+    // 🧠 REATIVIDADE AUTÓNOMA BLINDADA
+    if (_cachedSubject != null) {
+      // 🚀 EXCEÇÃO EDTECH: Se for a Aba Virtual "Partilhados Comigo" (-1), o scanner IGNERA.
+      if (_cachedSubject!.id == -1) {
+        return _cachedSubject;
+      }
+
+      // Se não for a Aba de Partilhados e a matéria realmente sumir da lista geral, volta à primeira
+      if (!subjects.any((s) => s.id == _cachedSubject!.id)) {
+        _cachedSubject = subjects.first;
+        return _cachedSubject;
+      }
     }
 
     return _cachedSubject;
@@ -172,6 +131,13 @@ class ActiveSubjectNotifier extends Notifier<Subject?> {
     final lastId = prefs.getInt('last_subject_id');
 
     if (lastId != null) {
+      // Impede que ele restaure a aba "Partilhados Comigo" do cache, volta sempre para as normais.
+      if (lastId == -1) {
+        _cachedSubject = subjects.first;
+        state = subjects.first;
+        return;
+      }
+
       try {
         final savedSubject = subjects.firstWhere((s) => s.id == lastId);
         _cachedSubject = savedSubject;
@@ -187,8 +153,10 @@ class ActiveSubjectNotifier extends Notifier<Subject?> {
     _cachedSubject = subject;
     state = subject;
     final prefs = await SharedPreferences.getInstance();
-    if (subject?.id != null) {
-      await prefs.setInt('last_subject_id', subject!.id!);
+
+    // Só guardamos a memória de longo prazo se for uma disciplina real
+    if (subject?.id != null && subject!.id != -1) {
+      await prefs.setInt('last_subject_id', subject.id!);
     } else {
       await prefs.remove('last_subject_id');
     }

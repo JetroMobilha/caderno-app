@@ -126,6 +126,9 @@ class Notebook {
     };
   }
 
+  // =========================================================================
+  // 🛡️ DESCODIFICADOR BLINDADO (SQLite -> RAM)
+  // =========================================================================
   factory Notebook.fromMap(Map<String, dynamic> map) {
     return Notebook(
       id: map['id'] as int?,
@@ -137,12 +140,18 @@ class Notebook {
       coverImage: map['cover_image'] as String?,
       lineType: map['line_type'] as String,
       paperSize: map['paper_size'] as String,
-      isPublished: map['is_published'] ?? 0,
-      price: (map['price'] as num?)?.toDouble() ?? 0.00,
+
+      // 🚀 CONVERSÃO SEGURA: Se o Laravel enviar "0", tentamos converter para int!
+      isPublished: int.tryParse(map['is_published']?.toString() ?? '0') ?? 0,
+
+      // 🚀 CONVERSÃO SEGURA: Se o Laravel enviar "0.00", convertemos para double!
+      price: double.tryParse(map['price']?.toString() ?? '0.0') ?? 0.0,
+
       description: map['description'] as String?,
       author_name: map['author_name'] as String?,
-      syncedWithCloud: map['synced_with_cloud'] ?? 0,
-      isDeleted: map['is_deleted'] ?? 0,
+
+      syncedWithCloud: int.tryParse(map['synced_with_cloud']?.toString() ?? '0') ?? 0,
+      isDeleted: int.tryParse(map['is_deleted']?.toString() ?? '0') ?? 0,
       role: map['role'] ?? 'owner',
     );
   }

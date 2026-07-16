@@ -9,6 +9,7 @@ class NotebooksController extends Notifier<List<Notebook>> {
   final SharedNotebookRepository _sharedRepository = SharedNotebookRepository();
 
   int? _currentSubjectId;
+  int? _currentSubjectServerId;
   int? _currentUserId;
   bool _isShowingShared = false;
 
@@ -20,24 +21,33 @@ class NotebooksController extends Notifier<List<Notebook>> {
   Future<void> loadNotebooks(int subjectId, {int? subjectServerId}) async {
     _isShowingShared = false;
     _currentSubjectId = subjectId;
+    _currentSubjectServerId = subjectServerId; // 🚀 Guarda na memória
     state = await _repository.getNotebooksBySubject(subjectId, subjectServerId);
   }
 
   Future<void> loadSharedNotebooks(int currentUserId) async {
     _isShowingShared = true;
     _currentSubjectId = null;
+    _currentSubjectServerId = null;
     _currentUserId = currentUserId;
     state = await _sharedRepository.getSharedNotebooks(currentUserId);
   }
 
+  // =========================================================================
+  // 🔄 RECARREGAR ESTADO (Usado pelo SyncService e Partilhas)
+  // =========================================================================
   Future<void> refreshCurrent() async {
-    if (_isShowingShared && _currentUserId != null) {
-      state = await _sharedRepository.getSharedNotebooks(_currentUserId!);
-    } else if (_currentSubjectId != null) {
-      state = await _repository.getNotebooksBySubject(_currentSubjectId!, null);
+    try {
+      if (_isShowingShared && _currentUserId != null) {
+        state = await _sharedRepository.getSharedNotebooks(_currentUserId!);
+      } else if (_currentSubjectId != null) {
+        // 🚀 AGORA PASSA O SERVER ID TAMBÉM!
+        state = await _repository.getNotebooksBySubject(_currentSubjectId!, _currentSubjectServerId);
+      }
+    } catch (e, stack) {
+      debugPrint('🚨 ERRO AO RENDERIZAR CADERNOS APÓS SYNC: $e\n$stack');
     }
   }
-
   Future<int> addNotebook(Notebook notebook, int? subjectServerId) async {
     final int generatedId = await _repository.insertNotebook(notebook);
     final newNotebookWithId = notebook.copyWith(id: generatedId, syncedWithCloud: 0);

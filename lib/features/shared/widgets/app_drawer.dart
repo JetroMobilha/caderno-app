@@ -67,7 +67,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Future<void> _handleManualSync() async {
     setState(() => _isSyncing = true);
     try {
+      // 1. Sincroniza as disciplinas e os dados em background
       await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+
+      // 2. 🚀 ORDEM DE REFRESH: Manda a estante de cadernos redesenhar-se com as novidades!
+      await ref.read(notebooksProvider.notifier).refreshCurrent();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sincronização concluída! ☁️✨'), backgroundColor: Color(0xFF27AE60)));
       }

@@ -199,8 +199,11 @@ class SyncService {
             'cover_image': net['cover_image'],
             'line_type': net['line_type'] ?? 'ruled',
             'paper_size': net['paper_size'] ?? 'A4',
-            'is_published': net['is_published'] ?? 0,
-            'price': net['price'] ?? 0.00,
+
+            // 🛡️ HIGIENE DE DADOS: Força a gravação de números reais no SQLite
+            'is_published': int.tryParse(net['is_published']?.toString() ?? '0') ?? 0,
+            'price': double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0,
+
             'description': net['description'],
             'author_name': net['author_name'],
             'is_deleted': net['deleted_at'] != null ? 1 : 0,

@@ -9,7 +9,7 @@ class NotebookRepository {
   final ApiService _apiService = ApiService();
 
   // =========================================================================
-  // 📚 LISTAR CADERNOS ATIVOS DA DISCIPLINA (Filtra is_deleted = 0)
+  // 📚 LISTAR CADERNOS ATIVOS DA DISCIPLINA (Com Blindagem de ID)
   // =========================================================================
   Future<List<Notebook>> getNotebooksBySubject(int subjectId, int? subjectServerId) async {
     if (kIsWeb) {
@@ -24,17 +24,27 @@ class NotebookRepository {
     } else {
       final db = await _dbHelper.database;
 
+      // 🚀 BLINDAGEM ANTI-FANTASMA: Descobre o ID local real da matéria!
+      // Se a UI enviar o ID da nuvem por engano, o SQLite traduz para o ID local.
+      int realLocalSubjectId = subjectId;
+      if (subjectServerId != null) {
+        final subQuery = await db.query('subjects', columns: ['id'], where: 'server_id = ?', whereArgs: [subjectServerId]);
+        if (subQuery.isNotEmpty) {
+          realLocalSubjectId = subQuery.first['id'] as int;
+        }
+      }
+
+      // Agora procura com absoluta certeza na tabela de cadernos
       final List<Map<String, dynamic>> maps = await db.query(
         'notebooks',
-        where: 'is_deleted = ? AND (subject_id = ? OR subject_id = ?)',
-        whereArgs: [0, subjectId, subjectServerId ?? subjectId],
+        where: 'is_deleted = ? AND subject_id = ?',
+        whereArgs: [0, realLocalSubjectId],
         orderBy: 'updated_at DESC',
       );
 
       return maps.map((map) => Notebook.fromMap(map)).toList();
     }
   }
-
   // =========================================================================
   // 📓 CRIAR CADERNO (OFFLINE-FIRST)
   // =========================================================================

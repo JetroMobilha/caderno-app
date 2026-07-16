@@ -13,7 +13,7 @@ class CanvasRepository {
   final ApiService _apiService = ApiService();
 
   // =========================================================================
-  // 📖 LER FOLHAS DO CADERNO (Ao abrir o Canvas)
+  // 📖 LER FOLHAS DO CADERNO
   // =========================================================================
   Future<List<LocalPage>> getPagesByNotebook(int notebookId, int? notebookServerId) async {
     if (kIsWeb) {
@@ -22,7 +22,7 @@ class CanvasRepository {
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
-        final List<dynamic> pagesData = jsonResponse['data'] ?? jsonResponse; // Lida com a paginação da API
+        final List<dynamic> pagesData = jsonResponse['data'] ?? jsonResponse;
         return pagesData.map((pMap) => LocalPage.fromMap(pMap)).toList();
       }
       return [];
@@ -37,20 +37,20 @@ class CanvasRepository {
       for (var pMap in pageMaps) {
         final int pageId = pMap['id'] as int;
 
-        // Recupera os Micro-Saves
         final strokeMaps = await db.query('canvas_strokes', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pageId]);
         final strokes = strokeMaps.map((s) => Stroke.fromJsonString(s['stroke_data'] as String)).toList();
 
         final textMaps = await db.query('canvas_text_blocks', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pageId]);
         final texts = textMaps.map((t) => TextBlock.fromMap(jsonDecode(t['text_data'] as String))).toList();
 
-        final imgMaps = await db.query('canvas_image_blocks', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pageId]);
+        // 🚀 CORREÇÃO 1: Removido o filtro is_deleted = 0 que escondia as imagens nulas
+        final imgMaps = await db.query('canvas_image_blocks', where: 'page_id = ?', whereArgs: [pageId]);
         final images = imgMaps.map((img) => ImageBlock.fromMap({
           'id': img['client_image_id'],
           'image_path': img['image_path'],
           'dx': img['pos_x'],
           'dy': img['pos_y'],
-          'width': img['width'] ?? 300.0, // Bug antigo corrigido!
+          'width': img['width'] ?? 300.0,
           'height': img['height'] ?? 200.0,
           'rotation': img['rotation'],
         })).toList();
@@ -62,7 +62,7 @@ class CanvasRepository {
   }
 
   // =========================================================================
-  // 📥 ESTRATÉGIA 1: BULK SAVE / TRANSAÇÃO (Mobile Only)
+  // 📥 SALVAR FOLHAS (BULK) E MICRO-SAVES
   // =========================================================================
   Future<void> savePage(LocalPage page, int? notebookServerId) async {
     if (kIsWeb) {
@@ -107,9 +107,6 @@ class CanvasRepository {
     return newPage;
   }
 
-  // =========================================================================
-  // ⚡ ESTRATÉGIA 2: MICRO-SAVES DE ALTA PERFORMANCE
-  // =========================================================================
   Future<void> saveSingleStroke(int pageId, Stroke stroke) async {
     if (kIsWeb) return;
     final db = await _dbHelper.database;
@@ -131,7 +128,8 @@ class CanvasRepository {
   Future<void> saveSingleImageBlock(int pageId, ImageBlock img) async {
     if (kIsWeb) return;
     final db = await _dbHelper.database;
-    await db.insert('canvas_image_blocks', {'client_image_id': img.id, 'page_id': pageId, 'image_path': img.imagePath, 'pos_x': img.position.dx, 'pos_y': img.position.dy, 'width': img.width, 'height': img.height, 'rotation': img.rotation, 'synced_with_cloud': 0}, conflictAlgorithm: ConflictAlgorithm.replace);
+    // 🚀 CORREÇÃO 2: Adicionado 'is_deleted': 0 para impedir que a imagem grave como NULL
+    await db.insert('canvas_image_blocks', {'client_image_id': img.id, 'page_id': pageId, 'image_path': img.imagePath, 'pos_x': img.position.dx, 'pos_y': img.position.dy, 'width': img.width, 'height': img.height, 'rotation': img.rotation, 'is_deleted': 0, 'synced_with_cloud': 0}, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> updatePageMetadata(int pageId, String title, String footer) async {
@@ -141,16 +139,25 @@ class CanvasRepository {
   }
 
   // =========================================================================
-  // 🚨 GATILHO DO AUTO-SAVE DO RADAR
+  // 🗑️ DESTRUIÇÃO DE PÁGINA (O Exterminador de Folhas)
   // =========================================================================
+  Future<void> deletePage(int pageId) async {
+    if (kIsWeb) return;
+    final db = await _dbHelper.database;
+
+    // 🚀 Destrói a folha e todos os seus vestígios físicos na base de dados!
+    await db.delete('pages', where: 'id = ?', whereArgs: [pageId]);
+    await db.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [pageId]);
+    await db.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [pageId]);
+    await db.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [pageId]);
+  }
+
   Future<void> triggerSyncRadar(int pageId, {LocalPage? webPagePayload}) async {
     if (kIsWeb && webPagePayload != null) {
-      debugPrint('🌐 [Web] A gravar traço/imagem diretamente na Nuvem...');
-      final payload = await webPagePayload.toMapAsync(); // 🚀 O teu conversor assíncrono!
+      final payload = await webPagePayload.toMapAsync();
       await _apiService.post('/notebooks/${webPagePayload.notebookId}/pages', payload);
       return;
     }
-
     final db = await _dbHelper.database;
     await db.update('pages', {'synced_with_cloud': 0, 'updated_at': DateTime.now().millisecondsSinceEpoch}, where: 'id = ?', whereArgs: [pageId]);
   }

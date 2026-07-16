@@ -6,8 +6,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 class DatabaseHelper {
-  // 🚀 Incrementámos para a versão _v8 para forçar o dispositivo a recriar o esquema limpo
-  static const _databaseName = "caderno_digital_offline_v8.db";
+  // 🚀 MUDAMOS PARA A v9! Assim o Flutter ignora a base de dados antiga e cria esta nova e perfeita!
+  static const _databaseName = "caderno_digital_offline_v9.db";
   static const _databaseVersion = 1;
 
   DatabaseHelper._privateConstructor();
@@ -73,25 +73,22 @@ class DatabaseHelper {
       )
     ''');
 
-    // 📓 Tabela de Cadernos (notebooks) - Preparada para Marketplace e Partilhas Soltas
+    // 📓 Tabela de Cadernos (notebooks)
     await db.execute('''
       CREATE TABLE notebooks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id INTEGER NULL,
-        subject_id INTEGER NULL, -- 🛡️ NULLABLE: Suporta cadernos partilhados sem pasta associada
+        subject_id INTEGER NULL,
         title TEXT NOT NULL,
         cover_type TEXT NOT NULL,
         color TEXT,
         cover_image TEXT,
         line_type TEXT,
         paper_size TEXT,
-        
-        -- 🌟 CAMPOS EDTECH & MARKETPLACE (Sementes de Negócio)
-        is_published INTEGER DEFAULT 0, -- 1 se estiver listado na loja pública
-        price REAL DEFAULT 0.00,        -- Preço do caderno (0 = gratuito)
-        description TEXT,               -- Sinopse para a vitrine
-        author_name TEXT,               -- Autor/Professor do conteúdo
-        
+        is_published INTEGER DEFAULT 0,
+        price REAL DEFAULT 0.00,
+        description TEXT,
+        author_name TEXT,
         is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
@@ -151,7 +148,7 @@ class DatabaseHelper {
         server_id INTEGER NULL,
         notebook_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
-        role TEXT NOT NULL DEFAULT 'viewer', -- 'owner', 'editor', 'viewer', 'student'
+        role TEXT NOT NULL DEFAULT 'viewer',
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE,
@@ -170,8 +167,8 @@ class DatabaseHelper {
         entity TEXT NOT NULL,
         reference TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
-        item_type TEXT DEFAULT 'subscription', -- 'subscription' ou 'notebook'
-        item_id INTEGER NULL,                  -- ID do caderno comprado, se aplicável
+        item_type TEXT DEFAULT 'subscription',
+        item_id INTEGER NULL,
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -187,7 +184,8 @@ class DatabaseHelper {
         image_path TEXT NOT NULL,
         pos_x REAL NOT NULL,
         pos_y REAL NOT NULL,
-        scale REAL NOT NULL,
+        width REAL NOT NULL,   -- 🚀 CORRIGIDO: LARGURA (Substituiu o scale)
+        height REAL NOT NULL,  -- 🚀 CORRIGIDO: ALTURA
         rotation REAL NOT NULL,
         is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
@@ -197,7 +195,7 @@ class DatabaseHelper {
     ''');
   }
 
-  // 🧹 Protocolo Terra Arrasada (Purificação Completa)
+  // 🧹 Protocolo Terra Arrasada
   Future<void> clearAllData() async {
     if (kIsWeb) return;
     final db = await database;

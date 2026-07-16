@@ -4,6 +4,8 @@ import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dar
 import 'package:caderno_digital_app/features/notebooks/repositories/notebook_repository.dart';
 import 'package:caderno_digital_app/features/notebooks/repositories/shared_notebook_repository.dart';
 
+import '../../auth/controllers/auth_controller.dart';
+
 class NotebooksController extends Notifier<List<Notebook>> {
   final NotebookRepository _repository = NotebookRepository();
   final SharedNotebookRepository _sharedRepository = SharedNotebookRepository();
@@ -25,14 +27,27 @@ class NotebooksController extends Notifier<List<Notebook>> {
     state = await _repository.getNotebooksBySubject(subjectId, subjectServerId);
   }
 
-  Future<void> loadSharedNotebooks(int currentUserId) async {
-    _isShowingShared = true;
-    _currentSubjectId = null;
-    _currentSubjectServerId = null;
-    _currentUserId = currentUserId;
-    state = await _sharedRepository.getSharedNotebooks(currentUserId);
-  }
+  // 🚀 MÉTODO LIMPO: Não pede parâmetros à UI! Ele próprio descobre quem está logado.
+  Future<void> loadSharedNotebooks() async {
+    state = []; // Limpa o estado para evitar fantasmas visuais
 
+    // 🧠 O Controlador vai ao AuthProvider buscar o utilizador sozinho
+    final currentUser = ref.read(authProvider).currentUser;
+
+    // Se por acaso não houver utilizador, aborta em segurança
+    if (currentUser == null) return;
+
+    final int localUserId = currentUser.id ?? 0;
+    final int? serverId = currentUser.serverId;
+
+    // Instancia o repositório passando os IDs capturados internamente
+    final sharedNotebooks = await SharedNotebookRepository().getSharedNotebooks(
+        localUserId,
+        serverUserId: serverId
+    );
+
+    state = sharedNotebooks;
+  }
   // =========================================================================
   // 🔄 RECARREGAR ESTADO (Usado pelo SyncService e Partilhas)
   // =========================================================================

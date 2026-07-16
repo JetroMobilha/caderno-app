@@ -138,6 +138,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             controller: controller.pageController,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: controller.pages.length,
+            onPageChanged: (index) => controller.setPageIndex(index),
             itemBuilder: (context, index) {
               final page = controller.pages[index];
               final Size pSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
@@ -557,13 +558,23 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     final double screenWidth = MediaQuery.of(context).size.width;
     return DropdownButtonHideUnderline(
       child: DropdownButton<int>(
-        isExpanded: true, value: controller.currentPageIndex, icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
-        selectedItemBuilder: (context) => controller.pages.asMap().entries.map<Widget>((entry) {
-          String label = '${widget.notebook.title} — Folha ${entry.key + 1} de ${controller.pages.length}';
-          if (screenWidth < 400) label = 'Folha ${entry.key + 1} de ${controller.pages.length}';
-          else if (screenWidth < 600) label = '${widget.notebook.title} • F. ${entry.key + 1}/${controller.pages.length}';
-          return Container(alignment: Alignment.centerLeft, child: Text(label, style: GoogleFonts.inter(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: screenWidth < 400 ? 15.0 : 17.0), overflow: TextOverflow.ellipsis));
-        }).toList()..add(const SizedBox.shrink()),
+        isExpanded: true,
+        value: controller.currentPageIndex,
+        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
+        selectedItemBuilder: (context) {
+          final widgets = controller.pages.asMap().entries.map<Widget>((entry) {
+            String label = '${widget.notebook.title} — Folha ${entry.key + 1} de ${controller.pages.length}';
+            if (screenWidth < 400) label = 'Folha ${entry.key + 1} de ${controller.pages.length}';
+            else if (screenWidth < 600) label = '${widget.notebook.title} • F. ${entry.key + 1}/${controller.pages.length}';
+            return Container(alignment: Alignment.centerLeft, child: Text(label, style: GoogleFonts.inter(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: screenWidth < 400 ? 15.0 : 17.0), overflow: TextOverflow.ellipsis));
+          }).toList();
+
+          // 🚀 A CORREÇÃO DO ERRO VERMELHO: A "sombra" só é adicionada se o botão real também for!
+          if (widget.notebook.role != 'viewer') {
+            widgets.add(const SizedBox.shrink());
+          }
+          return widgets;
+        },
         items: [
           ...controller.pages.asMap().entries.map((entry) => DropdownMenuItem<int>(value: entry.key, child: Text('Ir para Folha ${entry.key + 1}'))),
           if (widget.notebook.role != 'viewer')

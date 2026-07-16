@@ -83,9 +83,6 @@ class CanvasController extends ChangeNotifier {
     super.dispose();
   }
 
-  // =========================================================================
-  // 📥 INICIALIZAÇÃO
-  // =========================================================================
   Future<void> initNotebook(int notebookId, int? notebookSid, String lineType, String paperSize, String role) async {
     isLoading = true;
     currentNotebookId = notebookId;
@@ -121,9 +118,6 @@ class CanvasController extends ChangeNotifier {
     transformationController.value = Matrix4.identity()..scale(initialScale);
   }
 
-  // =========================================================================
-  // 🚀 MÉTODOS DE MUTACÃO SEGURA (O SEGREDO PARA A UI NÃO QUEBRAR)
-  // =========================================================================
   void setThickness(double thickness) {
     selectedThickness = thickness;
     notifyListeners();
@@ -147,9 +141,6 @@ class CanvasController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // =========================================================================
-  // 📡 WEBSOCKETS REVERB E AUTO-SAVE
-  // =========================================================================
   void initRealtimeCollaboration() async {
     final realtime = RealtimeService();
     await realtime.initConnection();
@@ -194,9 +185,6 @@ class CanvasController extends ChangeNotifier {
     await _repository.savePage(page, liveNotebookSid);
   }
 
-  // =========================================================================
-  // 🛠️ FERRAMENTAS E NAVEGAÇÃO
-  // =========================================================================
   void switchTool(ToolMode newMode) {
     currentTool = newMode;
     if (newMode != ToolMode.select) {
@@ -233,33 +221,35 @@ class CanvasController extends ChangeNotifier {
   }
 
   // =========================================================================
-  // 📄 APAGAR FOLHA COM SINCRONIZAÇÃO VISUAL FORÇADA
+  // 🚀 APAGAR PÁGINA (Com destruição verdadeira e navegação corrigida)
   // =========================================================================
-  void deleteCurrentPage() {
-    if (pages.length <= 1) return; // Não apaga a única folha
+  void deleteCurrentPage() async {
+    if (pages.length <= 1) return;
 
-    // Apaga a folha exata onde estamos
+    final pageToDelete = pages[currentPageIndex];
+
     pages.removeAt(currentPageIndex);
-
-    // Se a folha apagada era a última, recuamos o cursor para trás
     if (currentPageIndex >= pages.length) {
       currentPageIndex = pages.length - 1;
     }
 
-    // 🚀 O SEGREDO: Força a UI a dar o salto visual para a folha certa
-    if (pageController.hasClients) {
-      pageController.jumpToPage(currentPageIndex);
+    notifyListeners(); // Atualiza a UI primeiro
+
+    // Força o salto do carrossel visual logo a seguir
+    Future.microtask(() {
+      if (pageController.hasClients) {
+        pageController.jumpToPage(currentPageIndex);
+      }
+    });
+
+    // 🔥 Queima a página definitivamente no disco!
+    if (pageToDelete.id != null) {
+      await _repository.deletePage(pageToDelete.id!);
     }
 
-    notifyListeners();
     if (pages.isNotEmpty) triggerAutoSave(pages[currentPageIndex]);
   }
 
-
-
-  // =========================================================================
-  // 🧹 BORRACHA E HISTÓRICO
-  // =========================================================================
   void eraseAtPosition(Offset pos, LocalPage page) {
     if (selectedStrokeIds.isNotEmpty || selectedTextIds.isNotEmpty) {
       page.strokes.removeWhere((s) => selectedStrokeIds.contains(s.id));
@@ -321,9 +311,6 @@ class CanvasController extends ChangeNotifier {
     }
   }
 
-  // =========================================================================
-  // 🖼️ IMAGENS E SELEÇÃO
-  // =========================================================================
   Future<void> pickAndInsertImage(LocalPage page) async {
     final picker = ImagePicker();
     final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -348,8 +335,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   void deleteImageBlock(LocalPage page, ImageBlock img) {
-    // 🚀 Remove garantindo que o ID bate certo (mesmo que a memória mude)
-    page.imageBlocks.removeWhere((i) => i.id == img.id);
+    page.imageBlocks.remove(img);
     notifyListeners();
     triggerAutoSave(page);
   }

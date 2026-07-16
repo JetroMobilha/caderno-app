@@ -333,7 +333,9 @@ class SyncService {
 
           final localPageId = await db.insert('pages', pageData, conflictAlgorithm: ConflictAlgorithm.replace);
 
-          // 🚀 DESCODIFICADOR BLINDADO ANTI-STRING: Garante que os traços são tratados como Array
+          // =========================================================
+          // 🖌️ 1. PUXAR TINTA VETORIAL
+          // =========================================================
           List strokeList = [];
           if (sPage['stroke_data'] != null) {
             if (sPage['stroke_data'] is String) {
@@ -343,14 +345,68 @@ class SyncService {
             }
           }
 
-          // Limpa Canvas antigo e insere os novos traços da Nuvem
           await db.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [localPageId]);
-
           for (var st in strokeList) {
             await db.insert('canvas_strokes', {
               'client_stroke_id': st['id']?.toString() ?? uniqid(),
               'page_id': localPageId,
-              'stroke_data': jsonEncode(st), // Guarda de volta como JSON seguro para o SQLite
+              'stroke_data': jsonEncode(st),
+              'is_deleted': 0,
+              'synced_with_cloud': 1,
+              'updated_at': DateTime.now().millisecondsSinceEpoch,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+
+          // =========================================================
+          // 📝 2. PUXAR TEXTO LIVRE
+          // =========================================================
+          List textList = [];
+          if (sPage['text_data'] != null) {
+            if (sPage['text_data'] is String) {
+              try { textList = jsonDecode(sPage['text_data']); } catch (_) {}
+            } else if (sPage['text_data'] is Iterable) {
+              textList = List.from(sPage['text_data']);
+            }
+          }
+
+          await db.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [localPageId]);
+          for (var txt in textList) {
+            await db.insert('canvas_text_blocks', {
+              'client_text_id': txt['id']?.toString() ?? uniqid(),
+              'page_id': localPageId,
+              'text_data': jsonEncode(txt),
+              'is_deleted': 0,
+              'synced_with_cloud': 1,
+              'updated_at': DateTime.now().millisecondsSinceEpoch,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+
+          // =========================================================
+          // 🖼️ 3. PUXAR IMAGENS E FORMATOS (Largura e Altura!)
+          // =========================================================
+          List imageList = [];
+          if (sPage['image_data'] != null) {
+            if (sPage['image_data'] is String) {
+              try { imageList = jsonDecode(sPage['image_data']); } catch (_) {}
+            } else if (sPage['image_data'] is Iterable) {
+              imageList = List.from(sPage['image_data']);
+            }
+          }
+
+          await db.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [localPageId]);
+          for (var img in imageList) {
+            await db.insert('canvas_image_blocks', {
+              'client_image_id': img['id']?.toString() ?? uniqid(),
+              'page_id': localPageId,
+              'image_path': img['image_path']?.toString() ?? '',
+              'pos_x': (img['dx'] as num?)?.toDouble() ?? 0.0,
+              'pos_y': (img['dy'] as num?)?.toDouble() ?? 0.0,
+
+              // 🚀 OS NOVOS PARÂMETROS SÃO RECOLHIDOS AQUI:
+              'width': (img['width'] as num?)?.toDouble() ?? 300.0,
+              'height': (img['height'] as num?)?.toDouble() ?? 200.0,
+
+              'rotation': (img['rotation'] as num?)?.toDouble() ?? 0.0,
               'is_deleted': 0,
               'synced_with_cloud': 1,
               'updated_at': DateTime.now().millisecondsSinceEpoch,

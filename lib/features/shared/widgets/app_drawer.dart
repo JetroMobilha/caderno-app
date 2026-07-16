@@ -352,9 +352,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           icon: 'team',
                         );
                         ref.read(activeSubjectProvider.notifier).setSubject(virtualSharedSubject);
-                        // 🛡️ Usa o ID local do SQLite para garantir que o JOIN funciona mesmo sem internet!
-                        final targetUserId = user!.id ?? user.serverId ?? 0;
-                        ref.read(notebooksProvider.notifier).loadSharedNotebooks(targetUserId);
+                        ref.read(notebooksProvider.notifier).loadSharedNotebooks();
+
                         Navigator.pop(context);
                       },
                     ),

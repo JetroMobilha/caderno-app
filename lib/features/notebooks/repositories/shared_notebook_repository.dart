@@ -8,8 +8,8 @@ class SharedNotebookRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final ApiService _apiService = ApiService();
 
-  Future<List<Notebook>> getSharedNotebooks(int currentUserId) async {
-    // 🌐 NA WEB: Pede diretamente à rota do Laravel enviando o ID -1
+  Future<List<Notebook>> getSharedNotebooks(int currentUserId, {int? serverUserId}) async {
+    // 🌐 NA WEB: Pede diretamente à rota do Laravel enviando a rota unificada
     if (kIsWeb) {
       try {
         final response = await _apiService.get('/subjects/-1/notebooks');
@@ -23,18 +23,20 @@ class SharedNotebookRepository {
       return [];
     }
 
-    // 📱 NO MOBILE/DESKTOP: Faz o JOIN super rápido offline no SQLite
+    // 📱 NO MOBILE/DESKTOP: JOIN Inteligente e Anti-Amnésia
     else {
       final db = await _dbHelper.database;
+
+      // 🚀 O SEGREDO: Procura na tabela pivô tanto pelo ID local (1, 2) como pelo ID do Servidor (58, 65)
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
-        SELECT 
+        SELECT DISTINCT
           n.*, 
           nu.role 
         FROM notebooks n
         INNER JOIN notebook_user nu ON n.id = nu.notebook_id
-        WHERE nu.user_id = ? AND n.is_deleted = 0
+        WHERE (nu.user_id = ? OR (nu.user_id = ? AND ? != 0)) AND n.is_deleted = 0
         ORDER BY n.updated_at DESC
-      ''', [currentUserId]);
+      ''', [currentUserId, serverUserId ?? 0, serverUserId ?? 0]);
 
       return maps.map((map) => Notebook.fromMap(map)).toList();
     }

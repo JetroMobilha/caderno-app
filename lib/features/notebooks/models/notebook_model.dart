@@ -1,47 +1,89 @@
 class Notebook {
-    int? id; // ID local do SQLite (Mobile)
-    int? serverId; // ID oficial do Laravel (Nuvem)
-  final int subjectId; // ID da disciplina a que pertence
+  final int? id;
+  final int? serverId;
+  final int? subjectId; // 🛡️ Nullable para isolamento de chaves locais
   final String title;
-  final String coverType; // 'color' ou 'image'
-  final String? color; // Código Hex da capa
-  final String? coverImage; // Path ou URL da imagem de capa
-  final String lineType; // 'ruled', 'grid', 'blank'
-  final String paperSize; // 'A4', 'A5', 'A3', etc.
+  final String coverType;
+  final String? color;
+  final String? coverImage;
+  final String lineType;
+  final String paperSize;
+
+  // 🌟 Novas propriedades EdTech/Marketplace
+  final int isPublished;
+  final double price;
+  final String? description;
+  final String? author_name;
+
   final int syncedWithCloud;
+  final int isDeleted;
+  final String role; // 🚀 'owner', 'editor', 'viewer' ou 'student'
 
   Notebook({
     this.id,
     this.serverId,
-    required this.subjectId,
+    this.subjectId,
     required this.title,
-    this.coverType = 'color',
-    this.color = '#0F4C5C',
+    required this.coverType,
+    this.color,
     this.coverImage,
-    this.lineType = 'ruled',
-    this.paperSize = 'A4',
+    required this.lineType,
+    required this.paperSize,
+    this.isPublished = 0,
+    this.price = 0.00,
+    this.description,
+    this.author_name,
     this.syncedWithCloud = 0,
+    this.isDeleted = 0,
+    this.role = 'owner',
   });
 
-  // Converte a linha do SQLite num Objeto Dart
-  factory Notebook.fromMap(Map<String, dynamic> map) {
+  // 🔄 O Método copyWith para mutações limpas de estado na RAM
+  Notebook copyWith({
+    int? id,
+    int? serverId,
+    int? subjectId,
+    String? title,
+    String? coverType,
+    String? color,
+    String? coverImage,
+    String? lineType,
+    String? paperSize,
+    int? isPublished,
+    double? price,
+    String? description,
+    String? author_name,
+    int? syncedWithCloud,
+    int? isDeleted,
+    String? role,
+  }) {
     return Notebook(
-      id: map['id'],
-      serverId: map['server_id'],
-      subjectId: map['subject_id'] as int,
-      title: map['title'] ?? 'Sem Título',
-      coverType: map['cover_type'] ?? 'color',
-      color: map['color'],
-      coverImage: map['cover_image'],
-      lineType: map['line_type'] ?? 'ruled',
-      paperSize: map['paper_size'] ?? 'A4',
-      syncedWithCloud: map['synced_with_cloud'] ?? 0,
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      subjectId: subjectId ?? this.subjectId,
+      title: title ?? this.title,
+      coverType: coverType ?? this.coverType,
+      color: color ?? this.color,
+      coverImage: coverImage ?? this.coverImage,
+      lineType: lineType ?? this.lineType,
+      paperSize: paperSize ?? this.paperSize,
+      isPublished: isPublished ?? this.isPublished,
+      price: price ?? this.price,
+      description: description ?? this.description,
+      author_name: author_name ?? this.author_name,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      isDeleted: isDeleted ?? this.isDeleted,
+      role: role ?? this.role,
     );
   }
 
-  // Prepara o Objeto Caderno para ser escrito no SQLite
+  // =========================================================================
+  // 🌐 PARA A NUVEM / API (Manda tudo, incluindo a role)
+  // =========================================================================
   Map<String, dynamic> toMap() {
-    final map = {
+    return {
+      if (id != null) 'id': id,
+      'server_id': serverId,
       'subject_id': subjectId,
       'title': title,
       'cover_type': coverType,
@@ -49,10 +91,59 @@ class Notebook {
       'cover_image': coverImage,
       'line_type': lineType,
       'paper_size': paperSize,
+      'is_published': isPublished,
+      'price': price,
+      'description': description,
+      'author_name': author_name,
       'synced_with_cloud': syncedWithCloud,
+      'is_deleted': isDeleted,
+      'role': role, // A Nuvem recebe e processa isto na tabela pivô dela!
     };
-    if (id != null) map['id'] = id;
-    if (serverId != null) map['server_id'] = serverId;
-    return map;
+  }
+
+  // =========================================================================
+  // 📱 PARA O SQLITE LOCAL (Gravação limpa na tabela 'notebooks')
+  // =========================================================================
+  Map<String, dynamic> toMapForSQLite() {
+    return {
+      if (id != null) 'id': id,
+      'server_id': serverId,
+      'subject_id': subjectId,
+      'title': title,
+      'cover_type': coverType,
+      'color': color,
+      'cover_image': coverImage,
+      'line_type': lineType,
+      'paper_size': paperSize,
+      'is_published': isPublished,
+      'price': price,
+      'description': description,
+      'author_name': author_name,
+      'synced_with_cloud': syncedWithCloud,
+      'is_deleted': isDeleted,
+      // 🚀 NOTA: O campo 'role' foi removido aqui!
+      // Assim o SQLite grava o caderno tranquilamente sem dar erro de coluna inexistente.
+    };
+  }
+
+  factory Notebook.fromMap(Map<String, dynamic> map) {
+    return Notebook(
+      id: map['id'] as int?,
+      serverId: map['server_id'] as int?,
+      subjectId: map['subject_id'] as int?,
+      title: map['title'] as String,
+      coverType: map['cover_type'] as String,
+      color: map['color'] as String?,
+      coverImage: map['cover_image'] as String?,
+      lineType: map['line_type'] as String,
+      paperSize: map['paper_size'] as String,
+      isPublished: map['is_published'] ?? 0,
+      price: (map['price'] as num?)?.toDouble() ?? 0.00,
+      description: map['description'] as String?,
+      author_name: map['author_name'] as String?,
+      syncedWithCloud: map['synced_with_cloud'] ?? 0,
+      isDeleted: map['is_deleted'] ?? 0,
+      role: map['role'] ?? 'owner',
+    );
   }
 }

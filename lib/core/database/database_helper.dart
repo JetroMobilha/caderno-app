@@ -6,8 +6,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 class DatabaseHelper {
-  // 🚀 FORÇA TÁTICA: Mudámos para v4. O Android vai recriar o ficheiro do zero hoje!
-  static const _databaseName = "caderno_digital_offline_v7.db";
+  // 🚀 Incrementámos para a versão _v8 para forçar o dispositivo a recriar o esquema limpo
+  static const _databaseName = "caderno_digital_offline_v8.db";
   static const _databaseVersion = 1;
 
   DatabaseHelper._privateConstructor();
@@ -43,7 +43,7 @@ class DatabaseHelper {
   }
 
   Future _onCreate(Database db, int version) async {
-    // 1. Tabela de Utilizadores (users)
+    // 👤 Tabela de Utilizadores (users)
     await db.execute('''
       CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +57,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 2. Tabela de Disciplinas (subjects)
+    // 📚 Tabela de Disciplinas (subjects)
     await db.execute('''
       CREATE TABLE subjects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,18 +73,25 @@ class DatabaseHelper {
       )
     ''');
 
-    // 3. Tabela de Cadernos (notebooks)
+    // 📓 Tabela de Cadernos (notebooks) - Preparada para Marketplace e Partilhas Soltas
     await db.execute('''
       CREATE TABLE notebooks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id INTEGER NULL,
-        subject_id INTEGER NOT NULL,
+        subject_id INTEGER NULL, -- 🛡️ NULLABLE: Suporta cadernos partilhados sem pasta associada
         title TEXT NOT NULL,
         cover_type TEXT NOT NULL,
         color TEXT,
         cover_image TEXT,
         line_type TEXT,
         paper_size TEXT,
+        
+        -- 🌟 CAMPOS EDTECH & MARKETPLACE (Sementes de Negócio)
+        is_published INTEGER DEFAULT 0, -- 1 se estiver listado na loja pública
+        price REAL DEFAULT 0.00,        -- Preço do caderno (0 = gratuito)
+        description TEXT,               -- Sinopse para a vitrine
+        author_name TEXT,               -- Autor/Professor do conteúdo
+        
         is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
@@ -92,7 +99,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 4. Tabela de Páginas (pages)
+    // ✍️ Tabela de Páginas (pages)
     await db.execute('''
       CREATE TABLE pages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,7 +116,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 5. Motor de Desenho Vetorial (canvas_strokes)
+    // 🎨 Motor de Desenho Vetorial (canvas_strokes)
     await db.execute('''
       CREATE TABLE canvas_strokes (
         client_stroke_id TEXT PRIMARY KEY,
@@ -123,7 +130,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 5.1 Motor de Tipografia (canvas_text_blocks)
+    // ⌨️ Motor de Tipografia (canvas_text_blocks)
     await db.execute('''
       CREATE TABLE canvas_text_blocks (
         client_text_id TEXT PRIMARY KEY,
@@ -137,14 +144,14 @@ class DatabaseHelper {
       )
     ''');
 
-    // 6. Tabela Pivô de Partilha (notebook_user)
+    // 🤝 Tabela Pivô de Partilha e Turmas (notebook_user)
     await db.execute('''
       CREATE TABLE notebook_user (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id INTEGER NULL,
         notebook_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
-        role TEXT NOT NULL, 
+        role TEXT NOT NULL DEFAULT 'viewer', -- 'owner', 'editor', 'viewer', 'student'
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE,
@@ -152,7 +159,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // 7. Tabela de Pagamentos Multicaixa (payments)
+    // 💰 Tabela de Pagamentos (payments)
     await db.execute('''
       CREATE TABLE payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,15 +170,15 @@ class DatabaseHelper {
         entity TEXT NOT NULL,
         reference TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
+        item_type TEXT DEFAULT 'subscription', -- 'subscription' ou 'notebook'
+        item_id INTEGER NULL,                  -- ID do caderno comprado, se aplicável
         synced_with_cloud INTEGER DEFAULT 0,
         updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');
 
-    // =========================================================================
-    // 🚀 8. MOTOR DE MULTIMÉDIA (canvas_image_blocks) - PURIFICADO E ALINHADO
-    // =========================================================================
+    // 📸 Motor de Multimédia (canvas_image_blocks)
     await db.execute('''
       CREATE TABLE canvas_image_blocks (
         client_image_id TEXT PRIMARY KEY,
@@ -190,13 +197,11 @@ class DatabaseHelper {
     ''');
   }
 
-  // 🧹 PROTOCOLO TERRA ARRASADA (Versão Blindada Anti-Falhas)
+  // 🧹 Protocolo Terra Arrasada (Purificação Completa)
   Future<void> clearAllData() async {
     if (kIsWeb) return;
-
     final db = await database;
 
-    // Lista de todos os alvos a abater
     final List<String> alvos = [
       'canvas_image_blocks',
       'canvas_text_blocks',
@@ -210,24 +215,19 @@ class DatabaseHelper {
     ];
 
     print('🧨 A INICIAR PROTOCOLO TERRA ARRASADA...');
-
     for (String tabela in alvos) {
       try {
-        // Tenta destruir os registos da tabela
         await db.delete(tabela);
         print('✅ Tabela [$tabela] limpa com sucesso.');
       } catch (e) {
-        // Se a tabela ainda não existir no código, ignora silenciosamente e avança!
-        print('⚠️ Tabela [$tabela] ignorada (provavelmente ainda não foi criada).');
+        print('⚠️ Tabela [$tabela] ignorada.');
       }
     }
 
-    // Limpa o carimbo de tempo do radar de disciplinas
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('last_subjects_sync');
     await prefs.remove('last_notebooks_sync');
     await prefs.remove('last_pages_sync');
-
     print('🧹 Quartel-General purificado com sucesso!');
   }
 }

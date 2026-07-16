@@ -232,76 +232,130 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
           ),
 
+          // =========================================================================
+          // 🚀 SECÇÃO MODULAR: DISCIPLINAS GERAIS + ABA DE PARTILHAS FIXA
+          // =========================================================================
           Expanded(
-            child: subjectsList.isEmpty
-                ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text('Nenhuma disciplina criada.\nClica no (+) em cima para começares!', textAlign: TextAlign.center, style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13)),
-              ),
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.only(top: 4),
-              itemCount: subjectsList.length,
-              itemBuilder: (context, index) {
-                final sub = subjectsList[index];
-                final bool isSelected = activeSubject?.id == sub.id && sub.id != null;
+            child: Column(
+              children: [
+                Expanded(
+                  child: subjectsList.isEmpty
+                      ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'Nenhuma disciplina criada.\nClica no (+) em cima para começares!',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13),
+                      ),
+                    ),
+                  )
+                      : ListView.builder(
+                    padding: const EdgeInsets.only(top: 4),
+                    itemCount: subjectsList.length,
+                    itemBuilder: (context, index) {
+                      final sub = subjectsList[index];
+                      final bool isSelected = activeSubject?.id == sub.id && sub.id != null;
 
-                Color subColor = AppColors.primary;
-                try { subColor = Color(int.parse(sub.color.replaceFirst('#', '0xFF'))); } catch (_) {}
+                      Color subColor = AppColors.primary;
+                      try { subColor = Color(int.parse(sub.color.replaceFirst('#', '0xFF'))); } catch (_) {}
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: ListTile(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: isSelected ? BorderSide(color: subColor.withOpacity(0.4), width: 1.5) : BorderSide.none,
+                            ),
+                            tileColor: isSelected ? subColor.withOpacity(0.12) : null,
+                            leading: CircleAvatar(
+                              radius: 16,
+                              backgroundColor: subColor.withOpacity(0.2),
+                              child: Icon(_getIconData(sub.icon), color: subColor, size: 18),
+                            ),
+                            title: Text(
+                              sub.name,
+                              style: GoogleFonts.inter(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: isSelected ? subColor : AppColors.textDark),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isSelected) Icon(Icons.check_circle_rounded, color: subColor, size: 18),
+                                PopupMenuButton<String>(
+                                  icon: const Icon(Icons.more_vert_rounded, size: 18, color: AppColors.textMuted),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  color: AppColors.paper,
+                                  onSelected: (value) {
+                                    if (value == 'edit') {
+                                      if (user != null) _showSubjectModal(context, ref, user, isEditing: true, subjectToEdit: sub, themeColor: dynamicColor);
+                                    } else if (value == 'delete') {
+                                      _confirmDeleteSubject(context, sub);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
+                                    PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              ref.read(activeSubjectProvider.notifier).setSubject(sub);
+                              ref.read(notebooksProvider.notifier).loadNotebooks(sub.id ?? 0, subjectServerId: sub.serverId);
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const Divider(height: 1, color: Colors.black12),
+
+                // 🤝 ABA FIXA INDUSTRIAL: Partilhados Comigo
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   child: Material(
                     color: Colors.transparent,
                     child: ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: isSelected ? BorderSide(color: subColor.withOpacity(0.4), width: 1.5) : BorderSide.none,
-                      ),
-                      tileColor: isSelected ? subColor.withOpacity(0.12) : null,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      tileColor: activeSubject?.id == -1 ? dynamicColor.withOpacity(0.12) : null,
                       leading: CircleAvatar(
                         radius: 16,
-                        backgroundColor: subColor.withOpacity(0.2),
-                        child: Icon(_getIconData(sub.icon), color: subColor, size: 18),
+                        backgroundColor: activeSubject?.id == -1 ? dynamicColor.withOpacity(0.2) : Colors.grey.withOpacity(0.15),
+                        child: Icon(Icons.groups_rounded, color: activeSubject?.id == -1 ? dynamicColor : Colors.black54, size: 18),
                       ),
                       title: Text(
-                        sub.name,
-                        style: GoogleFonts.inter(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: isSelected ? subColor : AppColors.textDark),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (isSelected) Icon(Icons.check_circle_rounded, color: subColor, size: 18),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded, size: 18, color: AppColors.textMuted),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            color: AppColors.paper,
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                if (user != null) _showSubjectModal(context, ref, user, isEditing: true, subjectToEdit: sub, themeColor: dynamicColor);
-                              } else if (value == 'delete') {
-                                _confirmDeleteSubject(context, sub);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
-                              PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
-                            ],
-                          ),
-                        ],
+                        'Partilhados Comigo',
+                        style: GoogleFonts.inter(
+                          fontWeight: activeSubject?.id == -1 ? FontWeight.bold : FontWeight.w500,
+                          color: activeSubject?.id == -1 ? dynamicColor : AppColors.textDark,
+                        ),
                       ),
                       onTap: () {
-                        final activeSubNotifier = ref.read(activeSubjectProvider.notifier);
-                        final nbNotifier = ref.read(notebooksProvider.notifier);
+                        if (user?.id == null) return;
+
+                        // Instancia um estado temporário apenas para a UI saber a aba que está focada
+                        final virtualSharedSubject = Subject(
+                          id: -1,
+                          userId: 0,
+                          name: 'Partilhados Comigo',
+                          color: '#0F4C5C',
+                          icon: 'team',
+                        );
+                        ref.read(activeSubjectProvider.notifier).setSubject(virtualSharedSubject);
+                        // 🛡️ Usa o ID local do SQLite para garantir que o JOIN funciona mesmo sem internet!
+                        final targetUserId = user!.id ?? user.serverId ?? 0;
+                        ref.read(notebooksProvider.notifier).loadSharedNotebooks(targetUserId);
                         Navigator.pop(context);
-                        activeSubNotifier.setSubject(sub);
-                        nbNotifier.loadNotebooks(sub.id ?? 0, subjectServerId: sub.serverId);
                       },
                     ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
 
@@ -348,11 +402,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     ];
     String pickedColorHex = isEditing ? subjectToEdit!.color : availableColors[0];
 
-    // =========================================================================
-    // 🧭 CURADORIA DE 24 ÍCONES (Académico + Corporativo + Tecnologia + Pessoal)
-    // =========================================================================
     final List<Map<String, dynamic>> availableIcons = [
-      // 🎓 ACADÉMICO & ESTUDOS
       {'name': 'book', 'icon': Icons.menu_book_rounded},
       {'name': 'school', 'icon': Icons.school_rounded},
       {'name': 'science', 'icon': Icons.science_rounded},
@@ -362,23 +412,17 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       {'name': 'law', 'icon': Icons.gavel_rounded},
       {'name': 'health', 'icon': Icons.medical_services_rounded},
       {'name': 'psychology', 'icon': Icons.psychology_rounded},
-
-      // 💼 CORPORATIVO & NEGÓCIOS
       {'name': 'business', 'icon': Icons.business_center_rounded},
       {'name': 'analytics', 'icon': Icons.analytics_rounded},
       {'name': 'workspaces', 'icon': Icons.workspaces_rounded},
       {'name': 'team', 'icon': Icons.groups_rounded},
       {'name': 'presentation', 'icon': Icons.present_to_all_rounded},
       {'name': 'security', 'icon': Icons.security_rounded},
-
-      // 💻 TECNOLOGIA & CRIATIVIDADE
       {'name': 'computer', 'icon': Icons.computer_rounded},
       {'name': 'code', 'icon': Icons.code_rounded},
       {'name': 'idea', 'icon': Icons.lightbulb_rounded},
       {'name': 'art', 'icon': Icons.palette_rounded},
       {'name': 'music', 'icon': Icons.music_note_rounded},
-
-      // 🗓️ ORGANIZAÇÃO & PESSOAL
       {'name': 'calendar', 'icon': Icons.calendar_month_rounded},
       {'name': 'notes', 'icon': Icons.sticky_note_2_rounded},
       {'name': 'folder', 'icon': Icons.folder_special_rounded},
@@ -427,7 +471,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                         const SizedBox(height: 24),
                         Text('Ícone Representativo (24 Opções)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
                         const SizedBox(height: 12),
-                        // 🚀 O WRAP DISTRIBUI OS 24 ÍCONES EM GRID SEM QUEBRAR O ECRÃ
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,

@@ -7,6 +7,7 @@ import '../../subjects/controllers/subjects_controller.dart';
 import '../../canvas/views/canvas_screen.dart';
 import '../models/notebook_model.dart';
 import '../controllers/notebooks_controller.dart';
+import '../widgets/notebook_cover.dart'; // 🚀 Importa o teu componente visual fixo!
 
 class NotebooksListScreen extends ConsumerStatefulWidget {
   const NotebooksListScreen({super.key});
@@ -43,18 +44,20 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
   @override
   Widget build(BuildContext context) {
     final activeSubject = ref.watch(activeSubjectProvider);
-    final allNotebooks = ref.watch(notebooksProvider);
-
-    // 🎨 Captura a cor dinâmica ativa da disciplina naquele milissegundo!
+    final notebooks = ref.watch(notebooksProvider);
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
-    final notebooks = activeSubject == null ? [] : allNotebooks.where((n) =>
-    n.subjectId == activeSubject.id ||
-        (activeSubject.serverId != null && n.subjectId == activeSubject.serverId)
-    ).toList();
+    // 📱 CALCULA COLUNAS CONFORME O ESPAÇO DISPONÍVEL (Responsividade Pura)
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final int crossAxisCount = screenWidth > 1200
+        ? 6 // Ecrãs Ultra-Largas (PCs Grandes)
+        : screenWidth > 800
+        ? 4 // Notebooks / Tablets em Paisagem
+        : screenWidth > 600
+        ? 3 // Tablets em Retrato
+        : 2; // Telemóveis
 
     return Scaffold(
-      // Mantém o fundo papel padrão vindo do ColorScheme automático
       backgroundColor: Theme.of(context).colorScheme.surface,
       drawer: const AppDrawer(),
       appBar: AppBar(
@@ -62,15 +65,12 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
           activeSubject?.name ?? 'Meus Cadernos',
           style: GoogleFonts.lora(fontWeight: FontWeight.bold),
         ),
-        // 🚀 LIMPEZA TÁTICA: Removidas as cores fixas daqui! O AppBar agora
-        // herda automaticamente a cor da disciplina ativa configurada no app_theme.
       ),
       body: _isLoading
           ? Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 🎨 Usa a cor dinâmica no indicador de carregamento
             CircularProgressIndicator(color: dynamicColor, strokeWidth: 3),
             const SizedBox(height: 16),
             Text('A abrir a secretária...', style: GoogleFonts.inter(color: Colors.black54, fontSize: 14)),
@@ -78,39 +78,82 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
         ),
       )
           : activeSubject == null
-          ? _buildNoSubjectState(dynamicColor) // 🚀 Passa a cor dinâmica para o ecrã vazio
+          ? _buildNoSubjectState(dynamicColor)
           : notebooks.isEmpty
-          ? Center(
-        child: Text(
-          'Nenhum caderno na disciplina "${activeSubject.name}".\nClica no + para começares!',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.inter(color: Colors.black45, fontSize: 14),
-        ),
-      )
+          ? _buildEmptyState(dynamicColor, activeSubject.name)
           : Padding(
         padding: const EdgeInsets.all(16.0),
         child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount, // 🚀 Colunas adaptáveis!
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 0.75,
+            childAspectRatio: 0.75, // Garante que o caderno mantém a proporção 3:4
           ),
           itemCount: notebooks.length,
           itemBuilder: (context, index) {
-            return _buildNotebookCard(context, notebooks[index], activeSubject);
+            final notebook = notebooks[index];
+            return Stack(
+              children: [
+                // 🚀 1. O Teu Componente Visual de Capa Premium
+                Positioned.fill(
+                  child: NotebookCover(
+                    notebook: notebook,
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CanvasScreen(
+                            notebookId: notebook.id ?? 0,
+                            notebookSid: notebook.serverId ?? 0,
+                            notebookTitle: notebook.title,
+                            lineType: notebook.lineType,
+                            paperSize: notebook.paperSize,
+                          ),
+                        ),
+                      );
+                      if (mounted) {
+                        ref.read(notebooksProvider.notifier).loadNotebooks(
+                          activeSubject.id ?? 0,
+                          subjectServerId: activeSubject.serverId,
+                        );
+                      }
+                    },
+                  ),
+                ),
+
+                // 🚀 2. O Menu Flutuante de Três Pontos (Editar / Apagar)
+                Positioned(
+                  top: 8,
+                  right: 4,
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: true, notebookToEdit: notebook);
+                      } else if (value == 'delete') {
+                        _confirmDelete(context, notebook);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar Capa', style: GoogleFonts.inter(fontSize: 13))])),
+                      PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
+                    ],
+                  ),
+                ),
+              ],
+            );
           },
         ),
       ),
-      // 🚀 LIMPEZA TÁTICA: O FloatingActionButton herda a cor automaticamente do theme global!
       floatingActionButton: activeSubject == null ? null : FloatingActionButton(
-        onPressed: () => _showAddNotebookDialog(context, ref, activeSubject, dynamicColor),
+        onPressed: () => _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: false),
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  // Ecrã amigável adaptado para receber a cor viva ativa
   Widget _buildNoSubjectState(Color themeColor) {
     return Center(
       child: Column(
@@ -133,85 +176,47 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
     );
   }
 
-  Widget _buildNotebookCard(BuildContext context, Notebook notebook, activeSubject) {
-    final cardColor = notebook.color != null
-        ? Color(int.parse(notebook.color!.replaceFirst('#', '0xFF')))
-        : const Color(0xFF8B0000);
-
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CanvasScreen(
-              notebookId: notebook.id ?? 0,
-              notebookSid: notebook.serverId ?? 0,
-              notebookTitle: notebook.title,
-              lineType: notebook.lineType,
-              paperSize: notebook.paperSize,
-            ),
+  Widget _buildEmptyState(Color themeColor, String subjectName) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.book_outlined, size: 52, color: themeColor.withOpacity(0.3)),
+          const SizedBox(height: 16),
+          Text(
+            'Estante Vazia em "$subjectName"',
+            style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
           ),
-        );
-
-        if (mounted) {
-          ref.read(notebooksProvider.notifier).loadNotebooks(
-            activeSubject.id ?? 0,
-            subjectServerId: activeSubject.serverId,
-          );
-        }
-      },
-      onLongPress: () => _confirmDelete(context, notebook),
-      child: Container(
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 4))],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              left: 0, top: 0, bottom: 0, width: 15,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.15),
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 12, left: 27, top: 40,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                color: Colors.white.withOpacity(0.9),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      notebook.title,
-                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 13),
-                      maxLines: 2, overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text('Formato: ${notebook.paperSize}', style: GoogleFonts.inter(color: Colors.black54, fontSize: 10, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          const SizedBox(height: 6),
+          Text(
+            'Clica no (+) em baixo para criares o teu primeiro caderno.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: Colors.black45, fontSize: 13),
+          ),
+        ],
       ),
     );
   }
 
-  void _showAddNotebookDialog(BuildContext context, WidgetRef ref, activeSubject, Color themeColor) {
-    final titleController = TextEditingController();
+  // =========================================================================
+  // 📓 MODAL HÍBRIDO (CAMALEÓNICO): ALTERNA ENTRE CRIAR OU EDITAR CADERNOS
+  // =========================================================================
+  void _showNotebookModal(BuildContext context, WidgetRef ref, activeSubject, Color themeColor, {required bool isEditing, Notebook? notebookToEdit}) {
+    final titleController = TextEditingController(text: isEditing ? notebookToEdit!.title : '');
     final formKey = GlobalKey<FormState>();
 
-    String selectedLineType = 'ruled';
-    String selectedPaperSize = 'A4';
-    String pickedColorHex = '#8B0000';
+    String selectedLineType = isEditing ? (notebookToEdit!.lineType ?? 'ruled') : 'ruled';
+    String selectedPaperSize = isEditing ? (notebookToEdit!.paperSize ?? 'A4') : 'A4';
 
-    final List<String> availableColors = ['#8B0000', '#2C3E50', '#1E8449', '#D35400', '#6C3483'];
+    // 🎨 As 16 cores premium unificadas da app
+    final List<String> availableColors = [
+      '#8B0000', '#0F4C5C', '#1F4E79', '#3F51B5',
+      '#6C3483', '#9B59B6', '#D81B60', '#E91E63',
+      '#E67E22', '#D35400', '#F1C40F', '#1E8449',
+      '#27AE60', '#16A085', '#4E342E', '#607D8B',
+    ];
+    String pickedColorHex = isEditing ? (notebookToEdit!.color ?? '#8B0000') : '#8B0000';
+
     final Map<String, String> lineTypes = {'ruled': 'Pautado', 'grid': 'Quadriculado', 'blank': 'Liso / Em Branco'};
 
     showDialog(
@@ -219,7 +224,14 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
       builder: (contextDialog) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: Theme.of(context).colorScheme.surface,
-          title: Text('Novo Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(isEditing ? Icons.edit_note_rounded : Icons.library_add_rounded, color: themeColor),
+              const SizedBox(width: 10),
+              Text(isEditing ? 'Editar Caderno' : 'Novo Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor)),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Form(
               key: formKey,
@@ -229,7 +241,12 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                 children: [
                   TextFormField(
                     controller: titleController,
-                    decoration: const InputDecoration(labelText: 'Título do Caderno', border: OutlineInputBorder()),
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      labelText: 'Título do Caderno',
+                      border: const OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: themeColor, width: 1.5)),
+                    ),
                     validator: (value) => value == null || value.trim().isEmpty ? 'Introduz o título' : null,
                   ),
                   const SizedBox(height: 16),
@@ -247,16 +264,17 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                     onChanged: (value) { if (value != null) setModalState(() => selectedLineType = value); },
                   ),
                   const SizedBox(height: 16),
-                  Text('Cor da Capa:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text('Cor da Capa (16 Tons):', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54)),
                   const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
+                    spacing: 10, runSpacing: 10,
                     children: availableColors.map((hex) {
                       final isSelected = pickedColorHex == hex;
+                      final colorValue = Color(int.parse(hex.replaceFirst('#', '0xFF')));
                       return GestureDetector(
                         onTap: () => setModalState(() => pickedColorHex = hex),
                         child: CircleAvatar(
-                          backgroundColor: Color(int.parse(hex.replaceFirst('#', '0xFF'))),
+                          backgroundColor: colorValue,
                           radius: 14,
                           child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
                         ),
@@ -267,43 +285,57 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
               ),
             ),
           ),
+          actionsPadding: const EdgeInsets.only(right: 20, bottom: 20),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(contextDialog), child: const Text('Cancelar')),
+            TextButton(onPressed: () => Navigator.pop(contextDialog), child: const Text('Cancelar', style: TextStyle(color: Colors.black45))),
             ElevatedButton(
-              // 🚀 O botão agora herda as configurações universais automáticas do tema!
+              style: ElevatedButton.styleFrom(backgroundColor: themeColor),
               onPressed: () async {
                 if (formKey.currentState!.validate()) {
-                  final newNotebook = Notebook(
-                    subjectId: activeSubject.id ?? 0,
-                    title: titleController.text.trim(),
-                    coverType: 'color',
-                    color: pickedColorHex,
-                    lineType: selectedLineType,
-                    paperSize: selectedPaperSize,
-                  );
+                  final notifier = ref.read(notebooksProvider.notifier);
 
-                  final realId = await ref.read(notebooksProvider.notifier).addNotebook(newNotebook, activeSubject.serverId);
+                  if (isEditing) {
+                    final cadernoEditado = notebookToEdit!.copyWith(
+                      title: titleController.text.trim(),
+                      color: pickedColorHex,
+                      lineType: selectedLineType,
+                      paperSize: selectedPaperSize,
+                    );
+                    await notifier.updateNotebook(cadernoEditado);
+                    if (contextDialog.mounted) Navigator.pop(contextDialog);
+                  } else {
+                    final newNotebook = Notebook(
+                      subjectId: activeSubject.id ?? 0,
+                      title: titleController.text.trim(),
+                      coverType: 'color',
+                      color: pickedColorHex,
+                      lineType: selectedLineType,
+                      paperSize: selectedPaperSize,
+                    );
 
-                  if (contextDialog.mounted) {
-                    Navigator.pop(contextDialog);
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CanvasScreen(
-                            notebookId: realId,
-                            notebookSid: null,
-                            notebookTitle: newNotebook.title,
-                            lineType: newNotebook.lineType,
-                            paperSize: newNotebook.paperSize,
+                    final realId = await notifier.addNotebook(newNotebook, activeSubject.serverId);
+
+                    if (contextDialog.mounted) {
+                      Navigator.pop(contextDialog);
+                      if (context.mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CanvasScreen(
+                              notebookId: realId,
+                              notebookSid: null,
+                              notebookTitle: newNotebook.title,
+                              lineType: newNotebook.lineType,
+                              paperSize: newNotebook.paperSize,
+                            ),
                           ),
-                        ),
-                      );
+                        );
+                      }
                     }
                   }
                 }
               },
-              child: const Text('Criar'),
+              child: Text(isEditing ? 'Atualizar' : 'Criar', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -315,8 +347,9 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Destruir Caderno?'),
-        content: Text('O caderno "${notebook.title}" e todas as suas folhas serão apagados permanentemente.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Apagar Caderno?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+        content: Text('O caderno "${notebook.title}" e todas as suas folhas serão arquivados.', style: GoogleFonts.inter()),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
@@ -324,8 +357,11 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
             onPressed: () {
               ref.read(notebooksProvider.notifier).deleteNotebook(notebook);
               Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Caderno movido para a lixeira! 🗑️'), backgroundColor: Colors.green, duration: Duration(seconds: 2)),
+              );
             },
-            child: const Text('Apagar', style: TextStyle(color: Colors.white)),
+            child: const Text('Apagar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

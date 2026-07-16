@@ -4,21 +4,18 @@ import 'package:sqflite/sqflite.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/canvas/models/local_page_model.dart';
-import '../../features/canvas/repositories/canvas_repository.dart'; // 🚀 O Repositório Supremo do Canvas
+import '../../features/canvas/repositories/canvas_repository.dart';
 import '../database/database_helper.dart';
 import 'api_service.dart';
 
 class SyncService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final ApiService _apiService = ApiService();
-
-  // 🚀 A nossa "Ponte" para aceder à lógica complexa de compor páginas inteiras do SQLite
   final CanvasRepository _canvasRepository = CanvasRepository();
 
-  // 🎯 O INTERRUPTOR GERAL DE REDE
   static bool isCollaborationActive = false;
 
-  // 🚀 A ANTENA GLOBAL (ValueNotifiers para a UI escutar sem acoplamento)
+  // 🚀 A ANTENA GLOBAL
   static final ValueNotifier<Map<int, int>> syncedPagesRadio = ValueNotifier({});
   static final ValueNotifier<Map<int, int>> syncedNoteBooksRadio = ValueNotifier({});
 
@@ -30,7 +27,7 @@ class SyncService {
   Future<void> syncAll() async {
     if (kIsWeb) return;
 
-    if (false) {
+    if (isCollaborationActive) {
       debugPrint('🛑 [SyncService] Sincronização automática pausada para colaboração.');
       return;
     }
@@ -46,7 +43,7 @@ class SyncService {
     await pushPages();
     await pullPages();
 
-    debugPrint('🏆 [Sync General] Ciclo Concluído!');
+    debugPrint('🏆 [Sync General] Ciclo Concluído com Sucesso!');
   }
 
   // =========================================================================
@@ -111,7 +108,7 @@ class SyncService {
   }
 
   // =========================================================================
-  // 3. CADERNOS (NOTEBOOKS)
+  // 3. CADERNOS (NOTEBOOKS) - COM SUPORTE EDTECH E PERMISSÕES (ROLES)
   // =========================================================================
   Future<void> pushNotebooks() async {
     if (kIsWeb) return;
@@ -122,11 +119,17 @@ class SyncService {
 
       final List<Map<String, dynamic>> payload = [];
       for (var row in unsynced) {
-        final subjectQuery = await db.query('subjects', columns: ['server_id'], where: 'id = ?', whereArgs: [row['subject_id']]);
-        if (subjectQuery.isEmpty || subjectQuery.first['server_id'] == null) continue;
+        int? cloudSubjectId;
+
+        // 🚀 Se subject_id for nulo, é um caderno partilhado/comprado solto. Não precisa de FK.
+        if (row['subject_id'] != null) {
+          final subjectQuery = await db.query('subjects', columns: ['server_id'], where: 'id = ?', whereArgs: [row['subject_id']]);
+          if (subjectQuery.isEmpty || subjectQuery.first['server_id'] == null) continue; // Só avança se a matéria já estiver na nuvem
+          cloudSubjectId = subjectQuery.first['server_id'] as int;
+        }
 
         final map = Map<String, dynamic>.from(row);
-        map['subject_id'] = subjectQuery.first['server_id']; // Tradução do ID Local para ID da Nuvem
+        map['subject_id'] = cloudSubjectId; // Traduzido ou Null
         payload.add(map);
       }
 
@@ -164,27 +167,60 @@ class SyncService {
         final List serverNotebooks = data['notebooks'] ?? [];
         if (serverNotebooks.isEmpty) return false;
 
-        for (var net in serverNotebooks) {
-          final subjectQuery = await db.query('subjects', columns: ['id'], where: 'server_id = ?', whereArgs: [net['subject_id']]);
-          if (subjectQuery.isEmpty) continue;
+        // 🧠 Captura o ID do utilizador local para cruzar as permissões da tabela pivô
+        final userQuery = await db.query('users', orderBy: 'id ASC', limit: 1);
+        final int currentUserId = userQuery.isNotEmpty ? userQuery.first['id'] as int : 0;
 
+        for (var net in serverNotebooks) {
+          int? localSubjectId;
+          final role = net['role'] ?? 'owner';
+
+          // 1. Lógica de Cruzamento: Se for caderno próprio, traduz o subject_id
+          if (net['subject_id'] != null) {
+            final subjectQuery = await db.query('subjects', columns: ['id'], where: 'server_id = ?', whereArgs: [net['subject_id']]);
+            if (subjectQuery.isEmpty) continue; // A matéria ainda não baixou
+            localSubjectId = subjectQuery.first['id'] as int;
+          }
+
+          // 2. Prepara os dados estruturais preservando campos de monetização/formato
           final payload = {
             'server_id': net['id'],
-            'subject_id': subjectQuery.first['id'], // Tradução Inversa da Nuvem para o Local
+            'subject_id': localSubjectId, // Nulo se for partilha/marketplace
             'title': net['title'],
             'cover_type': net['cover_type'] ?? 'color',
             'color': net['color'],
+            'cover_image': net['cover_image'],
             'line_type': net['line_type'] ?? 'ruled',
             'paper_size': net['paper_size'] ?? 'A4',
+            'is_published': net['is_published'] ?? 0,
+            'price': net['price'] ?? 0.00,
+            'description': net['description'],
+            'author_name': net['author_name'],
+            'is_deleted': net['deleted_at'] != null ? 1 : 0,
             'synced_with_cloud': 1,
             'updated_at': DateTime.parse(net['updated_at'].toString()).millisecondsSinceEpoch,
           };
 
+          // 3. Grava o Caderno na Estante Virtual Local
+          int localNotebookId;
           final existing = await db.query('notebooks', where: 'server_id = ?', whereArgs: [net['id']]);
           if (existing.isEmpty) {
-            await db.insert('notebooks', payload);
+            localNotebookId = await db.insert('notebooks', payload);
           } else {
-            await db.update('notebooks', payload, where: 'server_id = ?', whereArgs: [net['id']]);
+            localNotebookId = existing.first['id'] as int;
+            await db.update('notebooks', payload, where: 'id = ?', whereArgs: [localNotebookId]);
+          }
+
+          // 4. 🚀 MAGIA RELACIONAL: Se for convidado ou aluno, grava a Tabela Pivô (notebook_user)
+          if (role != 'owner' && currentUserId > 0) {
+            await db.insert('notebook_user', {
+              'server_id': null,
+              'notebook_id': localNotebookId,
+              'user_id': currentUserId,
+              'role': role,
+              'synced_with_cloud': 1,
+              'updated_at': DateTime.now().millisecondsSinceEpoch,
+            }, conflictAlgorithm: ConflictAlgorithm.replace); // Se já existir, substitui a role atualizada
           }
         }
         return true;
@@ -211,11 +247,11 @@ class SyncService {
         final notebookQuery = await db.query('notebooks', columns: ['server_id'], where: 'id = ?', whereArgs: [row['notebook_id']]);
         if (notebookQuery.isEmpty || notebookQuery.first['server_id'] == null) continue;
 
-        // 🚀 O SEGREDO AQUI! Lemos as folhas montadas diretamente pelo novo CanvasRepository
+        // Lemos as folhas montadas diretamente pelo novo CanvasRepository
         final allPages = await _canvasRepository.getPagesByNotebook(row['notebook_id'] as int, null);
         final fullPage = allPages.firstWhere((p) => p.id == row['id'], orElse: () => LocalPage.fromDatabaseMap(row));
 
-        // 🚀 O TEU CONVERSOR ASSÍNCRONO GENIAL: Aguardamos a conversão de Base64 das fotos
+        // Conversor Assíncrono (Trata do Base64)
         final map = await fullPage.toMapAsync();
 
         map['notebook_id'] = notebookQuery.first['server_id'];
@@ -296,8 +332,6 @@ class SyncService {
               'updated_at': DateTime.now().millisecondsSinceEpoch,
             }, conflictAlgorithm: ConflictAlgorithm.replace);
           }
-
-          // (Os textos e imagens seriam inseridos da mesma forma a seguir...)
         }
         return true;
       }

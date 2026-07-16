@@ -24,11 +24,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _isSyncing = false;
 
   // =========================================================================
-  // 🧭 TRADUTOR DE ÍCONES (24 Categorias Híbridas: Trabalho + Estudos + Artes)
+  // 🧭 TRADUTOR DE ÍCONES (24 Categorias Híbridas)
   // =========================================================================
   IconData _getIconData(String? iconName) {
     switch (iconName) {
-    // 🎓 ACADÉMICO & EDUCAÇÃO
       case 'school': return Icons.school_rounded;
       case 'science': return Icons.science_rounded;
       case 'math': return Icons.calculate_rounded;
@@ -37,62 +36,66 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       case 'law': return Icons.gavel_rounded;
       case 'health': return Icons.medical_services_rounded;
       case 'psychology': return Icons.psychology_rounded;
-
-    // 💼 CORPORATIVO & NEGÓCIOS
       case 'business': return Icons.business_center_rounded;
       case 'analytics': return Icons.analytics_rounded;
       case 'workspaces': return Icons.workspaces_rounded;
       case 'team': return Icons.groups_rounded;
       case 'presentation': return Icons.present_to_all_rounded;
       case 'security': return Icons.security_rounded;
-
-    // 💻 TECNOLOGIA & CRIATIVIDADE
       case 'computer': return Icons.computer_rounded;
       case 'code': return Icons.code_rounded;
       case 'idea': return Icons.lightbulb_rounded;
       case 'art': return Icons.palette_rounded;
       case 'music': return Icons.music_note_rounded;
-
-    // 🗓️ ORGANIZAÇÃO & DESPORTO
       case 'calendar': return Icons.calendar_month_rounded;
       case 'notes': return Icons.sticky_note_2_rounded;
       case 'folder': return Icons.folder_special_rounded;
       case 'sport': return Icons.sports_basketball_rounded;
-
       case 'book':
       default: return Icons.menu_book_rounded;
     }
   }
 
+  // =========================================================================
+  // ☁️/🌐 SINCRONIZAÇÃO OU REFRESH (Híbrido Mobile vs Web)
+  // =========================================================================
   Future<void> _handleManualSync() async {
     setState(() => _isSyncing = true);
 
-    // 🚀 A CURA ANTI-FANTASMA: Capturamos os controladores e o Messenger ANTES do await!
-    // Assim, mesmo que o utilizador feche a gaveta a meio, a memória mantém-se viva
-    // e o processo termina em background sem crashar a app!
     final subNotifier = ref.read(subjectsProvider.notifier);
     final notebooksNotifier = ref.read(notebooksProvider.notifier);
     final snackbarMessenger = ScaffoldMessenger.of(context);
 
     try {
-      // 1. Sincroniza as disciplinas e os dados em background
-      await subNotifier.syncManuallyWithCloud();
-
-      // 2. 🚀 ORDEM DE REFRESH: Usa o controlador capturado em segurança!
-      await notebooksNotifier.refreshCurrent();
+      if (kIsWeb) {
+        // 🌐 COMPORTAMENTO WEB: Sem SQLite local, fazemos apenas o Refresh dos dados da API!
+        await subNotifier.loadSubjects();
+        await notebooksNotifier.refreshCurrent();
+      } else {
+        // 📱 COMPORTAMENTO NATIVO: Ciclo completo de Push & Pull (SQLite <-> Nuvem)
+        await subNotifier.syncManuallyWithCloud();
+        await notebooksNotifier.refreshCurrent();
+      }
 
       if (mounted) {
         snackbarMessenger.showSnackBar(
-            const SnackBar(content: Text('Sincronização concluída! ☁️✨'), backgroundColor: Color(0xFF27AE60))
+            SnackBar(
+              content: Text(kIsWeb ? 'Dados atualizados com sucesso! 🌐✨' : 'Sincronização concluída! ☁️✨'),
+              backgroundColor: const Color(0xFF27AE60),
+              duration: const Duration(seconds: 2),
+            )
         );
       }
     } catch (e, stackTrace) {
-      debugPrint('🚨 [SYNC MANUAL] ERRO FATAL: $e');
+      debugPrint('🚨 [SYNC/REFRESH] ERRO FATAL: $e');
       debugPrint('🚨 [RASTRO]: $stackTrace');
 
       if (mounted) {
         snackbarMessenger.showSnackBar(
-            const SnackBar(content: Text('Falha ao sincronizar. Verifica a internet.'), backgroundColor: Colors.redAccent)
+            SnackBar(
+                content: Text(kIsWeb ? 'Falha ao atualizar dados da rede.' : 'Falha ao sincronizar. Verifica a internet.'),
+                backgroundColor: Colors.redAccent
+            )
         );
       }
     } finally {
@@ -107,7 +110,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         backgroundColor: AppColors.paper,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Terminar Sessão?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: AppColors.textDark)),
-        content: Text('Tens a certeza? O teu conteúdo local será limpo por segurança.', style: GoogleFonts.inter(color: AppColors.textMuted)),
+        content: Text(
+          kIsWeb
+              ? 'Tens a certeza que desejas terminar sessão?'
+              : 'Tens a certeza? O teu conteúdo local será limpo por segurança.',
+          style: GoogleFonts.inter(color: AppColors.textMuted),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: AppColors.textMuted))),
           ElevatedButton(
@@ -115,9 +123,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             onPressed: () async {
               final rootNavigator = Navigator.of(context, rootNavigator: true);
               final authCtrl = ref.read(authProvider);
-
               await authCtrl.logout();
-
               rootNavigator.pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                       (route) => false
@@ -138,10 +144,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         title: Text('Apagar Disciplina?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.redAccent)),
         content: Text('A disciplina "${subject.name}" e os cadernos serão apagados.', style: GoogleFonts.inter()),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar')
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
@@ -150,26 +153,15 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               final snackBarMessenger = ScaffoldMessenger.of(context);
 
               Navigator.pop(ctx);
-
               try {
                 await subNotifier.deleteSubject(subject);
                 drawerNavigator.pop();
                 snackBarMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Disciplina eliminada! 🗑️'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 2),
-                    )
+                    const SnackBar(content: Text('Disciplina eliminada! 🗑️'), backgroundColor: Colors.green, duration: Duration(seconds: 2))
                 );
-              } catch (e, stackTrace) {
-                debugPrint('🚨 [GAVETA] Erro capturado no clique de eliminação: $e');
-                debugPrint('🚨 [GAVETA] Rastro do colapso: $stackTrace');
-
+              } catch (e) {
                 snackBarMessenger.showSnackBar(
-                    SnackBar(
-                        content: Text('Erro interno no controlador: $e'),
-                        backgroundColor: Colors.redAccent
-                    )
+                    SnackBar(content: Text('Erro interno no controlador: $e'), backgroundColor: Colors.redAccent)
                 );
               }
             },
@@ -185,7 +177,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final user = ref.watch(authProvider).currentUser;
     final subjectsList = ref.watch(subjectsProvider);
     final activeSubject = ref.watch(activeSubjectProvider);
-
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
     ImageProvider? userAvatarProvider;
@@ -201,32 +192,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GestureDetector(
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-            },
-            child: UserAccountsDrawerHeader(
-              decoration: BoxDecoration(color: dynamicColor),
-              accountName: Text(user?.name ?? 'Estudante', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 18)),
-              accountEmail: Row(
-                children: [
-                  Expanded(child: Text(user?.email ?? '', style: GoogleFonts.inter(fontSize: 12, color: Colors.white70))),
-                  const Icon(Icons.edit_outlined, size: 14, color: Colors.white70),
-                  const SizedBox(width: 4),
-                  Text('Editar', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
-                ],
-              ),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Colors.white,
-                backgroundImage: userAvatarProvider,
-                child: userAvatarProvider == null ? Icon(Icons.person, color: dynamicColor, size: 40) : null,
-              ),
-            ),
-          ),
+          // =========================================================================
+          // 🎨 COMPONENTE DO HEADER MODERNO DO UTILIZADOR
+          // =========================================================================
+          _buildModernUserHeader(context, user, dynamicColor, userAvatarProvider),
 
+          // Título da Secção de Disciplinas
           Padding(
-            padding: const EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 4),
+            padding: const EdgeInsets.only(left: 16, right: 8, top: 12, bottom: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -249,9 +222,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
           ),
 
-          // =========================================================================
-          // 🚀 SECÇÃO MODULAR: DISCIPLINAS GERAIS + ABA DE PARTILHAS FIXA
-          // =========================================================================
+          // Lista de Disciplinas
           Expanded(
             child: Column(
               children: [
@@ -354,7 +325,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                       ),
                       onTap: () {
                         Navigator.pop(context);
-
                         final virtualSharedSubject = Subject(
                           id: -1,
                           userId: 0,
@@ -363,8 +333,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           icon: 'team',
                         );
                         ref.read(activeSubjectProvider.notifier).setSubject(virtualSharedSubject);
-
-                        // 3. Dá a ordem de carregamento em segurança ao controlador
                         ref.read(notebooksProvider.notifier).loadSharedNotebooks();
                       },
                     ),
@@ -374,33 +342,158 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
           ),
 
+          // =========================================================================
+          // 🚪 RODAPÉ LIMPO (APENAS TERMINAR SESSÃO)
+          // =========================================================================
           const Divider(height: 1, color: Colors.black12),
           Material(
             color: Colors.black.withOpacity(0.02),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(
-                children: [
-                  ListTile(
-                    dense: true,
-                    leading: _isSyncing
-                        ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: dynamicColor))
-                        : Icon(Icons.cloud_sync_outlined, color: dynamicColor, size: 22),
-                    title: Text(_isSyncing ? 'A sincronizar...' : 'Sincronizar Nuvem', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: dynamicColor)),
-                    onTap: _isSyncing ? null : _handleManualSync,
-                  ),
-                  ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
-                    title: Text('Terminar Sessão', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent)),
-                    onTap: () => _confirmLogout(context),
-                  ),
-                ],
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
+                title: Text('Terminar Sessão', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent)),
+                onTap: () => _confirmLogout(context),
               ),
             ),
           ),
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+
+  // =========================================================================
+  // 🎨 COMPONENTE DO HEADER MODERNO DO UTILIZADOR (COM IMAGEM DE FUNDO)
+  // =========================================================================
+  Widget _buildModernUserHeader(BuildContext context, User? user, Color themeColor, ImageProvider? avatarProvider) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 48, 16, 20),
+      decoration: BoxDecoration(
+        color: themeColor,
+        image: DecorationImage(
+          image: const NetworkImage('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=800&auto=format&fit=crop'),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.mode(
+            themeColor.withOpacity(0.75),
+            BlendMode.srcOver,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: themeColor.withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ROW SUPERIOR: Avatar + Botões de Ação
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 3))
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Colors.white,
+                  backgroundImage: avatarProvider,
+                  child: avatarProvider == null
+                      ? Icon(Icons.person_rounded, color: themeColor, size: 32)
+                      : null,
+                ),
+              ),
+
+              // BOTÕES DE AÇÃO INTERATIVOS
+              Row(
+                children: [
+                  // 1. Botão de Sincronizar/Atualizar (Adaptado para Web e Mobile)
+                  _buildHeaderActionButton(
+                    tooltip: _isSyncing
+                        ? (kIsWeb ? 'A atualizar...' : 'A sincronizar...')
+                        : (kIsWeb ? 'Atualizar Dados da Rede' : 'Sincronizar Nuvem'),
+                    customChild: _isSyncing
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                        : Icon(kIsWeb ? Icons.refresh_rounded : Icons.cloud_sync_rounded, color: Colors.white, size: 20),
+                    onTap: _isSyncing ? null : _handleManualSync,
+                  ),
+                  const SizedBox(width: 8),
+                  // 2. Botão do Perfil do Utilizador
+                  _buildHeaderActionButton(
+                    tooltip: 'Meu Perfil e Dados',
+                    customChild: const Icon(Icons.manage_accounts_rounded, color: Colors.white, size: 20),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ROW INFERIOR: Nome e Email do Estudante
+          Text(
+            user?.name ?? 'Estudante',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.lora(
+              fontWeight: FontWeight.bold,
+              fontSize: 19,
+              color: Colors.white,
+              letterSpacing: 0.3,
+              shadows: [Shadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))],
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Icon(Icons.alternate_email_rounded, size: 13, color: Colors.white.withOpacity(0.9)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  user?.email ?? 'sem_email@caderno.app',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderActionButton({required String tooltip, required Widget customChild, VoidCallback? onTap}) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withOpacity(0.2),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: customChild,
+          ),
+        ),
       ),
     );
   }

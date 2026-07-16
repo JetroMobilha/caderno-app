@@ -13,7 +13,7 @@ class NotebooksController extends Notifier<List<Notebook>> {
   int? _currentSubjectId;
   int? _currentSubjectServerId;
   int? _currentUserId;
-  bool _isShowingShared = false;
+  bool _isShowingShared = false; // 🚀 O "Disjuntor" da memória
 
   @override
   List<Notebook> build() {
@@ -23,24 +23,25 @@ class NotebooksController extends Notifier<List<Notebook>> {
   Future<void> loadNotebooks(int subjectId, {int? subjectServerId}) async {
     _isShowingShared = false;
     _currentSubjectId = subjectId;
-    _currentSubjectServerId = subjectServerId; // 🚀 Guarda na memória
+    _currentSubjectServerId = subjectServerId;
     state = await _repository.getNotebooksBySubject(subjectId, subjectServerId);
   }
 
-  // 🚀 MÉTODO LIMPO: Não pede parâmetros à UI! Ele próprio descobre quem está logado.
   Future<void> loadSharedNotebooks() async {
-    state = []; // Limpa o estado para evitar fantasmas visuais
+    state = [];
 
-    // 🧠 O Controlador vai ao AuthProvider buscar o utilizador sozinho
+    // 🚀 LIGA O DISJUNTOR DA MEMÓRIA PARA SOBREVIVER AO SYNC!
+    _isShowingShared = true;
+    _currentSubjectId = -1;
+
     final currentUser = ref.read(authProvider).currentUser;
-
-    // Se por acaso não houver utilizador, aborta em segurança
     if (currentUser == null) return;
 
     final int localUserId = currentUser.id ?? 0;
     final int? serverId = currentUser.serverId;
 
-    // Instancia o repositório passando os IDs capturados internamente
+    _currentUserId = localUserId; // Guarda quem somos na memória
+
     final sharedNotebooks = await SharedNotebookRepository().getSharedNotebooks(
         localUserId,
         serverUserId: serverId
@@ -48,21 +49,24 @@ class NotebooksController extends Notifier<List<Notebook>> {
 
     state = sharedNotebooks;
   }
-  // =========================================================================
-  // 🔄 RECARREGAR ESTADO (Usado pelo SyncService e Partilhas)
-  // =========================================================================
+
   Future<void> refreshCurrent() async {
     try {
       if (_isShowingShared && _currentUserId != null) {
-        state = await _sharedRepository.getSharedNotebooks(_currentUserId!);
-      } else if (_currentSubjectId != null) {
-        // 🚀 AGORA PASSA O SERVER ID TAMBÉM!
+        // 🚀 RECUPERA O SERVER ID ATUALIZADO (Caso a sync tenha trazido um novo)
+        final currentUser = ref.read(authProvider).currentUser;
+        state = await _sharedRepository.getSharedNotebooks(
+            _currentUserId!,
+            serverUserId: currentUser?.serverId
+        );
+      } else if (_currentSubjectId != null && _currentSubjectId != -1) {
         state = await _repository.getNotebooksBySubject(_currentSubjectId!, _currentSubjectServerId);
       }
     } catch (e, stack) {
       debugPrint('🚨 ERRO AO RENDERIZAR CADERNOS APÓS SYNC: $e\n$stack');
     }
   }
+
   Future<int> addNotebook(Notebook notebook, int? subjectServerId) async {
     final int generatedId = await _repository.insertNotebook(notebook);
     final newNotebookWithId = notebook.copyWith(id: generatedId, syncedWithCloud: 0);
@@ -74,40 +78,22 @@ class NotebooksController extends Notifier<List<Notebook>> {
   }
 
   Future<void> updateNotebook(Notebook notebook) async {
-    if (notebook.role == 'viewer' || notebook.role == 'student') {
-      debugPrint('🚨 [SEGURANÇA LOCAL] Edição bloqueada! O utilizador é apenas um ${notebook.role}.');
-      return;
-    }
+    if (notebook.role == 'viewer' || notebook.role == 'student') return;
 
     await _repository.updateNotebook(notebook);
-    // 🛡️ PREVINE O DESAPARECIMENTO: Atualiza apenas o item modificado mantendo o resto da lista intacto!
     state = state.map((n) => n.id == notebook.id ? notebook : n).toList();
   }
 
   Future<void> deleteNotebook(Notebook notebook) async {
-    if (notebook.role != 'owner') {
-      debugPrint('🚨 [SEGURANÇA LOCAL] Exclusão bloqueada! Apenas o owner pode apagar o caderno.');
-      return;
-    }
+    if (notebook.role != 'owner') return;
 
     await _repository.deleteNotebook(notebook);
     state = state.where((n) => n.id != notebook.id).toList();
   }
 
-  // =========================================================================
-  // 🤝 EFETUAR PARTILHA E ATUALIZAR ACESSOS IMEDIATAMENTE
-  // =========================================================================
   Future<bool> shareNotebook(int notebookServerId, String email, String role) async {
-    final bool success = await _repository.shareNotebookWithFriend(
-      notebookId: notebookServerId,
-      email: email,
-      role: role,
-    );
-
-    if (success) {
-      // 🚀 FORÇA O REFRESH: Atualiza os carimbos de tempo locais para que as abas se mantenham vivas e estáveis
-      await refreshCurrent();
-    }
+    final bool success = await _repository.shareNotebookWithFriend(notebookId: notebookServerId, email: email, role: role);
+    if (success) await refreshCurrent();
     return success;
   }
 
@@ -121,9 +107,7 @@ class NotebooksController extends Notifier<List<Notebook>> {
 
   Future<bool> revokeAccess(int notebookServerId, String email) async {
     final bool success = await _repository.removeShareWithFriend(notebookId: notebookServerId, email: email);
-    if (success) {
-      await refreshCurrent();
-    }
+    if (success) await refreshCurrent();
     return success;
   }
 }

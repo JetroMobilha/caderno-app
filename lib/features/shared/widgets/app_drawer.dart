@@ -66,22 +66,34 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
   Future<void> _handleManualSync() async {
     setState(() => _isSyncing = true);
+
+    // 🚀 A CURA ANTI-FANTASMA: Capturamos os controladores e o Messenger ANTES do await!
+    // Assim, mesmo que o utilizador feche a gaveta a meio, a memória mantém-se viva
+    // e o processo termina em background sem crashar a app!
+    final subNotifier = ref.read(subjectsProvider.notifier);
+    final notebooksNotifier = ref.read(notebooksProvider.notifier);
+    final snackbarMessenger = ScaffoldMessenger.of(context);
+
     try {
       // 1. Sincroniza as disciplinas e os dados em background
-      await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+      await subNotifier.syncManuallyWithCloud();
 
-      // 2. 🚀 ORDEM DE REFRESH: Manda a estante de cadernos redesenhar-se com as novidades!
-      await ref.read(notebooksProvider.notifier).refreshCurrent();
+      // 2. 🚀 ORDEM DE REFRESH: Usa o controlador capturado em segurança!
+      await notebooksNotifier.refreshCurrent();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sincronização concluída! ☁️✨'), backgroundColor: Color(0xFF27AE60)));
+        snackbarMessenger.showSnackBar(
+            const SnackBar(content: Text('Sincronização concluída! ☁️✨'), backgroundColor: Color(0xFF27AE60))
+        );
       }
     } catch (e, stackTrace) {
       debugPrint('🚨 [SYNC MANUAL] ERRO FATAL: $e');
       debugPrint('🚨 [RASTRO]: $stackTrace');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao sincronizar. Verifica a internet.'), backgroundColor: Colors.redAccent));
+        snackbarMessenger.showSnackBar(
+            const SnackBar(content: Text('Falha ao sincronizar. Verifica a internet.'), backgroundColor: Colors.redAccent)
+        );
       }
     } finally {
       if (mounted) setState(() => _isSyncing = false);
@@ -341,9 +353,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                         ),
                       ),
                       onTap: () {
-                        if (user?.id == null) return;
+                        Navigator.pop(context);
 
-                        // Instancia um estado temporário apenas para a UI saber a aba que está focada
                         final virtualSharedSubject = Subject(
                           id: -1,
                           userId: 0,
@@ -352,9 +363,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           icon: 'team',
                         );
                         ref.read(activeSubjectProvider.notifier).setSubject(virtualSharedSubject);
-                        ref.read(notebooksProvider.notifier).loadSharedNotebooks();
 
-                        Navigator.pop(context);
+                        // 3. Dá a ordem de carregamento em segurança ao controlador
+                        ref.read(notebooksProvider.notifier).loadSharedNotebooks();
                       },
                     ),
                   ),

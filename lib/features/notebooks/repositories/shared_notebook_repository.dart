@@ -9,7 +9,6 @@ class SharedNotebookRepository {
   final ApiService _apiService = ApiService();
 
   Future<List<Notebook>> getSharedNotebooks(int currentUserId, {int? serverUserId}) async {
-    // 🌐 NA WEB: Pede diretamente à rota do Laravel enviando a rota unificada
     if (kIsWeb) {
       try {
         final response = await _apiService.get('/subjects/-1/notebooks');
@@ -21,20 +20,18 @@ class SharedNotebookRepository {
         debugPrint('🚨 [WEB] Erro ao carregar cadernos partilhados: $e');
       }
       return [];
-    }
-
-    // 📱 NO MOBILE/DESKTOP: JOIN Inteligente e Anti-Amnésia
-    else {
+    } else {
       final db = await _dbHelper.database;
 
-      // 🚀 O SEGREDO: Procura na tabela pivô tanto pelo ID local (1, 2) como pelo ID do Servidor (58, 65)
+      // 🚀 CORREÇÃO DO "ECO": GROUP BY n.id oblitera os cadernos duplicados!
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
-        SELECT DISTINCT
+        SELECT 
           n.*, 
           nu.role 
         FROM notebooks n
         INNER JOIN notebook_user nu ON n.id = nu.notebook_id
         WHERE (nu.user_id = ? OR (nu.user_id = ? AND ? != 0)) AND n.is_deleted = 0
+        GROUP BY n.id
         ORDER BY n.updated_at DESC
       ''', [currentUserId, serverUserId ?? 0, serverUserId ?? 0]);
 

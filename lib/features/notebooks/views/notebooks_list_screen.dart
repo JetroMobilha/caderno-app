@@ -31,17 +31,21 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
 
     final activeSub = ref.read(activeSubjectProvider);
     if (activeSub != null) {
-      await ref.read(notebooksProvider.notifier).loadNotebooks(
-        activeSub.id ?? 0,
-        subjectServerId: activeSub.serverId,
-      );
+      // 🚀 INTELIGÊNCIA DE ARRANQUE: Verifica em que aba estamos ao arrancar!
+      if (activeSub.id == -1) {
+        await ref.read(notebooksProvider.notifier).loadSharedNotebooks();
+      } else {
+        await ref.read(notebooksProvider.notifier).loadNotebooks(
+          activeSub.id ?? 0,
+          subjectServerId: activeSub.serverId,
+        );
+      }
     }
 
     if (mounted) {
       setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final activeSubject = ref.watch(activeSubjectProvider);
@@ -110,10 +114,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         ),
                       );
                       if (mounted) {
-                        ref.read(notebooksProvider.notifier).loadNotebooks(
-                          activeSubject.id ?? 0,
-                          subjectServerId: activeSubject.serverId,
-                        );
+                        ref.read(notebooksProvider.notifier).refreshCurrent();
                       }
                     },
                   ),

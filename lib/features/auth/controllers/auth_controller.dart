@@ -4,10 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/sync_service.dart';
+import '../../../core/network/realtime_service.dart'; // 🚀 O MOTOR REVERB AQUI
 import '../models/user_model.dart';
 import '../../../core/database/database_helper.dart';
 import '../repositories/auth_repository.dart';
 import '../../../core/network/api_service.dart';
+import '../../subjects/controllers/subjects_controller.dart'; // Para engatilhar o Refresh
 
 class AuthController extends ChangeNotifier {
   final AuthRepository _authRepository = AuthRepository();
@@ -24,6 +26,11 @@ class AuthController extends ChangeNotifier {
   String? get authErrorMessage => _authErrorMessage;
   bool get isAuthenticated => _token != null;
 
+  // Usa o Ref para avisar outros Providers
+  final Ref ref;
+
+  AuthController(this.ref);
+
   void setUser(User user, {String? newToken}) {
     _currentUser = user;
     if (newToken != null) _token = newToken;
@@ -31,6 +38,22 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // =========================================================================
+  // 🔌 O MOTOR DE WEBSOCKETS PRIVADOS (REVERB)
+  // =========================================================================
+  void _connectToPrivateRadar(int userId) {
+    if (kIsWeb) return;
+
+    // Mal o login é feito, ele liga a antena da conta do utilizador!
+    RealtimeService().listenToUserAccount(userId, () {
+      debugPrint('⚡ [Auth] A tua conta mudou noutro ecrã! A disparar Sync...');
+      ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+    });
+  }
+
+  // =========================================================================
+  // 💾 ARRANQUE: VERIFICAR SESSÃO
+  // =========================================================================
   Future<bool> checkAuthStatus() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('sanctum_token');
@@ -38,12 +61,20 @@ class AuthController extends ChangeNotifier {
     final String? cachedUser = prefs.getString('cached_user');
     if (cachedUser != null && _token != null) {
       _currentUser = User.fromJson(jsonDecode(cachedUser));
+
+      // 🚀 A app abriu e já tinha sessão? Liga os WebSockets imediatamente!
+      if (_currentUser?.id != null) {
+        _connectToPrivateRadar(_currentUser!.id!);
+      }
     }
 
     notifyListeners();
     return isAuthenticated;
   }
 
+  // =========================================================================
+  // 🚪 LOGIN
+  // =========================================================================
   Future<bool> login(String email, String password) async {
     _isLoading = true;
     _authErrorMessage = null;
@@ -56,7 +87,6 @@ class AuthController extends ChangeNotifier {
       if (response.statusCode == 200) {
         _token = responseData['access_token'];
 
-        // 🚀 Grava o utilizador na tabela local do SQLite!
         final Map<String, dynamic> userMap = responseData['user'];
 
         if(kIsWeb) {
@@ -68,6 +98,11 @@ class AuthController extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('sanctum_token', _token!);
         await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));
+
+        // 🚀 O utilizador acabou de entrar, liga os WebSockets Pessoais!
+        if (_currentUser?.id != null) {
+          _connectToPrivateRadar(_currentUser!.id!);
+        }
 
         await SyncService().syncAll();
 
@@ -82,8 +117,6 @@ class AuthController extends ChangeNotifier {
       }
     } catch (e) {
       _authErrorMessage = 'Erro de sistema: Falha ao comunicar com o servidor.';
-      debugPrint('📴 [RADAR SILENCIOSO] ERRO DURANTE A SINCRONIZAÇÃO:');
-      debugPrint('👉 Mensagem: $e');
     }
 
     _isLoading = false;
@@ -91,6 +124,9 @@ class AuthController extends ChangeNotifier {
     return false;
   }
 
+  // =========================================================================
+  // 🚪 REGISTO
+  // =========================================================================
   Future<bool> register(String name, String email, String password) async {
     _isLoading = true;
     _authErrorMessage = null;
@@ -103,7 +139,6 @@ class AuthController extends ChangeNotifier {
       if (response.statusCode == 201 || response.statusCode == 200) {
         _token = responseData['token']?.toString() ?? responseData['access_token']?.toString();
 
-        // 🚀 Grava no SQLite local para obter o ID gerado pelo telemóvel
         final Map<String, dynamic> userMap = responseData['user'] ?? {};
 
         if(kIsWeb) {
@@ -115,6 +150,11 @@ class AuthController extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('sanctum_token', _token!);
         await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));
+
+        // 🚀 O utilizador acabou de se registar, liga os WebSockets!
+        if (_currentUser?.id != null) {
+          _connectToPrivateRadar(_currentUser!.id!);
+        }
 
         await SyncService().syncAll();
 
@@ -136,6 +176,9 @@ class AuthController extends ChangeNotifier {
     return false;
   }
 
+  // =========================================================================
+  // 👤 ATUALIZAR PERFIL
+  // =========================================================================
   Future<bool> updateProfile({required String name, required dynamic imageFile}) async {
     _isLoading = true;
     _authErrorMessage = null;
@@ -185,10 +228,10 @@ class AuthController extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        _authErrorMessage = 'Não encontrámos nenhuma conta institucional com este e-mail.';
+        _authErrorMessage = 'Não encontrámos nenhuma conta com este e-mail.';
       }
     } catch (e) {
-      _authErrorMessage = 'Falha ao contactar o quartel-general (Servidor).';
+      _authErrorMessage = 'Falha ao contactar o servidor.';
     }
 
     _isLoading = false;
@@ -220,12 +263,18 @@ class AuthController extends ChangeNotifier {
     return false;
   }
 
+  // =========================================================================
+  // 🛑 LOGOUT
+  // =========================================================================
   Future<void> logout() async {
     try {
       await _authRepository.logout();
     } catch (e) {
       debugPrint('⚠️ Falha ao efetuar logout remoto, a forçar limpeza local...');
     }
+
+    // 🚀 O utilizador saiu, desliga as Antenas WebSockets para poupar CPU/Bateria!
+    RealtimeService().disconnect();
 
     _token = null;
     _currentUser = null;
@@ -243,7 +292,6 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // O MOTOR SECRETO QUE EVITA O ERRO "NULL" NO SQLITE
   Future<User> _syncUserToSqlite(Map<String, dynamic> userJson) async {
     final db = await DatabaseHelper.instance.database;
 
@@ -277,7 +325,7 @@ class AuthController extends ChangeNotifier {
     }
 
     return User(
-      id: localId, // 🧠 O ID auto-incrementado do telemóvel! NUNCA SERÁ NULO!
+      id: localId,
       serverId: sId,
       name: name,
       email: email,
@@ -287,6 +335,7 @@ class AuthController extends ChangeNotifier {
   }
 }
 
+// Passamos o 'ref' para dentro do provider para que ele possa aceder ao subjectsProvider e fazer a ponte!
 final authProvider = ChangeNotifierProvider<AuthController>((ref) {
-  return AuthController();
+  return AuthController(ref);
 });

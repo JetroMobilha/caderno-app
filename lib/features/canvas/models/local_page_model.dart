@@ -3,8 +3,8 @@ import 'stroke_model.dart';
 import 'text_block_model.dart';
 
 class LocalPage {
-  int? id;             // 💻 ID Local (SQLite AUTOINCREMENT)
-  int? serverId;       // ☁️ ID Oficial na Nuvem (Laravel)
+  int? id;
+  int? serverId;
   final int notebookId;
   final int pageNumber;
   final bool isLandscape;
@@ -12,12 +12,14 @@ class LocalPage {
   String title;
   String footer;
 
-  // As listas de conteúdo da folha
   List<Stroke> strokes;
   List<TextBlock> textBlocks;
   List<ImageBlock> imageBlocks;
 
-  int syncedWithCloud; // 0 = Pendente de Envio, 1 = Sincronizado
+  // 🚀 A VARIÁVEL QUE FALTAVA PARA O REDO FUNCIONAR!
+  List<Stroke> redoHistory;
+
+  int syncedWithCloud;
   int updatedAt;
 
   LocalPage({
@@ -36,12 +38,9 @@ class LocalPage {
   })  : strokes = strokes ?? <Stroke>[],
         textBlocks = textBlocks ?? <TextBlock>[],
         imageBlocks = imageBlocks ?? <ImageBlock>[],
+        redoHistory = [], // Inicializa a lista vazia
         updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
-  // =========================================================================
-  // 💻 LINGUAGEM 1: COMUNICAÇÃO COM O DISCO LOCAL (SQLite)
-  // Note: O SQLite guarda os objetos (strokes/images) em tabelas separadas!
-  // =========================================================================
   Map<String, dynamic> toDatabaseMap() {
     return {
       if (id != null) 'id': id,
@@ -75,11 +74,7 @@ class LocalPage {
     );
   }
 
-  // =========================================================================
-  // ☁️ LINGUAGEM 2: COMUNICAÇÃO COM O QUARTEL-GENERAL (Laravel API / JSON)
-  // =========================================================================
   Future<Map<String, dynamic>> toMapAsync() async {
-    // Extrai todas as imagens assincronamente com Base64 integrado!
     final List<Map<String, dynamic>> asyncImages = [];
     for (var img in imageBlocks) {
       asyncImages.add(await img.toMapAsync());
@@ -115,7 +110,7 @@ class LocalPage {
       strokes: strokesList.map((s) => Stroke.fromMap(s)).toList(),
       textBlocks: textList.map((t) => TextBlock.fromMap(t)).toList(),
       imageBlocks: imageList.map((img) => ImageBlock.fromMap(img)).toList(),
-      syncedWithCloud: 1, // Se veio do Laravel, já está 100% sincronizado!
+      syncedWithCloud: 1,
     );
   }
 }

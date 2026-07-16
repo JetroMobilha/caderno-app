@@ -105,11 +105,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => CanvasScreen(
-                            notebookId: notebook.id ?? 0,
-                            notebookSid: notebook.serverId ?? 0,
-                            notebookTitle: notebook.title,
-                            lineType: notebook.lineType,
-                            paperSize: notebook.paperSize,
+                            notebook: notebook
                           ),
                         ),
                       );
@@ -358,8 +354,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                       paperSize: selectedPaperSize,
                     );
 
-                    final realId = await notifier.addNotebook(newNotebook, activeSubject.serverId);
-
+                     newNotebook.id= await notifier.addNotebook(newNotebook, activeSubject.serverId);
                     if (contextDialog.mounted) {
                       Navigator.pop(contextDialog);
                       if (context.mounted) {
@@ -367,11 +362,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => CanvasScreen(
-                              notebookId: realId,
-                              notebookSid: null,
-                              notebookTitle: newNotebook.title,
-                              lineType: newNotebook.lineType,
-                              paperSize: newNotebook.paperSize,
+                              notebook:newNotebook
                             ),
                           ),
                         );

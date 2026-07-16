@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart'; // 🚀 O ESCUDO WEB
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -55,7 +55,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) return;
 
-    // Dispara a atualização centralizada no controlador
+    // Remove o teclado para a UI não dar saltos bruscos
+    FocusScope.of(context).unfocus();
+
     final bool success = await ref.read(authProvider).updateProfile(
       name: _nameController.text.trim(),
       imageFile: _selectedImage,
@@ -77,12 +79,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final authController = ref.watch(authProvider);
     final currentUser = authController.currentUser;
+    final themeColor = Theme.of(context).colorScheme.primary; // Adicionado para coesão do tema!
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
-        title: Text('Meu Perfil', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 22)),
-        backgroundColor: const Color(0xFF0F4C5C),
+        title: Text('Meu Perfil', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 20)), // 🚀 Inter!
+        backgroundColor: themeColor,
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
@@ -95,9 +98,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               children: [
                 Container(
                   height: 120,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0F4C5C),
-                    borderRadius: BorderRadius.only(
+                  decoration: BoxDecoration(
+                    color: themeColor,
+                    borderRadius: const BorderRadius.only(
                       bottomLeft: Radius.circular(40),
                       bottomRight: Radius.circular(40),
                     ),
@@ -162,7 +165,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     Center(
                       child: Text(
                         currentUser?.name ?? 'Estudante',
-                        style: GoogleFonts.lora(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50)),
+                        style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50)), // 🚀 Inter!
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -221,7 +224,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: Color(0xFF0F4C5C), width: 1.5),
+                          borderSide: BorderSide(color: themeColor, width: 1.5),
                         ),
                       ),
                     ),
@@ -254,11 +257,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       height: 54,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F4C5C),
+                          backgroundColor: themeColor,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           elevation: 4,
-                          shadowColor: const Color(0xFF0F4C5C).withOpacity(0.4),
+                          shadowColor: themeColor.withOpacity(0.4),
                         ),
                         onPressed: authController.isLoading ? null : _saveProfile,
                         child: authController.isLoading

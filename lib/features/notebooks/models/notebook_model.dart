@@ -1,13 +1,13 @@
 class Notebook {
-  final int? id;
-  final int? serverId;
-  final int? subjectId; // 🛡️ Nullable para isolamento de chaves locais
-  final String title;
-  final String coverType;
-  final String? color;
-  final String? coverImage;
-  final String lineType;
-  final String paperSize;
+    int? id;
+    int? serverId;
+    int? subjectId; // 🛡️ Nullable para isolamento de chaves locais
+    String title;
+    String coverType;
+    String? color;
+    String? coverImage;
+    String lineType;
+    String paperSize;
 
   // 🌟 Novas propriedades EdTech/Marketplace
   final int isPublished;

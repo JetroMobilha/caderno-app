@@ -71,7 +71,6 @@ class SubjectsController extends StateNotifier<List<Subject>> {
       await syncService.syncAll();
     }
     await loadSubjects();
-    ref.invalidate(notebooksProvider);
   }
 }
 

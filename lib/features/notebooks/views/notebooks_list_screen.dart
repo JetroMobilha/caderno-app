@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../canvas/widgets/share_notebook_sheet.dart';
+import '../../marketplace/widgets/publish_notebook_sheet.dart';
 import '../../shared/widgets/app_drawer.dart';
 import '../../subjects/controllers/subjects_controller.dart';
 import '../../canvas/views/canvas_screen.dart';
@@ -169,6 +172,25 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                             builder: (context) => ShareNotebookBottomSheet(notebook: currentNotebook),
                           );
                         }
+                      } else if (value == 'publish') {
+                        // 🚀 Abre o Bottom Sheet de Publicação do Marketplace
+                        if (context.mounted) {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => PublishNotebookSheet(notebook: notebook),
+                          );
+                        }
+                      } else if (value == 'view_store') {
+                        // Copia o ID ou link para a área de transferência e avisa o utilizador
+                        Clipboard.setData(ClipboardData(text: 'https://app.cadernodigital.ao/loja/caderno/${notebook.serverId}'));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Link de partilha copiado! 🔗 Envia aos teus alunos ou colegas.'),
+                            backgroundColor: Color(0xFF27AE60),
+                          ),
+                        );
                       }
                     },
                     itemBuilder: (context) => [
@@ -178,6 +200,36 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                       // 🌟 A MAGIA DA PARTILHA AQUI (Só o Dono pode partilhar)
                       if (notebook.role == 'owner')
                         PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
+
+
+                      // 🚀 NOVA OPÇÃO: PUBLICAR NO MARKETPLACE (Só o dono pode publicar)
+                      if (notebook.role == 'owner')
+                        PopupMenuItem(
+                          value: 'publish',
+                          child: Row(
+                            children: [
+                              Icon(Icons.storefront_rounded, size: 18, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                notebook.isPublished == 1 ? 'Loja (Publicado) 🟢' : 'Publicar na Loja 🛒',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: notebook.isPublished == 1 ? FontWeight.bold : FontWeight.normal, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.textDark),
+                              )
+                            ],
+                          ),
+                        ),
+
+                      // 🌐 OPÇÃO EXCLUSIVA PARA CADERNOS PUBLICADOS: Ver na Loja / Copiar Link
+                      if (notebook.isPublished == 1)
+                        PopupMenuItem(
+                          value: 'view_store',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.share_arrival_time_rounded, size: 18, color: Color(0xFF27AE60)),
+                              const SizedBox(width: 8),
+                              Text('Link da Loja 🔗', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))),
+                            ],
+                          ),
+                        ),
 
                       if (notebook.role == 'owner')
                         PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),

@@ -13,6 +13,8 @@ import 'package:caderno_digital_app/features/subjects/controllers/subjects_contr
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 
+import '../../marketplace/views/marketplace_screen.dart';
+
 class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({super.key});
 
@@ -337,6 +339,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                       },
                     ),
                   ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.storefront_rounded, color: Color(0xFFD81B60)),
+                  title: Text('Loja de Cadernos', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketplaceScreen()));
+                  },
                 ),
               ],
             ),

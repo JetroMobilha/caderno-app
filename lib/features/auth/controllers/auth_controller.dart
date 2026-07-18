@@ -42,8 +42,6 @@ class AuthController extends ChangeNotifier {
   // 🔌 O MOTOR DE WEBSOCKETS PRIVADOS (REVERB)
   // =========================================================================
   void _connectToPrivateRadar(int userId) {
-    if (kIsWeb) return;
-
     // Mal o login é feito, ele liga a antena da conta do utilizador!
     RealtimeService().listenToUserAccount(userId, () {
       debugPrint('⚡ [Auth] A tua conta mudou noutro ecrã! A disparar Sync...');
@@ -89,11 +87,7 @@ class AuthController extends ChangeNotifier {
 
         final Map<String, dynamic> userMap = responseData['user'];
 
-        if(kIsWeb) {
-          _currentUser = User.fromJson(userMap);
-        } else {
-          _currentUser = await _syncUserToSqlite(userMap);
-        }
+        _currentUser = await _syncUserToSqlite(userMap);
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('sanctum_token', _token!);
@@ -141,11 +135,7 @@ class AuthController extends ChangeNotifier {
 
         final Map<String, dynamic> userMap = responseData['user'] ?? {};
 
-        if(kIsWeb) {
-          _currentUser = User.fromJson(userMap);
-        } else {
-          _currentUser = await _syncUserToSqlite(userMap);
-        }
+        _currentUser = await _syncUserToSqlite(userMap);
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('sanctum_token', _token!);
@@ -191,11 +181,7 @@ class AuthController extends ChangeNotifier {
       if (response.statusCode == 200) {
         final Map<String, dynamic> userMap = responseData['user'];
 
-        if(kIsWeb) {
-          _currentUser = User.fromJson(userMap);
-        } else {
-          _currentUser = await _syncUserToSqlite(userMap);
-        }
+        _currentUser = await _syncUserToSqlite(userMap);
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));

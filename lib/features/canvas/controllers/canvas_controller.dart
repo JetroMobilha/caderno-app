@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/network/realtime_service.dart';
 import '../../../core/network/sync_service.dart';
+import '../../../core/network/webrtc_service.dart';
 import '../models/image_block_model.dart';
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
@@ -59,6 +60,8 @@ class CanvasController extends ChangeNotifier {
     const Color(0xFF2980B9), const Color(0xFFE74C3C), const Color(0xFF1ABC9C),
   ];
 
+  // 🚀
+  final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier({});
   final ValueNotifier<List<Offset>> activePointsNotifier = ValueNotifier([]);
   late TransformationController transformationController;
   final PageController pageController = PageController(initialPage: 0);
@@ -170,13 +173,66 @@ class CanvasController extends ChangeNotifier {
 
         if (activePage.pageNumber == incomingPageNum) {
           for (var strokeMap in rawStrokes) {
-            final List<Offset> points = (strokeMap['points'] as List).map((pt) => Offset((pt['x'] as num).toDouble(), (pt['y'] as num).toDouble())).toList();
-            activePage.strokes.add(Stroke(id: strokeMap['id'], color: strokeMap['color'], thickness: (strokeMap['thickness'] as num).toDouble(), points: points));
+            final String strokeId = strokeMap['id'];
+            final bool isFinal = strokeMap['is_final'] == true;
+
+            final List<Offset> incomingPoints = (strokeMap['points'] as List)
+                .map((pt) => Offset((pt['x'] as num).toDouble(), (pt['y'] as num).toDouble()))
+                .toList();
+
+            if (incomingPoints.isEmpty) continue;
+
+            // 🟢 SE O TRAÇO AINDA ESTÁ NO AR (O colega está a arrastar o dedo)
+            if (!isFinal) {
+              final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
+
+              if (currentMap.containsKey(strokeId)) {
+                // Adiciona os novos pontos instantaneamente à camada rápida
+                currentMap[strokeId]!.points.addAll(incomingPoints);
+              } else {
+                // Começa a desenhar o traço remoto na camada rápida
+                currentMap[strokeId] = Stroke(
+                  id: strokeId,
+                  color: strokeMap['color'],
+                  thickness: (strokeMap['thickness'] as num).toDouble(),
+                  points: incomingPoints,
+                );
+              }
+
+              // 🚀 Avisa APENAS a camada de tinta remota (0% de lag, sem redesenhar a folha inteira!)
+              remoteLiveStrokes.value = currentMap;
+
+            }
+            // 🔴 SE O TRAÇO TERMINOU (O colega levantou o dedo)
+            else {
+              final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
+              Stroke? completedStroke = currentMap.remove(strokeId);
+
+              if (completedStroke != null) {
+                completedStroke.points.addAll(incomingPoints);
+              } else {
+                completedStroke = Stroke(
+                  id: strokeId,
+                  color: strokeMap['color'],
+                  thickness: (strokeMap['thickness'] as num).toDouble(),
+                  points: incomingPoints,
+                );
+              }
+
+              // Limpa da camada rápida
+              remoteLiveStrokes.value = currentMap;
+
+              // Carimba na folha estática em definitivo!
+              activePage.strokes.add(completedStroke);
+              notifyListeners(); // Aqui sim, fazemos 1 único rebuild final!
+
+              if (currentUserRole == 'owner') triggerAutoSave(activePage);
+            }
           }
-          notifyListeners();
-          if (currentUserRole == 'owner') triggerAutoSave(activePage);
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('⚠️ Erro ao processar tinta remota: $e');
+      }
     });
   }
 
@@ -393,6 +449,37 @@ class CanvasController extends ChangeNotifier {
       initRealtimeCollaboration();
       notifyListeners();
     }
+  }
+
+  // Método para entrar ou sair da chamada de voz
+  Future<void> toggleVoiceCall(String myUserId) async {
+    if (isInVoiceCall) {
+      WebRTCService().leaveVoiceRoom();
+      isInVoiceCall = false;
+    } else {
+      final existingUserIds = onlineUsers.map((u) => u['id'].toString()).toList();
+      final success = await WebRTCService().joinVoiceRoom(
+          liveNotebookSid ?? currentNotebookId,
+          myUserId,
+          existingUserIds
+      );
+      if (success) {
+        isInVoiceCall = true;
+      }
+    }
+    notifyListeners();
+  }
+
+  void toggleMute() {
+    isMuted = !isMuted;
+    WebRTCService().toggleMute();
+    notifyListeners();
+  }
+
+  void toggleSpeaker() {
+    isSpeakerOn = !isSpeakerOn;
+    WebRTCService().toggleSpeaker();
+    notifyListeners();
   }
 }
 

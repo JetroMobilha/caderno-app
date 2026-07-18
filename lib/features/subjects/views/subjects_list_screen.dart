@@ -258,10 +258,8 @@ class SubjectsListScreen extends ConsumerWidget {
       const SnackBar(content: Text('A terminar sessão e encriptar dados...'), duration: Duration(seconds: 2)),
     );
 
-    // No Mobile, limpa a base de dados SQLite para proteger a privacidade
-    if (!kIsWeb) {
-      await DatabaseHelper.instance.clearAllData();
-    }
+    // Limpa a base de dados SQLite para proteger a privacidade
+    await DatabaseHelper.instance.clearAllData();
 
     // Invalida os estados dos Controladores
     ref.invalidate(subjectsProvider);

@@ -102,3 +102,32 @@ class ActiveStrokePainter extends CustomPainter {
   @override
   bool shouldRepaint(ActiveStrokePainter oldDelegate) => true;
 }
+
+// 🚀 PINTOR EXCLUSIVO PARA OS TRAÇOS EM TEMPO REAL DOS COLEGAS
+class RemoteLiveStrokesPainter extends CustomPainter {
+  final Map<String, Stroke> liveStrokes;
+
+  RemoteLiveStrokesPainter({required this.liveStrokes});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (liveStrokes.isEmpty) return;
+
+    for (final stroke in liveStrokes.values) {
+      if (stroke.points.isEmpty) continue;
+
+      final paint = Paint()
+        ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
+        ..strokeWidth = stroke.thickness
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      // Desenha usando curvas de Bézier suaves!
+      canvas.drawPath(buildSmoothPath(stroke.points), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(RemoteLiveStrokesPainter oldDelegate) => true;
+}

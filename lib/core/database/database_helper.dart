@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:path/path.dart';
 
 class DatabaseHelper {
@@ -16,9 +17,6 @@ class DatabaseHelper {
   static Database? _database;
 
   Future<Database> get database async {
-    if (kIsWeb) {
-      throw UnsupportedError('SQLite não é suportado na Web. Usa a API direta.');
-    }
     if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
@@ -26,10 +24,8 @@ class DatabaseHelper {
 
   Future<Database> _initDatabase() async {
     if (kIsWeb) {
-      throw Exception("O SQLite local não é suportado diretamente na Web.");
-    }
-
-    if (Platform.isWindows || Platform.isLinux) {
+      databaseFactory = databaseFactoryFfiWeb;
+    } else if (Platform.isWindows || Platform.isLinux) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
@@ -197,7 +193,6 @@ class DatabaseHelper {
 
   // 🧹 Protocolo Terra Arrasada
   Future<void> clearAllData() async {
-    if (kIsWeb) return;
     final db = await database;
 
     final List<String> alvos = [

@@ -33,7 +33,7 @@ void main() {
         coverType: 'classic',
         color: null,
         coverImage: 'assets/covers/geo.png',
-        lineType: 'grid',
+        lineType: 'grid', paperSize: '',
       );
 
       final map = notebook.toMap();

@@ -25,8 +25,6 @@ class SyncService {
   // 1. SINCRONIZAÇÃO TOTAL
   // =========================================================================
   Future<void> syncAll() async {
-    if (kIsWeb) return;
-
     if (isCollaborationActive) {
       debugPrint('🛑 [SyncService] Sincronização automática pausada para colaboração.');
       return;
@@ -50,7 +48,6 @@ class SyncService {
   // 2. DISCIPLINAS (SUBJECTS)
   // =========================================================================
   Future<void> pushOfflineSubjects() async {
-    if (kIsWeb) return;
     final db = await _dbHelper.database;
     try {
       final unsynced = await db.query('subjects', where: 'synced_with_cloud = ?', whereArgs: [0]);
@@ -69,7 +66,6 @@ class SyncService {
   }
 
   Future<bool> pullSubjects() async {
-    if (kIsWeb) return false;
     final db = await _dbHelper.database;
     final prefs = await SharedPreferences.getInstance();
     final lastSynced = prefs.getString('last_subjects_sync');
@@ -118,7 +114,6 @@ class SyncService {
   // 3. CADERNOS (NOTEBOOKS) - COM SUPORTE EDTECH E PERMISSÕES (ROLES)
   // =========================================================================
   Future<void> pushNotebooks() async {
-    if (kIsWeb) return;
     final db = await _dbHelper.database;
     try {
       final unsynced = await db.query('notebooks', where: 'synced_with_cloud = ?', whereArgs: [0]);
@@ -158,7 +153,6 @@ class SyncService {
   }
 
   Future<bool> pullNotebooks() async {
-    if (kIsWeb) return false;
     final db = await _dbHelper.database;
     final prefs = await SharedPreferences.getInstance();
     final lastSynced = prefs.getString('last_notebooks_sync');
@@ -245,7 +239,6 @@ class SyncService {
   // 4. PÁGINAS E TRAÇOS DE TINTA (PAGES & CANVAS)
   // =========================================================================
   Future<void> pushPages() async {
-    if (kIsWeb) return;
     final db = await _dbHelper.database;
     try {
       final unsyncedPages = await db.query('pages', where: 'synced_with_cloud = ?', whereArgs: [0]);
@@ -295,7 +288,6 @@ class SyncService {
   }
 
   Future<bool> pullPages() async {
-    if (kIsWeb) return false;
     final db = await _dbHelper.database;
     final prefs = await SharedPreferences.getInstance();
     final lastSynced = prefs.getString('last_pages_sync');

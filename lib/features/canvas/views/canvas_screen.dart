@@ -52,6 +52,16 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     'Castanho Claro': const Color(0xFF8D6E63), 'Castanho Escuro': const Color(0xFF5D4037),
   };
 
+  String? _liveStrokeId;
+  DateTime _lastBroadcastTime = DateTime.now();
+  int _lastBroadcastedPointIndex = 0;
+
+// Helper para arredondar pontos (Poupa extrema largura de banda no Reverb)
+  Map<String, num> _pointToMap(Offset pt) => {
+    'x': num.parse(pt.dx.toStringAsFixed(1)),
+    'y': num.parse(pt.dy.toStringAsFixed(1)),
+  };
+
   @override
   void initState() {
     super.initState();
@@ -251,8 +261,11 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   onPanStart: !isBlocked ? (details) {
                                     final localPos = details.localPosition;
                                     if (controller.currentTool == ToolMode.draw) {
+                                      _liveStrokeId = const Uuid().v4(); // ID único para o traço em curso
+                                      _lastBroadcastedPointIndex = 0;
+                                      _lastBroadcastTime = DateTime.now();
                                       controller.activePointsNotifier.value = [localPos];
-                                    } else if (controller.currentTool == ToolMode.select) {
+                                    }else if (controller.currentTool == ToolMode.select) {
                                       bool hitSelected = false;
                                       for (var id in controller.selectedStrokeIds) {
                                         final matches = page.strokes.where((s) => s.id == id);
@@ -287,7 +300,31 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                     if (controller.currentTool == ToolMode.draw) {
                                       final list = controller.activePointsNotifier.value;
                                       if (list.isEmpty || (localPos - list.last).distance > 1.5) {
-                                        controller.activePointsNotifier.value = List.from(list)..add(localPos);
+                                        final newList = List<Offset>.from(list)..add(localPos);
+                                        controller.activePointsNotifier.value = newList;
+
+                                        // 🚀 THROTTLING: Dispara apenas a cada 60ms e envia SÓ OS PONTOS NOVOS
+                                        final now = DateTime.now();
+                                        if (now.difference(_lastBroadcastTime).inMilliseconds > 30 && controller.isRealtimeActive && controller.liveNotebookSid != null) {
+                                          final newPoints = newList.sublist(_lastBroadcastedPointIndex);
+                                          if (newPoints.isNotEmpty) {
+                                            RealtimeService().broadcastStroke(
+                                                notebookId: controller.liveNotebookSid!,
+                                                strokeData: {
+                                                  'page_number': page.pageNumber,
+                                                  'strokes': [{
+                                                    'id': _liveStrokeId,
+                                                    'color': controller.selectedColorHex,
+                                                    'thickness': num.parse(controller.selectedThickness.toStringAsFixed(1)),
+                                                    'is_final': false, // Alerta os outros que o traço ainda está a ser desenhado
+                                                    'points': newPoints.map(_pointToMap).toList(),
+                                                  }]
+                                                }
+                                            );
+                                            _lastBroadcastedPointIndex = newList.length;
+                                            _lastBroadcastTime = now;
+                                          }
+                                        }
                                       }
                                     } else if (controller.currentTool == ToolMode.select) {
                                       if (controller.isMovingStrokes && controller.lastPanOffset != null) {
@@ -303,15 +340,38 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   } : null,
                                   onPanEnd: !isBlocked ? (details) async {
                                     if (controller.currentTool == ToolMode.draw) {
-                                      final newStroke = Stroke(id: const Uuid().v4(), color: controller.selectedColorHex, thickness: controller.selectedThickness, points: List.from(controller.activePointsNotifier.value));
-                                      page.strokes.add(newStroke);
-                                      controller.activePointsNotifier.value = [];
-                                      controller.forceNotify();
+                                      final allPoints = controller.activePointsNotifier.value;
+                                      if (allPoints.isNotEmpty && _liveStrokeId != null) {
+                                        final newStroke = Stroke(
+                                          id: _liveStrokeId,
+                                          color: controller.selectedColorHex,
+                                          thickness: controller.selectedThickness,
+                                          points: List.from(allPoints),
+                                        );
 
-                                      await controller.triggerAutoSave(page);
+                                        page.strokes.add(newStroke);
+                                        controller.activePointsNotifier.value = [];
+                                        controller.forceNotify();
+                                        await controller.triggerAutoSave(page);
 
-                                      if (controller.isRealtimeActive && controller.liveNotebookSid != null) {
-                                        RealtimeService().broadcastStroke(notebookId: controller.liveNotebookSid!, strokeData: {'page_number': page.pageNumber, 'strokes': [{'id': newStroke.id, 'color': newStroke.color, 'thickness': newStroke.thickness, 'points': newStroke.points.map((pt) => {'x': pt.dx, 'y': pt.dy}).toList()}]});
+                                        // 🚀 ENVIO FINAL: Envia os últimos pontos que faltavam e marca is_final: true
+                                        if (controller.isRealtimeActive && controller.liveNotebookSid != null) {
+                                          final remainingPoints = allPoints.sublist(_lastBroadcastedPointIndex);
+                                          RealtimeService().broadcastStroke(
+                                              notebookId: controller.liveNotebookSid!,
+                                              strokeData: {
+                                                'page_number': page.pageNumber,
+                                                'strokes': [{
+                                                  'id': _liveStrokeId,
+                                                  'color': controller.selectedColorHex,
+                                                  'thickness': num.parse(controller.selectedThickness.toStringAsFixed(1)),
+                                                  'is_final': true, // Traço concluído
+                                                  'points': remainingPoints.map(_pointToMap).toList(),
+                                                }]
+                                              }
+                                          );
+                                        }
+                                        _liveStrokeId = null;
                                       }
                                     } else if (controller.currentTool == ToolMode.select) {
                                       controller.selectionRectStart = null;
@@ -325,6 +385,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                     child: Stack(
                                       fit: StackFit.expand,
                                       children: [
+                                        // 1. A Folha Estática (Só se move quando um traço é concluído)
                                         CustomPaint(
                                           size: pSize,
                                           painter: StaticNotebookPainter(
@@ -334,9 +395,23 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                                 ? Rect.fromPoints(controller.selectionRectStart!, controller.selectionRectEnd!) : null,
                                           ),
                                         ),
+
+                                        // 🚀 2. A VIA RÁPIDA DO OBSERVADOR (Desenha a tinta dos colegas a 60 FPS sem engasgar!)
+                                        ValueListenableBuilder<Map<String, Stroke>>(
+                                          valueListenable: controller.remoteLiveStrokes,
+                                          builder: (context, remoteMap, _) => CustomPaint(
+                                              size: pSize,
+                                              painter: RemoteLiveStrokesPainter(liveStrokes: remoteMap)
+                                          ),
+                                        ),
+
+                                        // 3. A Via Rápida do Próprio Autor (O teu dedo no ecrã)
                                         ValueListenableBuilder<List<Offset>>(
                                           valueListenable: controller.activePointsNotifier,
-                                          builder: (context, points, _) => CustomPaint(size: pSize, painter: ActiveStrokePainter(currentPoints: points, currentColor: controller.selectedColorHex, currentThickness: controller.selectedThickness)),
+                                          builder: (context, points, _) => CustomPaint(
+                                              size: pSize,
+                                              painter: ActiveStrokePainter(currentPoints: points, currentColor: controller.selectedColorHex, currentThickness: controller.selectedThickness)
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -455,8 +530,12 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                 top: 16, left: 0, right: 0,
                 child: Center(
                     child: LiveVoiceCockpit(
-                        onlineUsers: controller.onlineUsers,
-                        onHangUp: () => setState(() => controller.isInVoiceCall = false)
+                      onlineUsers: controller.onlineUsers,
+                      isMuted: controller.isMuted,
+                      isSpeakerOn: controller.isSpeakerOn,
+                      onMuteToggle: controller.toggleMute,
+                      onSpeakerToggle: controller.toggleSpeaker,
+                      onHangUp: () => controller.toggleVoiceCall("MEU_ID_AQUI"), // Passa o ID do user logado
                     )
                 )
             ),

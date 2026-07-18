@@ -170,13 +170,30 @@ class ApiService {
     request.fields['name'] = name;
 
     if (imageFile != null) {
-      final String path = (imageFile is XFile) ? imageFile.path : imageFile.toString();
-      String fileName = path.split('\\').last.split('/').last;
-      String extension = fileName.split('.').last.toLowerCase();
-      if (!['png', 'jpg', 'jpeg', 'gif'].contains(extension)) extension = 'jpeg';
+      if (kIsWeb) {
+        final XFile file = imageFile as XFile;
+        final bytes = await file.readAsBytes();
+        final multipartFile = http.MultipartFile.fromBytes(
+          'avatar',
+          bytes,
+          filename: file.name,
+          contentType: MediaType('image', file.name.split('.').last.toLowerCase().replaceAll('jpg', 'jpeg')),
+        );
+        request.files.add(multipartFile);
+      } else {
+        final String path = (imageFile is XFile) ? imageFile.path : imageFile.toString();
+        String fileName = path.split('\\').last.split('/').last;
+        String extension = fileName.split('.').last.toLowerCase();
+        if (!['png', 'jpg', 'jpeg', 'gif'].contains(extension)) extension = 'jpeg';
 
-      final multipartFile = await http.MultipartFile.fromPath('avatar', path, filename: fileName, contentType: MediaType('image', extension));
-      request.files.add(multipartFile);
+        final multipartFile = await http.MultipartFile.fromPath(
+          'avatar',
+          path,
+          filename: fileName,
+          contentType: MediaType('image', extension),
+        );
+        request.files.add(multipartFile);
+      }
     }
 
     debugPrint('📢 [API] 5. A disparar para o servidor Laravel...');

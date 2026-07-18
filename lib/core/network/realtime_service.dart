@@ -23,6 +23,9 @@ class RealtimeService {
 
   bool get isConnected => _isConnected;
 
+  final _webrtcStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onWebRTCSignalReceived => _webrtcStreamController.stream;
+
   // =========================================================================
   // 🔌 1. INICIAR CONEXÃO WEBSOCKET (Laravel Reverb / Pusher)
   // =========================================================================
@@ -122,7 +125,18 @@ class RealtimeService {
       }
     });
 
+    _notebookChannel!.bind('client-webrtc-signal').listen((event) {
+      if (event.data != null) {
+        final data = event.data is Map ? Map<String, dynamic>.from(event.data) : jsonDecode(event.data.toString());
+        _webrtcStreamController.add(data);
+      }
+    });
+
     _notebookChannel!.subscribe();
+  }
+
+  void sendWebRTCSignal(int notebookId, Map<String, dynamic> signalData) {
+    _notebookChannel?.trigger(eventName: 'client-webrtc-signal', data: jsonEncode(signalData));
   }
 
   // =========================================================================
@@ -186,5 +200,16 @@ class RealtimeService {
     });
 
     _userChannel!.subscribe();
+  }
+
+  // No RealtimeService em Flutter
+  void updateUserTalkingState(String userId, bool isTalking) {
+    if (_estudantesNaSala.containsKey(userId)) {
+      // Só dispara se o estado tiver realmente mudado (para evitar rebuilds desnecessários)
+      if (_estudantesNaSala[userId]['isTalking'] != isTalking) {
+        _estudantesNaSala[userId]['isTalking'] = isTalking;
+        _usersStreamController.add(_estudantesNaSala.values.toList());
+      }
+    }
   }
 }

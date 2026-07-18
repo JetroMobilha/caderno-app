@@ -1,4 +1,7 @@
 allprojects {
+    extra["compileSdkVersion"] = 35
+    extra["targetSdkVersion"] = 35
+
     repositories {
         google()
         mavenCentral()

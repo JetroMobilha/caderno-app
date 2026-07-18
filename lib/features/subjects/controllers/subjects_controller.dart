@@ -1,11 +1,8 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/sync_service.dart';
-import '../../auth/controllers/auth_controller.dart';
-import '../../notebooks/controllers/notebooks_controller.dart';
 import '../models/subject_model.dart';
 import '../repositories/subject_repository.dart';
 
@@ -18,7 +15,6 @@ class SubjectsController extends StateNotifier<List<Subject>> {
 
   SubjectsController(this.ref) : super([]) {
     loadSubjects();
-    // 🚀 O Timer de 1 minuto foi ANIQUILADO! Poupamos bateria e CPU.
   }
 
   Future<void> loadSubjects() async {
@@ -54,7 +50,7 @@ class SubjectsController extends StateNotifier<List<Subject>> {
       name: subject.name,
       color: subject.color,
       icon: subject.icon,
-      syncedWithCloud: kIsWeb ? 1 : 0,
+      syncedWithCloud: 0,
     );
     state = state.map((s) => s.id == subject.id ? updatedSubject : s).toList();
   }
@@ -66,10 +62,8 @@ class SubjectsController extends StateNotifier<List<Subject>> {
 
   // 📡 Chamado manualmente pelo botão da Gaveta ou pelo Reverb (WebSocket)
   Future<void> syncManuallyWithCloud() async {
-    if (!kIsWeb) {
-      final syncService = SyncService();
-      await syncService.syncAll();
-    }
+    final syncService = SyncService();
+    await syncService.syncAll();
     await loadSubjects();
   }
 }
@@ -78,9 +72,6 @@ final subjectsProvider = StateNotifierProvider<SubjectsController, List<Subject>
   return SubjectsController(ref);
 });
 
-// ============================================================================
-// 🎯 PROVIDER DA DISCIPLINA ATIVA (Gere a sua reatividade de forma limpa)
-// ============================================================================
 // ============================================================================
 // 🎯 PROVIDER DA DISCIPLINA ATIVA (Gere a sua reatividade de forma limpa)
 // ============================================================================

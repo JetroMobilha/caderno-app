@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -89,7 +88,7 @@ class CanvasController extends ChangeNotifier {
   Future<void> initNotebook(int notebookId, int? notebookSid, String lineType, String paperSize, String role) async {
     isLoading = true;
     currentNotebookId = notebookId;
-    liveNotebookSid = kIsWeb ? notebookId : notebookSid;
+    liveNotebookSid = notebookSid;
     liveLineType = lineType;
     currentPaperSize = paperSize;
     currentUserRole = role;
@@ -155,9 +154,10 @@ class CanvasController extends ChangeNotifier {
       onlineUsers = usersList.map((u) {
         final map = Map<String, dynamic>.from(u);
         return {
+          'id': map['id'],
           'name': map['name'] ?? 'Colega',
           'color': avatarColorsPool[(map['id'] ?? 0) % avatarColorsPool.length],
-          'isTalking': false,
+          'isTalking': map['isTalking'] ?? false,
         };
       }).toList();
       notifyListeners();
@@ -383,7 +383,7 @@ class CanvasController extends ChangeNotifier {
       selectedStrokeIds.clear();
       selectedTextIds.clear();
       notifyListeners();
-      if (!kIsWeb && page.id != null) {
+      if (page.id != null) {
         await _repository.saveSingleImageBlock(page.id!, newImageBlock);
       }
       await triggerAutoSave(page);
@@ -441,7 +441,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   void _onNoteBookSyncedByRadar() {
-    if (liveNotebookSid != null && liveNotebookSid != 0 && !kIsWeb) return;
+    if (liveNotebookSid != null && liveNotebookSid != 0) return;
     final Map<int, int> updates = SyncService.syncedNoteBooksRadio.value;
     if (updates.containsKey(currentNotebookId)) {
       liveNotebookSid = updates[currentNotebookId]!;

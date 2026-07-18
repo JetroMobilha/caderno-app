@@ -1,6 +1,6 @@
 allprojects {
-    extra["compileSdkVersion"] = 35
-    extra["targetSdkVersion"] = 35
+    extra["compileSdkVersion"] = 36
+    extra["targetSdkVersion"] = 36
 
     repositories {
         google()

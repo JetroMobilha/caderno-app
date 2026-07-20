@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uuid/uuid.dart';
+import 'package:vector_math/vector_math_64.dart' as vector_math;
 
 import '../../../core/network/realtime_service.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../../notebooks/models/notebook_model.dart';
 import '../controllers/canvas_controller.dart';
 import '../models/local_page_model.dart';
@@ -55,6 +57,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   String? _liveStrokeId;
   DateTime _lastBroadcastTime = DateTime.now();
   int _lastBroadcastedPointIndex = 0;
+  String myUserId ="";
 
 // Helper para arredondar pontos (Poupa extrema largura de banda no Reverb)
   Map<String, num> _pointToMap(Offset pt) => {
@@ -66,9 +69,13 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(authProvider).currentUser;
+      final String uid = user?.serverId?.toString() ?? user?.id?.toString() ?? "";
+      
       ref.read(canvasProvider).initNotebook(
         widget.notebook.id ?? 0, widget.notebook.serverId,
-        widget.notebook.lineType ?? 'ruled', widget.notebook.paperSize ?? 'A4', widget.notebook.role,
+        widget.notebook.lineType ?? 'ruled', widget.notebook.paperSize ?? 'A4', 
+        widget.notebook.role, uid,
       );
     });
   }
@@ -128,6 +135,22 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = ref.watch(canvasProvider);
+    final user = ref.watch(authProvider).currentUser;
+    
+    // 🚀 UNIFICAÇÃO DE ID: Para colaboração, usamos EXCLUSIVAMENTE o serverId.
+    // O ID local do SQLite não serve para identificar utilizadores em diferentes dispositivos.
+    myUserId = user?.serverId?.toString() ?? "";
+
+    // 💡 AUTO-CORREÇÃO: Se estivermos online mas o myUserId não estiver na lista, tentamos sincronizar pelo nome
+    if (myUserId.isNotEmpty && controller.onlineUsers.isNotEmpty) {
+      final String myName = user?.name ?? "";
+      final meInList = controller.onlineUsers.where((u) => u['name'] == myName);
+      if (meInList.isNotEmpty && meInList.first['id'] != myUserId) {
+        final String officialId = meInList.first['id'];
+        debugPrint('🆔 [Auto-Sinc] O meu ID real no servidor é $officialId (em vez de $myUserId)');
+        myUserId = officialId;
+      }
+    }
 
     if (controller.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF0F4C5C))));
@@ -153,16 +176,30 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               final page = controller.pages[index];
               final Size pSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
 
-              final bool isBlocked = controller.currentTool == ToolMode.pan || widget.notebook.role == 'viewer';
+              final bool isFollowing = controller.followingUserId != null;
+              final bool isBlocked = (controller.currentTool == ToolMode.pan || widget.notebook.role == 'viewer') && !isFollowing;
               final bool canTapCanvas = controller.currentTool == ToolMode.text || controller.currentTool == ToolMode.eraser;
 
               return InteractiveViewer.builder(
-                scaleEnabled: controller.currentTool == ToolMode.pan,
-                panEnabled: controller.currentTool == ToolMode.pan,
+                scaleEnabled: controller.currentTool == ToolMode.pan && !isFollowing,
+                panEnabled: controller.currentTool == ToolMode.pan && !isFollowing,
                 maxScale: 6.0, minScale: 0.1,
                 transformationController: controller.transformationController,
                 boundaryMargin: const EdgeInsets.all(3000),
                 builder: (context, viewport) {
+                  // 🔭 ATUALIZAÇÃO DO CENTRO DE VISÃO E LARGURA (Para quem está a transmitir)
+                  // 🚀 CORREÇÃO DE SALTO: Só atualizamos pelo viewport se não estivermos a desenhar agora.
+                  if (_liveStrokeId == null) {
+                    final center = Offset(
+                      (viewport.point0.x + viewport.point1.x + viewport.point2.x + viewport.point3.x) / 4,
+                      (viewport.point0.y + viewport.point1.y + viewport.point2.y + viewport.point3.y) / 4,
+                    );
+                    controller.currentViewportCenter = center;
+                  }
+                  
+                  controller.currentVisibleWidth = (viewport.point1.x - viewport.point0.x).abs();
+                  controller.lastScreenSize = MediaQuery.of(context).size;
+
                   return Center(
                     child: Container(
                       width: pSize.width, height: pSize.height,
@@ -209,7 +246,16 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                           left: (img.width / 2) - 22, top: (img.height / 2) - 22, width: 44, height: 44,
                                           child: GestureDetector(
                                             behavior: HitTestBehavior.opaque,
-                                            onPanUpdate: (d) => setState(() => img.position += d.delta),
+                                            onPanUpdate: (d) {
+                                              setState(() => img.position += d.delta);
+                                              
+                                              // 🚀 FOCO DINÂMICO PARA IMAGEM
+                                              if (controller.isBroadcastingViewport) {
+                                                controller.currentViewportCenter = img.position + Offset(img.width / 2, img.height / 2);
+                                              }
+                                              
+                                              controller.broadcastImageBlockUpdate(page, img, myUserId);
+                                            },
                                             onPanEnd: (_) => controller.triggerAutoSave(page),
                                             child: const CircleAvatar(backgroundColor: Color(0xFF0F4C5C), child: Icon(Icons.open_with, size: 20, color: Colors.white)),
                                           ),
@@ -218,10 +264,13 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                           left: img.width - 22, top: img.height - 22, width: 44, height: 44,
                                           child: GestureDetector(
                                             behavior: HitTestBehavior.opaque,
-                                            onPanUpdate: (d) => setState(() {
-                                              img.width = (img.width + d.delta.dx).clamp(80.0, 900.0);
-                                              img.height = (img.height + d.delta.dy).clamp(80.0, 900.0);
-                                            }),
+                                            onPanUpdate: (d) {
+                                              setState(() {
+                                                img.width = (img.width + d.delta.dx).clamp(80.0, 900.0);
+                                                img.height = (img.height + d.delta.dy).clamp(80.0, 900.0);
+                                              });
+                                              controller.broadcastImageBlockUpdate(page, img, myUserId);
+                                            },
                                             onPanEnd: (_) => controller.triggerAutoSave(page),
                                             child: Container(width: 30, height: 30, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle), child: const Icon(Icons.open_in_full, size: 14, color: Colors.white)),
                                           ),
@@ -297,26 +346,34 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   } : null,
                                   onPanUpdate: !isBlocked ? (details) {
                                     final localPos = details.localPosition;
+                                    
+                                    // 🚀 FOCO DINÂMICO: Enquanto desenhamos, enviamos a ponta da caneta como foco.
+                                    // O assistente usará isto para saber se deve mover a câmera.
+                                    if (controller.isBroadcastingViewport) {
+                                      controller.currentViewportCenter = localPos;
+                                    }
+
                                     if (controller.currentTool == ToolMode.draw) {
                                       final list = controller.activePointsNotifier.value;
                                       if (list.isEmpty || (localPos - list.last).distance > 1.5) {
                                         final newList = List<Offset>.from(list)..add(localPos);
                                         controller.activePointsNotifier.value = newList;
 
-                                        // 🚀 THROTTLING: Dispara apenas a cada 60ms e envia SÓ OS PONTOS NOVOS
+                                        // 🚀 THROTTLING OTIMIZADO
                                         final now = DateTime.now();
-                                        if (now.difference(_lastBroadcastTime).inMilliseconds > 30 && controller.isRealtimeActive && controller.liveNotebookSid != null) {
+                                        if (now.difference(_lastBroadcastTime).inMilliseconds > 20 && controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
                                           final newPoints = newList.sublist(_lastBroadcastedPointIndex);
                                           if (newPoints.isNotEmpty) {
                                             RealtimeService().broadcastStroke(
                                                 notebookId: controller.liveNotebookSid!,
                                                 strokeData: {
+                                                  'sender_id': myUserId,
                                                   'page_number': page.pageNumber,
                                                   'strokes': [{
                                                     'id': _liveStrokeId,
                                                     'color': controller.selectedColorHex,
                                                     'thickness': num.parse(controller.selectedThickness.toStringAsFixed(1)),
-                                                    'is_final': false, // Alerta os outros que o traço ainda está a ser desenhado
+                                                    'is_final': false,
                                                     'points': newPoints.map(_pointToMap).toList(),
                                                   }]
                                                 }
@@ -354,19 +411,19 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         controller.forceNotify();
                                         await controller.triggerAutoSave(page);
 
-                                        // 🚀 ENVIO FINAL: Envia os últimos pontos que faltavam e marca is_final: true
-                                        if (controller.isRealtimeActive && controller.liveNotebookSid != null) {
-                                          final remainingPoints = allPoints.sublist(_lastBroadcastedPointIndex);
+                                        // 🚀 ENVIO FINAL ROBUSTO
+                                        if (controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
                                           RealtimeService().broadcastStroke(
                                               notebookId: controller.liveNotebookSid!,
                                               strokeData: {
+                                                'sender_id': myUserId,
                                                 'page_number': page.pageNumber,
                                                 'strokes': [{
                                                   'id': _liveStrokeId,
                                                   'color': controller.selectedColorHex,
                                                   'thickness': num.parse(controller.selectedThickness.toStringAsFixed(1)),
-                                                  'is_final': true, // Traço concluído
-                                                  'points': remainingPoints.map(_pointToMap).toList(),
+                                                  'is_final': true,
+                                                  'points': allPoints.map(_pointToMap).toList(),
                                                 }]
                                               }
                                           );
@@ -374,6 +431,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         _liveStrokeId = null;
                                       }
                                     } else if (controller.currentTool == ToolMode.select) {
+                                      controller.broadcastSelectionUpdate(page);
                                       controller.selectionRectStart = null;
                                       controller.selectionRectEnd = null;
                                       controller.isMovingStrokes = false;
@@ -396,13 +454,19 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                           ),
                                         ),
 
-                                        // 🚀 2. A VIA RÁPIDA DO OBSERVADOR (Desenha a tinta dos colegas a 60 FPS sem engasgar!)
+                                        // 🚀 2. A VIA RÁPIDA DO OBSERVADOR
                                         ValueListenableBuilder<Map<String, Stroke>>(
                                           valueListenable: controller.remoteLiveStrokes,
-                                          builder: (context, remoteMap, _) => CustomPaint(
+                                          builder: (context, remoteMap, _) {
+                                            // 🎯 FILTRAGEM CRÍTICA: Mostrar apenas traços desta página
+                                            final filteredMap = Map<String, Stroke>.from(remoteMap)
+                                              ..removeWhere((id, s) => s.pageNumber != null && s.pageNumber != page.pageNumber);
+                                            
+                                            return CustomPaint(
                                               size: pSize,
-                                              painter: RemoteLiveStrokesPainter(liveStrokes: remoteMap)
-                                          ),
+                                              painter: RemoteLiveStrokesPainter(liveStrokes: filteredMap)
+                                            );
+                                          },
                                         ),
 
                                         // 3. A Via Rápida do Próprio Autor (O teu dedo no ecrã)
@@ -432,7 +496,14 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                 child: GestureDetector(
                                   onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' ? (d) {
                                     tb.position += d.delta;
+                                    
+                                    // 🚀 FOCO DINÂMICO PARA TEXTO
+                                    if (controller.isBroadcastingViewport) {
+                                      controller.currentViewportCenter = tb.position;
+                                    }
+                                    
                                     controller.forceNotify();
+                                    controller.broadcastTextBlockUpdate(page, tb, myUserId);
                                   } : null,
                                   onTap: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' ? () {
                                     if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
@@ -451,7 +522,17 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                       decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
                                     ),
                                     decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                                    onChanged: (val) { tb.text = val; controller.forceNotify(); },
+                                    onChanged: (val) {
+                                      tb.text = val;
+                                      
+                                      // 🚀 FOCO DINÂMICO PARA TEXTO EM EDIÇÃO
+                                      if (controller.isBroadcastingViewport) {
+                                        controller.currentViewportCenter = tb.position;
+                                      }
+                                      
+                                      controller.forceNotify();
+                                      controller.broadcastTextBlockUpdate(page, tb, myUserId);
+                                    },
                                   )
                                       : Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
@@ -535,9 +616,57 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                       isSpeakerOn: controller.isSpeakerOn,
                       onMuteToggle: controller.toggleMute,
                       onSpeakerToggle: controller.toggleSpeaker,
-                      onHangUp: () => controller.toggleVoiceCall("MEU_ID_AQUI"), // Passa o ID do user logado
+                      onHangUp: () => controller.toggleVoiceCall(myUserId),
                     )
                 )
+            ),
+
+          // 🔭 INDICADORES DE ESTADO (FOLLOW/BROADCAST)
+          if (controller.followingUserId != null)
+            Positioned(
+              top: 80, left: 20,
+              child: _buildStatusBadge(
+                icon: Icons.visibility,
+                label: 'A assistir colega...',
+                color: Colors.green,
+                onClose: () => controller.toggleFollowUser(null, myUserId),
+              ),
+            ),
+
+          if (controller.isBroadcastingViewport)
+            Positioned(
+              top: 80, right: 20,
+              child: _buildStatusBadge(
+                icon: Icons.sensors,
+                label: 'A transmitir a minha visão',
+                color: Colors.redAccent,
+                onClose: () => controller.stopViewportBroadcasting(),
+              ),
+            ),
+
+          // ☁️ INDICADOR DE UPLOAD DE IMAGEM
+          if (controller.isUploadingImage)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.3),
+                child: Center(
+                  child: Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: Color(0xFF0F4C5C)),
+                          const SizedBox(height: 16),
+                          Text('A enviar imagem...', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                          Text('Isto poupa largura de banda para todos.', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
         ],
       ),
@@ -548,6 +677,30 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         foregroundColor: Colors.white,
         onPressed: () => _showAddPageDialog(controller),
         child: const Icon(Icons.note_add),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge({required IconData icon, required String label, required Color color, required VoidCallback onClose}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Text(label, style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onClose,
+            child: const Icon(Icons.close, color: Colors.white, size: 14),
+          ),
+        ],
       ),
     );
   }
@@ -569,6 +722,21 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
       // 🚀 AÇÕES MOVIDAS PARA FORA DAS RESTRIÇÕES, FICAM SEMPRE VISÍVEIS
       actions: [
+
+        // 🔭 0. BOTÃO DE TRANSMITIR CÂMARA
+        if (controller.followingUserId == null)
+          IconButton(
+            icon: Icon(controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off),
+            color: controller.isBroadcastingViewport ? Colors.redAccent : const Color(0xFF0F4C5C),
+            tooltip: controller.isBroadcastingViewport ? 'Parar Transmissão' : 'Transmitir Visão',
+            onPressed: () {
+              if (controller.isBroadcastingViewport) {
+                controller.stopViewportBroadcasting();
+              } else {
+                controller.startViewportBroadcasting(myUserId);
+              }
+            },
+          ),
 
         // 👥 1. CONTADOR DE QUEM ESTÁ ONLINE
         if (controller.onlineUsers.isNotEmpty)
@@ -595,7 +763,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               color: controller.isInVoiceCall ? const Color(0xFF27AE60) : const Color(0xFF0F4C5C)
           ),
           tooltip: controller.isInVoiceCall ? 'Chamada em curso' : 'Sala de Voz P2P',
-          onPressed: () => setState(() => controller.isInVoiceCall = !controller.isInVoiceCall),
+          onPressed: () => controller.toggleVoiceCall(myUserId),
         ),
 
         // 🤝 3. BOTÃO DE PARTILHAR CADERNO
@@ -619,15 +787,18 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             },
           ),
 
-        // 📡 4. BOTÃO DE RECONECTAR (Aparece se caiu a net e voltou)
+        // 📡 4. BOTÃO DE RECONECTAR
         if (controller.liveNotebookSid != null && !controller.isRealtimeActive)
           IconButton(
             icon: const Icon(Icons.cloud_off, color: Colors.orange),
             tooltip: 'Entrar na Sala em Tempo Real',
             onPressed: () {
+              if (myUserId.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro: Precisas de estar ligado à nuvem para colaborar. ☁️')));
+                return;
+              }
               controller.initRealtimeCollaboration();
               setState(() => controller.isRealtimeActive = true);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🟢 Ligado à sala de colaboração em tempo real!')));
             },
           ),
       ],
@@ -635,33 +806,193 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   }
   Widget _buildAppBarDropdown(CanvasController controller) {
     final double screenWidth = MediaQuery.of(context).size.width;
+    
+    // 🔍 Log para depurar o conflito de IDs
+    debugPrint('🔍 [Dropdown] Renderizando menu. myUserId (Server): $myUserId');
+
+    // 🛠️ Construção unificada para evitar erros de Assertion
+    final List<DropdownMenuItem<int>> dropdownItems = [];
+    final List<Widget> selectedWidgets = [];
+
+    // 1. Páginas existentes
+    for (int i = 0; i < controller.pages.length; i++) {
+      String label = '${widget.notebook.title} — Folha ${i + 1} de ${controller.pages.length}';
+      if (screenWidth < 400) {
+        label = 'Folha ${i + 1} de ${controller.pages.length}';
+      } else if (screenWidth < 600) {
+        label = '${widget.notebook.title} • F. ${i + 1}/${controller.pages.length}';
+      }
+
+      dropdownItems.add(DropdownMenuItem<int>(
+        value: i,
+        child: Text('Ir para Folha ${i + 1}', style: GoogleFonts.inter()),
+      ));
+
+      selectedWidgets.add(Container(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: const Color(0xFF1A1A24),
+            fontWeight: FontWeight.bold,
+            fontSize: screenWidth < 400 ? 15.0 : 17.0,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ));
+    }
+
+    // 2. Botão "Nova Folha"
+    if (widget.notebook.role != 'viewer') {
+      dropdownItems.add(DropdownMenuItem<int>(
+        value: controller.pages.length,
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add, color: Color(0xFF0F4C5C), size: 20),
+            SizedBox(width: 8),
+            Flexible(child: Text('Nova Folha', overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+      ));
+      selectedWidgets.add(const SizedBox.shrink());
+    }
+
+    // 3. Secção de Colaboradores Online
+    if (controller.onlineUsers.isNotEmpty) {
+      // Divider
+      dropdownItems.add(const DropdownMenuItem<int>(
+        enabled: false,
+        child: Divider(),
+      ));
+      selectedWidgets.add(const SizedBox.shrink());
+
+      // Header
+      dropdownItems.add(const DropdownMenuItem<int>(
+        enabled: false,
+        child: Text(
+          'ASSISTIR EM DIRETO:',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+        ),
+      ));
+      selectedWidgets.add(const SizedBox.shrink());
+
+      // Lista de Utilizadores
+      for (var u in controller.onlineUsers) {
+        final String uId = u['id'].toString();
+        final bool isLive = controller.activeBroadcasters.contains(uId);
+        
+        if (uId == myUserId) continue;
+
+        final bool isFollowing = controller.followingUserId == uId;
+        
+        // 🚀 Usamos um valor negativo único baseado no hash do ID para evitar conflitos no Dropdown
+        final int uniqueValue = -100 - uId.hashCode.abs() % 10000;
+
+        dropdownItems.add(DropdownMenuItem<int>(
+          value: uniqueValue, 
+          onTap: () => controller.toggleFollowUser(uId, myUserId),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 12,
+                    backgroundColor: u['color'],
+                    child: Text(u['name'][0], style: const TextStyle(fontSize: 10, color: Colors.white)),
+                  ),
+                  if (isLive)
+                    Positioned(
+                      right: -2, bottom: -2,
+                      child: Container(
+                        width: 8, height: 8,
+                        decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  isLive ? '${u['name']} (AO VIVO 🔴)' : 'Assistir ${u['name']}',
+                  style: TextStyle(
+                    color: isLive ? Colors.redAccent : Colors.black87, 
+                    fontWeight: isLive ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis
+                )
+              ),
+              // 👁️ INDICADOR PARA O TRANSMISSOR: Alguém que te está a assistir
+              if (controller.whoIsWatchingMe.contains(uId))
+                const Padding(
+                  padding: EdgeInsets.only(right: 6),
+                  child: Tooltip(
+                    message: 'Está a assistir-te',
+                    child: Icon(Icons.remove_red_eye, color: Colors.blueAccent, size: 16),
+                  ),
+                ),
+              if (isFollowing) const Icon(Icons.visibility, color: Colors.green, size: 16),
+            ],
+          ),
+        ));
+        selectedWidgets.add(const SizedBox.shrink());
+      }
+    }
+
+    // 👥 4. Secção: A ASSISTIR-ME (Quem me está a seguir)
+    if (controller.whoIsWatchingMe.isNotEmpty) {
+      dropdownItems.add(const DropdownMenuItem<int>(enabled: false, child: Divider()));
+      selectedWidgets.add(const SizedBox.shrink());
+
+      dropdownItems.add(const DropdownMenuItem<int>(
+        enabled: false,
+        child: Text('A ASSISTIR-ME:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+      ));
+      selectedWidgets.add(const SizedBox.shrink());
+
+      for (var viewerId in controller.whoIsWatchingMe) {
+        final viewer = controller.onlineUsers.firstWhere((u) => u['id'].toString() == viewerId, orElse: () => {});
+        if (viewer.isEmpty) continue;
+
+        dropdownItems.add(DropdownMenuItem<int>(
+          enabled: false,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 10, backgroundColor: viewer['color'],
+                child: Text(viewer['name'][0], style: const TextStyle(fontSize: 9, color: Colors.white)),
+              ),
+              const SizedBox(width: 8),
+              Flexible(child: Text(viewer['name'], style: const TextStyle(fontSize: 12, color: Colors.black54), overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 4),
+              const Icon(Icons.person_outline, size: 14, color: Colors.grey),
+            ],
+          ),
+        ));
+        selectedWidgets.add(const SizedBox.shrink());
+      }
+    }
+
     return DropdownButtonHideUnderline(
       child: DropdownButton<int>(
         isExpanded: true,
         value: controller.currentPageIndex,
         icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
-        selectedItemBuilder: (context) {
-          final widgets = controller.pages.asMap().entries.map<Widget>((entry) {
-            String label = '${widget.notebook.title} — Folha ${entry.key + 1} de ${controller.pages.length}';
-            if (screenWidth < 400) label = 'Folha ${entry.key + 1} de ${controller.pages.length}';
-            else if (screenWidth < 600) label = '${widget.notebook.title} • F. ${entry.key + 1}/${controller.pages.length}';
-            return Container(alignment: Alignment.centerLeft, child: Text(label, style: GoogleFonts.inter(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: screenWidth < 400 ? 15.0 : 17.0), overflow: TextOverflow.ellipsis));
-          }).toList();
-
-          // 🚀 A CORREÇÃO DO ERRO VERMELHO: A "sombra" só é adicionada se o botão real também for!
-          if (widget.notebook.role != 'viewer') {
-            widgets.add(const SizedBox.shrink());
-          }
-          return widgets;
-        },
-        items: [
-          ...controller.pages.asMap().entries.map((entry) => DropdownMenuItem<int>(value: entry.key, child: Text('Ir para Folha ${entry.key + 1}'))),
-          if (widget.notebook.role != 'viewer')
-            DropdownMenuItem<int>(value: controller.pages.length, child: const Row(children: [Icon(Icons.add, color: Color(0xFF0F4C5C)), SizedBox(width: 8), Text('Nova Folha')])),
-        ],
+        selectedItemBuilder: (_) => selectedWidgets,
+        items: dropdownItems,
         onChanged: (newIndex) {
-          if (newIndex == controller.pages.length) _showAddPageDialog(controller);
-          else if (newIndex != null) controller.pageController.animateToPage(newIndex, duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
+          if (newIndex == null || newIndex < 0) return; // 🚀 Aceita apenas índices positivos (páginas)
+          if (newIndex == controller.pages.length) {
+            _showAddPageDialog(controller);
+          } else {
+            controller.pageController.animateToPage(
+              newIndex,
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeInOut,
+            );
+          }
         },
       ),
     );

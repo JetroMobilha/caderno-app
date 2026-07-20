@@ -79,14 +79,17 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('🛫 [Auth] Tentativa de login para: $email');
       final response = await _authRepository.login(email, password);
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        debugPrint('✅ [Auth] Resposta 200 OK. Token recebido.');
         _token = responseData['access_token'];
 
         final Map<String, dynamic> userMap = responseData['user'];
 
+        debugPrint('💾 [Auth] A sincronizar utilizador para SQLite...');
         _currentUser = await _syncUserToSqlite(userMap);
 
         final prefs = await SharedPreferences.getInstance();
@@ -98,6 +101,7 @@ class AuthController extends ChangeNotifier {
           _connectToPrivateRadar(_currentUser!.id!);
         }
 
+        debugPrint('🔄 [Auth] A iniciar sincronização total pós-login...');
         await SyncService().syncAll();
 
         _isLoading = false;
@@ -109,7 +113,9 @@ class AuthController extends ChangeNotifier {
       } else {
         _authErrorMessage = responseData['message'] ?? 'Credenciais inválidas.';
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('🚨 [Auth Error] Falha crítica no processo de login: $e');
+      debugPrint('$stackTrace');
       _authErrorMessage = 'Erro de sistema: Falha ao comunicar com o servidor.';
     }
 

@@ -7,7 +7,7 @@ import 'package:uuid/uuid.dart';
 
 class ImageBlock {
   final String id;
-  final String imagePath; // String que aceita local, Blob (Web) e Nuvem (HTTP)
+  String imagePath; // Pode ser path local, Blob (Web) ou URL remota
   Offset position;
   double width;
   double height;
@@ -25,25 +25,9 @@ class ImageBlock {
   }) : id = id ?? const Uuid().v4();
 
   // =========================================================================
-  // 🚀 LINGUAGEM NUVEM (JSON ASSÍNCRONO BLINDADO) - A tua genialidade aqui!
+  // ⚡ MAPA LEVE: Usado para Realtime (WebSocket) e Base de Dados Local
   // =========================================================================
-  Future<Map<String, dynamic>> toMapAsync() async {
-    String? base64Image;
-    try {
-      // 🛡️ SE FOR WEB E FOR UM BLOB (Ficheiro recém-carregado no Chrome)
-      if (kIsWeb && imagePath.startsWith('blob:')) {
-        final response = await http.get(Uri.parse(imagePath));
-        base64Image = base64Encode(response.bodyBytes);
-      }
-      // 🛡️ SE FOR MOBILE E FOR UM FICHEIRO FÍSICO (/data/user/...)
-      else if (!kIsWeb && !imagePath.startsWith('http') && File(imagePath).existsSync()) {
-        final bytes = await File(imagePath).readAsBytes();
-        base64Image = base64Encode(bytes);
-      }
-    } catch (e) {
-      debugPrint('⚠️ Erro ao converter imagem para Base64: $e');
-    }
-
+  Map<String, dynamic> toMap() {
     return {
       'id': id,
       'dx': position.dx,
@@ -51,24 +35,54 @@ class ImageBlock {
       'width': width,
       'height': height,
       'rotation': rotation,
-      'image_base64': base64Image,
       'image_path': imagePath,
     };
+  }
+
+  // =========================================================================
+  // ☁️ MAPA COMPLETO: Usado pelo SyncService para persistência na Nuvem
+  // =========================================================================
+  Future<Map<String, dynamic>> toMapAsync() async {
+    String? base64Image;
+    
+    // Se o caminho for local (não for HTTP), precisamos de enviar os bytes para a nuvem
+    if (!imagePath.startsWith('http')) {
+      try {
+        if (kIsWeb) {
+          if (imagePath.startsWith('blob:')) {
+            final response = await http.get(Uri.parse(imagePath));
+            base64Image = base64Encode(response.bodyBytes);
+          }
+        } else {
+          final file = File(imagePath);
+          if (await file.exists()) {
+            final bytes = await file.readAsBytes();
+            base64Image = base64Encode(bytes);
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Erro ao preparar imagem para sync: $e');
+      }
+    }
+
+    final map = toMap();
+    map['image_base64'] = base64Image;
+    return map;
   }
 
   factory ImageBlock.fromMap(Map<String, dynamic> map) {
     String path = map['image_path']?.toString() ?? '';
 
-    // Se o Laravel enviou a foto em Base64 e estamos no Mobile, recriamos o ficheiro
+    // Se a Nuvem enviou binário (Base64) e estamos no Mobile, salvamos localmente
     if (!kIsWeb && map['image_base64'] != null && map['image_base64'].toString().isNotEmpty) {
       try {
         final Uint8List bytes = base64Decode(map['image_base64']);
         final tempDir = Directory.systemTemp;
-        File file = File('${tempDir.path}/sync_img_${map['id']}.png');
+        final File file = File('${tempDir.path}/sync_img_${map['id']}.png');
         file.writeAsBytesSync(bytes);
         path = file.path;
       } catch (e) {
-        debugPrint('⚠️ Erro ao recriar imagem do Base64: $e');
+        debugPrint('⚠️ Erro ao reconstruir imagem sync: $e');
       }
     }
 

@@ -1,5 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database_helper.dart';
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
@@ -63,7 +68,7 @@ class CanvasRepository {
       }
 
       await txn.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [currentPageId]);
-      for (var stroke in page.strokes) {
+      for (var stroke in List<Stroke>.from(page.strokes)) {
         await txn.insert('canvas_strokes', {
           'client_stroke_id': stroke.id,
           'page_id': currentPageId,
@@ -74,7 +79,7 @@ class CanvasRepository {
       }
 
       await txn.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
-      for (var tb in page.textBlocks) {
+      for (var tb in List<TextBlock>.from(page.textBlocks)) {
         await txn.insert('canvas_text_blocks', {
           'client_text_id': tb.id,
           'page_id': currentPageId,
@@ -85,7 +90,7 @@ class CanvasRepository {
       }
 
       await txn.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [currentPageId]);
-      for (var img in page.imageBlocks) {
+      for (var img in List<ImageBlock>.from(page.imageBlocks)) {
         await txn.insert('canvas_image_blocks', {
           'client_image_id': img.id,
           'page_id': currentPageId,
@@ -173,5 +178,35 @@ class CanvasRepository {
   Future<void> triggerSyncRadar(int pageId) async {
     final db = await _dbHelper.database;
     await db.update('pages', {'synced_with_cloud': 0, 'updated_at': DateTime.now().millisecondsSinceEpoch}, where: 'id = ?', whereArgs: [pageId]);
+  }
+
+  // =========================================================================
+  // ☁️ UPLOAD DE IMAGEM PARA O SERVIDOR (Compatível com Web e Mobile)
+  // =========================================================================
+  Future<String?> uploadImage(int notebookId, String filename, Uint8List bytes) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? token = prefs.getString('sanctum_token');
+      
+      final uri = Uri.parse('http://35.205.132.251:8080/api/notebooks/$notebookId/upload-image');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $token'
+        ..headers['Accept'] = 'application/json'
+        ..files.add(http.MultipartFile.fromBytes('image', bytes, filename: filename));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['url'];
+      } else {
+        debugPrint('❌ Erro no Upload: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('🚨 Exceção no Upload: $e');
+      return null;
+    }
   }
 }

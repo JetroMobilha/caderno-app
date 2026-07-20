@@ -7,7 +7,6 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:path/path.dart';
 
 class DatabaseHelper {
-  // 🚀 MUDAMOS PARA A v9! Assim o Flutter ignora a base de dados antiga e cria esta nova e perfeita!
   static const _databaseName = "caderno_digital_offline_v9.db";
   static const _databaseVersion = 1;
 
@@ -15,31 +14,51 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
 
   static Database? _database;
+  static bool _isInitializing = false;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
+    
+    // 🛡️ Proteção contra chamadas simultâneas
+    while (_isInitializing) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (_database != null) return _database!;
+    }
+
+    _isInitializing = true;
+    try {
+      _database = await _initDatabase();
+    } finally {
+      _isInitializing = false;
+    }
     return _database!;
   }
 
   Future<Database> _initDatabase() async {
+    String path;
+
     if (kIsWeb) {
+      // 🚀 NA WEB: Ativa o motor WebAssembly / IndexedDB
       databaseFactory = databaseFactoryFfiWeb;
-    } else if (Platform.isWindows || Platform.isLinux) {
+      path = _databaseName; // Na Web, o motor gere o sistema de ficheiros virtual no IndexedDB
+    } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      // 🖥️ NO DESKTOP: Windows / Linux / macOS
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
+      path = join(await getDatabasesPath(), _databaseName);
+    } else {
+      // 📱 NO MOBILE: Android / iOS
+      path = join(await getDatabasesPath(), _databaseName);
     }
 
-    String path = join(await getDatabasesPath(), _databaseName);
+    // Chamada única e universal para todas as plataformas!
     return await openDatabase(
       path,
       version: _databaseVersion,
       onCreate: _onCreate,
     );
   }
-
   Future _onCreate(Database db, int version) async {
-    // 👤 Tabela de Utilizadores (users)
     await db.execute('''
       CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +72,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 📚 Tabela de Disciplinas (subjects)
     await db.execute('''
       CREATE TABLE subjects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +87,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 📓 Tabela de Cadernos (notebooks)
     await db.execute('''
       CREATE TABLE notebooks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,7 +109,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // ✍️ Tabela de Páginas (pages)
     await db.execute('''
       CREATE TABLE pages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,7 +125,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 🎨 Motor de Desenho Vetorial (canvas_strokes)
     await db.execute('''
       CREATE TABLE canvas_strokes (
         client_stroke_id TEXT PRIMARY KEY,
@@ -123,7 +138,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // ⌨️ Motor de Tipografia (canvas_text_blocks)
     await db.execute('''
       CREATE TABLE canvas_text_blocks (
         client_text_id TEXT PRIMARY KEY,
@@ -137,7 +151,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 🤝 Tabela Pivô de Partilha e Turmas (notebook_user)
     await db.execute('''
       CREATE TABLE notebook_user (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,7 +165,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 💰 Tabela de Pagamentos (payments)
     await db.execute('''
       CREATE TABLE payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +183,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 📸 Motor de Multimédia (canvas_image_blocks)
     await db.execute('''
       CREATE TABLE canvas_image_blocks (
         client_image_id TEXT PRIMARY KEY,
@@ -180,8 +191,8 @@ class DatabaseHelper {
         image_path TEXT NOT NULL,
         pos_x REAL NOT NULL,
         pos_y REAL NOT NULL,
-        width REAL NOT NULL,   -- 🚀 CORRIGIDO: LARGURA (Substituiu o scale)
-        height REAL NOT NULL,  -- 🚀 CORRIGIDO: ALTURA
+        width REAL NOT NULL,
+        height REAL NOT NULL,
         rotation REAL NOT NULL,
         is_deleted INTEGER DEFAULT 0,
         synced_with_cloud INTEGER DEFAULT 0,
@@ -191,10 +202,8 @@ class DatabaseHelper {
     ''');
   }
 
-  // 🧹 Protocolo Terra Arrasada
   Future<void> clearAllData() async {
     final db = await database;
-
     final List<String> alvos = [
       'canvas_image_blocks',
       'canvas_text_blocks',
@@ -207,20 +216,15 @@ class DatabaseHelper {
       'users'
     ];
 
-    print('🧨 A INICIAR PROTOCOLO TERRA ARRASADA...');
     for (String tabela in alvos) {
       try {
         await db.delete(tabela);
-        print('✅ Tabela [$tabela] limpa com sucesso.');
-      } catch (e) {
-        print('⚠️ Tabela [$tabela] ignorada.');
-      }
+      } catch (_) {}
     }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('last_subjects_sync');
     await prefs.remove('last_notebooks_sync');
     await prefs.remove('last_pages_sync');
-    print('🧹 Quartel-General purificado com sucesso!');
   }
 }

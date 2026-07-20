@@ -57,17 +57,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       );
 
-      // Ofensiva tática de sincronização em background pós-login
-      try {
-        if (!kIsWeb) {
-          final syncService = SyncService();
-          await syncService.pullSubjects();
-        }
-        ref.invalidate(subjectsProvider);
-      } catch (e) {
-        debugPrint('⚠️ Sincronização inicial falhou: $e');
-      }
-
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const NotebooksListScreen()), // ✅ Novo e Elevado!

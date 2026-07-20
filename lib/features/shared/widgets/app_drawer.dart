@@ -69,22 +69,16 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final snackbarMessenger = ScaffoldMessenger.of(context);
 
     try {
-      if (kIsWeb) {
-        // 🌐 COMPORTAMENTO WEB: Sem SQLite local, fazemos apenas o Refresh dos dados da API!
-        await subNotifier.loadSubjects();
-        await notebooksNotifier.refreshCurrent();
-      } else {
-        // 📱 COMPORTAMENTO NATIVO: Ciclo completo de Push & Pull (SQLite <-> Nuvem)
-        await subNotifier.syncManuallyWithCloud();
-        await notebooksNotifier.refreshCurrent();
-      }
+      // Ciclo completo de Push & Pull (SQLite <-> Nuvem)
+      await subNotifier.syncManuallyWithCloud();
+      await notebooksNotifier.refreshCurrent();
 
       if (mounted) {
         snackbarMessenger.showSnackBar(
-            SnackBar(
-              content: Text(kIsWeb ? 'Dados atualizados com sucesso! 🌐✨' : 'Sincronização concluída! ☁️✨'),
-              backgroundColor: const Color(0xFF27AE60),
-              duration: const Duration(seconds: 2),
+            const SnackBar(
+              content: Text('Sincronização concluída! ✨'),
+              backgroundColor: Color(0xFF27AE60),
+              duration: Duration(seconds: 2),
             )
         );
       }
@@ -113,9 +107,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Terminar Sessão?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: AppColors.textDark)),
         content: Text(
-          kIsWeb
-              ? 'Tens a certeza que desejas terminar sessão?'
-              : 'Tens a certeza? O teu conteúdo local será limpo por segurança.',
+          'Tens a certeza? O teu conteúdo local será limpo por segurança.',
           style: GoogleFonts.inter(color: AppColors.textMuted),
         ),
         actions: [
@@ -430,11 +422,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   // 1. Botão de Sincronizar/Atualizar (Adaptado para Web e Mobile)
                   _buildHeaderActionButton(
                     tooltip: _isSyncing
-                        ? (kIsWeb ? 'A atualizar...' : 'A sincronizar...')
-                        : (kIsWeb ? 'Atualizar Dados da Rede' : 'Sincronizar Nuvem'),
+                        ? 'A sincronizar...'
+                        : 'Sincronizar Nuvem',
                     customChild: _isSyncing
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                        : Icon(kIsWeb ? Icons.refresh_rounded : Icons.cloud_sync_rounded, color: Colors.white, size: 20),
+                        : const Icon(Icons.cloud_sync_rounded, color: Colors.white, size: 20),
                     onTap: _isSyncing ? null : _handleManualSync,
                   ),
                   const SizedBox(width: 8),

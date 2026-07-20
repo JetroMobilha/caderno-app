@@ -24,8 +24,8 @@ class SyncService {
   // =========================================================================
   // 1. SINCRONIZAÇÃO TOTAL
   // =========================================================================
-  Future<void> syncAll() async {
-    if (isCollaborationActive) {
+  Future<void> syncAll({bool forced = false}) async {
+    if (isCollaborationActive && !forced) {
       debugPrint('🛑 [SyncService] Sincronização automática pausada para colaboração.');
       return;
     }

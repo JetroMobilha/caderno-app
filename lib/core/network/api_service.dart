@@ -12,11 +12,11 @@ class ApiService {
   ApiService._internal();
 
   static String get baseUrl {
-    return 'http://35.205.132.251:8080/api';
+    return 'https://appcaderno.duckdns.org:9000/api';
   }
 
   static String get baseUrlImagem {
-    return 'http://35.205.132.251:8080/storage/';
+    return 'https://appcaderno.duckdns.org:9000/storage/';
   }
 
   // =========================================================================

@@ -237,19 +237,13 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                           child: Stack(
                                             fit: StackFit.expand,
                                             children: [
-                                              kIsWeb
-                                                  ? Image.network(img.imagePath, fit: BoxFit.fill)
-                                                  : (img.imagePath.startsWith('http')
-                                                  ? CachedNetworkImage(
-                                                      imageUrl: img.imagePath, 
+                                              kIsWeb || img.imagePath.startsWith('http')
+                                                  ? Image.network(
+                                                      img.imagePath, 
                                                       fit: BoxFit.fill,
-                                                      placeholder: (context, url) => Container(
-                                                        color: Colors.grey.withOpacity(0.1),
-                                                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                                      ),
-                                                      errorWidget: (context, url, error) => const Icon(Icons.error_outline, color: Colors.red),
+                                                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.error_outline, color: Colors.red),
                                                     )
-                                                  : Image.file(File(img.imagePath), fit: BoxFit.fill)),
+                                                  : Image.file(File(img.imagePath), fit: BoxFit.fill),
                                               
                                               // 🚀 INDICADOR DE UPLOAD (Para quem está a carregar)
                                               if (controller.uploadingImageIds.contains(img.id))

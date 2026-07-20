@@ -10,8 +10,13 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
-    // Altera a engine padrão do SQLite para usar WebAssembly + IndexedDB
-    databaseFactory = databaseFactoryFfiWeb;
+    // 🚀 INICIALIZAÇÃO ROBUSTA: WebAssembly + Shared Worker
+    databaseFactory = createDatabaseFactoryFfiWeb(
+      options: SqfliteFfiWebOptions(
+        sqlite3WasmUri: Uri.parse('sqlite3.wasm'),
+        sharedWorkerUri: Uri.parse('sqflite_sw.js'),
+      ),
+    );
   }
 
   runApp(

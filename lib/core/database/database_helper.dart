@@ -39,7 +39,12 @@ class DatabaseHelper {
 
     if (kIsWeb) {
       // 🚀 NA WEB: Ativa o motor WebAssembly / IndexedDB
-      databaseFactory = databaseFactoryFfiWeb;
+      databaseFactory = createDatabaseFactoryFfiWeb(
+        options: SqfliteFfiWebOptions(
+          sqlite3WasmUri: Uri.parse('sqlite3.wasm'),
+          sharedWorkerUri: Uri.parse('sqflite_sw.js'),
+        ),
+      );
       path = _databaseName; // Na Web, o motor gere o sistema de ficheiros virtual no IndexedDB
     } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       // 🖥️ NO DESKTOP: Windows / Linux / macOS

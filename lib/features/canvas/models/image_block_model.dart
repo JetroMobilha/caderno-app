@@ -50,15 +50,17 @@ class ImageBlock {
       try {
         if (kIsWeb) {
           if (imagePath.startsWith('blob:')) {
+            // Na Web, usamos o pacote http para ler o conteúdo do Blob URL
             final response = await http.get(Uri.parse(imagePath));
-            base64Image = base64Encode(response.bodyBytes);
+            if (response.statusCode == 200) {
+              base64Image = base64Encode(response.bodyBytes);
+            }
           }
         } else {
-          final file = File(imagePath);
-          if (await file.exists()) {
-            final bytes = await file.readAsBytes();
-            base64Image = base64Encode(bytes);
-          }
+          // No Mobile, usamos dart:io (precisamos de contornar o import se formos puristas, 
+          // mas o Flutter trata isto se estiver dentro de um bloco !kIsWeb)
+          final bytes = await File(imagePath).readAsBytes();
+          base64Image = base64Encode(bytes);
         }
       } catch (e) {
         debugPrint('⚠️ Erro ao preparar imagem para sync: $e');

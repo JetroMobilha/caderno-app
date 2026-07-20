@@ -45,10 +45,10 @@ class RealtimeService {
     if (_isConnected && _pusher != null) return;
 
     final options = PusherChannelsOptions.fromHost(
-      scheme: 'ws',
-      host: '35.205.132.251',
+      scheme: 'wss',
+      host: 'appcaderno.duckdns.org',
       key: '6572db37e0db7615a423',
-      port: 6001,
+      port: 9001, // 🚀 Porta WSS do Reverb (Certifica-te que abriste a 9001 no servidor)
       shouldSupplyMetadataQueries: true,
       metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
     );
@@ -89,7 +89,7 @@ class RealtimeService {
     debugPrint('📡 [Realtime] A tentar autenticar e subscrever na sala: $channelName');
 
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPresenceChannel(
-      authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
+      authorizationEndpoint: Uri.parse('https://appcaderno.duckdns.org:9000/api/broadcasting/auth'),
       headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -324,7 +324,7 @@ class RealtimeService {
     final channelName = 'private-user.$userId';
 
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPrivateChannel(
-      authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
+      authorizationEndpoint: Uri.parse('https://appcaderno.duckdns.org:9000/api/broadcasting/auth'),
       headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',

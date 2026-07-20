@@ -210,7 +210,7 @@ class CanvasRepository {
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('sanctum_token');
       
-      final uri = Uri.parse('http://35.205.132.251:8080/api/notebooks/$notebookId/upload-image');
+      final uri = Uri.parse('https://appcaderno.duckdns.org:9000/api/notebooks/$notebookId/upload-image');
       final request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $token'
         ..headers['Accept'] = 'application/json'

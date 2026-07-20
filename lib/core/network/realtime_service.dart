@@ -22,6 +22,7 @@ class RealtimeService {
   final _followStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _usersStreamController = StreamController<List<dynamic>>.broadcast();
   final _pageEventStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _pageUpdatedStreamController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -30,6 +31,7 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onFollowUpdateReceived => _followStreamController.stream;
   Stream<List<dynamic>> get onUsersUpdated => _usersStreamController.stream;
   Stream<Map<String, dynamic>> get onPageEventReceived => _pageEventStreamController.stream;
+  Stream<Map<String, dynamic>> get onPageUpdated => _pageUpdatedStreamController.stream;
 
   bool get isConnected => _isConnected;
 
@@ -133,6 +135,7 @@ class RealtimeService {
 
     // 🎨 Quando um colega desenha um traço na tela!
     _notebookChannel!.bind('client-ink-stroke').listen((event) {
+      debugPrint('📡 [WebSocket] Evento recebido: client-ink-stroke');
       if (event.data != null) {
         final rawData = event.data;
         Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
@@ -142,6 +145,7 @@ class RealtimeService {
 
     // 📝 Quando um colega mexe num bloco de texto!
     _notebookChannel!.bind('client-text-block').listen((event) {
+      debugPrint('📡 [WebSocket] Evento recebido: client-text-block');
       if (event.data != null) {
         final rawData = event.data;
         Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
@@ -151,6 +155,7 @@ class RealtimeService {
 
     // 🖼️ Quando um colega mexe numa imagem!
     _notebookChannel!.bind('client-image-block').listen((event) {
+      debugPrint('📡 [WebSocket] Evento recebido: client-image-block');
       if (event.data != null) {
         final rawData = event.data;
         Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
@@ -160,6 +165,7 @@ class RealtimeService {
 
     // 🔭 Quando um colega mexe na câmara (Viewport Sync)!
     _notebookChannel!.bind('client-viewport-sync').listen((event) {
+      // Log omitido para evitar spam no console (ocorre a cada 80ms)
       if (event.data != null) {
         final rawData = event.data;
         Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
@@ -169,6 +175,7 @@ class RealtimeService {
 
     // 👥 Quando alguém começa ou para de seguir alguém!
     _notebookChannel!.bind('client-follow-update').listen((event) {
+      debugPrint('📡 [WebSocket] Evento recebido: client-follow-update');
       if (event.data != null) {
         final rawData = event.data;
         Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
@@ -178,10 +185,21 @@ class RealtimeService {
 
     // 📄 Quando alguém adiciona ou remove uma página!
     _notebookChannel!.bind('client-page-event').listen((event) {
+      debugPrint('📡 [WebSocket] Evento recebido: client-page-event');
       if (event.data != null) {
         final rawData = event.data;
         Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
         _pageEventStreamController.add(parsedData);
+      }
+    });
+
+    // 🏆 SERVER-AUTHORITATIVE: Quando o Laravel confirma o salvamento da página!
+    _notebookChannel!.bind('PageUpdated').listen((event) {
+      debugPrint('📡 [WebSocket] Evento CRÍTICO recebido: PageUpdated (Confirmação do Servidor)');
+      if (event.data != null) {
+        final rawData = event.data;
+        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
+        _pageUpdatedStreamController.add(parsedData);
       }
     });
 

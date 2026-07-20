@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database_helper.dart';
+import '../../../core/network/api_service.dart';
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
@@ -13,6 +14,7 @@ import '../models/image_block_model.dart';
 
 class CanvasRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final ApiService _apiService = ApiService();
 
   // =========================================================================
   // 📖 LER FOLHAS DO CADERNO
@@ -178,6 +180,26 @@ class CanvasRepository {
   Future<void> triggerSyncRadar(int pageId) async {
     final db = await _dbHelper.database;
     await db.update('pages', {'synced_with_cloud': 0, 'updated_at': DateTime.now().millisecondsSinceEpoch}, where: 'id = ?', whereArgs: [pageId]);
+  }
+
+  // =========================================================================
+  // 🚀 SERVER-AUTHORITATIVE SAVE (Ligar ao Laravel)
+  // =========================================================================
+  Future<bool> savePageToCloud(LocalPage page, int notebookServerId, String myUserId) async {
+    try {
+      final map = await page.toMapAsync();
+      map['notebook_id'] = notebookServerId;
+      map['sender_id'] = myUserId; // 🛡️ Crucial para evitar duplicidade no broadcast
+
+      final response = await _apiService.post('/sync/pages/push', {
+        'pages': [map]
+      });
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('🚨 [Repository] Erro ao salvar na Cloud: $e');
+      return false;
+    }
   }
 
   // =========================================================================

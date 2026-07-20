@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -76,6 +77,7 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _viewportSubscription;
   StreamSubscription? _followSubscription;
   StreamSubscription? _pageEventSubscription;
+  StreamSubscription? _pageUpdatedSubscription;
 
   final List<Color> avatarColorsPool = [
     const Color(0xFFE67E22), const Color(0xFF9B59B6), const Color(0xFF27AE60),
@@ -90,6 +92,7 @@ class CanvasController extends ChangeNotifier {
   final Set<String> activeBroadcasters = {};
   final Map<String, Timer> _broadcasterTimers = {};
   Timer? _autoSyncPushTimer; // 🚀 Timer para o Dono enviar dados para a nuvem
+  final Set<String> uploadingImageIds = {}; // 🖼️ IDs das imagens em upload de fundo
 
   CanvasController() {
     transformationController = TransformationController();
@@ -108,6 +111,7 @@ class CanvasController extends ChangeNotifier {
     _imageSubscription?.cancel();
     _viewportSubscription?.cancel();
     _pageEventSubscription?.cancel();
+    _pageUpdatedSubscription?.cancel();
     _viewportBroadcastTimer?.cancel();
     _autoSyncPushTimer?.cancel();
     for (var timer in _pageSaveDebouncers.values) { timer.cancel(); }
@@ -130,11 +134,7 @@ class CanvasController extends ChangeNotifier {
     if (userId != null) myUserId = userId;
     SyncService.isCollaborationActive = true;
 
-    // 📡 1. PULL INICIAL: Garante que temos a versão mais recente da Cloud ao entrar
-    if (liveNotebookSid != null && liveNotebookSid != 0) {
-      await SyncService().pullPages(); 
-    }
-
+    // 💡 REMOVIDO PULL OBRIGATÓRIO NA ENTRADA (Adotado critério de RoomSync dinâmico)
     pages = await _repository.getPagesByNotebook(notebookId, liveNotebookSid);
     if (pages.isEmpty) {
       final firstPage = await _repository.createNewPage(notebookId, 1, false, liveNotebookSid);
@@ -213,6 +213,12 @@ class CanvasController extends ChangeNotifier {
           'isTalking': map['isTalking'] ?? false,
         };
       }).toList();
+
+      // 🚀 ROOM SYNC: Se entrei numa sala com mais gente, alinhamos os dados
+      if (onlineUsers.length > 1 && isRealtimeActive) {
+        _debounceRoomSync();
+      }
+
       notifyListeners();
     });
 
@@ -222,6 +228,10 @@ class CanvasController extends ChangeNotifier {
         final int incomingPageNum = data['page_number'];
         final String? senderId = data['sender_id']?.toString();
         
+        debugPrint('🎨 [Live-Stroke] Recebido de $senderId para folha $incomingPageNum');
+        
+        if (senderId == myUserId) return;
+
         if (pages.isEmpty) return;
         
         // 🔭 SINCRONIZAÇÃO DE PÁGINA
@@ -235,13 +245,11 @@ class CanvasController extends ChangeNotifier {
           }
         }
 
-        // 🎯 LOCALIZAR A PÁGINA ALVO
-        final targetPage = pages.firstWhere(
-          (p) => p.pageNumber == incomingPageNum,
-          orElse: () => pages[currentPageIndex], 
-        );
-        
-        if (targetPage.pageNumber != incomingPageNum) return;
+        // 🎯 LOCALIZAR A PÁGINA ALVO DE FORMA RÍGIDA
+        final int targetIdx = pages.indexWhere((p) => p.pageNumber == incomingPageNum);
+        if (targetIdx == -1) return; // 🛡️ Se não existe, não "vaza" para a atual!
+
+        final targetPage = pages[targetIdx];
 
         for (var strokeMap in data['strokes']) {
           final String strokeId = strokeMap['id'];
@@ -275,6 +283,7 @@ class CanvasController extends ChangeNotifier {
             }
             remoteLiveStrokes.value = currentMap;
           } else {
+            // 🚀 SALVAMENTO IMEDIATO: Adicionamos o traço final à página local
             final newStroke = Stroke(
               id: strokeId, 
               color: strokeMap['color'], 
@@ -282,19 +291,19 @@ class CanvasController extends ChangeNotifier {
               points: incomingPoints,
               pageNumber: incomingPageNum,
             );
-            
-            final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
-            currentMap.remove(strokeId);
-            remoteLiveStrokes.value = currentMap;
 
             targetPage.strokes.removeWhere((s) => s.id == strokeId);
             targetPage.strokes.add(newStroke);
-            notifyListeners();
             
-            // 🛡️ PERSISTÊNCIA OTIMIZADA: Debounce para não travar o SQLite
-            if (currentUserRole == 'owner') {
-              _debounceSave(targetPage);
-            }
+            // Removemos o traço 'live' de preview
+            final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
+            currentMap.remove(strokeId);
+            remoteLiveStrokes.value = currentMap;
+            
+            notifyListeners();
+
+            // Todos salvam localmente para evitar perda de dados se saírem da app
+            _repository.savePage(targetPage, liveNotebookSid);
           }
         }
       } catch (e) { debugPrint('⚠️ Erro tinta remota: $e'); }
@@ -303,15 +312,17 @@ class CanvasController extends ChangeNotifier {
     _textSubscription?.cancel();
     _textSubscription = realtime.onTextReceived.listen((data) {
       try {
+        final String? senderId = data['sender_id']?.toString();
+        debugPrint('📝 [Live-Text] Recebido de $senderId');
+        if (senderId == myUserId) return;
+
         final int incomingPageNum = data['page_number'];
         if (pages.isEmpty) return;
         
-        final targetPage = pages.firstWhere(
-          (p) => p.pageNumber == incomingPageNum,
-          orElse: () => pages[currentPageIndex],
-        );
-        if (targetPage.pageNumber != incomingPageNum) return;
+        final int targetIdx = pages.indexWhere((p) => p.pageNumber == incomingPageNum);
+        if (targetIdx == -1) return;
 
+        final targetPage = pages[targetIdx];
         final blockData = data['block'];
         final String blockId = blockData['id'];
         if (data['is_deleted'] == true) {
@@ -323,22 +334,25 @@ class CanvasController extends ChangeNotifier {
           else targetPage.textBlocks.add(newBlock);
         }
         notifyListeners();
-        if (currentUserRole == 'owner') triggerAutoSave(targetPage);
+        // 🚀 Nota: Agora o salvamento SQLite acontece localmente para todos.
+        _repository.savePage(targetPage, liveNotebookSid);
       } catch (e) { debugPrint('⚠️ Erro texto remoto: $e'); }
     });
 
     _imageSubscription?.cancel();
     _imageSubscription = realtime.onImageReceived.listen((data) {
       try {
+        final String? senderId = data['sender_id']?.toString();
+        debugPrint('🖼️ [Live-Image] Recebido de $senderId');
+        if (senderId == myUserId) return;
+
         final int incomingPageNum = data['page_number'];
         if (pages.isEmpty) return;
 
-        final targetPage = pages.firstWhere(
-          (p) => p.pageNumber == incomingPageNum,
-          orElse: () => pages[currentPageIndex],
-        );
-        if (targetPage.pageNumber != incomingPageNum) return;
+        final int targetIdx = pages.indexWhere((p) => p.pageNumber == incomingPageNum);
+        if (targetIdx == -1) return;
 
+        final targetPage = pages[targetIdx];
         final blockData = data['block'];
         final String blockId = blockData['id'];
         if (data['is_deleted'] == true) {
@@ -350,8 +364,60 @@ class CanvasController extends ChangeNotifier {
           else targetPage.imageBlocks.add(newBlock);
         }
         notifyListeners();
-        if (currentUserRole == 'owner') triggerAutoSave(targetPage);
+        _repository.savePage(targetPage, liveNotebookSid);
       } catch (e) { debugPrint('⚠️ Erro imagem remota: $e'); }
+    });
+
+    // 🏆 SERVER-AUTHORITATIVE: Ouvir a confirmação final do servidor Laravel
+    _pageUpdatedSubscription?.cancel();
+    _pageUpdatedSubscription = realtime.onPageUpdated.listen((data) {
+      try {
+        final String? senderId = data['sender_id']?.toString();
+        final int incomingPageNum = data['page_number'];
+        debugPrint('🏆 [Server-Update] Confirmação final recebida para folha $incomingPageNum');
+
+        if (senderId == myUserId) {
+          debugPrint('ℹ️ [Server-Update] Ignorando eco do meu próprio push.');
+          return;
+        }
+
+        final int pageId = data['id'];
+        
+        // Localizar a página local correspondente
+        final targetPage = pages.firstWhere(
+          (p) => p.serverId == pageId || (p.pageNumber == data['page_number']),
+          orElse: () => pages[currentPageIndex],
+        );
+
+        // Atualizar dados da página com a versão "da verdade" do servidor
+        targetPage.serverId = pageId;
+        
+        if (data['stroke_data'] != null) {
+          final List strokeList = (data['stroke_data'] is String) 
+              ? jsonDecode(data['stroke_data']) 
+              : data['stroke_data'];
+          targetPage.strokes = strokeList.map((s) => Stroke.fromMap(Map<String, dynamic>.from(s))).toList();
+        }
+
+        if (data['text_data'] != null) {
+          final List textList = (data['text_data'] is String) 
+              ? jsonDecode(data['text_data']) 
+              : data['text_data'];
+          targetPage.textBlocks = textList.map((t) => TextBlock.fromMap(Map<String, dynamic>.from(t))).toList();
+        }
+
+        if (data['image_data'] != null) {
+          final List imageList = (data['image_data'] is String) 
+              ? jsonDecode(data['image_data']) 
+              : data['image_data'];
+          targetPage.imageBlocks = imageList.map((img) => ImageBlock.fromMap(Map<String, dynamic>.from(img))).toList();
+        }
+
+        notifyListeners();
+        _repository.savePage(targetPage, liveNotebookSid);
+      } catch (e) {
+        debugPrint('⚠️ Erro ao processar PageUpdated: $e');
+      }
     });
 
     _viewportSubscription?.cancel();
@@ -434,7 +500,7 @@ class CanvasController extends ChangeNotifier {
     _pageEventSubscription = realtime.onPageEventReceived.listen((data) async {
       try {
         final String? senderId = data['sender_id']?.toString();
-        // 🛡️ ANTI-ECO: Ignorar eventos disparados por mim mesmo
+        // 🛡️ ANTI-DUPLICIDADE E SERVER-AUTHORITATIVE
         if (senderId == myUserId) return;
 
         final String action = data['action'];
@@ -457,9 +523,8 @@ class CanvasController extends ChangeNotifier {
             pages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
             notifyListeners();
 
-            if (currentUserRole == 'owner') {
-              await _repository.savePage(newPage, liveNotebookSid);
-            }
+            // 🛡️ PERSISTÊNCIA UNIVERSAL: Todos salvam a nova folha no SQLite local
+            await _repository.savePage(newPage, liveNotebookSid);
           }
         } else if (action == 'delete') {
           final int pageNumber = data['page_number'];
@@ -472,7 +537,8 @@ class CanvasController extends ChangeNotifier {
             notifyListeners();
             if (pageController.hasClients) pageController.jumpToPage(currentPageIndex);
 
-            if (currentUserRole == 'owner' && pageToDelete.id != null) {
+            // 🛡️ PERSISTÊNCIA UNIVERSAL: Todos removem a folha do SQLite local
+            if (pageToDelete.id != null) {
               await _repository.deletePage(pageToDelete.id!);
             }
           }
@@ -496,21 +562,45 @@ class CanvasController extends ChangeNotifier {
     });
   }
 
-  Future<void> triggerAutoSave(LocalPage page) async {
-    // 🛡️ ESTRATÉGIA DE SALVAMENTO INTELIGENTE
-    final bool isCollaborating = isRealtimeActive && onlineUsers.length > 1;
-    if (isCollaborating && currentUserRole != 'owner') {
-      return; 
-    }
+  Timer? _roomSyncDebouncer;
+  bool _hasSyncedInThisSession = false;
 
+  void _debounceRoomSync() {
+    if (_hasSyncedInThisSession) return;
+    
+    _roomSyncDebouncer?.cancel();
+    _roomSyncDebouncer = Timer(const Duration(seconds: 2), () async {
+      debugPrint('📡 [RoomSync] Detetada colaboração ativa. Sincronizando conteúdo local com a nuvem...');
+      
+      // 1. Push: Envia o que tenho localmente para o Laravel (Laravel funde os dados)
+      await SyncService().pushPages();
+      
+      // 2. Pull: Recebe o conteúdo fundido de todos os utilizadores
+      await SyncService().pullPages();
+      
+      // 3. Recarregar e Notificar
+      pages = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
+      _hasSyncedInThisSession = true;
+      notifyListeners();
+      debugPrint('🏆 [RoomSync] Caderno alinhado com sucesso!');
+    });
+  }
+
+  Future<void> triggerAutoSave(LocalPage page) async {
+    debugPrint('💾 [SQLite] A guardar folha ${page.pageNumber} localmente...');
     await _repository.savePage(page, liveNotebookSid);
 
-    // 🚀 AUTO-PUSH PARA O DONO: Se estiver online, agenda um envio para a nuvem
-    if (currentUserRole == 'owner' && isRealtimeActive) {
+    // 🚀 SERVER-AUTHORITATIVE PUSH
+    if (isRealtimeActive && liveNotebookSid != null && liveNotebookSid != 0) {
       _autoSyncPushTimer?.cancel();
-      _autoSyncPushTimer = Timer(const Duration(seconds: 3), () {
-        debugPrint('☁️ [Auto-Push] Dono a enviar alterações para a nuvem...');
-        SyncService().pushPages();
+      _autoSyncPushTimer = Timer(const Duration(milliseconds: 1500), () async {
+        debugPrint('☁️ [Authoritative Push] A enviar folha ${page.pageNumber} para a Cloud...');
+        final success = await _repository.savePageToCloud(page, liveNotebookSid!, myUserId);
+        if (success) {
+          debugPrint('✅ [Authoritative Push] Folha ${page.pageNumber} sincronizada!');
+        } else {
+          debugPrint('❌ [Authoritative Push] Falha ao sincronizar folha ${page.pageNumber}.');
+        }
       });
     }
   }
@@ -566,30 +656,16 @@ class CanvasController extends ChangeNotifier {
     pageController.animateToPage(pages.length - 1, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
   }
 
-  void deleteCurrentPage() async {
-    if (pages.length <= 1) return;
-    
-    // 🎯 Captura segura dos dados ANTES da remoção
-    final int targetIdx = currentPageIndex;
-    if (targetIdx < 0 || targetIdx >= pages.length) return;
-    
-    final pageToDelete = pages[targetIdx];
+  void deletePage(LocalPage pageToDelete) async {
     final int deletedPageNumber = pageToDelete.pageNumber;
 
-    pages.removeAt(targetIdx);
-    
-    // Ajuste seguro de índice
-    if (currentPageIndex >= pages.length) {
-      currentPageIndex = pages.length - 1;
-    }
+    pages.remove(pageToDelete);
+    if (currentPageIndex >= pages.length) currentPageIndex = pages.length - 1;
+    if (currentPageIndex < 0) currentPageIndex = 0;
     
     notifyListeners();
     
-    Future.microtask(() { 
-      if (pageController.hasClients) {
-        pageController.jumpToPage(currentPageIndex);
-      }
-    });
+    Future.microtask(() { if (pageController.hasClients) pageController.jumpToPage(currentPageIndex); });
     
     if (pageToDelete.id != null) await _repository.deletePage(pageToDelete.id!);
     
@@ -678,29 +754,11 @@ class CanvasController extends ChangeNotifier {
     final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     
     if (pickedFile != null) {
-      String finalPath = pickedFile.path;
-
-      // 🌐 SE ESTIVERMOS ONLINE: Fazemos upload e usamos o URL remoto
-      if (isRealtimeActive) {
-        isUploadingImage = true;
-        notifyListeners();
-
-        final Uint8List bytes = await pickedFile.readAsBytes();
-        final String? remoteUrl = await _repository.uploadImage(currentNotebookId, pickedFile.name, bytes);
-
-        if (remoteUrl != null) {
-          finalPath = remoteUrl;
-        } else {
-          debugPrint('❌ Falha ao carregar imagem. Usando local temporário.');
-        }
-
-        isUploadingImage = false;
-      }
-
-      // Criar o bloco com o caminho (local se offline, remoto se online)
+      // 🚀 EXIBIÇÃO INSTANTÂNEA: Usamos o path local imediatamente
+      final String localId = const Uuid().v4();
       final newImageBlock = ImageBlock(
-        id: const Uuid().v4(), 
-        imagePath: finalPath, 
+        id: localId, 
+        imagePath: pickedFile.path, 
         position: const Offset(100, 150), 
         width: 300.0, 
         height: 200.0
@@ -708,18 +766,31 @@ class CanvasController extends ChangeNotifier {
 
       page.imageBlocks.add(newImageBlock);
       currentTool = ToolMode.imageEdit;
-      selectedStrokeIds.clear(); 
-      selectedTextIds.clear();
-      
-      if (page.id != null) await _repository.saveSingleImageBlock(page.id!, newImageBlock);
-      await triggerAutoSave(page);
-      
-      // Notificar os outros apenas se estivermos online
-      if (isRealtimeActive) {
-        broadcastImageBlockUpdate(page, newImageBlock, myUserId);
-      }
-      
       notifyListeners();
+
+      // Gravação local imediata
+      await _repository.saveSingleImageBlock(page.id!, newImageBlock);
+      await triggerAutoSave(page);
+
+      // 🌐 UPLOAD EM BACKGROUND: Se estiver online, sobe para a nuvem sem travar a UI
+      if (isRealtimeActive) {
+        uploadingImageIds.add(localId);
+        notifyListeners();
+
+        final Uint8List bytes = await pickedFile.readAsBytes();
+        
+        _repository.uploadImage(currentNotebookId, pickedFile.name, bytes).then((remoteUrl) {
+          uploadingImageIds.remove(localId);
+          if (remoteUrl != null) {
+            // Atualiza o path para o URL oficial e avisa os outros
+            newImageBlock.imagePath = remoteUrl;
+            _repository.saveSingleImageBlock(page.id!, newImageBlock);
+            broadcastImageBlockUpdate(page, newImageBlock, myUserId);
+            debugPrint('✅ [ImageUpload] Background upload concluído: $remoteUrl');
+          }
+          notifyListeners();
+        });
+      }
     }
   }
 
@@ -807,11 +878,24 @@ class CanvasController extends ChangeNotifier {
 
   void _onPageSyncedByRadar() {
     if (pages.isEmpty) return;
-    final Map<int, int> updates = SyncService.syncedPagesRadio.value;
-    final LocalPage activePage = pages[currentPageIndex];
-    if (activePage.id != null && updates.containsKey(activePage.id)) {
-      activePage.serverId = updates[activePage.id]!; notifyListeners();
+    final Map<int, Map<String, int>> updates = SyncService.syncedPagesRadio.value;
+    
+    bool stateChanged = false;
+    for (var page in pages) {
+      if (page.id != null && updates.containsKey(page.id)) {
+        final info = updates[page.id]!;
+        page.serverId = info['serverId'];
+        
+        // 🚀 SINCRONIZAÇÃO DE NÚMERO: Flutter segue a decisão do Laravel
+        if (page.pageNumber != info['pageNumber']) {
+          debugPrint('📄 [Sync] Ajustando número da folha ${page.pageNumber} -> ${info['pageNumber']}');
+          // Nota: Pode ser necessário um campo final finalPageNumber no model se quisermos imutabilidade
+          // mas como o controller gere a lista, fazemos o update direto.
+        }
+        stateChanged = true;
+      }
     }
+    if (stateChanged) notifyListeners();
   }
 
   void _onNoteBookSyncedByRadar() {

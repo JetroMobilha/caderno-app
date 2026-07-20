@@ -106,7 +106,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     controller.triggerAutoSave(page);
   }
 
-  void _confirmDeletePage(CanvasController controller, int index) {
+  void _confirmDeletePage(CanvasController controller, LocalPage page, int index) {
     if (controller.pages.length <= 1) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por segurança, não podes rasgar a única folha do caderno!'), backgroundColor: Colors.redAccent));
       return;
@@ -122,7 +122,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () {
-              controller.deleteCurrentPage();
+              controller.deletePage(page);
               Navigator.pop(ctx);
             },
             child: const Text('Rasgar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -234,11 +234,40 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         left: 0, top: 0, width: img.width, height: img.height,
                                         child: Container(
                                           decoration: BoxDecoration(border: isImageMode ? Border.all(color: const Color(0xFF0F4C5C), width: 2.0) : null),
-                                          child: kIsWeb
-                                              ? Image.network(img.imagePath, fit: BoxFit.fill)
-                                              : (img.imagePath.startsWith('http')
-                                              ? CachedNetworkImage(imageUrl: img.imagePath, fit: BoxFit.fill)
-                                              : Image.file(File(img.imagePath), fit: BoxFit.fill)),
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              kIsWeb
+                                                  ? Image.network(img.imagePath, fit: BoxFit.fill)
+                                                  : (img.imagePath.startsWith('http')
+                                                  ? CachedNetworkImage(
+                                                      imageUrl: img.imagePath, 
+                                                      fit: BoxFit.fill,
+                                                      placeholder: (context, url) => Container(
+                                                        color: Colors.grey.withOpacity(0.1),
+                                                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                                      ),
+                                                      errorWidget: (context, url, error) => const Icon(Icons.error_outline, color: Colors.red),
+                                                    )
+                                                  : Image.file(File(img.imagePath), fit: BoxFit.fill)),
+                                              
+                                              // 🚀 INDICADOR DE UPLOAD (Para quem está a carregar)
+                                              if (controller.uploadingImageIds.contains(img.id))
+                                                Container(
+                                                  color: Colors.black.withOpacity(0.3),
+                                                  child: const Center(
+                                                    child: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                                                        SizedBox(height: 8),
+                                                        Text('A enviar...', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                       if (isImageMode && widget.notebook.role != 'viewer') ...[
@@ -409,28 +438,15 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         page.strokes.add(newStroke);
                                         controller.activePointsNotifier.value = [];
                                         controller.forceNotify();
+                                        
+                                        // 🚀 SERVER-AUTHORITATIVE: O salvamento agora envia para o Laravel
+                                        // que por sua vez emitirá o evento 'PageUpdated' para todos.
                                         await controller.triggerAutoSave(page);
 
-                                        // 🚀 ENVIO FINAL ROBUSTO
-                                        if (controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
-                                          RealtimeService().broadcastStroke(
-                                              notebookId: controller.liveNotebookSid!,
-                                              strokeData: {
-                                                'sender_id': myUserId,
-                                                'page_number': page.pageNumber,
-                                                'strokes': [{
-                                                  'id': _liveStrokeId,
-                                                  'color': controller.selectedColorHex,
-                                                  'thickness': num.parse(controller.selectedThickness.toStringAsFixed(1)),
-                                                  'is_final': true,
-                                                  'points': allPoints.map(_pointToMap).toList(),
-                                                }]
-                                              }
-                                          );
-                                        }
                                         _liveStrokeId = null;
                                       }
-                                    } else if (controller.currentTool == ToolMode.select) {
+                                    }
+else if (controller.currentTool == ToolMode.select) {
                                       controller.broadcastSelectionUpdate(page);
                                       controller.selectionRectStart = null;
                                       controller.selectionRectEnd = null;
@@ -601,7 +617,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                     onColorTap: () => _showColorStudioDialog(controller, isForText: false),
                     onThicknessTap: () => _showThicknessStudioDialog(controller),
                     onChangePaperTap: () => _showPaperStyleStudioDialog(controller),
-                    onDeletePageTap: () => _confirmDeletePage(controller, controller.currentPageIndex),
+                    onDeletePageTap: () => _confirmDeletePage(controller, controller.pages[controller.currentPageIndex], controller.currentPageIndex),
                   )
               ),
             ),

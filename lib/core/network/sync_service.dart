@@ -15,8 +15,8 @@ class SyncService {
 
   static bool isCollaborationActive = false;
 
-  // 🚀 A ANTENA GLOBAL
-  static final ValueNotifier<Map<int, int>> syncedPagesRadio = ValueNotifier({});
+  // 🚀 A ANTENA GLOBAL: Agora envia detalhes completos da sincronização
+  static final ValueNotifier<Map<int, Map<String, int>>> syncedPagesRadio = ValueNotifier({});
   static final ValueNotifier<Map<int, int>> syncedNoteBooksRadio = ValueNotifier({});
 
   String uniqid() => DateTime.now().microsecondsSinceEpoch.toString();
@@ -168,7 +168,16 @@ class SyncService {
         final List serverNotebooks = data['notebooks'] ?? [];
         if (serverNotebooks.isEmpty) return false;
 
-        // 🧠 Captura o ID do utilizador local para cruzar as permissões da tabela pivô
+        // 🧠 1. Obter IDs dos cadernos que ainda existem no servidor
+        final List<int> serverIds = serverNotebooks.map((n) => n['id'] as int).toList();
+
+        // 🗑️ 2. LIMPEZA GLOBAL: Apagar cadernos locais que não estão no Pull (se foram apagados noutro dispositivo)
+        // Apenas para cadernos que têm server_id (já foram sincronizados)
+        await db.delete('notebooks', 
+          where: 'server_id IS NOT NULL AND server_id NOT IN (${serverIds.join(',')})'
+        );
+
+        // 🧠 3. Captura o ID do utilizador local para cruzar as permissões
         final userQuery = await db.query('users', orderBy: 'id ASC', limit: 1);
         final int currentUserId = userQuery.isNotEmpty ? userQuery.first['id'] as int : 0;
 
@@ -268,7 +277,7 @@ class SyncService {
       final response = await _apiService.post('/sync/pages/push', {'pages': payloadPages});
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        Map<int, int> newIdsMap = {};
+        Map<int, Map<String, int>> updatesMap = {};
         for (var item in data['synced_pages'] ?? []) {
           if (item['client_id'] != null && item['server_id'] != null) {
             await db.update('pages', {
@@ -277,10 +286,14 @@ class SyncService {
               'synced_with_cloud': 1,
               'updated_at': DateTime.now().millisecondsSinceEpoch,
             }, where: 'id = ?', whereArgs: [item['client_id']]);
-            newIdsMap[item['client_id']] = item['server_id'];
+            
+            updatesMap[item['client_id']] = {
+              'serverId': item['server_id'],
+              'pageNumber': item['page_number'],
+            };
           }
         }
-        if (newIdsMap.isNotEmpty) syncedPagesRadio.value = Map.from(newIdsMap);
+        if (updatesMap.isNotEmpty) syncedPagesRadio.value = Map.from(updatesMap);
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Pages: $e');
@@ -323,10 +336,19 @@ class SyncService {
             'updated_at': DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch,
           };
 
-          final localPageId = await db.insert('pages', pageData, conflictAlgorithm: ConflictAlgorithm.replace);
+          // 🟢 UPSERT INTELIGENTE: Usamos o server_id como referência para não duplicar páginas
+          int localPageId;
+          final existingPage = await db.query('pages', where: 'server_id = ?', whereArgs: [sPage['id']]);
+          
+          if (existingPage.isNotEmpty) {
+            localPageId = existingPage.first['id'] as int;
+            await db.update('pages', pageData, where: 'id = ?', whereArgs: [localPageId]);
+          } else {
+            localPageId = await db.insert('pages', pageData);
+          }
 
           // =========================================================
-          // 🖌️ 1. PUXAR TINTA VETORIAL
+          // 🖌️ 1. PUXAR TINTA VETORIAL (Merge por ID)
           // =========================================================
           List strokeList = [];
           if (sPage['stroke_data'] != null) {
@@ -337,10 +359,10 @@ class SyncService {
             }
           }
 
-          await db.delete('canvas_strokes', where: 'page_id = ?', whereArgs: [localPageId]);
           for (var st in strokeList) {
+            final String sid = st['id']?.toString() ?? uniqid();
             await db.insert('canvas_strokes', {
-              'client_stroke_id': st['id']?.toString() ?? uniqid(),
+              'client_stroke_id': sid,
               'page_id': localPageId,
               'stroke_data': jsonEncode(st),
               'is_deleted': 0,
@@ -350,7 +372,7 @@ class SyncService {
           }
 
           // =========================================================
-          // 📝 2. PUXAR TEXTO LIVRE
+          // 📝 2. PUXAR TEXTO LIVRE (Merge por ID)
           // =========================================================
           List textList = [];
           if (sPage['text_data'] != null) {
@@ -361,10 +383,10 @@ class SyncService {
             }
           }
 
-          await db.delete('canvas_text_blocks', where: 'page_id = ?', whereArgs: [localPageId]);
           for (var txt in textList) {
+            final String tid = txt['id']?.toString() ?? uniqid();
             await db.insert('canvas_text_blocks', {
-              'client_text_id': txt['id']?.toString() ?? uniqid(),
+              'client_text_id': tid,
               'page_id': localPageId,
               'text_data': jsonEncode(txt),
               'is_deleted': 0,
@@ -374,7 +396,7 @@ class SyncService {
           }
 
           // =========================================================
-          // 🖼️ 3. PUXAR IMAGENS E FORMATOS (Largura e Altura!)
+          // 🖼️ 3. PUXAR IMAGENS (Merge por ID)
           // =========================================================
           List imageList = [];
           if (sPage['image_data'] != null) {
@@ -385,19 +407,16 @@ class SyncService {
             }
           }
 
-          await db.delete('canvas_image_blocks', where: 'page_id = ?', whereArgs: [localPageId]);
           for (var img in imageList) {
+            final String iid = img['id']?.toString() ?? uniqid();
             await db.insert('canvas_image_blocks', {
-              'client_image_id': img['id']?.toString() ?? uniqid(),
+              'client_image_id': iid,
               'page_id': localPageId,
               'image_path': img['image_path']?.toString() ?? '',
               'pos_x': (img['dx'] as num?)?.toDouble() ?? 0.0,
               'pos_y': (img['dy'] as num?)?.toDouble() ?? 0.0,
-
-              // 🚀 OS NOVOS PARÂMETROS SÃO RECOLHIDOS AQUI:
               'width': (img['width'] as num?)?.toDouble() ?? 300.0,
               'height': (img['height'] as num?)?.toDouble() ?? 200.0,
-
               'rotation': (img['rotation'] as num?)?.toDouble() ?? 0.0,
               'is_deleted': 0,
               'synced_with_cloud': 1,

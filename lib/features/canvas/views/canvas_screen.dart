@@ -16,6 +16,7 @@ import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../widgets/canvas_painter.dart';
 import '../widgets/canvas_toolbar.dart';
+import '../widgets/ai_assistant_sheet.dart';
 import '../widgets/live_voice_cockpit.dart';
 import '../widgets/share_notebook_sheet.dart'; // 🚀 Importado para a AppBar
 
@@ -104,6 +105,21 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     controller.setTextEditing(InlineTarget.none);
     _textFocusNode.unfocus();
     controller.triggerAutoSave(page);
+  }
+
+  void _showAiAssistantSheet(CanvasController controller, LocalPage? page) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: AIAssistantSheet(
+          notebookId: widget.notebook.id,
+          pageId: page?.id,
+        ),
+      ),
+    );
   }
 
   void _confirmDeletePage(CanvasController controller, LocalPage page, int index) {
@@ -612,6 +628,7 @@ else if (controller.currentTool == ToolMode.select) {
                     onThicknessTap: () => _showThicknessStudioDialog(controller),
                     onChangePaperTap: () => _showPaperStyleStudioDialog(controller),
                     onDeletePageTap: () => _confirmDeletePage(controller, controller.pages[controller.currentPageIndex], controller.currentPageIndex),
+                    onAiAssistantTap: () => _showAiAssistantSheet(controller, currentPage),
                   )
               ),
             ),

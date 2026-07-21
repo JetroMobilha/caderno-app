@@ -53,18 +53,22 @@ void main() {
     });
 
     test('Unique Constraint on serverId', () async {
+      final userId = await db.into(db.users).insert(UsersCompanion.insert(
+        name: 'User 1',
+        email: 'u1@example.com',
+      ));
+
       await db.into(db.subjects).insert(SubjectsCompanion.insert(
-        userId: 1,
+        userId: userId,
         name: 'Sub 1',
         color: '#FF0000',
         serverId: const Value(100),
       ));
 
-      // Tentar inserir outro com o mesmo serverId deve falhar ou ser gerido
-      // Aqui testamos se a restrição existe
+      // Tentar inserir outro com o mesmo serverId deve falhar
       expect(
         () => db.into(db.subjects).insert(SubjectsCompanion.insert(
-          userId: 1,
+          userId: userId,
           name: 'Sub 2',
           color: '#00FF00',
           serverId: const Value(100),

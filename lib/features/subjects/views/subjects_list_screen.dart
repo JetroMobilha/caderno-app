@@ -257,15 +257,9 @@ class SubjectsListScreen extends ConsumerWidget {
   Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('A terminar sessão e encriptar dados...'), duration: Duration(seconds: 2)),
+      const SnackBar(content: Text('A terminar sessão...'), duration: Duration(seconds: 2)),
     );
 
-    // Limpa a base de dados para proteger a privacidade
-    await AppDatabase.instance.clearAllData();
-
-    // Invalida os estados dos Controladores
-    ref.invalidate(subjectsProvider);
-    ref.invalidate(notebooksProvider);
     await ref.read(authProvider).logout();
 
     if (context.mounted) {

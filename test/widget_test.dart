@@ -12,5 +12,8 @@ void main() {
     );
 
     expect(find.byType(MaterialApp), findsOneWidget);
+    
+    // Limpar timers pendentes (como o do SplashScreen)
+    await tester.pump(const Duration(seconds: 5));
   });
 }

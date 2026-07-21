@@ -3,20 +3,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/sync_provider.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../models/subject_model.dart';
 import '../repositories/subject_repository.dart';
 
 // ============================================================================
 // 🧠 CONTROLADOR OFFLINE-FIRST (Puro, Rápido e Sem Polling)
 // ============================================================================
-class SubjectsController extends StateNotifier<List<Subject>> {
-  final Ref ref;
-  final SubjectRepository _repository = SubjectRepository();
+class SubjectsController extends Notifier<List<Subject>> {
   StreamSubscription? _subscription;
 
-  SubjectsController(this.ref) : super([]) {
+  @override
+  List<Subject> build() {
+    // 📡 ESCUTAR AUTH: Se o utilizador sair, limpamos tudo instantaneamente!
+    final auth = ref.watch(authProvider);
+    
+    if (!auth.isAuthenticated) {
+      _subscription?.cancel();
+      return [];
+    }
+
     _subscribe();
+    return []; // Estado inicial vazio enquanto o stream não emite
   }
+
+  SubjectRepository get _repository => ref.read(subjectRepositoryProvider);
 
   void _subscribe() {
     _subscription?.cancel();
@@ -25,36 +36,26 @@ class SubjectsController extends StateNotifier<List<Subject>> {
     });
   }
 
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
-
   Future<void> addSubject(Subject subject) async {
     await _repository.addSubject(subject);
-    // state atualiza via stream
   }
 
   Future<void> updateSubject(Subject subject) async {
     await _repository.updateSubject(subject);
-    // state atualiza via stream
   }
 
   Future<void> deleteSubject(Subject subject) async {
     await _repository.deleteSubject(subject);
-    // state atualiza via stream
   }
 
   // 📡 Chamado manualmente pelo botão da Gaveta ou pelo Reverb (WebSocket)
   Future<void> syncManuallyWithCloud() async {
     await ref.read(syncProvider.notifier).performSync(forced: true);
-    // state atualiza via stream automaticamente após a escrita no banco
   }
 }
 
-final subjectsProvider = StateNotifierProvider<SubjectsController, List<Subject>>((ref) {
-  return SubjectsController(ref);
+final subjectsProvider = NotifierProvider<SubjectsController, List<Subject>>(() {
+  return SubjectsController();
 });
 
 // ============================================================================
@@ -80,21 +81,25 @@ class ActiveSubjectNotifier extends Notifier<Subject?> {
     if (!_isLoaded) {
       _isLoaded = true;
       Future.microtask(() => _restoreLastSubject(subjects));
-      _cachedSubject = subjects.first;
+      if (subjects.isNotEmpty) {
+        _cachedSubject = subjects.first;
+      }
       return _cachedSubject;
     }
 
     // 🧠 REATIVIDADE AUTÓNOMA BLINDADA
-    if (_cachedSubject != null) {
-      // 🚀 EXCEÇÃO EDTECH: Se for a Aba Virtual "Partilhados Comigo" (-1), o scanner IGNERA.
-      if (_cachedSubject!.id == -1) {
-        return _cachedSubject;
-      }
-
-      // Se não for a Aba de Partilhados e a matéria realmente sumir da lista geral, volta à primeira
-      if (!subjects.any((s) => s.id == _cachedSubject!.id)) {
+    if (subjects.isNotEmpty) {
+      if (_cachedSubject == null) {
         _cachedSubject = subjects.first;
-        return _cachedSubject;
+      } else if (_cachedSubject!.id != -1) {
+        // Se não for a Aba de Partilhados e a matéria realmente sumir da lista geral, volta à primeira
+        if (!subjects.any((s) => s.id == _cachedSubject!.id)) {
+          _cachedSubject = subjects.first;
+        }
+      }
+    } else {
+      if (_cachedSubject?.id != -1) {
+        _cachedSubject = null;
       }
     }
 

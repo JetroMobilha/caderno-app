@@ -61,6 +61,7 @@ class CanvasRepository {
         isLandscape: pRow.isLandscape == 1,
         title: pRow.headerData ?? '',
         footer: pRow.footerData ?? '',
+        extractedText: pRow.extractedText,
         syncedWithCloud: pRow.syncedWithCloud,
         strokes: strokes,
         textBlocks: texts,
@@ -139,6 +140,7 @@ class CanvasRepository {
                 isLandscape: Value(page.isLandscape ? 1 : 0),
                 headerData: Value(page.title),
                 footerData: Value(page.footer),
+                extractedText: Value(page.extractedText),
                 syncedWithCloud: Value(page.syncedWithCloud),
               ),
             );
@@ -149,6 +151,7 @@ class CanvasRepository {
           PagesCompanion(
             headerData: Value(page.title),
             footerData: Value(page.footer),
+            extractedText: Value(page.extractedText),
             syncedWithCloud: Value(page.syncedWithCloud),
             updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
           ),
@@ -252,11 +255,12 @@ class CanvasRepository {
     );
   }
 
-  Future<void> updatePageMetadata(int pageId, String title, String footer) async {
+  Future<void> updatePageMetadata(int pageId, String title, String footer, {String? extractedText}) async {
     await (_db.update(_db.pages)..where((t) => t.id.equals(pageId))).write(
       PagesCompanion(
         headerData: Value(title),
         footerData: Value(footer),
+        extractedText: Value(extractedText),
         syncedWithCloud: const Value(0),
         updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
       ),

@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_service.dart';
 import '../models/notebook_model.dart';
 
 class NotebookRepository {
-  final AppDatabase _db = AppDatabase.instance;
+  final AppDatabase _db;
   final ApiService _apiService = ApiService();
+
+  NotebookRepository(this._db);
 
   // =========================================================================
   // 📚 LISTAR CADERNOS ATIVOS DA DISCIPLINA (Com Blindagem de ID)
@@ -194,3 +197,7 @@ class NotebookRepository {
     }
   }
 }
+
+final notebookRepositoryProvider = Provider<NotebookRepository>((ref) {
+  return NotebookRepository(AppDatabase.instance);
+});

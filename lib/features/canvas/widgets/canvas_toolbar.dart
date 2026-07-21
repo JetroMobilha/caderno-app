@@ -9,6 +9,7 @@ class CanvasToolbar extends StatelessWidget {
   final VoidCallback onThicknessTap;
   final VoidCallback onChangePaperTap;
   final VoidCallback onDeletePageTap;
+  final VoidCallback onAiAssistantTap;
 
   const CanvasToolbar({
     super.key,
@@ -18,6 +19,7 @@ class CanvasToolbar extends StatelessWidget {
     required this.onThicknessTap,
     required this.onChangePaperTap,
     required this.onDeletePageTap,
+    required this.onAiAssistantTap,
   });
 
   @override
@@ -47,6 +49,8 @@ class CanvasToolbar extends StatelessWidget {
           _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha'),
           _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
           if (!isSmallScreen || isSelectActive) _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar Tinta'),
+          
+          _buildCompactIconButton(Icons.psychology_outlined, onAiAssistantTap, 'Assistente IA', const Color(0xFF0F4C5C)),
 
           if (!isSmallScreen)
             _buildCompactIconButton(Icons.add_photo_alternate_outlined, () => controller.pickAndInsertImage(currentPage), 'Adicionar Imagem', const Color(0xFF1A1A24)),
@@ -67,6 +71,7 @@ class CanvasToolbar extends StatelessWidget {
                 if (val == 'insert_image') controller.pickAndInsertImage(currentPage);
                 if (val == 'eraser') controller.switchTool(ToolMode.eraser);
                 if (val == 'select') controller.switchTool(ToolMode.select);
+                if (val == 'ai_assistant') onAiAssistantTap();
                 if (val == 'zoom_in') controller.zoom(1.2, MediaQuery.of(context).size);
                 if (val == 'zoom_out') controller.zoom(0.8, MediaQuery.of(context).size);
                 if (val == 'delete_page') onDeletePageTap();
@@ -74,6 +79,7 @@ class CanvasToolbar extends StatelessWidget {
               },
               itemBuilder: (context) => [
                 const PopupMenuItem(value: 'insert_image', child: Row(children: [Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Inserir Imagem')])),
+                const PopupMenuItem(value: 'ai_assistant', child: Row(children: [Icon(Icons.psychology_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Assistente IA')])),
                 const PopupMenuItem(value: 'eraser', child: Row(children: [Icon(Icons.backspace_outlined, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Borracha')])),
                 const PopupMenuItem(value: 'select', child: Row(children: [Icon(Icons.highlight_alt, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Selecionar Tinta')])),
                 const PopupMenuDivider(),

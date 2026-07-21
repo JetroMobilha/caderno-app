@@ -25,8 +25,8 @@ class TextBlock {
   Map<String, dynamic> toJson() => {
     'id': id,
     'text': text,
-    'dx': position.dx,
-    'dy': position.dy,
+    'dx': double.parse(position.dx.toStringAsFixed(1)),
+    'dy': double.parse(position.dy.toStringAsFixed(1)),
     'is_bold': isBold,
     'is_italic': isItalic,
     'is_underline': isUnderline,

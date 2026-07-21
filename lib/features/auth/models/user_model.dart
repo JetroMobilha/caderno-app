@@ -15,10 +15,13 @@ class User {
     this.planType = 'free',
   });
 
-  // 1. Receber do Laravel (JSON)
+  // 1. Receber do Laravel (JSON) ou do Cache Local
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
+      id: json['id'] is int ? json['id'] : null,
+      serverId: json['server_id'] != null 
+          ? (json['server_id'] is int ? json['server_id'] : int.tryParse(json['server_id'].toString()))
+          : (json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '')),
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       avatar: json['avatar'],

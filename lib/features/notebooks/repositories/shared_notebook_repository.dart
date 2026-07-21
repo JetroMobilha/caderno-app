@@ -1,9 +1,12 @@
 import 'package:drift/drift.dart' hide Column;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../models/notebook_model.dart';
 
 class SharedNotebookRepository {
-  final AppDatabase _db = AppDatabase.instance;
+  final AppDatabase _db;
+
+  SharedNotebookRepository(this._db);
 
   Future<List<Notebook>> getSharedNotebooks(int currentUserId, {int? serverUserId}) async {
     final query = _db.select(_db.notebooks).join([
@@ -81,3 +84,7 @@ class SharedNotebookRepository {
         }).toList());
   }
 }
+
+final sharedNotebookRepositoryProvider = Provider<SharedNotebookRepository>((ref) {
+  return SharedNotebookRepository(AppDatabase.instance);
+});

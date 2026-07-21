@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/sync_provider.dart';
 import '../../canvas/widgets/share_notebook_sheet.dart';
 import '../../marketplace/widgets/publish_notebook_sheet.dart';
 import '../../shared/widgets/app_drawer.dart';
@@ -53,6 +54,13 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
           activeSubject?.name ?? 'Meus Cadernos',
           style: GoogleFonts.lora(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          if (ref.watch(syncProvider) == SyncState.syncing)
+            const Padding(
+              padding: EdgeInsets.only(right: 16.0),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            ),
+        ],
       ),
       body: isLoading
           ? Center(

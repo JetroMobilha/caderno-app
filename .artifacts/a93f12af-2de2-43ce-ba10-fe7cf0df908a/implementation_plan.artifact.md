@@ -1,51 +1,40 @@
-# Plano de Otimização, Testes e Documentação Final
+# Plano de Implementação: Robustez da Colaboração em Tempo Real e Testes
 
-Este plano visa tornar a sincronização automática e eficiente, garantir a integridade do código através de testes unitários e atualizar a documentação do projeto para refletir a nova arquitetura reativa com Drift.
+Este plano foca em melhorar a estabilidade da colaboração em tempo real (WebSockets/Reverb) e introduzir testes unitários para garantir que o fluxo de dados entre utilizadores não se quebre durante o desenvolvimento.
 
-## Otimização da Sincronização
-Para economizar dados e bateria, implementaremos uma "Sincronização Delta" inteligente:
-* **Background Sync:** O `SyncService` será gerido por um `Notifier` que executa ciclos de sincronização periódicos (ex: a cada 5 minutos) apenas se houver alterações detetadas.
-* **Verificação de Cabeçalho:** Antes de fazer um `PULL` pesado, pediremos ao servidor o `last_updated_at` global. Se for igual ao local, ignoramos o download.
+## Problemas Identificados
+1. **Conectividade Instável:** Logs mostram tentativas repetidas de reconexão.
+2. **Dificuldade de Teste:** O `RealtimeService` é um Singleton difícil de mockar, impossibilitando testes automatizados do `CanvasController`.
+3. **Gestão de Estado de Conexão:** A UI não reflete claramente se o utilizador está realmente "online" na sala ou se a ligação caiu.
 
-## Alinhamento de Views
-Revisão das views principais para garantir que utilizam os Providers reativos de forma consistente:
-* `SubjectsListScreen`
-* `NotebooksListScreen`
-* `MarketplaceScreen`
-* `ProfileScreen`
+## Mudanças Propostas
 
-## Estratégia de Testes Unitários
-Criaremos uma suite de testes focada na confiança do motor de dados:
-* **Models:** Testar serialização/deserialização JSON de todos os modelos.
-* **Repositories:** Usar o `Drift` em memória para testar CRUD e Streams.
-* **Sync Logic:** Simular payloads do servidor para validar a lógica de Merge/Batch.
+### 1. Refatoração para Testabilidade (Injeção de Dependência)
+* **[RealtimeService](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/core/network/realtime_service.dart):**
+    * Criar uma interface `IRealtimeService` (opcional) ou permitir a injeção do cliente Pusher.
+    * Criar o `realtimeServiceProvider` no Riverpod para gerir a instância.
+* **[CanvasController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/controllers/canvas_controller.dart):**
+    * Refatorar para receber o `RealtimeService` no construtor ou via provider.
+    * Isto permitirá injetar um `MockRealtimeService` nos testes.
 
-## Atualização do README.md
-Documentar a nova "Stack de Elite":
-* **Drift (WASM):** Persistência reativa multiplataforma.
-* **Riverpod:** Gestão de estado moderna.
-* **Laravel Reverb:** Colaboração em tempo real via WebSockets.
-* **Sincronização Diferencial:** Como o projeto poupa dados do utilizador.
+### 2. Melhoria na Estabilidade do Realtime
+* **Reconexão Inteligente:** Adicionar um estado de conexão observável (`ConnectionState`) para que a UI possa mostrar avisos.
+* **Throttling e Buffering:** Otimizar o envio de traços para evitar saturação do socket em redes lentas.
+* **Keep-Alive:** Garantir que o canal de presença não "caduca" por inatividade.
 
-## User Review Required
-> [!NOTE]
-> A sincronização automática em background pode consumir alguma bateria. Recomenda-se desativar se o nível de bateria estiver baixo (lógica futura).
+### 3. Testes Unitários e de Fluxo
+* **[NEW] [canvas_controller_test.dart](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/test/features/canvas/controllers/canvas_controller_test.dart):**
+    * Testar receção de traços remotos.
+    * Testar broadcast de eventos ao desenhar localmente.
+    * Validar se o `currentPageIndex` muda corretamente ao seguir um utilizador.
 
-## Proposed Changes
+## Plano de Verificação
 
-### [Core]
-#### [NEW] [sync_provider.dart](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/core/network/sync_provider.dart)
-* Criar um `StreamProvider` ou `Notifier` que orquestra o ciclo de vida do `SyncService`.
-
-### [Testes]
-#### [NEW] suite de testes em `test/core/database/` e `test/features/`
-
-### [Documentação]
-#### [MODIFY] [README.md](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/README.md)
-
-## Verification Plan
 ### Automated Tests
-* `flutter test` - Todos os novos testes devem passar.
+* Executar `flutter test test/features/canvas/controllers/canvas_controller_test.dart`.
+* Validar 100% de cobertura na lógica de sincronização de traços.
+
 ### Manual Verification
-* Monitorizar o logcat para ver os ciclos de sincronização automática a disparar sem intervenção do utilizador.
-* Verificar no Chrome DevTools (Web) se o tráfego de rede é minimizado quando não há alterações no servidor.
+* Abrir a app em dois dispositivos (ou browser + mobile).
+* Desenhar em simultâneo e verificar se o atraso é mínimo e se não ocorrem quedas de ligação.
+* Forçar a queda da internet e verificar se a app tenta reconectar de forma graciosa.

@@ -1,8 +1,9 @@
-# Tarefas: Otimização, Testes e Documentação
+# Tarefas: Correção de Testes Unitários
 
-- [x] Implementar `SyncProvider` para sincronização automática
-- [x] Adicionar lógica de "Check Delta" no `SyncService`
-- [x] Revisar e alinhar Views (`Subjects`, `Notebooks`, `Marketplace`, `Profile`)
-- [x] Criar Testes Unitários de Modelos
-- [x] Criar Testes Unitários de Repositórios (In-Memory DB)
-- [x] Atualizar `README.md`
+- [x] Criar providers para Repositórios (Subjects, Notebooks)
+- [x] Refatorar `SubjectsController` para usar injeção de dependência
+- [x] Refatorar `NotebooksController` para usar injeção de dependência
+- [x] Atualizar `subjects_controller_test.dart`
+- [x] Corrigir falhas em `auth_controller_test.dart`
+- [x] Verificar e corrigir `widget_test.dart`
+- [x] Executar `flutter test` e validar 100% de aprovação

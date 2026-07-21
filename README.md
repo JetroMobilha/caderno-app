@@ -47,9 +47,17 @@ flutter pub get
 # Gerar código do banco de dados (Drift) e modelos
 dart run build_runner build --delete-conflicting-outputs
 
-# Executar o projeto
+# Executar o projeto (Mobile/Desktop)
 flutter run
 ```
+
+### Executar em WebAssembly (WASM)
+O SyncScribe utiliza o novo motor WASM do Flutter para performance máxima no browser.
+```bash
+flutter run -d chrome --wasm
+```
+> [!IMPORTANT]
+> Certifique-se de que as dependências do `pubspec.yaml` estão na versão 10.3+ para `flutter_secure_storage` e 2.34+ para `drift`, para evitar conflitos com a biblioteca legada `dart:html`.
 
 ### Executar Testes
 ```bash

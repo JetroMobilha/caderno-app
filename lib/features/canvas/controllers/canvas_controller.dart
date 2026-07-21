@@ -13,6 +13,7 @@ import '../../../core/database/app_database.dart' as db;
 import '../../../core/network/realtime_service.dart';
 import '../../../core/network/sync_service.dart';
 import '../../../core/network/webrtc_service.dart';
+import '../../../core/services/ocr_service.dart';
 import '../models/image_block_model.dart';
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
@@ -24,6 +25,7 @@ enum InlineTarget { none, block, title, footer }
 
 class CanvasController extends ChangeNotifier {
   final CanvasRepository _repository = CanvasRepository();
+  final HandwritingOCRService _ocrService = HandwritingOCRService();
 
   List<LocalPage> pages = [];
   int currentPageIndex = 0;
@@ -618,6 +620,9 @@ class CanvasController extends ChangeNotifier {
     debugPrint('💾 [SQLite] A guardar folha ${page.pageNumber} localmente...');
     await _repository.savePage(page, liveNotebookSid);
 
+    // 🧠 DISPARAR OCR (Background)
+    _debounceOCR(page);
+
     // 🚀 SERVER-AUTHORITATIVE PUSH
     if (isRealtimeActive && liveNotebookSid != null && liveNotebookSid != 0) {
       _autoSyncPushTimer?.cancel();
@@ -711,6 +716,22 @@ class CanvasController extends ChangeNotifier {
     }
 
     if (pages.isNotEmpty) triggerAutoSave(pages[currentPageIndex]);
+  }
+
+  final Map<int, Timer> _ocrDebouncers = {};
+
+  void _debounceOCR(LocalPage page) {
+    if (page.id == null) return;
+    _ocrDebouncers[page.id!]?.cancel();
+    _ocrDebouncers[page.id!] = Timer(const Duration(seconds: 3), () async {
+      debugPrint('🧠 [OCR] Iniciando reconhecimento de escrita para folha ${page.pageNumber}...');
+      final text = await _ocrService.recognizeHandwriting(page.strokes);
+      if (text.isNotEmpty && text != page.extractedText) {
+        page.extractedText = text;
+        await _repository.updatePageMetadata(page.id!, page.title, page.footer, extractedText: text);
+        debugPrint('✅ [OCR] Texto extraído e indexado!');
+      }
+    });
   }
 
   void eraseAtPosition(Offset pos, LocalPage page) {

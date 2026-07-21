@@ -1,30 +1,25 @@
-# Alinhamento de Models e Refatoração do SyncService Concluídos
+# Walkthrough: Correção de Testes e Refatoração de Dependências
 
-Os modelos de dados foram padronizados e o `SyncService` foi totalmente modernizado para utilizar o Drift de forma eficiente e reativa.
+Este documento detalha as mudanças efetuadas para restaurar a integridade dos testes unitários após as refatorações arquiteturais.
 
 ## Mudanças Realizadas
 
-### 1. Padronização de Models
-- **`User`, `Subject`, `Notebook`**: Os modelos agora possuem construtores `fromJson` padronizados para o Laravel.
-- **Remoção de Código Manual**: Foram removidos métodos como `toDatabaseMap` e `fromMap` (SQLite manual), pois o Drift gerencia a persistência através de suas próprias classes e `Companions`.
-- **CamelCase**: Garantia de que todos os campos seguem o padrão Dart (`authorName` em vez de `author_name`).
+### 1. Injeção de Dependência via Riverpod
+Para permitir o "mocking" de dados nos testes sem depender de instâncias reais da base de dados, implementei o padrão de injeção de dependência nos controladores:
+* **[SubjectRepository](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/subjects/repositories/subject_repository.dart):** Adicionado o `subjectRepositoryProvider`.
+* **[NotebookRepository](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/notebooks/repositories/notebook_repository.dart):** Adicionado o `notebookRepositoryProvider`.
+* **[SharedNotebookRepository](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/notebooks/repositories/shared_notebook_repository.dart):** Adicionado o `sharedNotebookRepositoryProvider`.
 
-### 2. Refatoração do SyncService (Drift Industrial)
-- **Batch Operations**: O `pull` agora utiliza o método `batch` do Drift, o que melhora significativamente a performance ao inserir/atualizar centenas de registros de uma vez.
-- **Consultas Seguras**: Substituição de SQL puro por queries Drift fluentes.
-- **Eliminação de Radios**: Removidos os `ValueNotifier` (`syncedPagesRadio`, etc). A sincronização agora escreve diretamente no banco e a reatividade do Drift cuida de atualizar a tela automaticamente.
+### 2. Refatoração de Controladores
+* **[SubjectsController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/subjects/controllers/subjects_controller.dart):** Agora utiliza `ref.read(subjectRepositoryProvider)` para aceder aos dados, facilitando a substituição por instâncias falsas (mocks) durante os testes.
+* **[NotebooksController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/notebooks/controllers/notebooks_controller.dart):** Segue o mesmo padrão, injetando os repositórios de cadernos normais e partilhados.
 
-### 3. Canvas reativo ao Server ID
-- O `CanvasController` agora observa a linha do caderno no banco de dados. Assim que o `SyncService` atribui um `serverId` a um caderno novo, o Canvas deteta isso instantaneamente e ativa as funcionalidades de colaboração em tempo real.
+### 3. Restauro dos Testes Unitários
+* **[SubjectsController Test](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/test/features/subjects/controllers/subjects_controller_test.dart):** Atualizada a lógica de inicialização para o padrão `Notifier` do Riverpod 2.0. Os repositórios e o estado de autenticação são agora injetados via overrides do `ProviderContainer`.
 
-## Benefícios Imediatos
+## Verificação Realizada
+* **Execução de Testes:** Todos os 20 testes unitários e de widget passaram com sucesso (`flutter test`).
+* **Estabilidade:** A refatoração garante que a lógica de negócio está desacoplada da implementação física dos repositórios, aumentando a testabilidade e manutenibilidade do código.
 
 > [!TIP]
-> **Performance:** A sincronização está mais rápida devido ao uso de `batch`.
-> **Estabilidade:** Menos Mapas manuais significa menos erros de digitação de chaves (Key errors).
-
-> [!IMPORTANT]
-> **Reatividade Real:** Não é mais necessário "avisar" a tela que um ID chegou. O banco de dados emite um evento e a UI se ajusta sozinha.
-
-## Próximos Passos
-- Como os modelos mudaram ligeiramente (nomes de campos), é recomendável um teste de fluxo completo: Login -> Criar Disciplina -> Criar Caderno -> Sync.
+> Esta arquitetura permite agora escrever testes muito mais granulares, simulando cenários complexos de rede ou falhas na base de dados de forma simples.

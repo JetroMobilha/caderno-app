@@ -29,7 +29,10 @@ class Stroke {
       'thickness': thickness,
       'is_deleted': isDeleted,
       if (pageNumber != null) 'page_number': pageNumber,
-      'points': points.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
+      'points': points.map((p) => {
+        'dx': double.parse(p.dx.toStringAsFixed(1)),
+        'dy': double.parse(p.dy.toStringAsFixed(1))
+      }).toList(),
     };
   }
 

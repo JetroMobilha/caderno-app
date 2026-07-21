@@ -11,6 +11,7 @@ class LocalPage {
 
   String title;
   String footer;
+  String? extractedText; // 🧠 Texto convertido da escrita manual
 
   List<Stroke> strokes;
   List<TextBlock> textBlocks;
@@ -31,6 +32,7 @@ class LocalPage {
     List<Stroke>? strokes,
     this.title = '',
     this.footer = '',
+    this.extractedText,
     List<TextBlock>? textBlocks,
     List<ImageBlock>? imageBlocks,
     this.syncedWithCloud = 0,
@@ -58,6 +60,7 @@ class LocalPage {
       'is_landscape': isLandscape,
       'header_data': title,
       'footer_data': footer,
+      'extracted_text': extractedText,
       'stroke_data': strokes.map((s) => s.toJson()).toList(),
       'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': asyncImages,
@@ -77,6 +80,7 @@ class LocalPage {
       isLandscape: json['is_landscape'] == true || json['is_landscape'] == 1,
       title: json['header_data']?.toString() ?? '',
       footer: json['footer_data']?.toString() ?? '',
+      extractedText: json['extracted_text']?.toString(),
       strokes: strokesList.map((s) => Stroke.fromJson(s)).toList(),
       textBlocks: textList.map((t) => TextBlock.fromJson(t)).toList(),
       imageBlocks: imageList.map((img) => ImageBlock.fromJson(img)).toList(),

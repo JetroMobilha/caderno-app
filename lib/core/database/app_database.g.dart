@@ -539,6 +539,9 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
@@ -1083,6 +1086,9 @@ class $NotebooksTable extends Notebooks
     true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES subjects (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
@@ -1980,6 +1986,9 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES notebooks (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _pageNumberMeta = const VerificationMeta(
     'pageNumber',
@@ -2021,6 +2030,17 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
   @override
   late final GeneratedColumn<String> footerData = GeneratedColumn<String>(
     'footer_data',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _extractedTextMeta = const VerificationMeta(
+    'extractedText',
+  );
+  @override
+  late final GeneratedColumn<String> extractedText = GeneratedColumn<String>(
+    'extracted_text',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -2071,6 +2091,7 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     isLandscape,
     headerData,
     footerData,
+    extractedText,
     isDeleted,
     syncedWithCloud,
     updatedAt,
@@ -2133,6 +2154,15 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         footerData.isAcceptableOrUnknown(data['footer_data']!, _footerDataMeta),
       );
     }
+    if (data.containsKey('extracted_text')) {
+      context.handle(
+        _extractedTextMeta,
+        extractedText.isAcceptableOrUnknown(
+          data['extracted_text']!,
+          _extractedTextMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_deleted')) {
       context.handle(
         _isDeletedMeta,
@@ -2191,6 +2221,10 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         DriftSqlType.string,
         data['${effectivePrefix}footer_data'],
       ),
+      extractedText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}extracted_text'],
+      ),
       isDeleted: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}is_deleted'],
@@ -2220,6 +2254,7 @@ class Page extends DataClass implements Insertable<Page> {
   final int isLandscape;
   final String? headerData;
   final String? footerData;
+  final String? extractedText;
   final int isDeleted;
   final int syncedWithCloud;
   final int updatedAt;
@@ -2231,6 +2266,7 @@ class Page extends DataClass implements Insertable<Page> {
     required this.isLandscape,
     this.headerData,
     this.footerData,
+    this.extractedText,
     required this.isDeleted,
     required this.syncedWithCloud,
     required this.updatedAt,
@@ -2250,6 +2286,9 @@ class Page extends DataClass implements Insertable<Page> {
     }
     if (!nullToAbsent || footerData != null) {
       map['footer_data'] = Variable<String>(footerData);
+    }
+    if (!nullToAbsent || extractedText != null) {
+      map['extracted_text'] = Variable<String>(extractedText);
     }
     map['is_deleted'] = Variable<int>(isDeleted);
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
@@ -2272,6 +2311,9 @@ class Page extends DataClass implements Insertable<Page> {
       footerData: footerData == null && nullToAbsent
           ? const Value.absent()
           : Value(footerData),
+      extractedText: extractedText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(extractedText),
       isDeleted: Value(isDeleted),
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
@@ -2291,6 +2333,7 @@ class Page extends DataClass implements Insertable<Page> {
       isLandscape: serializer.fromJson<int>(json['isLandscape']),
       headerData: serializer.fromJson<String?>(json['headerData']),
       footerData: serializer.fromJson<String?>(json['footerData']),
+      extractedText: serializer.fromJson<String?>(json['extractedText']),
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
@@ -2307,6 +2350,7 @@ class Page extends DataClass implements Insertable<Page> {
       'isLandscape': serializer.toJson<int>(isLandscape),
       'headerData': serializer.toJson<String?>(headerData),
       'footerData': serializer.toJson<String?>(footerData),
+      'extractedText': serializer.toJson<String?>(extractedText),
       'isDeleted': serializer.toJson<int>(isDeleted),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
@@ -2321,6 +2365,7 @@ class Page extends DataClass implements Insertable<Page> {
     int? isLandscape,
     Value<String?> headerData = const Value.absent(),
     Value<String?> footerData = const Value.absent(),
+    Value<String?> extractedText = const Value.absent(),
     int? isDeleted,
     int? syncedWithCloud,
     int? updatedAt,
@@ -2332,6 +2377,9 @@ class Page extends DataClass implements Insertable<Page> {
     isLandscape: isLandscape ?? this.isLandscape,
     headerData: headerData.present ? headerData.value : this.headerData,
     footerData: footerData.present ? footerData.value : this.footerData,
+    extractedText: extractedText.present
+        ? extractedText.value
+        : this.extractedText,
     isDeleted: isDeleted ?? this.isDeleted,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2355,6 +2403,9 @@ class Page extends DataClass implements Insertable<Page> {
       footerData: data.footerData.present
           ? data.footerData.value
           : this.footerData,
+      extractedText: data.extractedText.present
+          ? data.extractedText.value
+          : this.extractedText,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
@@ -2373,6 +2424,7 @@ class Page extends DataClass implements Insertable<Page> {
           ..write('isLandscape: $isLandscape, ')
           ..write('headerData: $headerData, ')
           ..write('footerData: $footerData, ')
+          ..write('extractedText: $extractedText, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt')
@@ -2389,6 +2441,7 @@ class Page extends DataClass implements Insertable<Page> {
     isLandscape,
     headerData,
     footerData,
+    extractedText,
     isDeleted,
     syncedWithCloud,
     updatedAt,
@@ -2404,6 +2457,7 @@ class Page extends DataClass implements Insertable<Page> {
           other.isLandscape == this.isLandscape &&
           other.headerData == this.headerData &&
           other.footerData == this.footerData &&
+          other.extractedText == this.extractedText &&
           other.isDeleted == this.isDeleted &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt);
@@ -2417,6 +2471,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
   final Value<int> isLandscape;
   final Value<String?> headerData;
   final Value<String?> footerData;
+  final Value<String?> extractedText;
   final Value<int> isDeleted;
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
@@ -2428,6 +2483,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.isLandscape = const Value.absent(),
     this.headerData = const Value.absent(),
     this.footerData = const Value.absent(),
+    this.extractedText = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2440,6 +2496,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.isLandscape = const Value.absent(),
     this.headerData = const Value.absent(),
     this.footerData = const Value.absent(),
+    this.extractedText = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2453,6 +2510,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Expression<int>? isLandscape,
     Expression<String>? headerData,
     Expression<String>? footerData,
+    Expression<String>? extractedText,
     Expression<int>? isDeleted,
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
@@ -2465,6 +2523,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
       if (isLandscape != null) 'is_landscape': isLandscape,
       if (headerData != null) 'header_data': headerData,
       if (footerData != null) 'footer_data': footerData,
+      if (extractedText != null) 'extracted_text': extractedText,
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -2479,6 +2538,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Value<int>? isLandscape,
     Value<String?>? headerData,
     Value<String?>? footerData,
+    Value<String?>? extractedText,
     Value<int>? isDeleted,
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
@@ -2491,6 +2551,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
       isLandscape: isLandscape ?? this.isLandscape,
       headerData: headerData ?? this.headerData,
       footerData: footerData ?? this.footerData,
+      extractedText: extractedText ?? this.extractedText,
       isDeleted: isDeleted ?? this.isDeleted,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -2521,6 +2582,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     if (footerData.present) {
       map['footer_data'] = Variable<String>(footerData.value);
     }
+    if (extractedText.present) {
+      map['extracted_text'] = Variable<String>(extractedText.value);
+    }
     if (isDeleted.present) {
       map['is_deleted'] = Variable<int>(isDeleted.value);
     }
@@ -2543,6 +2607,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
           ..write('isLandscape: $isLandscape, ')
           ..write('headerData: $headerData, ')
           ..write('footerData: $footerData, ')
+          ..write('extractedText: $extractedText, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt')
@@ -2587,6 +2652,9 @@ class $CanvasStrokesTable extends CanvasStrokes
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _strokeDataMeta = const VerificationMeta(
     'strokeData',
@@ -3061,6 +3129,9 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _textDataMeta = const VerificationMeta(
     'textData',
@@ -3533,6 +3604,9 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _imagePathMeta = const VerificationMeta(
     'imagePath',
@@ -4243,6 +4317,9 @@ class $NotebookUserTable extends NotebookUser
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES notebooks (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
   @override
@@ -4252,6 +4329,9 @@ class $NotebookUserTable extends NotebookUser
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _roleMeta = const VerificationMeta('role');
   @override
@@ -4693,6 +4773,9 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _amountMeta = const VerificationMeta('amount');
   @override
@@ -5371,6 +5454,72 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     notebookUser,
     payments,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('subjects', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'subjects',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('notebooks', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'notebooks',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('pages', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_strokes', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_text_blocks', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_image_blocks', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'notebooks',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('notebook_user', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('notebook_user', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('payments', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$UsersTableCreateCompanionBuilder =
@@ -5395,6 +5544,67 @@ typedef $$UsersTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
     });
+
+final class $$UsersTableReferences
+    extends BaseReferences<_$AppDatabase, $UsersTable, User> {
+  $$UsersTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$SubjectsTable, List<Subject>> _subjectsRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.subjects,
+    aliasName: 'users__id__subjects__user_id',
+  );
+
+  $$SubjectsTableProcessedTableManager get subjectsRefs {
+    final manager = $$SubjectsTableTableManager(
+      $_db,
+      $_db.subjects,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_subjectsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$NotebookUserTable, List<NotebookUserData>>
+  _notebookUserRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.notebookUser,
+    aliasName: 'users__id__notebook_user__user_id',
+  );
+
+  $$NotebookUserTableProcessedTableManager get notebookUserRefs {
+    final manager = $$NotebookUserTableTableManager(
+      $_db,
+      $_db.notebookUser,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_notebookUserRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$PaymentsTable, List<Payment>> _paymentsRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.payments,
+    aliasName: 'users__id__payments__user_id',
+  );
+
+  $$PaymentsTableProcessedTableManager get paymentsRefs {
+    final manager = $$PaymentsTableTableManager(
+      $_db,
+      $_db.payments,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_paymentsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
 
 class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
   $$UsersTableFilterComposer({
@@ -5443,6 +5653,81 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> subjectsRefs(
+    Expression<bool> Function($$SubjectsTableFilterComposer f) f,
+  ) {
+    final $$SubjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.subjects,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SubjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.subjects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> notebookUserRefs(
+    Expression<bool> Function($$NotebookUserTableFilterComposer f) f,
+  ) {
+    final $$NotebookUserTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.notebookUser,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebookUserTableFilterComposer(
+            $db: $db,
+            $table: $db.notebookUser,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> paymentsRefs(
+    Expression<bool> Function($$PaymentsTableFilterComposer f) f,
+  ) {
+    final $$PaymentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.payments,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PaymentsTableFilterComposer(
+            $db: $db,
+            $table: $db.payments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableOrderingComposer
@@ -5529,6 +5814,81 @@ class $$UsersTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> subjectsRefs<T extends Object>(
+    Expression<T> Function($$SubjectsTableAnnotationComposer a) f,
+  ) {
+    final $$SubjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.subjects,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SubjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.subjects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> notebookUserRefs<T extends Object>(
+    Expression<T> Function($$NotebookUserTableAnnotationComposer a) f,
+  ) {
+    final $$NotebookUserTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.notebookUser,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebookUserTableAnnotationComposer(
+            $db: $db,
+            $table: $db.notebookUser,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> paymentsRefs<T extends Object>(
+    Expression<T> Function($$PaymentsTableAnnotationComposer a) f,
+  ) {
+    final $$PaymentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.payments,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PaymentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.payments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -5542,9 +5902,13 @@ class $$UsersTableTableManager
           $$UsersTableAnnotationComposer,
           $$UsersTableCreateCompanionBuilder,
           $$UsersTableUpdateCompanionBuilder,
-          (User, BaseReferences<_$AppDatabase, $UsersTable, User>),
+          (User, $$UsersTableReferences),
           User,
-          PrefetchHooks Function()
+          PrefetchHooks Function({
+            bool subjectsRefs,
+            bool notebookUserRefs,
+            bool paymentsRefs,
+          })
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
     : super(
@@ -5598,9 +5962,86 @@ class $$UsersTableTableManager
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) =>
+                    (e.readTable(table), $$UsersTableReferences(db, table, e)),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback:
+              ({
+                subjectsRefs = false,
+                notebookUserRefs = false,
+                paymentsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (subjectsRefs) db.subjects,
+                    if (notebookUserRefs) db.notebookUser,
+                    if (paymentsRefs) db.payments,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (subjectsRefs)
+                        await $_getPrefetchedData<User, $UsersTable, Subject>(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._subjectsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).subjectsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (notebookUserRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          NotebookUserData
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._notebookUserRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).notebookUserRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (paymentsRefs)
+                        await $_getPrefetchedData<User, $UsersTable, Payment>(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._paymentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).paymentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
         ),
       );
 }
@@ -5615,9 +6056,13 @@ typedef $$UsersTableProcessedTableManager =
       $$UsersTableAnnotationComposer,
       $$UsersTableCreateCompanionBuilder,
       $$UsersTableUpdateCompanionBuilder,
-      (User, BaseReferences<_$AppDatabase, $UsersTable, User>),
+      (User, $$UsersTableReferences),
       User,
-      PrefetchHooks Function()
+      PrefetchHooks Function({
+        bool subjectsRefs,
+        bool notebookUserRefs,
+        bool paymentsRefs,
+      })
     >;
 typedef $$SubjectsTableCreateCompanionBuilder =
     SubjectsCompanion Function({
@@ -5644,6 +6089,46 @@ typedef $$SubjectsTableUpdateCompanionBuilder =
       Value<int> updatedAt,
     });
 
+final class $$SubjectsTableReferences
+    extends BaseReferences<_$AppDatabase, $SubjectsTable, Subject> {
+  $$SubjectsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $UsersTable _userIdTable(_$AppDatabase db) =>
+      db.users.createAlias('subjects__user_id__users__id');
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<int>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$NotebooksTable, List<Notebook>>
+  _notebooksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.notebooks,
+    aliasName: 'subjects__id__notebooks__subject_id',
+  );
+
+  $$NotebooksTableProcessedTableManager get notebooksRefs {
+    final manager = $$NotebooksTableTableManager(
+      $_db,
+      $_db.notebooks,
+    ).filter((f) => f.subjectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_notebooksRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$SubjectsTableFilterComposer
     extends Composer<_$AppDatabase, $SubjectsTable> {
   $$SubjectsTableFilterComposer({
@@ -5660,11 +6145,6 @@ class $$SubjectsTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get userId => $composableBuilder(
-    column: $table.userId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5697,6 +6177,54 @@ class $$SubjectsTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> notebooksRefs(
+    Expression<bool> Function($$NotebooksTableFilterComposer f) f,
+  ) {
+    final $$NotebooksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.subjectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableFilterComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$SubjectsTableOrderingComposer
@@ -5715,11 +6243,6 @@ class $$SubjectsTableOrderingComposer
 
   ColumnOrderings<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get userId => $composableBuilder(
-    column: $table.userId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5752,6 +6275,29 @@ class $$SubjectsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$SubjectsTableAnnotationComposer
@@ -5768,9 +6314,6 @@ class $$SubjectsTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
-
-  GeneratedColumn<int> get userId =>
-      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -5791,6 +6334,54 @@ class $$SubjectsTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> notebooksRefs<T extends Object>(
+    Expression<T> Function($$NotebooksTableAnnotationComposer a) f,
+  ) {
+    final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.subjectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$SubjectsTableTableManager
@@ -5804,9 +6395,9 @@ class $$SubjectsTableTableManager
           $$SubjectsTableAnnotationComposer,
           $$SubjectsTableCreateCompanionBuilder,
           $$SubjectsTableUpdateCompanionBuilder,
-          (Subject, BaseReferences<_$AppDatabase, $SubjectsTable, Subject>),
+          (Subject, $$SubjectsTableReferences),
           Subject,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool userId, bool notebooksRefs})
         > {
   $$SubjectsTableTableManager(_$AppDatabase db, $SubjectsTable table)
     : super(
@@ -5864,9 +6455,73 @@ class $$SubjectsTableTableManager
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SubjectsTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({userId = false, notebooksRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (notebooksRefs) db.notebooks],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$SubjectsTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$SubjectsTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (notebooksRefs)
+                    await $_getPrefetchedData<
+                      Subject,
+                      $SubjectsTable,
+                      Notebook
+                    >(
+                      currentTable: table,
+                      referencedTable: $$SubjectsTableReferences
+                          ._notebooksRefsTable(db),
+                      managerFromTypedResult: (p0) => $$SubjectsTableReferences(
+                        db,
+                        table,
+                        p0,
+                      ).notebooksRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.subjectId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -5881,9 +6536,9 @@ typedef $$SubjectsTableProcessedTableManager =
       $$SubjectsTableAnnotationComposer,
       $$SubjectsTableCreateCompanionBuilder,
       $$SubjectsTableUpdateCompanionBuilder,
-      (Subject, BaseReferences<_$AppDatabase, $SubjectsTable, Subject>),
+      (Subject, $$SubjectsTableReferences),
       Subject,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool userId, bool notebooksRefs})
     >;
 typedef $$NotebooksTableCreateCompanionBuilder =
     NotebooksCompanion Function({
@@ -5924,6 +6579,65 @@ typedef $$NotebooksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
     });
 
+final class $$NotebooksTableReferences
+    extends BaseReferences<_$AppDatabase, $NotebooksTable, Notebook> {
+  $$NotebooksTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $SubjectsTable _subjectIdTable(_$AppDatabase db) =>
+      db.subjects.createAlias('notebooks__subject_id__subjects__id');
+
+  $$SubjectsTableProcessedTableManager? get subjectId {
+    final $_column = $_itemColumn<int>('subject_id');
+    if ($_column == null) return null;
+    final manager = $$SubjectsTableTableManager(
+      $_db,
+      $_db.subjects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_subjectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$PagesTable, List<Page>> _pagesRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.pages,
+    aliasName: 'notebooks__id__pages__notebook_id',
+  );
+
+  $$PagesTableProcessedTableManager get pagesRefs {
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.notebookId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_pagesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$NotebookUserTable, List<NotebookUserData>>
+  _notebookUserRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.notebookUser,
+    aliasName: 'notebooks__id__notebook_user__notebook_id',
+  );
+
+  $$NotebookUserTableProcessedTableManager get notebookUserRefs {
+    final manager = $$NotebookUserTableTableManager(
+      $_db,
+      $_db.notebookUser,
+    ).filter((f) => f.notebookId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_notebookUserRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$NotebooksTableFilterComposer
     extends Composer<_$AppDatabase, $NotebooksTable> {
   $$NotebooksTableFilterComposer({
@@ -5940,11 +6654,6 @@ class $$NotebooksTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get subjectId => $composableBuilder(
-    column: $table.subjectId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6012,6 +6721,79 @@ class $$NotebooksTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$SubjectsTableFilterComposer get subjectId {
+    final $$SubjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.subjectId,
+      referencedTable: $db.subjects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SubjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.subjects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> pagesRefs(
+    Expression<bool> Function($$PagesTableFilterComposer f) f,
+  ) {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.notebookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> notebookUserRefs(
+    Expression<bool> Function($$NotebookUserTableFilterComposer f) f,
+  ) {
+    final $$NotebookUserTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.notebookUser,
+      getReferencedColumn: (t) => t.notebookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebookUserTableFilterComposer(
+            $db: $db,
+            $table: $db.notebookUser,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$NotebooksTableOrderingComposer
@@ -6030,11 +6812,6 @@ class $$NotebooksTableOrderingComposer
 
   ColumnOrderings<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get subjectId => $composableBuilder(
-    column: $table.subjectId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6102,6 +6879,29 @@ class $$NotebooksTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$SubjectsTableOrderingComposer get subjectId {
+    final $$SubjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.subjectId,
+      referencedTable: $db.subjects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SubjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.subjects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$NotebooksTableAnnotationComposer
@@ -6118,9 +6918,6 @@ class $$NotebooksTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
-
-  GeneratedColumn<int> get subjectId =>
-      $composableBuilder(column: $table.subjectId, builder: (column) => column);
 
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
@@ -6170,6 +6967,79 @@ class $$NotebooksTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$SubjectsTableAnnotationComposer get subjectId {
+    final $$SubjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.subjectId,
+      referencedTable: $db.subjects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SubjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.subjects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> pagesRefs<T extends Object>(
+    Expression<T> Function($$PagesTableAnnotationComposer a) f,
+  ) {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.notebookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> notebookUserRefs<T extends Object>(
+    Expression<T> Function($$NotebookUserTableAnnotationComposer a) f,
+  ) {
+    final $$NotebookUserTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.notebookUser,
+      getReferencedColumn: (t) => t.notebookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebookUserTableAnnotationComposer(
+            $db: $db,
+            $table: $db.notebookUser,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$NotebooksTableTableManager
@@ -6183,9 +7053,13 @@ class $$NotebooksTableTableManager
           $$NotebooksTableAnnotationComposer,
           $$NotebooksTableCreateCompanionBuilder,
           $$NotebooksTableUpdateCompanionBuilder,
-          (Notebook, BaseReferences<_$AppDatabase, $NotebooksTable, Notebook>),
+          (Notebook, $$NotebooksTableReferences),
           Notebook,
-          PrefetchHooks Function()
+          PrefetchHooks Function({
+            bool subjectId,
+            bool pagesRefs,
+            bool notebookUserRefs,
+          })
         > {
   $$NotebooksTableTableManager(_$AppDatabase db, $NotebooksTable table)
     : super(
@@ -6271,9 +7145,105 @@ class $$NotebooksTableTableManager
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$NotebooksTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback:
+              ({
+                subjectId = false,
+                pagesRefs = false,
+                notebookUserRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (pagesRefs) db.pages,
+                    if (notebookUserRefs) db.notebookUser,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (subjectId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.subjectId,
+                                    referencedTable: $$NotebooksTableReferences
+                                        ._subjectIdTable(db),
+                                    referencedColumn: $$NotebooksTableReferences
+                                        ._subjectIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (pagesRefs)
+                        await $_getPrefetchedData<
+                          Notebook,
+                          $NotebooksTable,
+                          Page
+                        >(
+                          currentTable: table,
+                          referencedTable: $$NotebooksTableReferences
+                              ._pagesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$NotebooksTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).pagesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.notebookId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (notebookUserRefs)
+                        await $_getPrefetchedData<
+                          Notebook,
+                          $NotebooksTable,
+                          NotebookUserData
+                        >(
+                          currentTable: table,
+                          referencedTable: $$NotebooksTableReferences
+                              ._notebookUserRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$NotebooksTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).notebookUserRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.notebookId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
         ),
       );
 }
@@ -6288,9 +7258,13 @@ typedef $$NotebooksTableProcessedTableManager =
       $$NotebooksTableAnnotationComposer,
       $$NotebooksTableCreateCompanionBuilder,
       $$NotebooksTableUpdateCompanionBuilder,
-      (Notebook, BaseReferences<_$AppDatabase, $NotebooksTable, Notebook>),
+      (Notebook, $$NotebooksTableReferences),
       Notebook,
-      PrefetchHooks Function()
+      PrefetchHooks Function({
+        bool subjectId,
+        bool pagesRefs,
+        bool notebookUserRefs,
+      })
     >;
 typedef $$PagesTableCreateCompanionBuilder =
     PagesCompanion Function({
@@ -6301,6 +7275,7 @@ typedef $$PagesTableCreateCompanionBuilder =
       Value<int> isLandscape,
       Value<String?> headerData,
       Value<String?> footerData,
+      Value<String?> extractedText,
       Value<int> isDeleted,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
@@ -6314,10 +7289,92 @@ typedef $$PagesTableUpdateCompanionBuilder =
       Value<int> isLandscape,
       Value<String?> headerData,
       Value<String?> footerData,
+      Value<String?> extractedText,
       Value<int> isDeleted,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
     });
+
+final class $$PagesTableReferences
+    extends BaseReferences<_$AppDatabase, $PagesTable, Page> {
+  $$PagesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $NotebooksTable _notebookIdTable(_$AppDatabase db) =>
+      db.notebooks.createAlias('pages__notebook_id__notebooks__id');
+
+  $$NotebooksTableProcessedTableManager get notebookId {
+    final $_column = $_itemColumn<int>('notebook_id')!;
+
+    final manager = $$NotebooksTableTableManager(
+      $_db,
+      $_db.notebooks,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_notebookIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasStrokesTable, List<CanvasStroke>>
+  _canvasStrokesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.canvasStrokes,
+    aliasName: 'pages__id__canvas_strokes__page_id',
+  );
+
+  $$CanvasStrokesTableProcessedTableManager get canvasStrokesRefs {
+    final manager = $$CanvasStrokesTableTableManager(
+      $_db,
+      $_db.canvasStrokes,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_canvasStrokesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasTextBlocksTable, List<CanvasTextBlock>>
+  _canvasTextBlocksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.canvasTextBlocks,
+    aliasName: 'pages__id__canvas_text_blocks__page_id',
+  );
+
+  $$CanvasTextBlocksTableProcessedTableManager get canvasTextBlocksRefs {
+    final manager = $$CanvasTextBlocksTableTableManager(
+      $_db,
+      $_db.canvasTextBlocks,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _canvasTextBlocksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasImageBlocksTable, List<CanvasImageBlock>>
+  _canvasImageBlocksRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.canvasImageBlocks,
+        aliasName: 'pages__id__canvas_image_blocks__page_id',
+      );
+
+  $$CanvasImageBlocksTableProcessedTableManager get canvasImageBlocksRefs {
+    final manager = $$CanvasImageBlocksTableTableManager(
+      $_db,
+      $_db.canvasImageBlocks,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _canvasImageBlocksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
 
 class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
   $$PagesTableFilterComposer({
@@ -6334,11 +7391,6 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get notebookId => $composableBuilder(
-    column: $table.notebookId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6362,6 +7414,11 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get extractedText => $composableBuilder(
+    column: $table.extractedText,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
     builder: (column) => ColumnFilters(column),
@@ -6376,6 +7433,104 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$NotebooksTableFilterComposer get notebookId {
+    final $$NotebooksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableFilterComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> canvasStrokesRefs(
+    Expression<bool> Function($$CanvasStrokesTableFilterComposer f) f,
+  ) {
+    final $$CanvasStrokesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasStrokes,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasStrokesTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasStrokes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasTextBlocksRefs(
+    Expression<bool> Function($$CanvasTextBlocksTableFilterComposer f) f,
+  ) {
+    final $$CanvasTextBlocksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasTextBlocks,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasTextBlocksTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasTextBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasImageBlocksRefs(
+    Expression<bool> Function($$CanvasImageBlocksTableFilterComposer f) f,
+  ) {
+    final $$CanvasImageBlocksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasImageBlocks,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasImageBlocksTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasImageBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$PagesTableOrderingComposer
@@ -6394,11 +7549,6 @@ class $$PagesTableOrderingComposer
 
   ColumnOrderings<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get notebookId => $composableBuilder(
-    column: $table.notebookId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6422,6 +7572,11 @@ class $$PagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get extractedText => $composableBuilder(
+    column: $table.extractedText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
     builder: (column) => ColumnOrderings(column),
@@ -6436,6 +7591,29 @@ class $$PagesTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$NotebooksTableOrderingComposer get notebookId {
+    final $$NotebooksTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableOrderingComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$PagesTableAnnotationComposer
@@ -6452,11 +7630,6 @@ class $$PagesTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
-
-  GeneratedColumn<int> get notebookId => $composableBuilder(
-    column: $table.notebookId,
-    builder: (column) => column,
-  );
 
   GeneratedColumn<int> get pageNumber => $composableBuilder(
     column: $table.pageNumber,
@@ -6478,6 +7651,11 @@ class $$PagesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get extractedText => $composableBuilder(
+    column: $table.extractedText,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
 
@@ -6488,6 +7666,105 @@ class $$PagesTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$NotebooksTableAnnotationComposer get notebookId {
+    final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> canvasStrokesRefs<T extends Object>(
+    Expression<T> Function($$CanvasStrokesTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasStrokesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasStrokes,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasStrokesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.canvasStrokes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> canvasTextBlocksRefs<T extends Object>(
+    Expression<T> Function($$CanvasTextBlocksTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasTextBlocksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasTextBlocks,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasTextBlocksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.canvasTextBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> canvasImageBlocksRefs<T extends Object>(
+    Expression<T> Function($$CanvasImageBlocksTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasImageBlocksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.canvasImageBlocks,
+          getReferencedColumn: (t) => t.pageId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CanvasImageBlocksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.canvasImageBlocks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$PagesTableTableManager
@@ -6501,9 +7778,14 @@ class $$PagesTableTableManager
           $$PagesTableAnnotationComposer,
           $$PagesTableCreateCompanionBuilder,
           $$PagesTableUpdateCompanionBuilder,
-          (Page, BaseReferences<_$AppDatabase, $PagesTable, Page>),
+          (Page, $$PagesTableReferences),
           Page,
-          PrefetchHooks Function()
+          PrefetchHooks Function({
+            bool notebookId,
+            bool canvasStrokesRefs,
+            bool canvasTextBlocksRefs,
+            bool canvasImageBlocksRefs,
+          })
         > {
   $$PagesTableTableManager(_$AppDatabase db, $PagesTable table)
     : super(
@@ -6525,6 +7807,7 @@ class $$PagesTableTableManager
                 Value<int> isLandscape = const Value.absent(),
                 Value<String?> headerData = const Value.absent(),
                 Value<String?> footerData = const Value.absent(),
+                Value<String?> extractedText = const Value.absent(),
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
@@ -6536,6 +7819,7 @@ class $$PagesTableTableManager
                 isLandscape: isLandscape,
                 headerData: headerData,
                 footerData: footerData,
+                extractedText: extractedText,
                 isDeleted: isDeleted,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
@@ -6549,6 +7833,7 @@ class $$PagesTableTableManager
                 Value<int> isLandscape = const Value.absent(),
                 Value<String?> headerData = const Value.absent(),
                 Value<String?> footerData = const Value.absent(),
+                Value<String?> extractedText = const Value.absent(),
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
@@ -6560,14 +7845,132 @@ class $$PagesTableTableManager
                 isLandscape: isLandscape,
                 headerData: headerData,
                 footerData: footerData,
+                extractedText: extractedText,
                 isDeleted: isDeleted,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) =>
+                    (e.readTable(table), $$PagesTableReferences(db, table, e)),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback:
+              ({
+                notebookId = false,
+                canvasStrokesRefs = false,
+                canvasTextBlocksRefs = false,
+                canvasImageBlocksRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (canvasStrokesRefs) db.canvasStrokes,
+                    if (canvasTextBlocksRefs) db.canvasTextBlocks,
+                    if (canvasImageBlocksRefs) db.canvasImageBlocks,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (notebookId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.notebookId,
+                                    referencedTable: $$PagesTableReferences
+                                        ._notebookIdTable(db),
+                                    referencedColumn: $$PagesTableReferences
+                                        ._notebookIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (canvasStrokesRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasStroke
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasStrokesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasStrokesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (canvasTextBlocksRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasTextBlock
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasTextBlocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasTextBlocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (canvasImageBlocksRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasImageBlock
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasImageBlocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasImageBlocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
         ),
       );
 }
@@ -6582,9 +7985,14 @@ typedef $$PagesTableProcessedTableManager =
       $$PagesTableAnnotationComposer,
       $$PagesTableCreateCompanionBuilder,
       $$PagesTableUpdateCompanionBuilder,
-      (Page, BaseReferences<_$AppDatabase, $PagesTable, Page>),
+      (Page, $$PagesTableReferences),
       Page,
-      PrefetchHooks Function()
+      PrefetchHooks Function({
+        bool notebookId,
+        bool canvasStrokesRefs,
+        bool canvasTextBlocksRefs,
+        bool canvasImageBlocksRefs,
+      })
     >;
 typedef $$CanvasStrokesTableCreateCompanionBuilder =
     CanvasStrokesCompanion Function({
@@ -6609,6 +8017,32 @@ typedef $$CanvasStrokesTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$CanvasStrokesTableReferences
+    extends BaseReferences<_$AppDatabase, $CanvasStrokesTable, CanvasStroke> {
+  $$CanvasStrokesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_strokes__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
 class $$CanvasStrokesTableFilterComposer
     extends Composer<_$AppDatabase, $CanvasStrokesTable> {
   $$CanvasStrokesTableFilterComposer({
@@ -6625,11 +8059,6 @@ class $$CanvasStrokesTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get pageId => $composableBuilder(
-    column: $table.pageId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6652,6 +8081,29 @@ class $$CanvasStrokesTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasStrokesTableOrderingComposer
@@ -6670,11 +8122,6 @@ class $$CanvasStrokesTableOrderingComposer
 
   ColumnOrderings<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get pageId => $composableBuilder(
-    column: $table.pageId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6697,6 +8144,29 @@ class $$CanvasStrokesTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasStrokesTableAnnotationComposer
@@ -6716,9 +8186,6 @@ class $$CanvasStrokesTableAnnotationComposer
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<int> get pageId =>
-      $composableBuilder(column: $table.pageId, builder: (column) => column);
-
   GeneratedColumn<String> get strokeData => $composableBuilder(
     column: $table.strokeData,
     builder: (column) => column,
@@ -6734,6 +8201,29 @@ class $$CanvasStrokesTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasStrokesTableTableManager
@@ -6747,12 +8237,9 @@ class $$CanvasStrokesTableTableManager
           $$CanvasStrokesTableAnnotationComposer,
           $$CanvasStrokesTableCreateCompanionBuilder,
           $$CanvasStrokesTableUpdateCompanionBuilder,
-          (
-            CanvasStroke,
-            BaseReferences<_$AppDatabase, $CanvasStrokesTable, CanvasStroke>,
-          ),
+          (CanvasStroke, $$CanvasStrokesTableReferences),
           CanvasStroke,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool pageId})
         > {
   $$CanvasStrokesTableTableManager(_$AppDatabase db, $CanvasStrokesTable table)
     : super(
@@ -6806,9 +8293,54 @@ class $$CanvasStrokesTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasStrokesTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable: $$CanvasStrokesTableReferences
+                                    ._pageIdTable(db),
+                                referencedColumn: $$CanvasStrokesTableReferences
+                                    ._pageIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ),
       );
 }
@@ -6823,12 +8355,9 @@ typedef $$CanvasStrokesTableProcessedTableManager =
       $$CanvasStrokesTableAnnotationComposer,
       $$CanvasStrokesTableCreateCompanionBuilder,
       $$CanvasStrokesTableUpdateCompanionBuilder,
-      (
-        CanvasStroke,
-        BaseReferences<_$AppDatabase, $CanvasStrokesTable, CanvasStroke>,
-      ),
+      (CanvasStroke, $$CanvasStrokesTableReferences),
       CanvasStroke,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool pageId})
     >;
 typedef $$CanvasTextBlocksTableCreateCompanionBuilder =
     CanvasTextBlocksCompanion Function({
@@ -6853,6 +8382,33 @@ typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$CanvasTextBlocksTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $CanvasTextBlocksTable, CanvasTextBlock> {
+  $$CanvasTextBlocksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_text_blocks__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
 class $$CanvasTextBlocksTableFilterComposer
     extends Composer<_$AppDatabase, $CanvasTextBlocksTable> {
   $$CanvasTextBlocksTableFilterComposer({
@@ -6869,11 +8425,6 @@ class $$CanvasTextBlocksTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get pageId => $composableBuilder(
-    column: $table.pageId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6896,6 +8447,29 @@ class $$CanvasTextBlocksTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasTextBlocksTableOrderingComposer
@@ -6914,11 +8488,6 @@ class $$CanvasTextBlocksTableOrderingComposer
 
   ColumnOrderings<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get pageId => $composableBuilder(
-    column: $table.pageId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6941,6 +8510,29 @@ class $$CanvasTextBlocksTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasTextBlocksTableAnnotationComposer
@@ -6960,9 +8552,6 @@ class $$CanvasTextBlocksTableAnnotationComposer
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<int> get pageId =>
-      $composableBuilder(column: $table.pageId, builder: (column) => column);
-
   GeneratedColumn<String> get textData =>
       $composableBuilder(column: $table.textData, builder: (column) => column);
 
@@ -6976,6 +8565,29 @@ class $$CanvasTextBlocksTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasTextBlocksTableTableManager
@@ -6989,16 +8601,9 @@ class $$CanvasTextBlocksTableTableManager
           $$CanvasTextBlocksTableAnnotationComposer,
           $$CanvasTextBlocksTableCreateCompanionBuilder,
           $$CanvasTextBlocksTableUpdateCompanionBuilder,
-          (
-            CanvasTextBlock,
-            BaseReferences<
-              _$AppDatabase,
-              $CanvasTextBlocksTable,
-              CanvasTextBlock
-            >,
-          ),
+          (CanvasTextBlock, $$CanvasTextBlocksTableReferences),
           CanvasTextBlock,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool pageId})
         > {
   $$CanvasTextBlocksTableTableManager(
     _$AppDatabase db,
@@ -7054,9 +8659,56 @@ class $$CanvasTextBlocksTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasTextBlocksTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable:
+                                    $$CanvasTextBlocksTableReferences
+                                        ._pageIdTable(db),
+                                referencedColumn:
+                                    $$CanvasTextBlocksTableReferences
+                                        ._pageIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ),
       );
 }
@@ -7071,12 +8723,9 @@ typedef $$CanvasTextBlocksTableProcessedTableManager =
       $$CanvasTextBlocksTableAnnotationComposer,
       $$CanvasTextBlocksTableCreateCompanionBuilder,
       $$CanvasTextBlocksTableUpdateCompanionBuilder,
-      (
-        CanvasTextBlock,
-        BaseReferences<_$AppDatabase, $CanvasTextBlocksTable, CanvasTextBlock>,
-      ),
+      (CanvasTextBlock, $$CanvasTextBlocksTableReferences),
       CanvasTextBlock,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool pageId})
     >;
 typedef $$CanvasImageBlocksTableCreateCompanionBuilder =
     CanvasImageBlocksCompanion Function({
@@ -7111,6 +8760,37 @@ typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$CanvasImageBlocksTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $CanvasImageBlocksTable,
+          CanvasImageBlock
+        > {
+  $$CanvasImageBlocksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_image_blocks__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
 class $$CanvasImageBlocksTableFilterComposer
     extends Composer<_$AppDatabase, $CanvasImageBlocksTable> {
   $$CanvasImageBlocksTableFilterComposer({
@@ -7127,11 +8807,6 @@ class $$CanvasImageBlocksTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get pageId => $composableBuilder(
-    column: $table.pageId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7179,6 +8854,29 @@ class $$CanvasImageBlocksTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasImageBlocksTableOrderingComposer
@@ -7197,11 +8895,6 @@ class $$CanvasImageBlocksTableOrderingComposer
 
   ColumnOrderings<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get pageId => $composableBuilder(
-    column: $table.pageId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7249,6 +8942,29 @@ class $$CanvasImageBlocksTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasImageBlocksTableAnnotationComposer
@@ -7267,9 +8983,6 @@ class $$CanvasImageBlocksTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
-
-  GeneratedColumn<int> get pageId =>
-      $composableBuilder(column: $table.pageId, builder: (column) => column);
 
   GeneratedColumn<String> get imagePath =>
       $composableBuilder(column: $table.imagePath, builder: (column) => column);
@@ -7299,6 +9012,29 @@ class $$CanvasImageBlocksTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CanvasImageBlocksTableTableManager
@@ -7312,16 +9048,9 @@ class $$CanvasImageBlocksTableTableManager
           $$CanvasImageBlocksTableAnnotationComposer,
           $$CanvasImageBlocksTableCreateCompanionBuilder,
           $$CanvasImageBlocksTableUpdateCompanionBuilder,
-          (
-            CanvasImageBlock,
-            BaseReferences<
-              _$AppDatabase,
-              $CanvasImageBlocksTable,
-              CanvasImageBlock
-            >,
-          ),
+          (CanvasImageBlock, $$CanvasImageBlocksTableReferences),
           CanvasImageBlock,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool pageId})
         > {
   $$CanvasImageBlocksTableTableManager(
     _$AppDatabase db,
@@ -7400,9 +9129,56 @@ class $$CanvasImageBlocksTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasImageBlocksTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable:
+                                    $$CanvasImageBlocksTableReferences
+                                        ._pageIdTable(db),
+                                referencedColumn:
+                                    $$CanvasImageBlocksTableReferences
+                                        ._pageIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ),
       );
 }
@@ -7417,16 +9193,9 @@ typedef $$CanvasImageBlocksTableProcessedTableManager =
       $$CanvasImageBlocksTableAnnotationComposer,
       $$CanvasImageBlocksTableCreateCompanionBuilder,
       $$CanvasImageBlocksTableUpdateCompanionBuilder,
-      (
-        CanvasImageBlock,
-        BaseReferences<
-          _$AppDatabase,
-          $CanvasImageBlocksTable,
-          CanvasImageBlock
-        >,
-      ),
+      (CanvasImageBlock, $$CanvasImageBlocksTableReferences),
       CanvasImageBlock,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool pageId})
     >;
 typedef $$NotebookUserTableCreateCompanionBuilder =
     NotebookUserCompanion Function({
@@ -7449,6 +9218,46 @@ typedef $$NotebookUserTableUpdateCompanionBuilder =
       Value<int> updatedAt,
     });
 
+final class $$NotebookUserTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $NotebookUserTable, NotebookUserData> {
+  $$NotebookUserTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $NotebooksTable _notebookIdTable(_$AppDatabase db) =>
+      db.notebooks.createAlias('notebook_user__notebook_id__notebooks__id');
+
+  $$NotebooksTableProcessedTableManager get notebookId {
+    final $_column = $_itemColumn<int>('notebook_id')!;
+
+    final manager = $$NotebooksTableTableManager(
+      $_db,
+      $_db.notebooks,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_notebookIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $UsersTable _userIdTable(_$AppDatabase db) =>
+      db.users.createAlias('notebook_user__user_id__users__id');
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<int>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
 class $$NotebookUserTableFilterComposer
     extends Composer<_$AppDatabase, $NotebookUserTable> {
   $$NotebookUserTableFilterComposer({
@@ -7468,16 +9277,6 @@ class $$NotebookUserTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get notebookId => $composableBuilder(
-    column: $table.notebookId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get userId => $composableBuilder(
-    column: $table.userId,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<String> get role => $composableBuilder(
     column: $table.role,
     builder: (column) => ColumnFilters(column),
@@ -7492,6 +9291,52 @@ class $$NotebookUserTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$NotebooksTableFilterComposer get notebookId {
+    final $$NotebooksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableFilterComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$NotebookUserTableOrderingComposer
@@ -7513,16 +9358,6 @@ class $$NotebookUserTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get notebookId => $composableBuilder(
-    column: $table.notebookId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get userId => $composableBuilder(
-    column: $table.userId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get role => $composableBuilder(
     column: $table.role,
     builder: (column) => ColumnOrderings(column),
@@ -7537,6 +9372,52 @@ class $$NotebookUserTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$NotebooksTableOrderingComposer get notebookId {
+    final $$NotebooksTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableOrderingComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$NotebookUserTableAnnotationComposer
@@ -7554,14 +9435,6 @@ class $$NotebookUserTableAnnotationComposer
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
 
-  GeneratedColumn<int> get notebookId => $composableBuilder(
-    column: $table.notebookId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get userId =>
-      $composableBuilder(column: $table.userId, builder: (column) => column);
-
   GeneratedColumn<String> get role =>
       $composableBuilder(column: $table.role, builder: (column) => column);
 
@@ -7572,6 +9445,52 @@ class $$NotebookUserTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$NotebooksTableAnnotationComposer get notebookId {
+    final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$NotebookUserTableTableManager
@@ -7585,12 +9504,9 @@ class $$NotebookUserTableTableManager
           $$NotebookUserTableAnnotationComposer,
           $$NotebookUserTableCreateCompanionBuilder,
           $$NotebookUserTableUpdateCompanionBuilder,
-          (
-            NotebookUserData,
-            BaseReferences<_$AppDatabase, $NotebookUserTable, NotebookUserData>,
-          ),
+          (NotebookUserData, $$NotebookUserTableReferences),
           NotebookUserData,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool notebookId, bool userId})
         > {
   $$NotebookUserTableTableManager(_$AppDatabase db, $NotebookUserTable table)
     : super(
@@ -7640,9 +9556,67 @@ class $$NotebookUserTableTableManager
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$NotebookUserTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({notebookId = false, userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (notebookId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.notebookId,
+                                referencedTable: $$NotebookUserTableReferences
+                                    ._notebookIdTable(db),
+                                referencedColumn: $$NotebookUserTableReferences
+                                    ._notebookIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$NotebookUserTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$NotebookUserTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ),
       );
 }
@@ -7657,12 +9631,9 @@ typedef $$NotebookUserTableProcessedTableManager =
       $$NotebookUserTableAnnotationComposer,
       $$NotebookUserTableCreateCompanionBuilder,
       $$NotebookUserTableUpdateCompanionBuilder,
-      (
-        NotebookUserData,
-        BaseReferences<_$AppDatabase, $NotebookUserTable, NotebookUserData>,
-      ),
+      (NotebookUserData, $$NotebookUserTableReferences),
       NotebookUserData,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool notebookId, bool userId})
     >;
 typedef $$PaymentsTableCreateCompanionBuilder =
     PaymentsCompanion Function({
@@ -7695,6 +9666,28 @@ typedef $$PaymentsTableUpdateCompanionBuilder =
       Value<int> updatedAt,
     });
 
+final class $$PaymentsTableReferences
+    extends BaseReferences<_$AppDatabase, $PaymentsTable, Payment> {
+  $$PaymentsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $UsersTable _userIdTable(_$AppDatabase db) =>
+      db.users.createAlias('payments__user_id__users__id');
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<int>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
 class $$PaymentsTableFilterComposer
     extends Composer<_$AppDatabase, $PaymentsTable> {
   $$PaymentsTableFilterComposer({
@@ -7711,11 +9704,6 @@ class $$PaymentsTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get userId => $composableBuilder(
-    column: $table.userId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7763,6 +9751,29 @@ class $$PaymentsTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$PaymentsTableOrderingComposer
@@ -7781,11 +9792,6 @@ class $$PaymentsTableOrderingComposer
 
   ColumnOrderings<int> get serverId => $composableBuilder(
     column: $table.serverId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get userId => $composableBuilder(
-    column: $table.userId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7833,6 +9839,29 @@ class $$PaymentsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$PaymentsTableAnnotationComposer
@@ -7849,9 +9878,6 @@ class $$PaymentsTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
-
-  GeneratedColumn<int> get userId =>
-      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<double> get amount =>
       $composableBuilder(column: $table.amount, builder: (column) => column);
@@ -7883,6 +9909,29 @@ class $$PaymentsTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$PaymentsTableTableManager
@@ -7896,9 +9945,9 @@ class $$PaymentsTableTableManager
           $$PaymentsTableAnnotationComposer,
           $$PaymentsTableCreateCompanionBuilder,
           $$PaymentsTableUpdateCompanionBuilder,
-          (Payment, BaseReferences<_$AppDatabase, $PaymentsTable, Payment>),
+          (Payment, $$PaymentsTableReferences),
           Payment,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool userId})
         > {
   $$PaymentsTableTableManager(_$AppDatabase db, $PaymentsTable table)
     : super(
@@ -7968,9 +10017,54 @@ class $$PaymentsTableTableManager
                 updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$PaymentsTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$PaymentsTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$PaymentsTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ),
       );
 }
@@ -7985,9 +10079,9 @@ typedef $$PaymentsTableProcessedTableManager =
       $$PaymentsTableAnnotationComposer,
       $$PaymentsTableCreateCompanionBuilder,
       $$PaymentsTableUpdateCompanionBuilder,
-      (Payment, BaseReferences<_$AppDatabase, $PaymentsTable, Payment>),
+      (Payment, $$PaymentsTableReferences),
       Payment,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool userId})
     >;
 
 class $AppDatabaseManager {

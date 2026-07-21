@@ -1,9 +1,12 @@
 import 'package:drift/drift.dart' hide Column;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../models/subject_model.dart';
 
 class SubjectRepository {
-  final AppDatabase _db = AppDatabase.instance;
+  final AppDatabase _db;
+
+  SubjectRepository(this._db);
 
   // =========================================================================
   // 📚 LER DISCIPLINAS
@@ -99,3 +102,7 @@ class SubjectRepository {
     );
   }
 }
+
+final subjectRepositoryProvider = Provider<SubjectRepository>((ref) {
+  return SubjectRepository(AppDatabase.instance);
+});

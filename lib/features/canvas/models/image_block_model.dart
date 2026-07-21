@@ -30,11 +30,11 @@ class ImageBlock {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'dx': position.dx,
-      'dy': position.dy,
-      'width': width,
-      'height': height,
-      'rotation': rotation,
+      'dx': double.parse(position.dx.toStringAsFixed(1)),
+      'dy': double.parse(position.dy.toStringAsFixed(1)),
+      'width': double.parse(width.toStringAsFixed(1)),
+      'height': double.parse(height.toStringAsFixed(1)),
+      'rotation': double.parse(rotation.toStringAsFixed(2)),
       'image_path': imagePath,
     };
   }

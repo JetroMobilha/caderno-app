@@ -85,7 +85,10 @@ class SyncService {
 
   Future<bool> pullSubjects() async {
     final prefs = await SharedPreferences.getInstance();
-    final lastSynced = prefs.getString('last_subjects_sync');
+    
+    // 🛡️ SEGURANÇA: Se não temos nada localmente, forçamos um pull total ignorando o cache
+    final localCount = await _db.subjects.count().getSingle();
+    final String? lastSynced = localCount > 0 ? prefs.getString('last_subjects_sync') : null;
 
     try {
       final endpoint = lastSynced != null ? '/sync/pull?last_synced_at=$lastSynced' : '/sync/pull';
@@ -98,20 +101,36 @@ class SyncService {
 
         if (serverSubjects.isEmpty) return false;
 
+        // 👤 Localizar o utilizador local para a Foreign Key
+        final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
+        if (userQuery.isEmpty) return false;
+        final int localUserId = userQuery.first.id;
+
         await _db.batch((batch) {
           for (var sub in serverSubjects) {
-            batch.insert(_db.subjects, 
-              SubjectsCompanion.insert(
-                serverId: Value(sub['id']),
-                userId: sub['user_id'] is int ? sub['user_id'] : int.parse(sub['user_id'].toString()),
-                name: sub['name'] ?? '',
-                color: sub['color'] ?? '#0F4C5C',
-                icon: Value(sub['icon']),
-                isDeleted: Value(sub['deleted_at'] != null ? 1 : 0),
-                syncedWithCloud: const Value(1),
-                updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-              ),
-              mode: InsertMode.insertOrReplace,
+            final int sId = sub['id'] is int ? sub['id'] : int.parse(sub['id'].toString());
+            
+            final companion = SubjectsCompanion.insert(
+              serverId: Value(sId),
+              userId: localUserId, // 🚀 USAR ID LOCAL REAL
+              name: sub['name'] ?? '',
+              color: sub['color'] ?? '#0F4C5C',
+              icon: Value(sub['icon']),
+              isDeleted: Value(sub['deleted_at'] != null ? 1 : 0),
+              syncedWithCloud: const Value(1),
+              updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+            );
+
+            // 🚀 UPSERT REAL: Alveja o server_id para evitar duplicação e falha de UNIQUE
+            batch.insert(_db.subjects, companion, 
+              onConflict: DoUpdate((old) => SubjectsCompanion(
+                name: companion.name,
+                color: companion.color,
+                icon: companion.icon,
+                isDeleted: companion.isDeleted,
+                syncedWithCloud: companion.syncedWithCloud,
+                updatedAt: companion.updatedAt,
+              ), target: [_db.subjects.serverId])
             );
           }
         });
@@ -166,7 +185,10 @@ class SyncService {
 
   Future<bool> pullNotebooks() async {
     final prefs = await SharedPreferences.getInstance();
-    final lastSynced = prefs.getString('last_notebooks_sync');
+    
+    // 🛡️ SEGURANÇA: Se não temos cadernos localmente, forçamos um pull total
+    final localCount = await _db.notebooks.count().getSingle();
+    final String? lastSynced = localCount > 0 ? prefs.getString('last_notebooks_sync') : null;
 
     try {
       final endpoint = lastSynced != null ? '/sync/notebooks/pull?last_synced_at=$lastSynced' : '/sync/notebooks/pull';
@@ -179,8 +201,11 @@ class SyncService {
         final List serverNotebooks = data['notebooks'] ?? [];
         if (serverNotebooks.isEmpty) return false;
 
-        final List<int> serverIds = serverNotebooks.map((n) => n['id'] as int).toList();
-        await (_db.delete(_db.notebooks)..where((t) => t.serverId.isNotNull() & t.serverId.isNotIn(serverIds))).go();
+        // Se for um pull total (sem lastSynced), removemos o que não está no servidor
+        if (lastSynced == null) {
+          final List<int> serverIds = serverNotebooks.map((n) => n['id'] as int).toList();
+          await (_db.delete(_db.notebooks)..where((t) => t.serverId.isNotNull() & t.serverId.isNotIn(serverIds))).go();
+        }
 
         final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
         final int currentUserId = userQuery.isNotEmpty ? userQuery.first.id : 0;
@@ -192,10 +217,15 @@ class SyncService {
         // PASSO 1: Sincronizar os Cadernos (Batch)
         await _db.batch((batch) {
           for (var net in serverNotebooks) {
-            final int? localSubjectId = (net['subject_id'] != null) ? subjectIdMap[net['subject_id']] : null;
+            final int sId = net['id'] is int ? net['id'] : int.parse(net['id'].toString());
+            final int? serverSubId = net['subject_id'] != null 
+                ? (net['subject_id'] is int ? net['subject_id'] : int.parse(net['subject_id'].toString()))
+                : null;
+
+            final int? localSubjectId = (serverSubId != null) ? subjectIdMap[serverSubId] : null;
             
             final companion = NotebooksCompanion.insert(
-              serverId: Value(net['id']),
+              serverId: Value(sId),
               subjectId: Value(localSubjectId),
               title: net['title'] ?? '',
               coverType: net['cover_type'] ?? 'color',
@@ -212,7 +242,24 @@ class SyncService {
               updatedAt: Value(DateTime.parse(net['updated_at'].toString()).millisecondsSinceEpoch),
             );
 
-            batch.insert(_db.notebooks, companion, mode: InsertMode.insertOrReplace);
+            batch.insert(_db.notebooks, companion, 
+              onConflict: DoUpdate((old) => NotebooksCompanion(
+                subjectId: companion.subjectId,
+                title: companion.title,
+                coverType: companion.coverType,
+                color: companion.color,
+                coverImage: companion.coverImage,
+                lineType: companion.lineType,
+                paperSize: companion.paperSize,
+                isPublished: companion.isPublished,
+                price: companion.price,
+                description: companion.description,
+                authorName: companion.authorName,
+                isDeleted: companion.isDeleted,
+                syncedWithCloud: companion.syncedWithCloud,
+                updatedAt: companion.updatedAt,
+              ), target: [_db.notebooks.serverId])
+            );
           }
         });
 
@@ -302,7 +349,10 @@ class SyncService {
 
   Future<bool> pullPages() async {
     final prefs = await SharedPreferences.getInstance();
-    final lastSynced = prefs.getString('last_pages_sync');
+    
+    // 🛡️ SEGURANÇA: Se não temos páginas localmente, forçamos um pull total
+    final localCount = await _db.pages.count().getSingle();
+    final String? lastSynced = localCount > 0 ? prefs.getString('last_pages_sync') : null;
 
     try {
       final endpoint = lastSynced != null ? '/sync/pages/pull?last_synced_at=$lastSynced' : '/sync/pages/pull';
@@ -316,33 +366,47 @@ class SyncService {
         if (serverPages.isEmpty) return false;
 
         for (var sPage in serverPages) {
-          final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sPage['notebook_id']))).getSingleOrNull();
+          final int sId = sPage['id'] is int ? sPage['id'] : int.parse(sPage['id'].toString());
+          final int sNotebookId = sPage['notebook_id'] is int ? sPage['notebook_id'] : int.parse(sPage['notebook_id'].toString());
+
+          final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNotebookId))).getSingleOrNull();
           if (notebook == null) continue;
 
           final localNotebookId = notebook.id;
 
           final pageCompanion = PagesCompanion.insert(
-            serverId: Value(sPage['id']),
+            serverId: Value(sId),
             notebookId: localNotebookId,
             pageNumber: sPage['page_number'],
             isLandscape: Value((sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0),
             headerData: Value(sPage['header_data'] is String ? sPage['header_data'] : jsonEncode(sPage['header_data'] ?? '')),
             footerData: Value(sPage['footer_data'] is String ? sPage['footer_data'] : jsonEncode(sPage['footer_data'] ?? '')),
+            extractedText: Value(sPage['extracted_text']?.toString()), // 🧠 Incluir texto extraído IA
             syncedWithCloud: const Value(1),
             updatedAt: Value(DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch),
           );
 
-          final existingPage = await (_db.select(_db.pages)..where((t) => t.serverId.equals(sPage['id']))).getSingleOrNull();
+          // UPSERT REAL PARA PÁGINAS
+          final existingPage = await (_db.select(_db.pages)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
           int localPageId;
           
           if (existingPage != null) {
             localPageId = existingPage.id;
-            await (_db.update(_db.pages)..where((t) => t.id.equals(localPageId))).write(pageCompanion);
+            await (_db.update(_db.pages)..where((t) => t.id.equals(localPageId))).write(
+              PagesCompanion(
+                headerData: pageCompanion.headerData,
+                footerData: pageCompanion.footerData,
+                isLandscape: pageCompanion.isLandscape,
+                extractedText: pageCompanion.extractedText,
+                syncedWithCloud: pageCompanion.syncedWithCloud,
+                updatedAt: pageCompanion.updatedAt,
+              )
+            );
           } else {
             localPageId = await _db.into(_db.pages).insert(pageCompanion);
           }
 
-          // Merge Tinta, Texto e Imagem (A reatividade do Drift notificará o CanvasController)
+          // Merge Tinta, Texto e Imagem
           await _pullCanvasData(localPageId, sPage);
         }
         return true;

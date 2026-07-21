@@ -9,22 +9,23 @@ import '../../auth/controllers/auth_controller.dart';
 import '../../subjects/controllers/subjects_controller.dart';
 
 class NotebooksController extends Notifier<List<Notebook>> {
-  final NotebookRepository _repository = NotebookRepository();
-  final SharedNotebookRepository _sharedRepository = SharedNotebookRepository();
   StreamSubscription? _subscription;
 
   int? _currentSubjectId;
-  int? _currentUserId;
   bool _isShowingShared = false;
+  List<Notebook> _lastData = [];
 
   @override
   List<Notebook> build() {
     // 📡 REATIVIDADE MÁXIMA: Escuta a disciplina ativa e troca o stream automaticamente!
     final activeSubject = ref.watch(activeSubjectProvider);
+    // Escuta mudanças no utilizador (Login/Logout/Update)
+    final auth = ref.watch(authProvider);
 
-    if (activeSubject == null) {
+    if (!auth.isAuthenticated || activeSubject == null) {
       _currentSubjectId = null;
       _subscription?.cancel();
+      _lastData = [];
       return [];
     }
 
@@ -34,8 +35,11 @@ class NotebooksController extends Notifier<List<Notebook>> {
       _loadNormalStream(activeSubject.id!);
     }
 
-    return state;
+    return _lastData;
   }
+
+  NotebookRepository get _repository => ref.read(notebookRepositoryProvider);
+  SharedNotebookRepository get _sharedRepository => ref.read(sharedNotebookRepositoryProvider);
 
   void _loadNormalStream(int subjectId) {
     if (_currentSubjectId == subjectId && !_isShowingShared) return;
@@ -43,7 +47,12 @@ class NotebooksController extends Notifier<List<Notebook>> {
     _isShowingShared = false;
     _currentSubjectId = subjectId;
     _subscription?.cancel();
+    
+    // Se mudou de matéria, limpamos o cache para não mostrar cadernos da matéria anterior
+    _lastData = [];
+
     _subscription = _repository.watchNotebooksBySubject(subjectId).listen((list) {
+      _lastData = list;
       state = list;
     });
   }
@@ -55,8 +64,11 @@ class NotebooksController extends Notifier<List<Notebook>> {
     _currentSubjectId = -1;
     _subscription?.cancel();
 
+    // Limpar cache ao mudar para partilhados
+    _lastData = [];
+
     final currentUser = ref.read(authProvider).currentUser;
-    if (currentUser == null) {
+    if (currentUser == null || currentUser.id == null) {
       state = [];
       return;
     }
@@ -64,6 +76,7 @@ class NotebooksController extends Notifier<List<Notebook>> {
     _subscription = _sharedRepository
         .watchSharedNotebooks(currentUser.id!, serverUserId: currentUser.serverId)
         .listen((list) {
+      _lastData = list;
       state = list;
     });
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/sync_service.dart';
 import '../../../core/network/realtime_service.dart'; // 🚀 O MOTOR REVERB AQUI
+import '../../notebooks/controllers/notebooks_controller.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
 import '../../../core/network/api_service.dart';
@@ -13,9 +15,9 @@ import '../../../core/database/app_database.dart' hide User;
 import '../../subjects/controllers/subjects_controller.dart'; // Para engatilhar o Refresh
 
 class AuthController extends ChangeNotifier {
-  final AuthRepository _authRepository = AuthRepository();
+  final AuthRepository _authRepository;
   final ApiService _apiService = ApiService();
-  final AppDatabase _db = AppDatabase.instance;
+  final AppDatabase _db;
 
   User? _currentUser;
   String? _token;
@@ -31,7 +33,9 @@ class AuthController extends ChangeNotifier {
   // Usa o Ref para avisar outros Providers
   final Ref ref;
 
-  AuthController(this.ref);
+  AuthController(this.ref, {AuthRepository? repository, AppDatabase? database}) 
+      : _authRepository = repository ?? AuthRepository(),
+        _db = database ?? AppDatabase.instance;
 
   void setUser(User user, {String? newToken}) {
     _currentUser = user;
@@ -267,22 +271,41 @@ class AuthController extends ChangeNotifier {
       debugPrint('⚠️ Falha ao efetuar logout remoto, a forçar limpeza local...');
     }
 
-    // 🚀 O utilizador saiu, desliga as Antenas WebSockets para poupar CPU/Bateria!
+    // 🚀 1. DESLIGAR MOTORES REALTIME
     RealtimeService().disconnect();
 
+    // 🚀 2. LIMPAR CACHE DE FICHEIROS (Apenas Mobile/Desktop)
+    if (!kIsWeb) {
+      try {
+        final tempDir = Directory.systemTemp;
+        final List<FileSystemEntity> files = tempDir.listSync();
+        for (var file in files) {
+          if (file is File && file.path.contains('sync_img_')) {
+            file.deleteSync();
+          }
+        }
+        debugPrint('🧹 [Auth] Imagens temporárias eliminadas.');
+      } catch (e) {
+        debugPrint('⚠️ Erro ao limpar ficheiros temporários: $e');
+      }
+    }
+
+    // 🚀 3. LIMPAR PREFERÊNCIAS E TOKEN
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
     _token = null;
     _currentUser = null;
     _authErrorMessage = null;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
+    // 🚀 4. LIMPAR BASE DE DADOS SQLITE
     try {
       await _db.clearAllData();
+      debugPrint('🗄️ [Auth] Base de dados local limpa.');
     } catch (e) {
       debugPrint('🚨 [Segurança]: Erro ao tentar limpar a Base de Dados local: $e');
     }
 
+    // 🚀 5. NOTIFICAR REATIVIDADE (PROVIDERS VÃO REAGIR AO USER=NULL)
     notifyListeners();
   }
 

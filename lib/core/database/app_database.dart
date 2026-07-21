@@ -57,6 +57,7 @@ class Pages extends Table {
   IntColumn get isLandscape => integer().withDefault(const Constant(0))();
   TextColumn get headerData => text().nullable()();
   TextColumn get footerData => text().nullable()();
+  TextColumn get extractedText => text().nullable()(); // 🧠 O cérebro local: Armazena o texto convertido da escrita manual
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
@@ -140,7 +141,13 @@ class Payments extends Table {
 ])
 class AppDatabase extends _$AppDatabase {
   // Padrão Singleton usando drift_flutter para conexão automática multiplataforma
-  AppDatabase._privateConstructor() : super(driftDatabase(name: 'caderno_digital_v9'));
+  AppDatabase._privateConstructor() : super(driftDatabase(
+    name: 'caderno_digital_v9',
+    web: DriftWebOptions(
+      sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+      driftWorker: Uri.parse('drift_worker.js'),
+    ),
+  ));
   static final AppDatabase instance = AppDatabase._privateConstructor();
 
   // Construtor para Testes
@@ -152,11 +159,17 @@ class AppDatabase extends _$AppDatabase {
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
       },
+      onUpgrade: (m, from, to) async {
+        if (from < 2) {
+          // Migração da v1 para v2: Adicionar coluna extractedText
+          await m.addColumn(pages, pages.extractedText);
+        }
+      },
     );
   }
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   // Função equivalente ao seu antigo clearAllData()
   Future<void> clearAllData() async {

@@ -13,10 +13,10 @@ void main() {
       'line_type': 'ruled',
     };
 
-    test('Deve converter corretamente um Map do SQLite para Objeto Notebook (fromMap)', () {
-      final notebook = Notebook.fromMap(mockMap);
+    test('Deve converter corretamente um JSON do Laravel para Objeto Notebook (fromJson)', () {
+      final notebook = Notebook.fromJson(mockMap);
 
-      expect(notebook.id, 1);
+      expect(notebook.serverId, 1);
       expect(notebook.subjectId, 10);
       expect(notebook.title, 'Álgebra Linear');
       expect(notebook.coverType, 'leather');
@@ -25,7 +25,7 @@ void main() {
       expect(notebook.lineType, 'ruled');
     });
 
-    test('Deve converter corretamente um Objeto Notebook para Map (toMap)', () {
+    test('Deve converter corretamente um Objeto Notebook para JSON (toJson)', () {
       final notebook = Notebook(
         id: 2,
         subjectId: 10,
@@ -33,18 +33,18 @@ void main() {
         coverType: 'classic',
         color: null,
         coverImage: 'assets/covers/geo.png',
-        lineType: 'grid', paperSize: '',
+        lineType: 'grid', paperSize: 'A4',
       );
 
-      final map = notebook.toMap();
+      final json = notebook.toJson();
 
-      expect(map['id'], 2);
-      expect(map['subject_id'], 10);
-      expect(map['title'], 'Geometria Analítica');
-      expect(map['cover_type'], 'classic');
-      expect(map['color'], isNull);
-      expect(map['cover_image'], 'assets/covers/geo.png');
-      expect(map['line_type'], 'grid');
+      expect(json['id'], 2);
+      expect(json['subject_id'], 10);
+      expect(json['title'], 'Geometria Analítica');
+      expect(json['cover_type'], 'classic');
+      expect(json['color'], isNull);
+      expect(json['cover_image'], 'assets/covers/geo.png');
+      expect(json['line_type'], 'grid');
     });
   });
 }

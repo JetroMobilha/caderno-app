@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors, Matrix4;
 
+import 'package:drift/drift.dart' hide Column;
+import '../../../core/database/app_database.dart' as db;
 import '../../../core/network/realtime_service.dart';
 import '../../../core/network/sync_service.dart';
 import '../../../core/network/webrtc_service.dart';
@@ -78,6 +80,8 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _followSubscription;
   StreamSubscription? _pageEventSubscription;
   StreamSubscription? _pageUpdatedSubscription;
+  StreamSubscription? _dbPagesSubscription;
+  StreamSubscription? _dbNotebookSubscription;
 
   final List<Color> avatarColorsPool = [
     const Color(0xFFE67E22), const Color(0xFF9B59B6), const Color(0xFF27AE60),
@@ -96,8 +100,6 @@ class CanvasController extends ChangeNotifier {
 
   CanvasController() {
     transformationController = TransformationController();
-    SyncService.syncedPagesRadio.addListener(_onPageSyncedByRadar);
-    SyncService.syncedNoteBooksRadio.addListener(_onNoteBookSyncedByRadar);
   }
 
   @override
@@ -110,15 +112,16 @@ class CanvasController extends ChangeNotifier {
     _textSubscription?.cancel();
     _imageSubscription?.cancel();
     _viewportSubscription?.cancel();
+    _followSubscription?.cancel();
     _pageEventSubscription?.cancel();
     _pageUpdatedSubscription?.cancel();
+    _dbPagesSubscription?.cancel();
+    _dbNotebookSubscription?.cancel();
     _viewportBroadcastTimer?.cancel();
     _autoSyncPushTimer?.cancel();
     for (var timer in _pageSaveDebouncers.values) { timer.cancel(); }
     for (var timer in _broadcasterTimers.values) { timer.cancel(); }
     _broadcasterTimers.clear();
-    SyncService.syncedPagesRadio.removeListener(_onPageSyncedByRadar);
-    SyncService.syncedNoteBooksRadio.removeListener(_onNoteBookSyncedByRadar);
     if (liveNotebookSid != null) RealtimeService().leaveNotebookChannel(liveNotebookSid!);
     SyncService.isCollaborationActive = false;
     super.dispose();
@@ -134,14 +137,39 @@ class CanvasController extends ChangeNotifier {
     if (userId != null) myUserId = userId;
     SyncService.isCollaborationActive = true;
 
-    // 💡 REMOVIDO PULL OBRIGATÓRIO NA ENTRADA (Adotado critério de RoomSync dinâmico)
-    pages = await _repository.getPagesByNotebook(notebookId, liveNotebookSid);
-    if (pages.isEmpty) {
-      final firstPage = await _repository.createNewPage(notebookId, 1, false, liveNotebookSid);
-      if (firstPage != null) { _resetZoomForPage(firstPage, paperSize); pages.add(firstPage); }
-    } else { _resetZoomForPage(pages.first, paperSize); }
-    isLoading = false;
-    notifyListeners();
+    // 📡 ASSINAR METADADOS DO CADERNO (Reatividade para o Server ID)
+    _dbNotebookSubscription?.cancel();
+    final database = db.AppDatabase.instance;
+    _dbNotebookSubscription = (database.select(database.notebooks)..where((t) => t.id.equals(notebookId))).watchSingle().listen((row) {
+      if (row.serverId != null && liveNotebookSid == null) {
+        debugPrint('☁️ [Canvas] Server ID detetado via reatividade do banco! Ativando Realtime...');
+        liveNotebookSid = row.serverId;
+        initRealtimeCollaboration();
+        isRealtimeActive = true;
+        notifyListeners();
+      }
+    });
+
+    // 📡 INÍCIO DA REATIVIDADE DO BANCO: Assina as páginas imediatamente
+    _dbPagesSubscription?.cancel();
+    _dbPagesSubscription = _repository.watchPagesByNotebook(notebookId).listen((fullPages) async {
+      if (fullPages.isEmpty && isLoading) {
+        // Se o banco está vazio e estamos a carregar, cria a primeira página
+        final firstPage = await _repository.createNewPage(notebookId, 1, false, liveNotebookSid);
+        if (firstPage != null) {
+          _resetZoomForPage(firstPage, paperSize);
+          pages = [firstPage];
+        }
+      } else {
+        pages = fullPages;
+        if (isLoading && pages.isNotEmpty) {
+          _resetZoomForPage(pages.first, paperSize);
+        }
+      }
+      
+      isLoading = false;
+      notifyListeners();
+    });
 
     if (liveNotebookSid != null && liveNotebookSid != 0) {
       initRealtimeCollaboration();
@@ -329,7 +357,7 @@ class CanvasController extends ChangeNotifier {
           targetPage.textBlocks.removeWhere((t) => t.id == blockId);
         } else {
           final existingIndex = targetPage.textBlocks.indexWhere((t) => t.id == blockId);
-          final newBlock = TextBlock.fromMap(blockData);
+          final newBlock = TextBlock.fromJson(blockData);
           if (existingIndex != -1) targetPage.textBlocks[existingIndex] = newBlock;
           else targetPage.textBlocks.add(newBlock);
         }
@@ -359,7 +387,7 @@ class CanvasController extends ChangeNotifier {
           targetPage.imageBlocks.removeWhere((img) => img.id == blockId);
         } else {
           final existingIndex = targetPage.imageBlocks.indexWhere((img) => img.id == blockId);
-          final newBlock = ImageBlock.fromMap(blockData);
+          final newBlock = ImageBlock.fromJson(blockData);
           if (existingIndex != -1) targetPage.imageBlocks[existingIndex] = newBlock;
           else targetPage.imageBlocks.add(newBlock);
         }
@@ -396,21 +424,21 @@ class CanvasController extends ChangeNotifier {
           final List strokeList = (data['stroke_data'] is String) 
               ? jsonDecode(data['stroke_data']) 
               : data['stroke_data'];
-          targetPage.strokes = strokeList.map((s) => Stroke.fromMap(Map<String, dynamic>.from(s))).toList();
+          targetPage.strokes = strokeList.map((s) => Stroke.fromJson(Map<String, dynamic>.from(s))).toList();
         }
 
         if (data['text_data'] != null) {
           final List textList = (data['text_data'] is String) 
               ? jsonDecode(data['text_data']) 
               : data['text_data'];
-          targetPage.textBlocks = textList.map((t) => TextBlock.fromMap(Map<String, dynamic>.from(t))).toList();
+          targetPage.textBlocks = textList.map((t) => TextBlock.fromJson(Map<String, dynamic>.from(t))).toList();
         }
 
         if (data['image_data'] != null) {
           final List imageList = (data['image_data'] is String) 
               ? jsonDecode(data['image_data']) 
               : data['image_data'];
-          targetPage.imageBlocks = imageList.map((img) => ImageBlock.fromMap(Map<String, dynamic>.from(img))).toList();
+          targetPage.imageBlocks = imageList.map((img) => ImageBlock.fromJson(Map<String, dynamic>.from(img))).toList();
         }
 
         notifyListeners();
@@ -857,7 +885,7 @@ class CanvasController extends ChangeNotifier {
       RealtimeService().broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
         'sender_id': id,
         'page_number': page.pageNumber,
-        'block': block.toMap(),
+        'block': block.toJson(),
       });
     }
   }
@@ -869,44 +897,12 @@ class CanvasController extends ChangeNotifier {
       RealtimeService().broadcastImageBlock(notebookId: liveNotebookSid!, imageData: {
         'sender_id': id,
         'page_number': page.pageNumber,
-        'block': block.toMap(),
+        'block': block.toJson(),
       });
     }
   }
 
   void forceNotify() => notifyListeners();
-
-  void _onPageSyncedByRadar() {
-    if (pages.isEmpty) return;
-    final Map<int, Map<String, int>> updates = SyncService.syncedPagesRadio.value;
-    
-    bool stateChanged = false;
-    for (var page in pages) {
-      if (page.id != null && updates.containsKey(page.id)) {
-        final info = updates[page.id]!;
-        page.serverId = info['serverId'];
-        
-        // 🚀 SINCRONIZAÇÃO DE NÚMERO: Flutter segue a decisão do Laravel
-        if (page.pageNumber != info['pageNumber']) {
-          debugPrint('📄 [Sync] Ajustando número da folha ${page.pageNumber} -> ${info['pageNumber']}');
-          // Nota: Pode ser necessário um campo final finalPageNumber no model se quisermos imutabilidade
-          // mas como o controller gere a lista, fazemos o update direto.
-        }
-        stateChanged = true;
-      }
-    }
-    if (stateChanged) notifyListeners();
-  }
-
-  void _onNoteBookSyncedByRadar() {
-    if (liveNotebookSid != null && liveNotebookSid != 0) return;
-    final Map<int, int> updates = SyncService.syncedNoteBooksRadio.value;
-    if (updates.containsKey(currentNotebookId)) {
-      liveNotebookSid = updates[currentNotebookId]!;
-      RealtimeService().leaveNotebookChannel(currentNotebookId);
-      initRealtimeCollaboration(); notifyListeners();
-    }
-  }
 
   Future<void> toggleVoiceCall(String myUserId) async {
     if (isInVoiceCall) { WebRTCService().leaveVoiceRoom(); isInVoiceCall = false; }

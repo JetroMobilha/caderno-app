@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/database/database_helper.dart';
+import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_service.dart';
-import '../../../core/network/sync_service.dart';
+import '../../../core/network/sync_provider.dart';
 
 // 🚀 IMPORTS CORRIGIDOS PARA A ARQUITETURA LIMPA (controllers/ e views/):
 import '../../auth/controllers/auth_controller.dart';
@@ -93,15 +93,17 @@ class SubjectsListScreen extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.cloud_sync_outlined, color: Colors.black87),
               title: Text('Sincronização', style: GoogleFonts.inter(color: Colors.black87, fontWeight: FontWeight.w500)),
+              trailing: ref.watch(syncProvider) == SyncState.syncing 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : null,
               onTap: () async {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('A comunicar com o Quartel-General... ☁️'), duration: Duration(seconds: 2)),
                 );
 
-                // 🔄 Inicia a ofensiva de sincronização e força o controlador a recarregar
-                await SyncService().syncAll();
-                ref.invalidate(subjectsProvider);
+                // 🔄 Dispara sincronização forçada via Provider
+                await ref.read(syncProvider.notifier).performSync(forced: true);
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -258,8 +260,8 @@ class SubjectsListScreen extends ConsumerWidget {
       const SnackBar(content: Text('A terminar sessão e encriptar dados...'), duration: Duration(seconds: 2)),
     );
 
-    // Limpa a base de dados SQLite para proteger a privacidade
-    await DatabaseHelper.instance.clearAllData();
+    // Limpa a base de dados para proteger a privacidade
+    await AppDatabase.instance.clearAllData();
 
     // Invalida os estados dos Controladores
     ref.invalidate(subjectsProvider);

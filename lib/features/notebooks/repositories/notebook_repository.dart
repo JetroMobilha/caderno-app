@@ -1,52 +1,104 @@
 import 'dart:convert';
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
-import '../../../core/database/database_helper.dart';
+import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_service.dart';
 import '../models/notebook_model.dart';
 
 class NotebookRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final AppDatabase _db = AppDatabase.instance;
   final ApiService _apiService = ApiService();
 
   // =========================================================================
   // 📚 LISTAR CADERNOS ATIVOS DA DISCIPLINA (Com Blindagem de ID)
   // =========================================================================
   Future<List<Notebook>> getNotebooksBySubject(int subjectId, int? subjectServerId) async {
-    final db = await _dbHelper.database;
-
     // 🚀 BLINDAGEM ANTI-FANTASMA: Descobre o ID local real da matéria!
-    // Se a UI enviar o ID da nuvem por engano, o SQLite traduz para o ID local.
     int realLocalSubjectId = subjectId;
     if (subjectServerId != null) {
-      final subQuery = await db.query('subjects', columns: ['id'], where: 'server_id = ?', whereArgs: [subjectServerId]);
-      if (subQuery.isNotEmpty) {
-        realLocalSubjectId = subQuery.first['id'] as int;
+      final subQuery = await (_db.select(_db.subjects)..where((t) => t.serverId.equals(subjectServerId))).getSingleOrNull();
+      if (subQuery != null) {
+        realLocalSubjectId = subQuery.id;
       }
     }
 
     // Agora procura com absoluta certeza na tabela de cadernos
-    final List<Map<String, dynamic>> maps = await db.query(
-      'notebooks',
-      where: 'is_deleted = ? AND subject_id = ?',
-      whereArgs: [0, realLocalSubjectId],
-      orderBy: 'updated_at DESC',
-    );
+    final rows = await (_db.select(_db.notebooks)
+          ..where((t) => t.isDeleted.equals(0) & t.subjectId.equals(realLocalSubjectId))
+          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
+        .get();
 
-    return maps.map((map) => Notebook.fromMap(map)).toList();
+    return rows.map((row) => Notebook(
+      id: row.id,
+      serverId: row.serverId,
+      subjectId: row.subjectId,
+      title: row.title,
+      coverType: row.coverType,
+      color: row.color,
+      coverImage: row.coverImage,
+      lineType: row.lineType ?? 'ruled',
+      paperSize: row.paperSize ?? 'A4',
+      isPublished: row.isPublished,
+      price: row.price,
+      description: row.description,
+      authorName: row.authorName,
+      isDeleted: row.isDeleted,
+      syncedWithCloud: row.syncedWithCloud,
+      updatedAt: row.updatedAt,
+    )).toList();
+  }
+
+  // =========================================================================
+  // 📡 ASSINAR CADERNOS DA DISCIPLINA (REATIVO)
+  // =========================================================================
+  Stream<List<Notebook>> watchNotebooksBySubject(int subjectId) {
+    return (_db.select(_db.notebooks)
+          ..where((t) => t.isDeleted.equals(0) & t.subjectId.equals(subjectId))
+          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
+        .watch()
+        .map((rows) => rows.map((row) => Notebook(
+              id: row.id,
+              serverId: row.serverId,
+              subjectId: row.subjectId,
+              title: row.title,
+              coverType: row.coverType,
+              color: row.color,
+              coverImage: row.coverImage,
+              lineType: row.lineType ?? 'ruled',
+              paperSize: row.paperSize ?? 'A4',
+              isPublished: row.isPublished,
+              price: row.price,
+              description: row.description,
+              authorName: row.authorName,
+              isDeleted: row.isDeleted,
+              syncedWithCloud: row.syncedWithCloud,
+              updatedAt: row.updatedAt,
+            )).toList());
   }
 
   // =========================================================================
   // 📓 CRIAR CADERNO (OFFLINE-FIRST)
   // =========================================================================
   Future<int> insertNotebook(Notebook notebook) async {
-    final db = await _dbHelper.database;
-    final map = notebook.toMapForSQLite();
+    final companion = NotebooksCompanion.insert(
+      serverId: Value(notebook.serverId),
+      subjectId: Value(notebook.subjectId),
+      title: notebook.title,
+      coverType: notebook.coverType,
+      color: Value(notebook.color),
+      coverImage: Value(notebook.coverImage),
+      lineType: Value(notebook.lineType),
+      paperSize: Value(notebook.paperSize),
+      isPublished: Value(notebook.isPublished),
+      price: Value(notebook.price),
+      description: Value(notebook.description),
+      authorName: Value(notebook.authorName),
+      syncedWithCloud: const Value(0),
+      isDeleted: const Value(0),
+      updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+    );
 
-    map['synced_with_cloud'] = 0;
-    map['is_deleted'] = 0;
-    map['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-
-    return await db.insert('notebooks', map);
+    return await _db.into(_db.notebooks).insert(companion);
   }
 
   // =========================================================================
@@ -54,13 +106,22 @@ class NotebookRepository {
   // =========================================================================
   Future<void> updateNotebook(Notebook notebook) async {
     if (notebook.id == null) return;
-    final db = await _dbHelper.database;
-    final map = notebook.toMapForSQLite();
-
-    map['synced_with_cloud'] = 0;
-    map['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-
-    await db.update('notebooks', map, where: 'id = ?', whereArgs: [notebook.id]);
+    await (_db.update(_db.notebooks)..where((t) => t.id.equals(notebook.id!))).write(
+      NotebooksCompanion(
+        title: Value(notebook.title),
+        coverType: Value(notebook.coverType),
+        color: Value(notebook.color),
+        coverImage: Value(notebook.coverImage),
+        lineType: Value(notebook.lineType),
+        paperSize: Value(notebook.paperSize),
+        isPublished: Value(notebook.isPublished),
+        price: Value(notebook.price),
+        description: Value(notebook.description),
+        authorName: Value(notebook.authorName),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
   }
 
   // =========================================================================
@@ -68,13 +129,12 @@ class NotebookRepository {
   // =========================================================================
   Future<void> deleteNotebook(Notebook notebook) async {
     if (notebook.id == null) return;
-    final db = await _dbHelper.database;
-
-    await db.update(
-      'notebooks',
-      {'is_deleted': 1, 'synced_with_cloud': 0, 'updated_at': DateTime.now().millisecondsSinceEpoch},
-      where: 'id = ?',
-      whereArgs: [notebook.id],
+    await (_db.update(_db.notebooks)..where((t) => t.id.equals(notebook.id!))).write(
+      NotebooksCompanion(
+        isDeleted: const Value(1),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
     );
   }
 

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/network/sync_service.dart';
+import '../../../core/network/sync_provider.dart';
 import '../models/subject_model.dart';
 import '../repositories/subject_repository.dart';
 
@@ -12,59 +12,44 @@ import '../repositories/subject_repository.dart';
 class SubjectsController extends StateNotifier<List<Subject>> {
   final Ref ref;
   final SubjectRepository _repository = SubjectRepository();
+  StreamSubscription? _subscription;
 
   SubjectsController(this.ref) : super([]) {
-    loadSubjects();
+    _subscribe();
   }
 
-  Future<void> loadSubjects() async {
-    final lista = await _repository.getAllSubjects();
-    if (lista.length != state.length || _hasChanges(lista, state)) {
+  void _subscribe() {
+    _subscription?.cancel();
+    _subscription = _repository.watchAllSubjects().listen((lista) {
       state = lista;
-    }
+    });
   }
 
-  bool _hasChanges(List<Subject> a, List<Subject> b) {
-    if (a.length != b.length) return true;
-    for (int i = 0; i < a.length; i++) {
-      if (a[i].id != b[i].id || a[i].name != b[i].name || a[i].serverId != b[i].serverId) {
-        return true;
-      }
-    }
-    return false;
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
   }
 
   Future<void> addSubject(Subject subject) async {
-    final newSubject = await _repository.addSubject(subject);
-    if (newSubject != null) {
-      state = [newSubject, ...state];
-    }
+    await _repository.addSubject(subject);
+    // state atualiza via stream
   }
 
   Future<void> updateSubject(Subject subject) async {
     await _repository.updateSubject(subject);
-    final updatedSubject = Subject(
-      id: subject.id,
-      serverId: subject.serverId,
-      userId: subject.userId,
-      name: subject.name,
-      color: subject.color,
-      icon: subject.icon,
-      syncedWithCloud: 0,
-    );
-    state = state.map((s) => s.id == subject.id ? updatedSubject : s).toList();
+    // state atualiza via stream
   }
 
   Future<void> deleteSubject(Subject subject) async {
     await _repository.deleteSubject(subject);
-    state = state.where((s) => s.id != subject.id).toList();
+    // state atualiza via stream
   }
 
   // 📡 Chamado manualmente pelo botão da Gaveta ou pelo Reverb (WebSocket)
   Future<void> syncManuallyWithCloud() async {
-    final syncService = SyncService();
-    await syncService.syncAll();
-    await loadSubjects();
+    await ref.read(syncProvider.notifier).performSync(forced: true);
+    // state atualiza via stream automaticamente após a escrita no banco
   }
 }
 

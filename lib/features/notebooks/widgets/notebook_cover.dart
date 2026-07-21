@@ -169,10 +169,10 @@ class _NotebookCoverState extends State<NotebookCover> with SingleTickerProvider
                             ),
                           ),
                         ),
-                        if (widget.notebook.author_name != null && widget.notebook.author_name!.isNotEmpty) ...[
+                        if (widget.notebook.authorName != null && widget.notebook.authorName!.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Text(
-                            'Por: ${widget.notebook.author_name}',
+                            'Por: ${widget.notebook.authorName}',
                             style: GoogleFonts.inter(fontSize: 11, color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.w500),
                           ),
                         ]

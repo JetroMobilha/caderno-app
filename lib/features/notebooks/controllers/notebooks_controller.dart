@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
@@ -5,95 +6,85 @@ import 'package:caderno_digital_app/features/notebooks/repositories/notebook_rep
 import 'package:caderno_digital_app/features/notebooks/repositories/shared_notebook_repository.dart';
 
 import '../../auth/controllers/auth_controller.dart';
+import '../../subjects/controllers/subjects_controller.dart';
 
 class NotebooksController extends Notifier<List<Notebook>> {
   final NotebookRepository _repository = NotebookRepository();
   final SharedNotebookRepository _sharedRepository = SharedNotebookRepository();
+  StreamSubscription? _subscription;
 
   int? _currentSubjectId;
-  int? _currentSubjectServerId;
   int? _currentUserId;
-  bool _isShowingShared = false; // 🚀 O "Disjuntor" da memória
+  bool _isShowingShared = false;
 
   @override
   List<Notebook> build() {
-    return [];
+    // 📡 REATIVIDADE MÁXIMA: Escuta a disciplina ativa e troca o stream automaticamente!
+    final activeSubject = ref.watch(activeSubjectProvider);
+
+    if (activeSubject == null) {
+      _currentSubjectId = null;
+      _subscription?.cancel();
+      return [];
+    }
+
+    if (activeSubject.id == -1) {
+      _loadSharedStream();
+    } else {
+      _loadNormalStream(activeSubject.id!);
+    }
+
+    return state;
   }
 
-  Future<void> loadNotebooks(int subjectId, {int? subjectServerId}) async {
+  void _loadNormalStream(int subjectId) {
+    if (_currentSubjectId == subjectId && !_isShowingShared) return;
+
     _isShowingShared = false;
     _currentSubjectId = subjectId;
-    _currentSubjectServerId = subjectServerId;
-    state = await _repository.getNotebooksBySubject(subjectId, subjectServerId);
+    _subscription?.cancel();
+    _subscription = _repository.watchNotebooksBySubject(subjectId).listen((list) {
+      state = list;
+    });
   }
 
-  Future<void> loadSharedNotebooks() async {
-    state = [];
+  void _loadSharedStream() {
+    if (_isShowingShared) return;
 
-    // 🚀 LIGA O DISJUNTOR DA MEMÓRIA PARA SOBREVIVER AO SYNC!
     _isShowingShared = true;
     _currentSubjectId = -1;
+    _subscription?.cancel();
 
     final currentUser = ref.read(authProvider).currentUser;
-    if (currentUser == null) return;
-
-    final int localUserId = currentUser.id ?? 0;
-    final int? serverId = currentUser.serverId;
-
-    _currentUserId = localUserId; // Guarda quem somos na memória
-
-    final sharedNotebooks = await SharedNotebookRepository().getSharedNotebooks(
-        localUserId,
-        serverUserId: serverId
-    );
-
-    state = sharedNotebooks;
-  }
-
-  Future<void> refreshCurrent() async {
-    try {
-      if (_isShowingShared && _currentUserId != null) {
-        // 🚀 RECUPERA O SERVER ID ATUALIZADO (Caso a sync tenha trazido um novo)
-        final currentUser = ref.read(authProvider).currentUser;
-        state = await _sharedRepository.getSharedNotebooks(
-            _currentUserId!,
-            serverUserId: currentUser?.serverId
-        );
-      } else if (_currentSubjectId != null && _currentSubjectId != -1) {
-        state = await _repository.getNotebooksBySubject(_currentSubjectId!, _currentSubjectServerId);
-      }
-    } catch (e, stack) {
-      debugPrint('🚨 ERRO AO RENDERIZAR CADERNOS APÓS SYNC: $e\n$stack');
+    if (currentUser == null) {
+      state = [];
+      return;
     }
+
+    _subscription = _sharedRepository
+        .watchSharedNotebooks(currentUser.id!, serverUserId: currentUser.serverId)
+        .listen((list) {
+      state = list;
+    });
   }
 
   Future<int> addNotebook(Notebook notebook, int? subjectServerId) async {
     final int generatedId = await _repository.insertNotebook(notebook);
-    final newNotebookWithId = notebook.copyWith(id: generatedId, syncedWithCloud: 0);
-
-    if (!_isShowingShared) {
-      state = [newNotebookWithId, ...state];
-    }
     return generatedId;
   }
 
   Future<void> updateNotebook(Notebook notebook) async {
     if (notebook.role == 'viewer' || notebook.role == 'student') return;
-
     await _repository.updateNotebook(notebook);
-    state = state.map((n) => n.id == notebook.id ? notebook : n).toList();
   }
 
   Future<void> deleteNotebook(Notebook notebook) async {
     if (notebook.role != 'owner') return;
-
     await _repository.deleteNotebook(notebook);
-    state = state.where((n) => n.id != notebook.id).toList();
   }
 
   Future<bool> shareNotebook(int notebookServerId, String email, String role) async {
     final bool success = await _repository.shareNotebookWithFriend(notebookId: notebookServerId, email: email, role: role);
-    if (success) await refreshCurrent();
     return success;
   }
 
@@ -107,7 +98,6 @@ class NotebooksController extends Notifier<List<Notebook>> {
 
   Future<bool> revokeAccess(int notebookServerId, String email) async {
     final bool success = await _repository.removeShareWithFriend(notebookId: notebookServerId, email: email);
-    if (success) await refreshCurrent();
     return success;
   }
 }

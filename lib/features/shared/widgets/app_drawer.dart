@@ -71,7 +71,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     try {
       // Ciclo completo de Push & Pull (SQLite <-> Nuvem)
       await subNotifier.syncManuallyWithCloud();
-      await notebooksNotifier.refreshCurrent();
 
       if (mounted) {
         snackbarMessenger.showSnackBar(
@@ -285,7 +284,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             ),
                             onTap: () {
                               ref.read(activeSubjectProvider.notifier).setSubject(sub);
-                              ref.read(notebooksProvider.notifier).loadNotebooks(sub.id ?? 0, subjectServerId: sub.serverId);
                               Navigator.pop(context);
                             },
                           ),
@@ -327,7 +325,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           icon: 'team',
                         );
                         ref.read(activeSubjectProvider.notifier).setSubject(virtualSharedSubject);
-                        ref.read(notebooksProvider.notifier).loadSharedNotebooks();
                       },
                     ),
                   ),

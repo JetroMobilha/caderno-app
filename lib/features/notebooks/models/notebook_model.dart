@@ -1,22 +1,23 @@
 class Notebook {
-    int? id;
-    int? serverId;
-    int? subjectId; // 🛡️ Nullable para isolamento de chaves locais
-    String title;
-    String coverType;
-    String? color;
-    String? coverImage;
-    String lineType;
-    String paperSize;
+  int? id;
+  int? serverId;
+  int? subjectId; // 🛡️ Nullable para isolamento de chaves locais
+  String title;
+  String coverType;
+  String? color;
+  String? coverImage;
+  String lineType;
+  String paperSize;
 
   // 🌟 Novas propriedades EdTech/Marketplace
   final int isPublished;
   final double price;
   final String? description;
-  final String? author_name;
+  final String? authorName;
 
   final int syncedWithCloud;
   final int isDeleted;
+  final int updatedAt;
   final String role; // 🚀 'owner', 'editor', 'viewer' ou 'student'
 
   Notebook({
@@ -32,11 +33,12 @@ class Notebook {
     this.isPublished = 0,
     this.price = 0.00,
     this.description,
-    this.author_name,
+    this.authorName,
     this.syncedWithCloud = 0,
     this.isDeleted = 0,
+    int? updatedAt,
     this.role = 'owner',
-  });
+  }) : updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   // 🔄 O Método copyWith para mutações limpas de estado na RAM
   Notebook copyWith({
@@ -52,9 +54,10 @@ class Notebook {
     int? isPublished,
     double? price,
     String? description,
-    String? author_name,
+    String? authorName,
     int? syncedWithCloud,
     int? isDeleted,
+    int? updatedAt,
     String? role,
   }) {
     return Notebook(
@@ -70,9 +73,10 @@ class Notebook {
       isPublished: isPublished ?? this.isPublished,
       price: price ?? this.price,
       description: description ?? this.description,
-      author_name: author_name ?? this.author_name,
+      authorName: authorName ?? this.authorName,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
       role: role ?? this.role,
     );
   }
@@ -80,9 +84,9 @@ class Notebook {
   // =========================================================================
   // 🌐 PARA A NUVEM / API (Manda tudo, incluindo a role)
   // =========================================================================
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
-      if (id != null) 'id': id,
+      'id': id,
       'server_id': serverId,
       'subject_id': subjectId,
       'title': title,
@@ -94,65 +98,32 @@ class Notebook {
       'is_published': isPublished,
       'price': price,
       'description': description,
-      'author_name': author_name,
+      'author_name': authorName,
       'synced_with_cloud': syncedWithCloud,
       'is_deleted': isDeleted,
-      'role': role, // A Nuvem recebe e processa isto na tabela pivô dela!
+      'updated_at': updatedAt,
+      'role': role,
     };
   }
 
-  // =========================================================================
-  // 📱 PARA O SQLITE LOCAL (Gravação limpa na tabela 'notebooks')
-  // =========================================================================
-  Map<String, dynamic> toMapForSQLite() {
-    return {
-      if (id != null) 'id': id,
-      'server_id': serverId,
-      'subject_id': subjectId,
-      'title': title,
-      'cover_type': coverType,
-      'color': color,
-      'cover_image': coverImage,
-      'line_type': lineType,
-      'paper_size': paperSize,
-      'is_published': isPublished,
-      'price': price,
-      'description': description,
-      'author_name': author_name,
-      'synced_with_cloud': syncedWithCloud,
-      'is_deleted': isDeleted,
-      // 🚀 NOTA: O campo 'role' foi removido aqui!
-      // Assim o SQLite grava o caderno tranquilamente sem dar erro de coluna inexistente.
-    };
-  }
-
-  // =========================================================================
-  // 🛡️ DESCODIFICADOR BLINDADO (SQLite -> RAM)
-  // =========================================================================
-  factory Notebook.fromMap(Map<String, dynamic> map) {
+  // Receber do Laravel (JSON)
+  factory Notebook.fromJson(Map<String, dynamic> json) {
     return Notebook(
-      id: map['id'] as int?,
-      serverId: map['server_id'] as int?,
-      subjectId: map['subject_id'] as int?,
-      title: map['title'] as String,
-      coverType: map['cover_type'] as String,
-      color: map['color'] as String?,
-      coverImage: map['cover_image'] as String?,
-      lineType: map['line_type'] as String,
-      paperSize: map['paper_size'] as String,
-
-      // 🚀 CONVERSÃO SEGURA: Se o Laravel enviar "0", tentamos converter para int!
-      isPublished: int.tryParse(map['is_published']?.toString() ?? '0') ?? 0,
-
-      // 🚀 CONVERSÃO SEGURA: Se o Laravel enviar "0.00", convertemos para double!
-      price: double.tryParse(map['price']?.toString() ?? '0.0') ?? 0.0,
-
-      description: map['description'] as String?,
-      author_name: map['author_name'] as String?,
-
-      syncedWithCloud: int.tryParse(map['synced_with_cloud']?.toString() ?? '0') ?? 0,
-      isDeleted: int.tryParse(map['is_deleted']?.toString() ?? '0') ?? 0,
-      role: map['role'] ?? 'owner',
+      serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
+      subjectId: json['subject_id'] is int ? json['subject_id'] : int.tryParse(json['subject_id']?.toString() ?? ''),
+      title: json['title'] ?? '',
+      coverType: json['cover_type'] ?? 'color',
+      color: json['color'],
+      coverImage: json['cover_image'],
+      lineType: json['line_type'] ?? 'ruled',
+      paperSize: json['paper_size'] ?? 'A4',
+      isPublished: int.tryParse(json['is_published']?.toString() ?? '0') ?? 0,
+      price: double.tryParse(json['price']?.toString() ?? '0.0') ?? 0.0,
+      description: json['description'],
+      authorName: json['author_name'],
+      syncedWithCloud: 1,
+      isDeleted: json['deleted_at'] != null ? 1 : 0,
+      role: json['role'] ?? 'owner',
     );
   }
 }

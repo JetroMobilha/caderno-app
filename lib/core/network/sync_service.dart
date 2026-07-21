@@ -1,23 +1,20 @@
 import 'dart:convert';
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../features/canvas/models/local_page_model.dart';
+import '../../features/subjects/models/subject_model.dart' as subjects_model;
+import '../../features/canvas/models/local_page_model.dart' as pages_model;
 import '../../features/canvas/repositories/canvas_repository.dart';
-import '../database/database_helper.dart';
+import '../database/app_database.dart';
 import 'api_service.dart';
 
 class SyncService {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final AppDatabase _db = AppDatabase.instance;
   final ApiService _apiService = ApiService();
   final CanvasRepository _canvasRepository = CanvasRepository();
 
   static bool isCollaborationActive = false;
-
-  // 🚀 A ANTENA GLOBAL: Agora envia detalhes completos da sincronização
-  static final ValueNotifier<Map<int, Map<String, int>>> syncedPagesRadio = ValueNotifier({});
-  static final ValueNotifier<Map<int, int>> syncedNoteBooksRadio = ValueNotifier({});
 
   String uniqid() => DateTime.now().microsecondsSinceEpoch.toString();
 
@@ -48,17 +45,38 @@ class SyncService {
   // 2. DISCIPLINAS (SUBJECTS)
   // =========================================================================
   Future<void> pushOfflineSubjects() async {
-    final db = await _dbHelper.database;
     try {
-      final unsynced = await db.query('subjects', where: 'synced_with_cloud = ?', whereArgs: [0]);
+      final unsynced = await (_db.select(_db.subjects)..where((t) => t.syncedWithCloud.equals(0))).get();
       if (unsynced.isEmpty) return;
 
-      final response = await _apiService.post('/sync/push', {'subjects': unsynced});
+      final List<Map<String, dynamic>> payload = unsynced.map((s) => 
+        subjects_model.Subject(
+          id: s.id,
+          serverId: s.serverId,
+          userId: s.userId,
+          name: s.name,
+          color: s.color,
+          icon: s.icon,
+          isDeleted: s.isDeleted,
+          syncedWithCloud: s.syncedWithCloud,
+          updatedAt: s.updatedAt,
+        ).toJson()
+      ).toList();
+
+      final response = await _apiService.post('/sync/push', {'subjects': payload});
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        for (var item in data['synced_subjects']) {
-          await db.update('subjects', {'server_id': item['server_id'], 'synced_with_cloud': 1}, where: 'id = ?', whereArgs: [item['client_id']]);
-        }
+        await _db.batch((batch) {
+          for (var item in data['synced_subjects']) {
+            batch.update(_db.subjects, 
+              SubjectsCompanion(
+                serverId: Value(item['server_id']),
+                syncedWithCloud: const Value(1),
+              ),
+              where: (t) => t.id.equals(item['client_id']),
+            );
+          }
+        });
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Subjects: $e');
@@ -66,7 +84,6 @@ class SyncService {
   }
 
   Future<bool> pullSubjects() async {
-    final db = await _dbHelper.database;
     final prefs = await SharedPreferences.getInstance();
     final lastSynced = prefs.getString('last_subjects_sync');
 
@@ -81,27 +98,23 @@ class SyncService {
 
         if (serverSubjects.isEmpty) return false;
 
-        for (var sub in serverSubjects) {
-          final existing = await db.query('subjects', where: 'server_id = ?', whereArgs: [sub['id']]);
-
-          final payload = {
-            'server_id': sub['id'],
-            'user_id': sub['user_id'],
-            'name': sub['name'],
-            'color': sub['color'],
-            'icon': sub['icon'],
-            // 🚀 A CORREÇÃO ANTI-FANTASMA AQUI! Lê o deleted_at da nuvem!
-            'is_deleted': sub['deleted_at'] != null ? 1 : 0,
-            'synced_with_cloud': 1,
-            'updated_at': DateTime.now().millisecondsSinceEpoch,
-          };
-
-          if (existing.isEmpty) {
-            await db.insert('subjects', payload);
-          } else {
-            await db.update('subjects', payload, where: 'server_id = ?', whereArgs: [sub['id']]);
+        await _db.batch((batch) {
+          for (var sub in serverSubjects) {
+            batch.insert(_db.subjects, 
+              SubjectsCompanion.insert(
+                serverId: Value(sub['id']),
+                userId: sub['user_id'] is int ? sub['user_id'] : int.parse(sub['user_id'].toString()),
+                name: sub['name'] ?? '',
+                color: sub['color'] ?? '#0F4C5C',
+                icon: Value(sub['icon']),
+                isDeleted: Value(sub['deleted_at'] != null ? 1 : 0),
+                syncedWithCloud: const Value(1),
+                updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
           }
-        }
+        });
         return true;
       }
     } catch (e) {
@@ -111,27 +124,24 @@ class SyncService {
   }
 
   // =========================================================================
-  // 3. CADERNOS (NOTEBOOKS) - COM SUPORTE EDTECH E PERMISSÕES (ROLES)
+  // 3. CADERNOS (NOTEBOOKS)
   // =========================================================================
   Future<void> pushNotebooks() async {
-    final db = await _dbHelper.database;
     try {
-      final unsynced = await db.query('notebooks', where: 'synced_with_cloud = ?', whereArgs: [0]);
+      final unsynced = await (_db.select(_db.notebooks)..where((t) => t.syncedWithCloud.equals(0))).get();
       if (unsynced.isEmpty) return;
 
       final List<Map<String, dynamic>> payload = [];
       for (var row in unsynced) {
         int? cloudSubjectId;
-
-        // 🚀 Se subject_id for nulo, é um caderno partilhado/comprado solto. Não precisa de FK.
-        if (row['subject_id'] != null) {
-          final subjectQuery = await db.query('subjects', columns: ['server_id'], where: 'id = ?', whereArgs: [row['subject_id']]);
-          if (subjectQuery.isEmpty || subjectQuery.first['server_id'] == null) continue; // Só avança se a matéria já estiver na nuvem
-          cloudSubjectId = subjectQuery.first['server_id'] as int;
+        if (row.subjectId != null) {
+          final subject = await (_db.select(_db.subjects)..where((t) => t.id.equals(row.subjectId!))).getSingleOrNull();
+          if (subject == null || subject.serverId == null) continue;
+          cloudSubjectId = subject.serverId;
         }
 
-        final map = Map<String, dynamic>.from(row);
-        map['subject_id'] = cloudSubjectId; // Traduzido ou Null
+        final map = row.toJson();
+        map['subject_id'] = cloudSubjectId;
         payload.add(map);
       }
 
@@ -140,12 +150,14 @@ class SyncService {
       final response = await _apiService.post('/sync/notebooks/push', {'notebooks': payload});
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        Map<int, int> newIdsMap = {};
-        for (var item in data['synced_notebooks']) {
-          await db.update('notebooks', {'server_id': item['server_id'], 'synced_with_cloud': 1}, where: 'id = ?', whereArgs: [item['client_id']]);
-          newIdsMap[item['client_id']] = item['server_id'];
-        }
-        if (newIdsMap.isNotEmpty) syncedNoteBooksRadio.value = Map.from(newIdsMap);
+        await _db.batch((batch) {
+          for (var item in data['synced_notebooks']) {
+            batch.update(_db.notebooks,
+              NotebooksCompanion(serverId: Value(item['server_id']), syncedWithCloud: const Value(1)),
+              where: (t) => t.id.equals(item['client_id']),
+            );
+          }
+        });
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Notebooks: $e');
@@ -153,7 +165,6 @@ class SyncService {
   }
 
   Future<bool> pullNotebooks() async {
-    final db = await _dbHelper.database;
     final prefs = await SharedPreferences.getInstance();
     final lastSynced = prefs.getString('last_notebooks_sync');
 
@@ -168,74 +179,69 @@ class SyncService {
         final List serverNotebooks = data['notebooks'] ?? [];
         if (serverNotebooks.isEmpty) return false;
 
-        // 🧠 1. Obter IDs dos cadernos que ainda existem no servidor
         final List<int> serverIds = serverNotebooks.map((n) => n['id'] as int).toList();
+        await (_db.delete(_db.notebooks)..where((t) => t.serverId.isNotNull() & t.serverId.isNotIn(serverIds))).go();
 
-        // 🗑️ 2. LIMPEZA GLOBAL: Apagar cadernos locais que não estão no Pull (se foram apagados noutro dispositivo)
-        // Apenas para cadernos que têm server_id (já foram sincronizados)
-        await db.delete('notebooks', 
-          where: 'server_id IS NOT NULL AND server_id NOT IN (${serverIds.join(',')})'
-        );
+        final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
+        final int currentUserId = userQuery.isNotEmpty ? userQuery.first.id : 0;
 
-        // 🧠 3. Captura o ID do utilizador local para cruzar as permissões
-        final userQuery = await db.query('users', orderBy: 'id ASC', limit: 1);
-        final int currentUserId = userQuery.isNotEmpty ? userQuery.first['id'] as int : 0;
+        // Mapear as matérias antes do batch para evitar queries lentas dentro do loop
+        final allSubjects = await _db.select(_db.subjects).get();
+        final Map<int, int> subjectIdMap = {for (var s in allSubjects) if (s.serverId != null) s.serverId!: s.id};
 
-        for (var net in serverNotebooks) {
-          int? localSubjectId;
-          final role = net['role'] ?? 'owner';
+        // PASSO 1: Sincronizar os Cadernos (Batch)
+        await _db.batch((batch) {
+          for (var net in serverNotebooks) {
+            final int? localSubjectId = (net['subject_id'] != null) ? subjectIdMap[net['subject_id']] : null;
+            
+            final companion = NotebooksCompanion.insert(
+              serverId: Value(net['id']),
+              subjectId: Value(localSubjectId),
+              title: net['title'] ?? '',
+              coverType: net['cover_type'] ?? 'color',
+              color: Value(net['color']),
+              coverImage: Value(net['cover_image']),
+              lineType: Value(net['line_type'] ?? 'ruled'),
+              paperSize: Value(net['paper_size'] ?? 'A4'),
+              isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0),
+              price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
+              description: Value(net['description']),
+              authorName: Value(net['author_name']),
+              isDeleted: Value(net['deleted_at'] != null ? 1 : 0),
+              syncedWithCloud: const Value(1),
+              updatedAt: Value(DateTime.parse(net['updated_at'].toString()).millisecondsSinceEpoch),
+            );
 
-          // 1. Lógica de Cruzamento: Se for caderno próprio, traduz o subject_id
-          if (net['subject_id'] != null) {
-            final subjectQuery = await db.query('subjects', columns: ['id'], where: 'server_id = ?', whereArgs: [net['subject_id']]);
-            if (subjectQuery.isEmpty) continue; // A matéria ainda não baixou
-            localSubjectId = subjectQuery.first['id'] as int;
+            batch.insert(_db.notebooks, companion, mode: InsertMode.insertOrReplace);
           }
+        });
 
-          // 2. Prepara os dados estruturais preservando campos de monetização/formato
-          final payload = {
-            'server_id': net['id'],
-            'subject_id': localSubjectId, // Nulo se for partilha/marketplace
-            'title': net['title'],
-            'cover_type': net['cover_type'] ?? 'color',
-            'color': net['color'],
-            'cover_image': net['cover_image'],
-            'line_type': net['line_type'] ?? 'ruled',
-            'paper_size': net['paper_size'] ?? 'A4',
+        // PASSO 2: Sincronizar Permissões (Pivot Table)
+        // Primeiro, mapeamos serverId -> localId
+        final allNotebooks = await _db.select(_db.notebooks).get();
+        final Map<int, int> notebookIdMap = {for (var n in allNotebooks) if (n.serverId != null) n.serverId!: n.id};
 
-            // 🛡️ HIGIENE DE DADOS: Força a gravação de números reais no SQLite
-            'is_published': int.tryParse(net['is_published']?.toString() ?? '0') ?? 0,
-            'price': double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0,
+        await _db.batch((batch) {
+          for (var net in serverNotebooks) {
+            final role = net['role'];
+            final sId = net['id'];
+            final localNotebookId = notebookIdMap[sId];
 
-            'description': net['description'],
-            'author_name': net['author_name'],
-            'is_deleted': net['deleted_at'] != null ? 1 : 0,
-            'synced_with_cloud': 1,
-            'updated_at': DateTime.parse(net['updated_at'].toString()).millisecondsSinceEpoch,
-          };
-
-          // 3. Grava o Caderno na Estante Virtual Local
-          int localNotebookId;
-          final existing = await db.query('notebooks', where: 'server_id = ?', whereArgs: [net['id']]);
-          if (existing.isEmpty) {
-            localNotebookId = await db.insert('notebooks', payload);
-          } else {
-            localNotebookId = existing.first['id'] as int;
-            await db.update('notebooks', payload, where: 'id = ?', whereArgs: [localNotebookId]);
+            if (role != null && role != 'owner' && currentUserId > 0 && localNotebookId != null) {
+              batch.insert(_db.notebookUser, 
+                NotebookUserCompanion.insert(
+                  notebookId: localNotebookId,
+                  userId: currentUserId,
+                  role: Value(role),
+                  syncedWithCloud: const Value(1),
+                  updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+                ),
+                mode: InsertMode.insertOrReplace,
+              );
+            }
           }
+        });
 
-          // 4. 🚀 MAGIA RELACIONAL: Se for convidado ou aluno, grava a Tabela Pivô (notebook_user)
-          if (role != 'owner' && currentUserId > 0) {
-            await db.insert('notebook_user', {
-              'server_id': null,
-              'notebook_id': localNotebookId,
-              'user_id': currentUserId,
-              'role': role,
-              'synced_with_cloud': 1,
-              'updated_at': DateTime.now().millisecondsSinceEpoch,
-            }, conflictAlgorithm: ConflictAlgorithm.replace); // Se já existir, substitui a role atualizada
-          }
-        }
         return true;
       }
     } catch (e) {
@@ -245,30 +251,26 @@ class SyncService {
   }
 
   // =========================================================================
-  // 4. PÁGINAS E TRAÇOS DE TINTA (PAGES & CANVAS)
+  // 4. PÁGINAS E CANVAS
   // =========================================================================
   Future<void> pushPages() async {
-    final db = await _dbHelper.database;
     try {
-      final unsyncedPages = await db.query('pages', where: 'synced_with_cloud = ?', whereArgs: [0]);
+      final unsyncedPages = await (_db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(0))).get();
       if (unsyncedPages.isEmpty) return;
 
       final List<Map<String, dynamic>> payloadPages = [];
 
       for (var row in unsyncedPages) {
-        final notebookQuery = await db.query('notebooks', columns: ['server_id'], where: 'id = ?', whereArgs: [row['notebook_id']]);
-        if (notebookQuery.isEmpty || notebookQuery.first['server_id'] == null) continue;
+        final notebook = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
+        if (notebook == null || notebook.serverId == null) continue;
 
-        // Lemos as folhas montadas diretamente pelo novo CanvasRepository
-        final allPages = await _canvasRepository.getPagesByNotebook(row['notebook_id'] as int, null);
-        final fullPage = allPages.firstWhere((p) => p.id == row['id'], orElse: () => LocalPage.fromDatabaseMap(row));
+        final allPages = await _canvasRepository.getPagesByNotebook(row.notebookId, null);
+        final fullPage = allPages.firstWhere((p) => p.id == row.id);
 
-        // Conversor Assíncrono (Trata do Base64)
-        final map = await fullPage.toMapAsync();
-
-        map['notebook_id'] = notebookQuery.first['server_id'];
-        map['client_id'] = row['id'];
-        map['server_id'] = row['server_id'];
+        final map = await fullPage.toJsonAsync();
+        map['notebook_id'] = notebook.serverId;
+        map['client_id'] = row.id;
+        map['server_id'] = row.serverId;
         payloadPages.add(map);
       }
 
@@ -277,23 +279,21 @@ class SyncService {
       final response = await _apiService.post('/sync/pages/push', {'pages': payloadPages});
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        Map<int, Map<String, int>> updatesMap = {};
-        for (var item in data['synced_pages'] ?? []) {
-          if (item['client_id'] != null && item['server_id'] != null) {
-            await db.update('pages', {
-              'server_id': item['server_id'],
-              'page_number': item['page_number'],
-              'synced_with_cloud': 1,
-              'updated_at': DateTime.now().millisecondsSinceEpoch,
-            }, where: 'id = ?', whereArgs: [item['client_id']]);
-            
-            updatesMap[item['client_id']] = {
-              'serverId': item['server_id'],
-              'pageNumber': item['page_number'],
-            };
+        await _db.batch((batch) {
+          for (var item in data['synced_pages'] ?? []) {
+            if (item['client_id'] != null && item['server_id'] != null) {
+              batch.update(_db.pages,
+                PagesCompanion(
+                  serverId: Value(item['server_id']),
+                  pageNumber: Value(item['page_number']),
+                  syncedWithCloud: const Value(1),
+                  updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+                ),
+                where: (t) => t.id.equals(item['client_id']),
+              );
+            }
           }
-        }
-        if (updatesMap.isNotEmpty) syncedPagesRadio.value = Map.from(updatesMap);
+        });
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Pages: $e');
@@ -301,7 +301,6 @@ class SyncService {
   }
 
   Future<bool> pullPages() async {
-    final db = await _dbHelper.database;
     final prefs = await SharedPreferences.getInstance();
     final lastSynced = prefs.getString('last_pages_sync');
 
@@ -317,112 +316,34 @@ class SyncService {
         if (serverPages.isEmpty) return false;
 
         for (var sPage in serverPages) {
-          final notebookQuery = await db.query('notebooks', columns: ['id'], where: 'server_id = ?', whereArgs: [sPage['notebook_id']]);
-          if (notebookQuery.isEmpty) continue;
+          final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sPage['notebook_id']))).getSingleOrNull();
+          if (notebook == null) continue;
 
-          final localNotebookId = notebookQuery.first['id'] as int;
+          final localNotebookId = notebook.id;
 
-          final pageData = {
-            'server_id': sPage['id'],
-            'notebook_id': localNotebookId,
-            'page_number': sPage['page_number'],
-            'is_landscape': (sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0,
+          final pageCompanion = PagesCompanion.insert(
+            serverId: Value(sPage['id']),
+            notebookId: localNotebookId,
+            pageNumber: sPage['page_number'],
+            isLandscape: Value((sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0),
+            headerData: Value(sPage['header_data'] is String ? sPage['header_data'] : jsonEncode(sPage['header_data'] ?? '')),
+            footerData: Value(sPage['footer_data'] is String ? sPage['footer_data'] : jsonEncode(sPage['footer_data'] ?? '')),
+            syncedWithCloud: const Value(1),
+            updatedAt: Value(DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch),
+          );
 
-            // 🛡️ Previne Strings Null ou Inválidas nos headers
-            'header_data': sPage['header_data'] is String ? sPage['header_data'] : jsonEncode(sPage['header_data'] ?? ''),
-            'footer_data': sPage['footer_data'] is String ? sPage['footer_data'] : jsonEncode(sPage['footer_data'] ?? ''),
-
-            'synced_with_cloud': 1,
-            'updated_at': DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch,
-          };
-
-          // 🟢 UPSERT INTELIGENTE: Usamos o server_id como referência para não duplicar páginas
+          final existingPage = await (_db.select(_db.pages)..where((t) => t.serverId.equals(sPage['id']))).getSingleOrNull();
           int localPageId;
-          final existingPage = await db.query('pages', where: 'server_id = ?', whereArgs: [sPage['id']]);
           
-          if (existingPage.isNotEmpty) {
-            localPageId = existingPage.first['id'] as int;
-            await db.update('pages', pageData, where: 'id = ?', whereArgs: [localPageId]);
+          if (existingPage != null) {
+            localPageId = existingPage.id;
+            await (_db.update(_db.pages)..where((t) => t.id.equals(localPageId))).write(pageCompanion);
           } else {
-            localPageId = await db.insert('pages', pageData);
+            localPageId = await _db.into(_db.pages).insert(pageCompanion);
           }
 
-          // =========================================================
-          // 🖌️ 1. PUXAR TINTA VETORIAL (Merge por ID)
-          // =========================================================
-          List strokeList = [];
-          if (sPage['stroke_data'] != null) {
-            if (sPage['stroke_data'] is String) {
-              try { strokeList = jsonDecode(sPage['stroke_data']); } catch (_) {}
-            } else if (sPage['stroke_data'] is Iterable) {
-              strokeList = List.from(sPage['stroke_data']);
-            }
-          }
-
-          for (var st in strokeList) {
-            final String sid = st['id']?.toString() ?? uniqid();
-            await db.insert('canvas_strokes', {
-              'client_stroke_id': sid,
-              'page_id': localPageId,
-              'stroke_data': jsonEncode(st),
-              'is_deleted': 0,
-              'synced_with_cloud': 1,
-              'updated_at': DateTime.now().millisecondsSinceEpoch,
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
-          }
-
-          // =========================================================
-          // 📝 2. PUXAR TEXTO LIVRE (Merge por ID)
-          // =========================================================
-          List textList = [];
-          if (sPage['text_data'] != null) {
-            if (sPage['text_data'] is String) {
-              try { textList = jsonDecode(sPage['text_data']); } catch (_) {}
-            } else if (sPage['text_data'] is Iterable) {
-              textList = List.from(sPage['text_data']);
-            }
-          }
-
-          for (var txt in textList) {
-            final String tid = txt['id']?.toString() ?? uniqid();
-            await db.insert('canvas_text_blocks', {
-              'client_text_id': tid,
-              'page_id': localPageId,
-              'text_data': jsonEncode(txt),
-              'is_deleted': 0,
-              'synced_with_cloud': 1,
-              'updated_at': DateTime.now().millisecondsSinceEpoch,
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
-          }
-
-          // =========================================================
-          // 🖼️ 3. PUXAR IMAGENS (Merge por ID)
-          // =========================================================
-          List imageList = [];
-          if (sPage['image_data'] != null) {
-            if (sPage['image_data'] is String) {
-              try { imageList = jsonDecode(sPage['image_data']); } catch (_) {}
-            } else if (sPage['image_data'] is Iterable) {
-              imageList = List.from(sPage['image_data']);
-            }
-          }
-
-          for (var img in imageList) {
-            final String iid = img['id']?.toString() ?? uniqid();
-            await db.insert('canvas_image_blocks', {
-              'client_image_id': iid,
-              'page_id': localPageId,
-              'image_path': img['image_path']?.toString() ?? '',
-              'pos_x': (img['dx'] as num?)?.toDouble() ?? 0.0,
-              'pos_y': (img['dy'] as num?)?.toDouble() ?? 0.0,
-              'width': (img['width'] as num?)?.toDouble() ?? 300.0,
-              'height': (img['height'] as num?)?.toDouble() ?? 200.0,
-              'rotation': (img['rotation'] as num?)?.toDouble() ?? 0.0,
-              'is_deleted': 0,
-              'synced_with_cloud': 1,
-              'updated_at': DateTime.now().millisecondsSinceEpoch,
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
-          }
+          // Merge Tinta, Texto e Imagem (A reatividade do Drift notificará o CanvasController)
+          await _pullCanvasData(localPageId, sPage);
         }
         return true;
       }
@@ -430,5 +351,71 @@ class SyncService {
       debugPrint('🚨 Erro PULL Pages: $e');
     }
     return false;
+  }
+
+  Future<void> _pullCanvasData(int localPageId, Map sPage) async {
+    await _db.batch((batch) {
+      // 1. Strokes
+      List strokeList = _parseJsonList(sPage['stroke_data']);
+      for (var st in strokeList) {
+        batch.insert(_db.canvasStrokes, 
+          CanvasStrokesCompanion.insert(
+            clientStrokeId: st['id']?.toString() ?? uniqid(),
+            pageId: localPageId,
+            strokeData: jsonEncode(st),
+            isDeleted: const Value(0),
+            syncedWithCloud: const Value(1),
+            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
+      }
+
+      // 2. Text
+      List textList = _parseJsonList(sPage['text_data']);
+      for (var txt in textList) {
+        batch.insert(_db.canvasTextBlocks, 
+          CanvasTextBlocksCompanion.insert(
+            clientTextId: txt['id']?.toString() ?? uniqid(),
+            pageId: localPageId,
+            textData: jsonEncode(txt),
+            isDeleted: const Value(0),
+            syncedWithCloud: const Value(1),
+            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
+      }
+
+      // 3. Images
+      List imageList = _parseJsonList(sPage['image_data']);
+      for (var img in imageList) {
+        batch.insert(_db.canvasImageBlocks,
+          CanvasImageBlocksCompanion.insert(
+            clientImageId: img['id']?.toString() ?? uniqid(),
+            pageId: localPageId,
+            imagePath: img['image_path']?.toString() ?? '',
+            posX: (img['dx'] as num?)?.toDouble() ?? 0.0,
+            posY: (img['dy'] as num?)?.toDouble() ?? 0.0,
+            width: (img['width'] as num?)?.toDouble() ?? 300.0,
+            height: (img['height'] as num?)?.toDouble() ?? 200.0,
+            rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0,
+            isDeleted: const Value(0),
+            syncedWithCloud: const Value(1),
+            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
+      }
+    });
+  }
+
+  List _parseJsonList(dynamic data) {
+    if (data == null) return [];
+    if (data is String) {
+      try { return jsonDecode(data); } catch (_) { return []; }
+    }
+    if (data is Iterable) return List.from(data);
+    return [];
   }
 }

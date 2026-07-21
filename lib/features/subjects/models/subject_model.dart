@@ -6,7 +6,7 @@ class Subject {
   final String color;
   final String? icon;
   final int syncedWithCloud;
-  final int isDeleted; // 🚀 A NOSSA VARIÁVEL DE CONTROLO FANTASMA!
+  final int isDeleted;
   final int updatedAt;
 
   Subject({
@@ -21,9 +21,6 @@ class Subject {
     this.updatedAt = 0,
   });
 
-  // =========================================================================
-  // 🚀 MÉTODO CLONAR PARA EDIÇÃO (Resolve o erro do Editor!)
-  // =========================================================================
   Subject copyWith({
     int? id,
     int? serverId,
@@ -48,10 +45,20 @@ class Subject {
     );
   }
 
-  // =========================================================================
-  // 💾 CONVERSÃO PARA A BASE DE DADOS LOCAL
-  // =========================================================================
-  Map<String, dynamic> toMap() {
+  // Receber do Laravel (JSON)
+  factory Subject.fromJson(Map<String, dynamic> json) {
+    return Subject(
+      serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
+      userId: json['user_id'] is int ? json['user_id'] : int.tryParse(json['user_id']?.toString() ?? ''),
+      name: json['name'] ?? '',
+      color: json['color'] ?? '#0F4C5C',
+      icon: json['icon'],
+      isDeleted: json['deleted_at'] != null ? 1 : 0,
+      syncedWithCloud: 1,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'server_id': serverId,
@@ -63,19 +70,5 @@ class Subject {
       'is_deleted': isDeleted,
       'updated_at': updatedAt,
     };
-  }
-
-  factory Subject.fromMap(Map<String, dynamic> map) {
-    return Subject(
-      id: map['id'],
-      serverId: map['server_id'],
-      userId: map['user_id'],
-      name: map['name'] ?? '',
-      color: map['color'] ?? '#1976D2',
-      icon: map['icon'],
-      syncedWithCloud: map['synced_with_cloud'] ?? 0,
-      isDeleted: map['is_deleted'] ?? 0,
-      updatedAt: map['updated_at'] ?? 0,
-    );
   }
 }

@@ -41,43 +41,13 @@ class LocalPage {
         redoHistory = [], // Inicializa a lista vazia
         updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
-  Map<String, dynamic> toDatabaseMap() {
-    return {
-      if (id != null) 'id': id,
-      'server_id': serverId,
-      'notebook_id': notebookId,
-      'page_number': pageNumber,
-      'is_landscape': isLandscape ? 1 : 0,
-      'header_data': title,
-      'footer_data': footer,
-      'synced_with_cloud': syncedWithCloud,
-    };
-  }
-
-  factory LocalPage.fromDatabaseMap(Map<String, dynamic> map, {
-    List<Stroke>? strokes,
-    List<TextBlock>? textBlocks,
-    List<ImageBlock>? imageBlocks,
-  }) {
-    return LocalPage(
-      id: map['id'] as int?,
-      serverId: map['server_id'] as int?,
-      notebookId: map['notebook_id'] as int,
-      pageNumber: map['page_number'] as int,
-      isLandscape: map['is_landscape'] == 1,
-      title: map['header_data']?.toString() ?? '',
-      footer: map['footer_data']?.toString() ?? '',
-      syncedWithCloud: map['synced_with_cloud'] as int? ?? 0,
-      strokes: strokes,
-      textBlocks: textBlocks,
-      imageBlocks: imageBlocks,
-    );
-  }
-
-  Future<Map<String, dynamic>> toMapAsync() async {
+  // =========================================================================
+  // ☁️ COMUNICAÇÃO (JSON / Laravel / Drift)
+  // =========================================================================
+  Future<Map<String, dynamic>> toJsonAsync() async {
     final List<Map<String, dynamic>> asyncImages = [];
     for (var img in imageBlocks) {
-      asyncImages.add(await img.toMapAsync());
+      asyncImages.add(await img.toJsonAsync());
     }
 
     return {
@@ -88,28 +58,28 @@ class LocalPage {
       'is_landscape': isLandscape,
       'header_data': title,
       'footer_data': footer,
-      'stroke_data': strokes.map((s) => s.toMap()).toList(),
-      'text_data': textBlocks.map((t) => t.toMap()).toList(),
+      'stroke_data': strokes.map((s) => s.toJson()).toList(),
+      'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': asyncImages,
     };
   }
 
-  factory LocalPage.fromMap(Map<String, dynamic> map) {
-    final List<dynamic> strokesList = map['stroke_data'] ?? [];
-    final List<dynamic> textList = map['text_data'] ?? [];
-    final List<dynamic> imageList = map['image_data'] ?? [];
+  factory LocalPage.fromJson(Map<String, dynamic> json) {
+    final List<dynamic> strokesList = json['stroke_data'] ?? [];
+    final List<dynamic> textList = json['text_data'] ?? [];
+    final List<dynamic> imageList = json['image_data'] ?? [];
 
     return LocalPage(
-      id: map['client_id'] != null ? int.tryParse(map['client_id'].toString()) : null,
-      serverId: map['id'] != null ? int.tryParse(map['id'].toString()) : null,
-      notebookId: int.parse(map['notebook_id'].toString()),
-      pageNumber: int.parse(map['page_number'].toString()),
-      isLandscape: map['is_landscape'] == true || map['is_landscape'] == 1,
-      title: map['header_data']?.toString() ?? '',
-      footer: map['footer_data']?.toString() ?? '',
-      strokes: strokesList.map((s) => Stroke.fromMap(s)).toList(),
-      textBlocks: textList.map((t) => TextBlock.fromMap(t)).toList(),
-      imageBlocks: imageList.map((img) => ImageBlock.fromMap(img)).toList(),
+      id: json['client_id'] != null ? int.tryParse(json['client_id'].toString()) : null,
+      serverId: json['id'] != null ? int.tryParse(json['id'].toString()) : null,
+      notebookId: int.tryParse(json['notebook_id']?.toString() ?? '0') ?? 0,
+      pageNumber: int.tryParse(json['page_number']?.toString() ?? '0') ?? 0,
+      isLandscape: json['is_landscape'] == true || json['is_landscape'] == 1,
+      title: json['header_data']?.toString() ?? '',
+      footer: json['footer_data']?.toString() ?? '',
+      strokes: strokesList.map((s) => Stroke.fromJson(s)).toList(),
+      textBlocks: textList.map((t) => TextBlock.fromJson(t)).toList(),
+      imageBlocks: imageList.map((img) => ImageBlock.fromJson(img)).toList(),
       syncedWithCloud: 1,
     );
   }

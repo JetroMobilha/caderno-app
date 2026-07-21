@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,14 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/sync_service.dart';
 import '../../../core/network/realtime_service.dart'; // 🚀 O MOTOR REVERB AQUI
 import '../models/user_model.dart';
-import '../../../core/database/database_helper.dart';
 import '../repositories/auth_repository.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/database/app_database.dart' hide User;
 import '../../subjects/controllers/subjects_controller.dart'; // Para engatilhar o Refresh
 
 class AuthController extends ChangeNotifier {
   final AuthRepository _authRepository = AuthRepository();
   final ApiService _apiService = ApiService();
+  final AppDatabase _db = AppDatabase.instance;
 
   User? _currentUser;
   String? _token;
@@ -276,7 +278,7 @@ class AuthController extends ChangeNotifier {
     await prefs.clear();
 
     try {
-      await DatabaseHelper.instance.clearAllData();
+      await _db.clearAllData();
     } catch (e) {
       debugPrint('🚨 [Segurança]: Erro ao tentar limpar a Base de Dados local: $e');
     }
@@ -285,35 +287,38 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<User> _syncUserToSqlite(Map<String, dynamic> userJson) async {
-    final db = await DatabaseHelper.instance.database;
-
     final int sId = userJson['id'] is int ? userJson['id'] : int.parse(userJson['id'].toString());
     final String email = userJson['email'] ?? '';
     final String name = userJson['name'] ?? '';
     final String? avatar = userJson['avatar'];
     final String plan = userJson['plan_type'] ?? 'free';
 
-    final List<Map<String, dynamic>> existing = await db.query(
-      'users',
-      where: 'email = ?',
-      whereArgs: [email],
-    );
+    final existing = await (_db.select(_db.users)..where((t) => t.email.equals(email))).getSingleOrNull();
 
     int localId;
 
-    if (existing.isNotEmpty) {
-      localId = existing.first['id'] as int;
-      await db.update(
-        'users',
-        {'server_id': sId, 'name': name, 'avatar': avatar, 'plan_type': plan, 'synced_with_cloud': 1},
-        where: 'id = ?',
-        whereArgs: [localId],
+    if (existing != null) {
+      localId = existing.id;
+      await (_db.update(_db.users)..where((t) => t.id.equals(localId))).write(
+        UsersCompanion(
+          serverId: Value(sId),
+          name: Value(name),
+          avatar: Value(avatar),
+          planType: Value(plan),
+          syncedWithCloud: const Value(1),
+        ),
       );
     } else {
-      localId = await db.insert(
-        'users',
-        {'server_id': sId, 'name': name, 'email': email, 'avatar': avatar, 'plan_type': plan, 'synced_with_cloud': 1},
-      );
+      localId = await _db.into(_db.users).insert(
+            UsersCompanion.insert(
+              serverId: Value(sId),
+              name: name,
+              email: email,
+              avatar: Value(avatar),
+              planType: Value(plan),
+              syncedWithCloud: const Value(1),
+            ),
+          );
     }
 
     return User(

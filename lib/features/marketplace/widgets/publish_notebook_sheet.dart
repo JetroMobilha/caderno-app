@@ -36,7 +36,7 @@ class _PublishNotebookSheetState extends ConsumerState<PublishNotebookSheet> {
     _isFree = widget.notebook.price == 0;
 
     _authorController = TextEditingController(
-      text: widget.notebook.author_name ?? user?.name ?? 'Autor Académico',
+      text: widget.notebook.authorName ?? user?.name ?? 'Autor Académico',
     );
     _descController = TextEditingController(
       text: widget.notebook.description ?? '',
@@ -291,7 +291,7 @@ class _PublishNotebookSheetState extends ConsumerState<PublishNotebookSheet> {
       // 1. Atualizamos o objeto do caderno com as novas propriedades da Loja
       final cadernoAtualizado = widget.notebook.copyWith(
         isPublished: _isPublished ? 1 : 0,
-        author_name: _isPublished ? _authorController.text.trim() : widget.notebook.author_name,
+        authorName: _isPublished ? _authorController.text.trim() : widget.notebook.authorName,
         description: _isPublished ? _descController.text.trim() : widget.notebook.description,
         price: price,
       );
@@ -301,7 +301,6 @@ class _PublishNotebookSheetState extends ConsumerState<PublishNotebookSheet> {
 
       // 3. Disparamos a sincronização para enviar a novidade logo para o servidor do Laravel!
       await subjectsNotifier.syncManuallyWithCloud();
-      await notebooksNotifier.refreshCurrent();
 
       if (mounted) {
         Navigator.pop(context);

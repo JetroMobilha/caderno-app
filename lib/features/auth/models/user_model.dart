@@ -3,8 +3,7 @@ class User {
   final int? serverId; // ID na Nuvem (Laravel)
   final String name;
   final String email;
-  final String? avatar; // 🚀 O caminho ou Link da foto!
-  final String? phone;
+  final String? avatar;
   final String planType;
 
   User({
@@ -13,46 +12,18 @@ class User {
     required this.name,
     required this.email,
     this.avatar,
-    this.phone,
     this.planType = 'free',
   });
 
   // 1. Receber do Laravel (JSON)
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      serverId: json['id'],
-      name: json['name'],
-      email: json['email'],
-      avatar:json['avatar'],
-      phone: json['phone'] as String?,
+      serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
+      name: json['name'] ?? '',
+      email: json['email'] ?? '',
+      avatar: json['avatar'],
       planType: json['plan_type'] ?? 'free',
     );
-  }
-
-  // 2. Receber do SQLite Local
-  factory User.fromDatabaseMap(Map<String, dynamic> map) {
-    return User(
-      id: map['id'],
-      serverId: map['server_id'],
-      name: map['name'],
-      email: map['email'],
-      avatar: map['avatar'],
-      phone: map['phone'],
-      planType: map['plan_type'],
-    );
-  }
-
-  // 3. Enviar para o SQLite Local
-  Map<String, dynamic> toDatabaseMap() {
-    return {
-      'id': id,
-      'server_id': serverId,
-      'name': name,
-      'email': email,
-      'avatar': avatar,
-      'plan_type': planType,
-      'updated_at': DateTime.now().millisecondsSinceEpoch,
-    };
   }
 
   Map<String, dynamic> toJson() {
@@ -62,7 +33,6 @@ class User {
       'name': name,
       'email': email,
       'avatar': avatar,
-      'phone': phone,
       'plan_type': planType,
     };
   }

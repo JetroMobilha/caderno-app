@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
+import '../../../core/network/api_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../notebooks/models/notebook_model.dart';
 
@@ -42,8 +42,7 @@ class MarketplaceState {
 
 class MarketplaceNotifier extends StateNotifier<MarketplaceState> {
   final Ref ref;
-  // Ajusta para o IP/domínio real da tua API
-  final String _baseUrl = 'http://35.205.132.251:8080/api';
+  final ApiService _apiService = ApiService();
 
   MarketplaceNotifier(this.ref) : super(MarketplaceState(notebooks: [])) {
     loadInitial();
@@ -69,18 +68,14 @@ class MarketplaceNotifier extends StateNotifier<MarketplaceState> {
     }
 
     try {
-      final url = Uri.parse('$_baseUrl/marketplace/notebooks?page=$page&q=$query');
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
+      final response = await _apiService.get('/marketplace/notebooks?page=$page&q=$query');
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         final List rawList = body['data'] ?? [];
         final int lastPage = body['last_page'] ?? 1;
 
-        final newNotebooks = rawList.map((json) => Notebook.fromMap(json)).toList();
+        final newNotebooks = rawList.map((json) => Notebook.fromJson(json)).toList();
         final updatedList = isInitial ? newNotebooks : [...state.notebooks, ...newNotebooks];
 
         state = state.copyWith(

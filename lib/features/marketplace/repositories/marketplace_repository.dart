@@ -17,7 +17,7 @@ class MarketplaceRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((map) => Notebook.fromMap(map)).toList();
+        return data.map((map) => Notebook.fromJson(map)).toList();
       }
     } catch (e) {
       debugPrint('🚨 [MARKETPLACE] Erro ao carregar loja: $e');

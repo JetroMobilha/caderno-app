@@ -25,9 +25,9 @@ class ImageBlock {
   }) : id = id ?? const Uuid().v4();
 
   // =========================================================================
-  // ⚡ MAPA LEVE: Usado para Realtime (WebSocket) e Base de Dados Local
+  // ⚡ MAPA LEVE: Usado para Realtime (WebSocket) e Drift
   // =========================================================================
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'dx': position.dx,
@@ -42,7 +42,7 @@ class ImageBlock {
   // =========================================================================
   // ☁️ MAPA COMPLETO: Usado pelo SyncService para persistência na Nuvem
   // =========================================================================
-  Future<Map<String, dynamic>> toMapAsync() async {
+  Future<Map<String, dynamic>> toJsonAsync() async {
     String? base64Image;
     
     // Se o caminho for local (não for HTTP), precisamos de enviar os bytes para a nuvem
@@ -57,8 +57,6 @@ class ImageBlock {
             }
           }
         } else {
-          // No Mobile, usamos dart:io (precisamos de contornar o import se formos puristas, 
-          // mas o Flutter trata isto se estiver dentro de um bloco !kIsWeb)
           final bytes = await File(imagePath).readAsBytes();
           base64Image = base64Encode(bytes);
         }
@@ -67,20 +65,20 @@ class ImageBlock {
       }
     }
 
-    final map = toMap();
+    final map = toJson();
     map['image_base64'] = base64Image;
     return map;
   }
 
-  factory ImageBlock.fromMap(Map<String, dynamic> map) {
-    String path = map['image_path']?.toString() ?? '';
+  factory ImageBlock.fromJson(Map<String, dynamic> json) {
+    String path = json['image_path']?.toString() ?? '';
 
     // Se a Nuvem enviou binário (Base64) e estamos no Mobile, salvamos localmente
-    if (!kIsWeb && map['image_base64'] != null && map['image_base64'].toString().isNotEmpty) {
+    if (!kIsWeb && json['image_base64'] != null && json['image_base64'].toString().isNotEmpty) {
       try {
-        final Uint8List bytes = base64Decode(map['image_base64']);
+        final Uint8List bytes = base64Decode(json['image_base64']);
         final tempDir = Directory.systemTemp;
-        final File file = File('${tempDir.path}/sync_img_${map['id']}.png');
+        final File file = File('${tempDir.path}/sync_img_${json['id']}.png');
         file.writeAsBytesSync(bytes);
         path = file.path;
       } catch (e) {
@@ -89,15 +87,15 @@ class ImageBlock {
     }
 
     return ImageBlock(
-      id: map['id']?.toString() ?? const Uuid().v4(),
+      id: json['id']?.toString() ?? const Uuid().v4(),
       imagePath: path,
       position: Offset(
-        (map['dx'] as num?)?.toDouble() ?? 0.0,
-        (map['dy'] as num?)?.toDouble() ?? 0.0,
+        (json['dx'] as num?)?.toDouble() ?? 0.0,
+        (json['dy'] as num?)?.toDouble() ?? 0.0,
       ),
-      width: (map['width'] as num?)?.toDouble() ?? 300.0,
-      height: (map['height'] as num?)?.toDouble() ?? 200.0,
-      rotation: (map['rotation'] as num?)?.toDouble() ?? 0.0,
+      width: (json['width'] as num?)?.toDouble() ?? 300.0,
+      height: (json['height'] as num?)?.toDouble() ?? 200.0,
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

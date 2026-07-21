@@ -22,29 +22,29 @@ class TextBlock {
     this.fontSize = 18.0,
   }) : id = id ?? const Uuid().v4();
 
-  Map<String, dynamic> toMap() => {
+  Map<String, dynamic> toJson() => {
     'id': id,
     'text': text,
     'dx': position.dx,
     'dy': position.dy,
-    'isBold': isBold,
-    'isItalic': isItalic,
-    'isUnderline': isUnderline,
-    'textColorHex': textColorHex,
-    'fontSize': fontSize,
+    'is_bold': isBold,
+    'is_italic': isItalic,
+    'is_underline': isUnderline,
+    'text_color_hex': textColorHex,
+    'font_size': fontSize,
   };
 
-  factory TextBlock.fromMap(Map<String, dynamic> map) => TextBlock(
-    id: map['id']?.toString(),
-    text: map['text']?.toString() ?? '',
+  factory TextBlock.fromJson(Map<String, dynamic> json) => TextBlock(
+    id: json['id']?.toString(),
+    text: json['text']?.toString() ?? '',
     position: Offset(
-      (map['dx'] as num?)?.toDouble() ?? 0.0,
-      (map['dy'] as num?)?.toDouble() ?? 0.0,
+      (json['dx'] as num?)?.toDouble() ?? 0.0,
+      (json['dy'] as num?)?.toDouble() ?? 0.0,
     ),
-    isBold: map['isBold'] ?? false,
-    isItalic: map['isItalic'] ?? false,
-    isUnderline: map['isUnderline'] ?? false,
-    textColorHex: map['textColorHex']?.toString() ?? '#1A1A24',
-    fontSize: (map['fontSize'] as num?)?.toDouble() ?? 18.0,
+    isBold: json['is_bold'] ?? json['isBold'] ?? false,
+    isItalic: json['is_italic'] ?? json['isItalic'] ?? false,
+    isUnderline: json['is_underline'] ?? json['isUnderline'] ?? false,
+    textColorHex: json['text_color_hex']?.toString() ?? json['textColorHex']?.toString() ?? '#1A1A24',
+    fontSize: (json['font_size'] as num?)?.toDouble() ?? (json['fontSize'] as num?)?.toDouble() ?? 18.0,
   );
 }

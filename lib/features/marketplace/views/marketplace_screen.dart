@@ -111,7 +111,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 4),
-                        Text(notebook.author_name ?? 'Autor Anónimo', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                        Text(notebook.authorName ?? 'Autor Anónimo', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
                         if (notebook.description != null && notebook.description!.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(notebook.description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 13)),

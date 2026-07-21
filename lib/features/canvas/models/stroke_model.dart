@@ -20,9 +20,9 @@ class Stroke {
   }) : id = id ?? const Uuid().v4();
 
   // =========================================================================
-  // ☁️ COMUNICAÇÃO COM A NUVEM (JSON / Laravel)
+  // ☁️ COMUNICAÇÃO (JSON / Laravel / Drift)
   // =========================================================================
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'color': color,
@@ -33,21 +33,21 @@ class Stroke {
     };
   }
 
-  factory Stroke.fromMap(Map<String, dynamic> map) {
+  factory Stroke.fromJson(Map<String, dynamic> json) {
     return Stroke(
-      id: map['id']?.toString(),
-      color: map['color']?.toString() ?? '#1A1A24',
-      thickness: (map['thickness'] as num?)?.toDouble() ?? 3.0,
-      isDeleted: map['is_deleted'] == true || map['is_deleted'] == 1,
-      pageNumber: map['page_number'] as int?,
-      points: map['points'] != null
-          ? (map['points'] as List)
+      id: json['id']?.toString(),
+      color: json['color']?.toString() ?? '#1A1A24',
+      thickness: (json['thickness'] as num?)?.toDouble() ?? 3.0,
+      isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
+      pageNumber: json['page_number'] as int?,
+      points: json['points'] != null
+          ? (json['points'] as List)
           .map((p) => Offset((p['dx'] as num).toDouble(), (p['dy'] as num).toDouble()))
           .toList()
           : <Offset>[],
     );
   }
 
-  String toJsonString() => jsonEncode(toMap());
-  factory Stroke.fromJsonString(String jsonStr) => Stroke.fromMap(jsonDecode(jsonStr));
+  String toJsonString() => jsonEncode(toJson());
+  factory Stroke.fromJsonString(String jsonStr) => Stroke.fromJson(jsonDecode(jsonStr));
 }

@@ -21,39 +21,19 @@ class NotebooksListScreen extends ConsumerStatefulWidget {
 }
 
 class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
-  bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
-    _fetchInitialData();
   }
 
-  Future<void> _fetchInitialData() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    final activeSub = ref.read(activeSubjectProvider);
-    if (activeSub != null) {
-      // 🚀 INTELIGÊNCIA DE ARRANQUE: Verifica em que aba estamos ao arrancar!
-      if (activeSub.id == -1) {
-        await ref.read(notebooksProvider.notifier).loadSharedNotebooks();
-      } else {
-        await ref.read(notebooksProvider.notifier).loadNotebooks(
-          activeSub.id ?? 0,
-          subjectServerId: activeSub.serverId,
-        );
-      }
-    }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-  }
   @override
   Widget build(BuildContext context) {
     final activeSubject = ref.watch(activeSubjectProvider);
     final notebooks = ref.watch(notebooksProvider);
     final dynamicColor = Theme.of(context).colorScheme.primary;
+
+    // Se estiver carregando inicialmente ou mudando de stream
+    final bool isLoading = activeSubject != null && notebooks.isEmpty && activeSubject.id != -1;
 
     // 📱 CALCULA COLUNAS CONFORME O ESPAÇO DISPONÍVEL (Responsividade Pura)
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -74,7 +54,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
           style: GoogleFonts.lora(fontWeight: FontWeight.bold),
         ),
       ),
-      body: _isLoading
+      body: isLoading
           ? Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -116,9 +96,6 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                           ),
                         ),
                       );
-                      if (mounted) {
-                        ref.read(notebooksProvider.notifier).refreshCurrent();
-                      }
                     },
                   ),
                 ),

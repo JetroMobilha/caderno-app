@@ -1,180 +1,174 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
-import 'package:sqflite/sqflite.dart';
+import 'package:drift/drift.dart';
 import '../../features/canvas/models/image_block_model.dart';
 import '../../features/canvas/models/local_page_model.dart';
 import '../../features/canvas/models/stroke_model.dart';
 import '../../features/canvas/models/text_block_model.dart';
-import '../database/database_helper.dart';
+import '../database/app_database.dart';
 
 class LocalDatabaseService {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final AppDatabase _db = AppDatabase.instance;
 
   // 📥 SALVA A ESTRUTURA DE METADADOS DA PÁGINA (COM ESCUDO ANTI-AMNÉSIA)
   Future<int> savePageMetadata(LocalPage page) async {
-    final db = await _dbHelper.database;
-
     if (page.id != null) {
       // =======================================================================
-      // 🛡️ O ESCUDO ANTI-AMNÉSIA: Espreitar o SQLite antes de gravar
+      // 🛡️ O ESCUDO ANTI-AMNÉSIA: Espreitar o banco antes de gravar
       // =======================================================================
-      final existing = await db.query(
-        'pages',
-        columns: ['server_id'],
-        where: 'id = ?',
-        whereArgs: [page.id],
-      );
+      final existing = await (_db.select(_db.pages)..where((t) => t.id.equals(page.id!))).getSingleOrNull();
 
       int? officialServerId = page.serverId;
 
-      // Se o Canvas acha que o server_id é nulo, MAS o SQLite já recebeu o ID da Nuvem...
-      if (officialServerId == null && existing.isNotEmpty) {
-        officialServerId = existing.first['server_id'] as int?;
+      // Se o Canvas acha que o server_id é nulo, MAS o banco já recebeu o ID da Nuvem...
+      if (officialServerId == null && existing != null) {
+        officialServerId = existing.serverId;
       }
 
-      // Criamos o mapa original da página
-      final Map<String, dynamic> map = page.toDatabaseMap();
-
-      // 🎯 REFORÇO CRÍTICO: Injetamos o ID oficial para nunca mais o perdermos!
-      map['server_id'] = officialServerId;
-
-      // Como a folha sofreu alterações (novos desenhos), marcamos para o Radar atuar!
-      map['synced_with_cloud'] = 0;
-      map['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-
-      await db.update(
-        'pages',
-        map,
-        where: 'id = ?',
-        whereArgs: [page.id],
+      await (_db.update(_db.pages)..where((t) => t.id.equals(page.id!))).write(
+        PagesCompanion(
+          serverId: Value(officialServerId),
+          syncedWithCloud: const Value(0),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+          headerData: Value(page.title),
+          footerData: Value(page.footer),
+          // Outros campos se necessário
+        ),
       );
       return page.id!;
     } else {
       // Se a folha é 100% nova, insere normalmente
-      return await db.insert('pages', page.toDatabaseMap());
+      final newId = await _db.into(_db.pages).insert(
+        PagesCompanion.insert(
+          notebookId: page.notebookId,
+          pageNumber: page.pageNumber,
+          isLandscape: Value(page.isLandscape ? 1 : 0),
+          headerData: Value(page.title),
+          footerData: Value(page.footer),
+        ),
+      );
+      return newId;
     }
   }
 
   // 📥 SALVA UM TRAÇO VETORIAL ISOLADO
   Future<void> saveStrokeLocally(int pageId, Stroke stroke) async {
-    final db = await _dbHelper.database;
-    await db.insert(
-      'canvas_strokes',
-      {
-        'client_stroke_id': stroke.id,
-        'page_id': pageId,
-        'stroke_data': jsonEncode(stroke.toMap()),
-        'is_deleted': 0,
-        'synced_with_cloud': 0,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    await _db.into(_db.canvasStrokes).insertOnConflictUpdate(
+      CanvasStrokesCompanion.insert(
+        clientStrokeId: stroke.id,
+        pageId: pageId,
+        strokeData: jsonEncode(stroke.toJson()),
+        isDeleted: const Value(0),
+        syncedWithCloud: const Value(0),
+      ),
     );
   }
 
   // 📥 SALVA UM BLOCO DE TEXTO ISOLADO
   Future<void> saveTextBlockLocally(int pageId, TextBlock block) async {
-    final db = await _dbHelper.database;
-    await db.insert(
-      'canvas_text_blocks',
-      {
-        'client_text_id': block.id,
-        'page_id': pageId,
-        'text_data': jsonEncode(block.toMap()),
-        'is_deleted': 0,
-        'synced_with_cloud': 0,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    await _db.into(_db.canvasTextBlocks).insertOnConflictUpdate(
+      CanvasTextBlocksCompanion.insert(
+        clientTextId: block.id,
+        pageId: pageId,
+        textData: jsonEncode(block.toJson()),
+        isDeleted: const Value(0),
+        syncedWithCloud: const Value(0),
+      ),
     );
   }
 
   // =========================================================================
-  // 🚀 NOVO: SALVA UM BLOCO DE IMAGEM ISOLADO (O que te faltava!)
+  // 🚀 NOVO: SALVA UM BLOCO DE IMAGEM ISOLADO
   // =========================================================================
   Future<void> saveImageBlockLocally(int pageId, ImageBlock img) async {
-    final db = await _dbHelper.database;
-    await db.insert(
-      'canvas_image_blocks',
-      {
-        'client_image_id': img.id,
-        'page_id': pageId,
-        'image_path': img.imagePath,
-        'pos_x': img.position.dx,
-        'pos_y': img.position.dy,
-        'scale': img.width,       // Guardamos a largura no campo scale
-        'rotation': img.height,   // Guardamos a altura no campo rotation
-        'is_deleted': 0,
-        'synced_with_cloud': 0,
-        'updated_at': DateTime.now().millisecondsSinceEpoch,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    await _db.into(_db.canvasImageBlocks).insertOnConflictUpdate(
+      CanvasImageBlocksCompanion.insert(
+        clientImageId: img.id,
+        pageId: pageId,
+        imagePath: img.imagePath,
+        posX: img.position.dx,
+        posY: img.position.dy,
+        width: img.width,
+        height: img.height,
+        rotation: img.rotation,
+        isDeleted: const Value(0),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
     );
   }
 
   // 📤 CARREGA UMA PÁGINA COMPLETA COM TUDO O QUE LHE PERTENCE
   Future<List<LocalPage>> getFullPagesForNotebook(int notebookId) async {
-    final db = await _dbHelper.database;
-
-    final pageMaps = await db.query(
-        'pages',
-        where: 'notebook_id = ?',
-        whereArgs: [notebookId],
-        orderBy: 'page_number ASC'
-    );
+    final pageRows = await (_db.select(_db.pages)
+          ..where((t) => t.notebookId.equals(notebookId))
+          ..orderBy([(t) => OrderingTerm(expression: t.pageNumber)]))
+        .get();
 
     List<LocalPage> fullPages = [];
 
-    for (var pMap in pageMaps) {
-      final page = LocalPage.fromDatabaseMap(pMap);
-      final pId = page.id;
+    for (var pRow in pageRows) {
+      final pId = pRow.id;
 
-      if (pId != null) {
-        // 1. Busca Traços
-        final strokeMaps = await db.query('canvas_strokes', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pId]);
-        page.strokes = strokeMaps.map((s) {
-          final data = jsonDecode(s['stroke_data'] as String);
-          return Stroke.fromMap(data);
-        }).toList();
+      // 1. Busca Traços
+      final strokeRows = await (_db.select(_db.canvasStrokes)
+            ..where((t) => t.pageId.equals(pId) & t.isDeleted.equals(0)))
+          .get();
+      final strokes = strokeRows.map((s) {
+        final data = jsonDecode(s.strokeData);
+        return Stroke.fromJson(data);
+      }).toList();
 
-        // 2. Busca Textos
-        final textMaps = await db.query('canvas_text_blocks', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pId]);
-        page.textBlocks = textMaps.map((t) {
-          final data = jsonDecode(t['text_data'] as String);
-          return TextBlock.fromMap(data);
-        }).toList();
+      // 2. Busca Textos
+      final textRows = await (_db.select(_db.canvasTextBlocks)
+            ..where((t) => t.pageId.equals(pId) & t.isDeleted.equals(0)))
+          .get();
+      final textBlocks = textRows.map((t) {
+        final data = jsonDecode(t.textData);
+        return TextBlock.fromJson(data);
+      }).toList();
 
-        // 3. 🚀 Busca Imagens (BLINDADO CONTRA CRASHES DE TIPO)
-        final imgMaps = await db.query('canvas_image_blocks', where: 'page_id = ? AND is_deleted = 0', whereArgs: [pId]);
+      // 3. Busca Imagens
+      final imgRows = await (_db.select(_db.canvasImageBlocks)
+            ..where((t) => t.pageId.equals(pId) & t.isDeleted.equals(0)))
+          .get();
 
-        final List<ImageBlock> safeImages = [];
+      final List<ImageBlock> safeImages = [];
 
-        for (var m in imgMaps) {
-          final String path = m['image_path'].toString();
+      for (var m in imgRows) {
+        final String path = m.imagePath;
 
-          // 🛡️ O NOVO ESCUDO: É válido se for um link da internet OU um ficheiro físico no disco!
-          final bool isValidImage = path.startsWith('http') || File(path).existsSync();
+        // 🛡️ O NOVO ESCUDO: É válido se for um link da internet OU um ficheiro físico no disco!
+        final bool isValidImage = path.startsWith('http') || File(path).existsSync();
 
-          if (isValidImage) {
-            safeImages.add(
-                ImageBlock(
-                  id: m['client_image_id'].toString(),
-                  imagePath: path, // 🚀 MUDANÇA
-                  position: Offset(
-                    (m['pos_x'] as num).toDouble(),
-                    (m['pos_y'] as num).toDouble(),
-                  ),
-                  width: (m['scale'] as num).toDouble(),
-                  height: (m['rotation'] as num).toDouble(),
-                  rotation: 0.0,
-                )
-            );
-          }
+        if (isValidImage) {
+          safeImages.add(
+            ImageBlock(
+              id: m.clientImageId,
+              imagePath: path,
+              position: Offset(m.posX, m.posY),
+              width: m.width,
+              height: m.height,
+              rotation: m.rotation,
+            ),
+          );
         }
-
-        page.imageBlocks = safeImages;
       }
 
-      fullPages.add(page);
+      fullPages.add(LocalPage(
+        id: pRow.id,
+        serverId: pRow.serverId,
+        notebookId: pRow.notebookId,
+        pageNumber: pRow.pageNumber,
+        isLandscape: pRow.isLandscape == 1,
+        title: pRow.headerData ?? '',
+        footer: pRow.footerData ?? '',
+        syncedWithCloud: pRow.syncedWithCloud,
+        strokes: strokes,
+        textBlocks: textBlocks,
+        imageBlocks: safeImages,
+      ));
     }
 
     return fullPages;

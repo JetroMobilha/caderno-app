@@ -2,22 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:caderno_digital_app/core/theme/app_theme.dart'; // 🚀 Importa o tema unificado
 import 'package:caderno_digital_app/features/auth/views/splash_screen.dart';
-import 'package:flutter/foundation.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  if (kIsWeb) {
-    // 🚀 INICIALIZAÇÃO ROBUSTA: WebAssembly + Shared Worker
-    databaseFactory = createDatabaseFactoryFfiWeb(
-      options: SqfliteFfiWebOptions(
-        sqlite3WasmUri: Uri.parse('sqlite3.wasm'),
-        sharedWorkerUri: Uri.parse('sqflite_sw.js'),
-      ),
-    );
-  }
 
   runApp(
     const ProviderScope(

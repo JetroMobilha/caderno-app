@@ -49,7 +49,7 @@ class AuthController extends ChangeNotifier {
   // =========================================================================
   void _connectToPrivateRadar(int userId) {
     // Mal o login é feito, ele liga a antena da conta do utilizador!
-    RealtimeService().listenToUserAccount(userId, () {
+    ref.read(realtimeServiceProvider).listenToUserAccount(userId, () {
       debugPrint('⚡ [Auth] A tua conta mudou noutro ecrã! A disparar Sync...');
       ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
     });
@@ -272,7 +272,7 @@ class AuthController extends ChangeNotifier {
     }
 
     // 🚀 1. DESLIGAR MOTORES REALTIME
-    RealtimeService().disconnect();
+    ref.read(realtimeServiceProvider).disconnect();
 
     // 🚀 2. LIMPAR CACHE DE FICHEIROS (Apenas Mobile/Desktop)
     if (!kIsWeb) {

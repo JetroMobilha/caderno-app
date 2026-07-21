@@ -5,8 +5,10 @@ class LiveVoiceCockpit extends StatelessWidget {
   final List<Map<String, dynamic>> onlineUsers;
   final bool isMuted;
   final bool isSpeakerOn;
+  final bool isHandRaised;
   final VoidCallback onMuteToggle;
   final VoidCallback onSpeakerToggle;
+  final VoidCallback onHandToggle;
   final VoidCallback onHangUp;
 
   const LiveVoiceCockpit({
@@ -14,8 +16,10 @@ class LiveVoiceCockpit extends StatelessWidget {
     required this.onlineUsers,
     required this.isMuted,
     required this.isSpeakerOn,
+    required this.isHandRaised,
     required this.onMuteToggle,
     required this.onSpeakerToggle,
+    required this.onHandToggle,
     required this.onHangUp,
   });
 
@@ -71,13 +75,23 @@ class LiveVoiceCockpit extends StatelessWidget {
               ),
               child: Tooltip(
                 message: name,
-                child: CircleAvatar(
-                  radius: 9,
-                  backgroundColor: (s['color'] as Color?) ?? Colors.blueGrey,
-                  child: Text(
-                      initial,
-                      style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)
-                  ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      radius: 9,
+                      backgroundColor: (s['color'] as Color?) ?? Colors.blueGrey,
+                      child: Text(
+                          initial,
+                          style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)
+                      ),
+                    ),
+                    if (s['isHandRaised'] == true)
+                      const Positioned(
+                        right: -4, top: -4,
+                        child: Icon(Icons.pan_tool, color: Colors.orange, size: 10),
+                      ),
+                  ],
                 ),
               ),
             );
@@ -110,6 +124,14 @@ class LiveVoiceCockpit extends StatelessWidget {
             icon: isSpeakerOn ? Icons.volume_up : Icons.headphones,
             color: Colors.white12,
             onTap: onSpeakerToggle,
+          ),
+          const SizedBox(width: 6),
+
+          // ✋ Pedir a Palavra
+          _buildVoiceButton(
+            icon: Icons.pan_tool,
+            color: isHandRaised ? Colors.orange : Colors.white12,
+            onTap: onHandToggle,
           ),
           const SizedBox(width: 6),
 

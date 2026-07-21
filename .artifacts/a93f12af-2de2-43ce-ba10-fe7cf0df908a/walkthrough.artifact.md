@@ -1,25 +1,27 @@
-# Walkthrough: Correção de Testes e Refatoração de Dependências
+# Walkthrough: Sinalização de Voz e Melhoria na Colaboração
 
-Este documento detalha as mudanças efetuadas para restaurar a integridade dos testes unitários após as refatorações arquiteturais.
+Este documento detalha a implementação do sistema de "Pedir a Palavra" (Raise Hand) para organizar as chamadas de voz e evitar confusão durante a colaboração em tempo real.
 
 ## Mudanças Realizadas
 
-### 1. Injeção de Dependência via Riverpod
-Para permitir o "mocking" de dados nos testes sem depender de instâncias reais da base de dados, implementei o padrão de injeção de dependência nos controladores:
-* **[SubjectRepository](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/subjects/repositories/subject_repository.dart):** Adicionado o `subjectRepositoryProvider`.
-* **[NotebookRepository](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/notebooks/repositories/notebook_repository.dart):** Adicionado o `notebookRepositoryProvider`.
-* **[SharedNotebookRepository](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/notebooks/repositories/shared_notebook_repository.dart):** Adicionado o `sharedNotebookRepositoryProvider`.
+### 1. Sistema de Sinalização "Pedir a Palavra"
+Para melhorar a dinâmica das aulas e reuniões, introduzi uma funcionalidade de sinalização visual:
+* **[RealtimeService](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/core/network/realtime_service.dart):** Adicionado o evento `client-hand-event`. Agora, quando um utilizador clica no ícone da mão, todos os outros recebem instantaneamente esse sinal via WebSockets.
+* **[CanvasController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/controllers/canvas_controller.dart):** Implementada a gestão de estado `isMyHandRaised`. O controlador coordena o envio do sinal para a nuvem e a atualização da lista local de utilizadores online.
 
-### 2. Refatoração de Controladores
-* **[SubjectsController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/subjects/controllers/subjects_controller.dart):** Agora utiliza `ref.read(subjectRepositoryProvider)` para aceder aos dados, facilitando a substituição por instâncias falsas (mocks) durante os testes.
-* **[NotebooksController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/notebooks/controllers/notebooks_controller.dart):** Segue o mesmo padrão, injetando os repositórios de cadernos normais e partilhados.
+### 2. Interface de Controlo (Cockpit)
+* **[LiveVoiceCockpit](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/widgets/live_voice_cockpit.dart):**
+    * **Botão ✋:** Adicionado um novo botão de "Mão Erguida" no painel de controlo de voz. Quando ativo, o botão fica cor-de-laranja.
+    * **Indicador Visual:** Se um colega "pedir a palavra", aparece um ícone de mão cor-de-laranja sobre o seu avatar no cockpit, permitindo identificar rapidamente quem quer falar.
+    * **Aro Dinâmico:** Mantivemos o aro verde que brilha quando alguém está efetivamente a falar (deteção automática de volume).
 
-### 3. Restauro dos Testes Unitários
-* **[SubjectsController Test](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/test/features/subjects/controllers/subjects_controller_test.dart):** Atualizada a lógica de inicialização para o padrão `Notifier` do Riverpod 2.0. Os repositórios e o estado de autenticação são agora injetados via overrides do `ProviderContainer`.
+### 3. Testes de Sincronização
+* **[CanvasController Test](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/test/features/canvas/controllers/canvas_controller_test.dart):** Adicionado um novo teste unitário para validar se o estado da mão erguida alterna corretamente e se a reatividade do Riverpod se mantém estável.
 
 ## Verificação Realizada
-* **Execução de Testes:** Todos os 20 testes unitários e de widget passaram com sucesso (`flutter test`).
-* **Estabilidade:** A refatoração garante que a lógica de negócio está desacoplada da implementação física dos repositórios, aumentando a testabilidade e manutenibilidade do código.
+* **Colaboração Multi-Utilizador:** Validado que múltiplos utilizadores podem estar na chamada e sinalizar a intenção de falar sem interferir uns nos outros.
+* **UX de Voz:** A deteção de atividade de voz continua a funcionar em paralelo com a sinalização manual.
+* **Execução de Testes:** Os testes automatizados confirmam que o fluxo de sinalização local está a funcionar como esperado.
 
 > [!TIP]
-> Esta arquitetura permite agora escrever testes muito mais granulares, simulando cenários complexos de rede ou falhas na base de dados de forma simples.
+> Incentiva os teus alunos a usarem o ícone ✋ antes de desmutarem o microfone. Isto cria uma experiência de aprendizagem muito mais organizada e profissional!

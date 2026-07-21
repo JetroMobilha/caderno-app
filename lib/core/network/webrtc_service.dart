@@ -1,18 +1,19 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'realtime_service.dart';
 import 'dart:async';
 
 class WebRTCService {
-  static final WebRTCService _instance = WebRTCService._internal();
-  factory WebRTCService() => _instance;
+  final RealtimeService _realtimeService;
   Timer? _talkingTimer;
-  WebRTCService._internal();
 
   MediaStream? _localStream;
   final Map<String, RTCPeerConnection> _peerConnections = {};
+
+  WebRTCService(this._realtimeService);
 
   // Servidores STUN públicos da Google (Gratuitos e estáveis)
   final Map<String, dynamic> _iceServers = {
@@ -43,7 +44,7 @@ class WebRTCService {
         'video': false,
       });
 
-      RealtimeService().onWebRTCSignalReceived.listen(_handleIncomingSignal);
+      _realtimeService.onWebRTCSignalReceived.listen(_handleIncomingSignal);
 
       for (var targetUserId in existingUserIds) {
         if (targetUserId != _currentUserId) {
@@ -72,7 +73,7 @@ class WebRTCService {
 
     // Enviar ICE Candidates descobertos para o outro aluno via Reverb
     pc.onIceCandidate = (candidate) {
-      RealtimeService().sendWebRTCSignal(_currentNotebookId!, {
+      _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
         'type': 'ice',
         'target_id': targetUserId,
         'sender_id': _currentUserId,
@@ -88,7 +89,7 @@ class WebRTCService {
     if (isInitiator) {
       RTCSessionDescription offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      RealtimeService().sendWebRTCSignal(_currentNotebookId!, {
+      _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
         'type': 'offer',
         'target_id': targetUserId,
         'sender_id': _currentUserId,
@@ -115,7 +116,7 @@ class WebRTCService {
       RTCSessionDescription answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      RealtimeService().sendWebRTCSignal(_currentNotebookId!, {
+      _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
         'type': 'answer',
         'target_id': senderId,
         'sender_id': _currentUserId,
@@ -153,7 +154,7 @@ class WebRTCService {
     _talkingTimer = null;
 
     if (_currentNotebookId != null && _currentUserId != null) {
-      RealtimeService().sendWebRTCSignal(_currentNotebookId!, {
+      _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
         'type': 'leave',
         'sender_id': _currentUserId,
       });
@@ -188,7 +189,7 @@ class WebRTCService {
               final bool isSpeaking = audioLevel > 0.05;
 
               // Avisa o CanvasController para atualizar o aro verde desse ID
-              RealtimeService().updateUserTalkingState(remoteUserId, isSpeaking);
+              _realtimeService.updateUserTalkingState(remoteUserId, isSpeaking);
             }
           }
         } catch (_) {
@@ -198,3 +199,8 @@ class WebRTCService {
     });
   }
 }
+
+final webrtcServiceProvider = Provider<WebRTCService>((ref) {
+  final realtime = ref.read(realtimeServiceProvider);
+  return WebRTCService(realtime);
+});

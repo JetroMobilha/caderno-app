@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
@@ -13,8 +14,10 @@ import '../models/text_block_model.dart';
 import '../models/image_block_model.dart';
 
 class CanvasRepository {
-  final AppDatabase _db = AppDatabase.instance;
+  final AppDatabase _db;
   final ApiService _apiService = ApiService();
+
+  CanvasRepository(this._db);
 
   // =========================================================================
   // 📖 LER FOLHAS DO CADERNO
@@ -336,3 +339,7 @@ class CanvasRepository {
     }
   }
 }
+
+final canvasRepositoryProvider = Provider<CanvasRepository>((ref) {
+  return CanvasRepository(AppDatabase.instance);
+});

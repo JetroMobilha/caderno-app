@@ -1,9 +1,7 @@
-# Tarefas: Correção de Testes Unitários
+# Tarefas: Sinalização de Voz e Colaboração
 
-- [x] Criar providers para Repositórios (Subjects, Notebooks)
-- [x] Refatorar `SubjectsController` para usar injeção de dependência
-- [x] Refatorar `NotebooksController` para usar injeção de dependência
-- [x] Atualizar `subjects_controller_test.dart`
-- [x] Corrigir falhas em `auth_controller_test.dart`
-- [x] Verificar e corrigir `widget_test.dart`
-- [x] Executar `flutter test` e validar 100% de aprovação
+- [x] Implementar evento `client-hand-event` no `RealtimeService`
+- [x] Adicionar lógica `toggleHandRaise` no `CanvasController`
+- [x] Criar botão de "Mão Erguida" no `LiveVoiceCockpit`
+- [x] Implementar indicador visual de mão erguida nos avatares
+- [x] Adicionar teste unitário para funcionalidade de Raise Hand

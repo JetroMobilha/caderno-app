@@ -12,7 +12,11 @@ import 'api_service.dart';
 class SyncService {
   final AppDatabase _db = AppDatabase.instance;
   final ApiService _apiService = ApiService();
-  final CanvasRepository _canvasRepository = CanvasRepository();
+  late final CanvasRepository _canvasRepository;
+
+  SyncService() {
+    _canvasRepository = CanvasRepository(_db);
+  }
 
   static bool isCollaborationActive = false;
 

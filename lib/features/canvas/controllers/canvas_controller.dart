@@ -24,8 +24,10 @@ enum ToolMode { draw, pan, select, text, eraser, insertImage, imageEdit }
 enum InlineTarget { none, block, title, footer }
 
 class CanvasController extends ChangeNotifier {
-  final CanvasRepository _repository = CanvasRepository();
-  final HandwritingOCRService _ocrService = HandwritingOCRService();
+  final CanvasRepository _repository;
+  final HandwritingOCRService _ocrService;
+  final RealtimeService _realtimeService;
+  final WebRTCService _webrtcService;
 
   List<LocalPage> pages = [];
   int currentPageIndex = 0;
@@ -58,6 +60,7 @@ class CanvasController extends ChangeNotifier {
   bool isInVoiceCall = false;
   bool isMuted = false;
   bool isSpeakerOn = true;
+  bool isMyHandRaised = false; // ✋ Estado local para "Pedir a Palavra"
   
   List<Map<String, dynamic>> onlineUsers = [];
   String? followingUserId;
@@ -82,6 +85,7 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _followSubscription;
   StreamSubscription? _pageEventSubscription;
   StreamSubscription? _pageUpdatedSubscription;
+  StreamSubscription? _handSubscription;
   StreamSubscription? _dbPagesSubscription;
   StreamSubscription? _dbNotebookSubscription;
 
@@ -100,7 +104,9 @@ class CanvasController extends ChangeNotifier {
   Timer? _autoSyncPushTimer; // 🚀 Timer para o Dono enviar dados para a nuvem
   final Set<String> uploadingImageIds = {}; // 🖼️ IDs das imagens em upload de fundo
 
-  CanvasController() {
+  CanvasController(this._realtimeService, this._webrtcService, {CanvasRepository? repository, HandwritingOCRService? ocrService}) 
+      : _repository = repository ?? CanvasRepository(db.AppDatabase.instance),
+        _ocrService = ocrService ?? HandwritingOCRService() {
     transformationController = TransformationController();
   }
 
@@ -117,6 +123,7 @@ class CanvasController extends ChangeNotifier {
     _followSubscription?.cancel();
     _pageEventSubscription?.cancel();
     _pageUpdatedSubscription?.cancel();
+    _handSubscription?.cancel();
     _dbPagesSubscription?.cancel();
     _dbNotebookSubscription?.cancel();
     _viewportBroadcastTimer?.cancel();
@@ -124,7 +131,8 @@ class CanvasController extends ChangeNotifier {
     for (var timer in _pageSaveDebouncers.values) { timer.cancel(); }
     for (var timer in _broadcasterTimers.values) { timer.cancel(); }
     _broadcasterTimers.clear();
-    if (liveNotebookSid != null) RealtimeService().leaveNotebookChannel(liveNotebookSid!);
+    if (liveNotebookSid != null) _realtimeService.leaveNotebookChannel(liveNotebookSid!);
+    if (isInVoiceCall) _webrtcService.leaveVoiceRoom();
     SyncService.isCollaborationActive = false;
     super.dispose();
   }
@@ -217,8 +225,8 @@ class CanvasController extends ChangeNotifier {
     });
   }
 
-  void initRealtimeCollaboration() async {
-    final realtime = RealtimeService();
+  Future<void> initRealtimeCollaboration() async {
+    final realtime = _realtimeService;
     await realtime.initConnection();
     final int channelId = (liveNotebookSid != null && liveNotebookSid != 0) ? liveNotebookSid! : currentNotebookId;
 
@@ -241,6 +249,7 @@ class CanvasController extends ChangeNotifier {
           'name': map['name'] ?? 'Colega',
           'color': avatarColorsPool[idAsInt % avatarColorsPool.length],
           'isTalking': map['isTalking'] ?? false,
+          'isHandRaised': map['isHandRaised'] ?? false,
         };
       }).toList();
 
@@ -578,6 +587,13 @@ class CanvasController extends ChangeNotifier {
       }
     });
 
+    _handSubscription?.cancel();
+    _handSubscription = realtime.onHandEventReceived.listen((data) {
+      final String senderId = data['sender_id'].toString();
+      final bool isRaised = data['is_raised'] == true;
+      _realtimeService.updateUserHandState(senderId, isRaised);
+    });
+
     // Agora sim, entrar no canal
     await realtime.joinNotebookChannel(notebookId: channelId);
   }
@@ -674,7 +690,7 @@ class CanvasController extends ChangeNotifier {
 
     // 📢 Notificar colegas online
     if (isRealtimeActive && liveNotebookSid != null) {
-      RealtimeService().broadcastPageEvent(
+      _realtimeService.broadcastPageEvent(
         notebookId: liveNotebookSid!,
         myUserId: myUserId,
         pageData: {
@@ -704,7 +720,7 @@ class CanvasController extends ChangeNotifier {
     
     // 📢 Notificar colegas online
     if (isRealtimeActive && liveNotebookSid != null) {
-      RealtimeService().broadcastPageEvent(
+      _realtimeService.broadcastPageEvent(
         notebookId: liveNotebookSid!,
         myUserId: myUserId,
         pageData: {
@@ -769,12 +785,12 @@ class CanvasController extends ChangeNotifier {
       notifyListeners(); triggerAutoSave(page);
       if (isRealtimeActive && liveNotebookSid != null) {
         for (var id in deletedStrokeIds) {
-          RealtimeService().broadcastStroke(notebookId: liveNotebookSid!, strokeData: {
+          _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, strokeData: {
             'page_number': page.pageNumber, 'strokes': [{'id': id, 'is_deleted': true}]
           });
         }
         for (var id in deletedTextIds) {
-          RealtimeService().broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
+          _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
             'page_number': page.pageNumber, 'block': {'id': id}, 'is_deleted': true
           });
         }
@@ -847,7 +863,7 @@ class CanvasController extends ChangeNotifier {
     page.imageBlocks.remove(img);
     notifyListeners(); await triggerAutoSave(page);
     if (isRealtimeActive && liveNotebookSid != null) {
-      RealtimeService().broadcastImageBlock(notebookId: liveNotebookSid!, imageData: {
+      _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, imageData: {
         'page_number': page.pageNumber, 'block': {'id': img.id}, 'is_deleted': true
       });
     }
@@ -885,7 +901,7 @@ class CanvasController extends ChangeNotifier {
       final matches = page.strokes.where((s) => s.id == id);
       if (matches.isNotEmpty) {
         final stroke = matches.first;
-        RealtimeService().broadcastStroke(notebookId: liveNotebookSid!, strokeData: {
+        _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, strokeData: {
           'page_number': page.pageNumber,
           'strokes': [{
             'id': stroke.id, 'color': stroke.color, 'thickness': stroke.thickness, 'is_final': true,
@@ -903,7 +919,7 @@ class CanvasController extends ChangeNotifier {
   void broadcastTextBlockUpdate(LocalPage page, TextBlock block, [String? senderId]) {
     if (isRealtimeActive && liveNotebookSid != null) {
       final String id = senderId ?? myUserId;
-      RealtimeService().broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
+      _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
         'sender_id': id,
         'page_number': page.pageNumber,
         'block': block.toJson(),
@@ -915,7 +931,7 @@ class CanvasController extends ChangeNotifier {
     if (isRealtimeActive && liveNotebookSid != null) {
       final String id = senderId ?? myUserId;
       // 🚀 AGORA É SINCRONO E LEVE: Enviamos apenas o URL que já está no block.imagePath
-      RealtimeService().broadcastImageBlock(notebookId: liveNotebookSid!, imageData: {
+      _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, imageData: {
         'sender_id': id,
         'page_number': page.pageNumber,
         'block': block.toJson(),
@@ -926,17 +942,32 @@ class CanvasController extends ChangeNotifier {
   void forceNotify() => notifyListeners();
 
   Future<void> toggleVoiceCall(String myUserId) async {
-    if (isInVoiceCall) { WebRTCService().leaveVoiceRoom(); isInVoiceCall = false; }
+    if (isInVoiceCall) { _webrtcService.leaveVoiceRoom(); isInVoiceCall = false; }
     else {
       final existingUserIds = onlineUsers.map((u) => u['id'].toString()).toList();
-      final success = await WebRTCService().joinVoiceRoom(liveNotebookSid ?? currentNotebookId, myUserId, existingUserIds);
+      final success = await _webrtcService.joinVoiceRoom(liveNotebookSid ?? currentNotebookId, myUserId, existingUserIds);
       if (success) isInVoiceCall = true;
     }
     notifyListeners();
   }
 
-  void toggleMute() { isMuted = !isMuted; WebRTCService().toggleMute(); notifyListeners(); }
-  void toggleSpeaker() { isSpeakerOn = !isSpeakerOn; WebRTCService().toggleSpeaker(); notifyListeners(); }
+  void toggleMute() { isMuted = !isMuted; _webrtcService.toggleMute(); notifyListeners(); }
+  void toggleSpeaker() { isSpeakerOn = !isSpeakerOn; _webrtcService.toggleSpeaker(); notifyListeners(); }
+
+  void toggleHandRaise() {
+    isMyHandRaised = !isMyHandRaised;
+    notifyListeners();
+
+    if (isRealtimeActive && liveNotebookSid != null) {
+      _realtimeService.broadcastHandEvent(
+        notebookId: liveNotebookSid!,
+        myUserId: myUserId,
+        isRaised: isMyHandRaised,
+      );
+      // Atualizar o próprio estado na lista local para refletir imediatamente
+      _realtimeService.updateUserHandState(myUserId, isMyHandRaised);
+    }
+  }
 
   void toggleFollowUser(String? userId, String myId) {
     debugPrint('🔭 [CanvasController] Tentar seguir/parar utilizador: $userId');
@@ -948,7 +979,7 @@ class CanvasController extends ChangeNotifier {
     
     // 📢 Avisar os outros sobre a mudança de estado
     if (liveNotebookSid != null) {
-      RealtimeService().broadcastFollowUpdate(
+      _realtimeService.broadcastFollowUpdate(
         notebookId: liveNotebookSid!,
         myUserId: myId,
         followingUserId: followingUserId,
@@ -971,7 +1002,7 @@ class CanvasController extends ChangeNotifier {
       
       if (currentViewportCenter == null || currentVisibleWidth == null || effectiveUserId.isEmpty) return;
 
-      RealtimeService().broadcastViewport(notebookId: liveNotebookSid!, viewportData: {
+      _realtimeService.broadcastViewport(notebookId: liveNotebookSid!, viewportData: {
         'page_number': currentPageIndex + 1,
         'focusX': currentViewportCenter!.dx,
         'focusY': currentViewportCenter!.dy,
@@ -1022,5 +1053,8 @@ class CanvasController extends ChangeNotifier {
 }
 
 final canvasProvider = ChangeNotifierProvider.autoDispose<CanvasController>((ref) {
-  return CanvasController();
+  final realtime = ref.read(realtimeServiceProvider);
+  final webrtc = ref.read(webrtcServiceProvider);
+  final repository = ref.read(canvasRepositoryProvider);
+  return CanvasController(realtime, webrtc, repository: repository);
 });

@@ -403,7 +403,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         if (now.difference(_lastBroadcastTime).inMilliseconds > 20 && controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
                                           final newPoints = newList.sublist(_lastBroadcastedPointIndex);
                                           if (newPoints.isNotEmpty) {
-                                            RealtimeService().broadcastStroke(
+                                            ref.read(realtimeServiceProvider).broadcastStroke(
                                                 notebookId: controller.liveNotebookSid!,
                                                 strokeData: {
                                                   'sender_id': myUserId,
@@ -641,8 +641,10 @@ else if (controller.currentTool == ToolMode.select) {
                       onlineUsers: controller.onlineUsers,
                       isMuted: controller.isMuted,
                       isSpeakerOn: controller.isSpeakerOn,
+                      isHandRaised: controller.isMyHandRaised,
                       onMuteToggle: controller.toggleMute,
                       onSpeakerToggle: controller.toggleSpeaker,
+                      onHandToggle: controller.toggleHandRaise,
                       onHangUp: () => controller.toggleVoiceCall(myUserId),
                     )
                 )
@@ -738,6 +740,7 @@ else if (controller.currentTool == ToolMode.select) {
   PreferredSizeWidget _buildAppBar(CanvasController controller, bool hasPages) {
     // Se o Role for nulo (caderno acabado de criar offline), assumimos que o criador é o Dono!
     final String safeRole = widget.notebook.role ?? 'owner';
+    final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
 
     return AppBar(
       backgroundColor: Colors.white,
@@ -749,6 +752,35 @@ else if (controller.currentTool == ToolMode.select) {
 
       // 🚀 AÇÕES MOVIDAS PARA FORA DAS RESTRIÇÕES, FICAM SEMPRE VISÍVEIS
       actions: [
+        
+        // 🛰️ INDICADOR DE STATUS DA CONEXÃO
+        ValueListenableBuilder<RealtimeStatus>(
+          valueListenable: realtimeStatus,
+          builder: (context, status, _) {
+            Color statusColor = Colors.grey;
+            String tooltip = 'Desconectado';
+            
+            if (status == RealtimeStatus.connected) {
+              statusColor = Colors.green;
+              tooltip = 'Online e Colaborativo';
+            } else if (status == RealtimeStatus.connecting) {
+              statusColor = Colors.orange;
+              tooltip = 'A conectar...';
+            } else if (status == RealtimeStatus.error) {
+              statusColor = Colors.red;
+              tooltip = 'Erro na ligação';
+            }
+            
+            return Tooltip(
+              message: tooltip,
+              child: Container(
+                width: 12, height: 12,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+              ),
+            );
+          },
+        ),
 
         // 🔭 0. BOTÃO DE TRANSMITIR CÂMARA
         if (controller.followingUserId == null)

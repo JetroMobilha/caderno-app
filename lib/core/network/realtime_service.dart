@@ -2,16 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dart_pusher_channels/dart_pusher_channels.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+enum RealtimeStatus { disconnected, connecting, connected, error }
+
 class RealtimeService {
-  static final RealtimeService _instance = RealtimeService._internal();
-  factory RealtimeService() => _instance;
-  RealtimeService._internal();
   PrivateChannel? _userChannel;
   PusherChannelsClient? _pusher;
   PresenceChannel? _notebookChannel;
-  bool _isConnected = false;
+  
+  final ValueNotifier<RealtimeStatus> statusNotifier = ValueNotifier(RealtimeStatus.disconnected);
   final Map<String, dynamic> _estudantesNaSala = {};
 
   // 📡 AS NOSSAS ANTENAS DE RÁDIO (Streams Broadcast)
@@ -23,6 +24,7 @@ class RealtimeService {
   final _usersStreamController = StreamController<List<dynamic>>.broadcast();
   final _pageEventStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _pageUpdatedStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _handStreamController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -32,8 +34,9 @@ class RealtimeService {
   Stream<List<dynamic>> get onUsersUpdated => _usersStreamController.stream;
   Stream<Map<String, dynamic>> get onPageEventReceived => _pageEventStreamController.stream;
   Stream<Map<String, dynamic>> get onPageUpdated => _pageUpdatedStreamController.stream;
+  Stream<Map<String, dynamic>> get onHandEventReceived => _handStreamController.stream;
 
-  bool get isConnected => _isConnected;
+  bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
   final _webrtcStreamController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onWebRTCSignalReceived => _webrtcStreamController.stream;
@@ -42,13 +45,15 @@ class RealtimeService {
   // 🔌 1. INICIAR CONEXÃO WEBSOCKET (Laravel Reverb / Pusher)
   // =========================================================================
   Future<void> initConnection() async {
-    if (_isConnected && _pusher != null) return;
+    if (statusNotifier.value == RealtimeStatus.connected && _pusher != null) return;
+
+    statusNotifier.value = RealtimeStatus.connecting;
 
     final options = PusherChannelsOptions.fromHost(
       scheme: 'wss',
       host: 'appcaderno.duckdns.org',
       key: '6572db37e0db7615a423',
-      port: 9001, // 🚀 Porta WSS do Reverb (Certifica-te que abriste a 9001 no servidor)
+      port: 9001, // 🚀 Porta WSS do Reverb
       shouldSupplyMetadataQueries: true,
       metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
     );
@@ -57,15 +62,17 @@ class RealtimeService {
       options: options,
       connectionErrorHandler: (exception, trace, refresh) {
         debugPrint('⚠️ [Realtime] Erro na conexão, a tentar reconectar...');
+        statusNotifier.value = RealtimeStatus.error;
         refresh();
       },
     );
 
     try {
       _pusher!.connect();
-      _isConnected = true;
+      statusNotifier.value = RealtimeStatus.connected;
       debugPrint('✅ [Realtime] Conectado com sucesso ao servidor Reverb!');
     } catch (e) {
+      statusNotifier.value = RealtimeStatus.error;
       debugPrint('❌ [Realtime] Erro de rede Reverb: $e');
     }
   }
@@ -210,6 +217,13 @@ class RealtimeService {
       }
     });
 
+    _notebookChannel!.bind('client-hand-event').listen((event) {
+      if (event.data != null) {
+        final data = event.data is Map ? Map<String, dynamic>.from(event.data) : jsonDecode(event.data.toString());
+        _handStreamController.add(data);
+      }
+    });
+
     _notebookChannel!.subscribe();
   }
 
@@ -293,6 +307,21 @@ class RealtimeService {
     }
   }
 
+  Future<bool> broadcastHandEvent({required int notebookId, required String myUserId, required bool isRaised}) async {
+    if (_notebookChannel == null) return false;
+    try {
+      final data = {
+        'sender_id': myUserId,
+        'is_raised': isRaised,
+      };
+      _notebookChannel!.trigger(eventName: 'client-hand-event', data: jsonEncode(data));
+      return true;
+    } catch (e) {
+      debugPrint('🚨 [Realtime] Falha ao disparar hand event: $e');
+      return false;
+    }
+  }
+
   // =========================================================================
   // 🚪 4. SAIR DA SALA DO CADERNO
   // =========================================================================
@@ -309,7 +338,7 @@ class RealtimeService {
   // =========================================================================
   void disconnect() {
     _pusher?.disconnect();
-    _isConnected = false;
+    statusNotifier.value = RealtimeStatus.disconnected;
   }
 
   // =========================================================================
@@ -352,4 +381,17 @@ class RealtimeService {
       }
     }
   }
+
+  void updateUserHandState(String userId, bool isRaised) {
+    if (_estudantesNaSala.containsKey(userId)) {
+      if (_estudantesNaSala[userId]['isHandRaised'] != isRaised) {
+        _estudantesNaSala[userId]['isHandRaised'] = isRaised;
+        _usersStreamController.add(_estudantesNaSala.values.toList());
+      }
+    }
+  }
 }
+
+final realtimeServiceProvider = Provider<RealtimeService>((ref) {
+  return RealtimeService();
+});

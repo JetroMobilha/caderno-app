@@ -57,6 +57,7 @@ class CanvasController extends ChangeNotifier {
   Offset? lastPanOffset;
 
   bool isRealtimeActive = false;
+  bool isCollaborationEnabled = false; // 🌐 Decisão do utilizador de ficar online
   bool isInVoiceCall = false;
   bool isMuted = false;
   bool isSpeakerOn = true;
@@ -86,6 +87,7 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _pageEventSubscription;
   StreamSubscription? _pageUpdatedSubscription;
   StreamSubscription? _handSubscription;
+  StreamSubscription? _uploadingSubscription;
   StreamSubscription? _dbPagesSubscription;
   StreamSubscription? _dbNotebookSubscription;
 
@@ -101,6 +103,7 @@ class CanvasController extends ChangeNotifier {
 
   final Set<String> activeBroadcasters = {};
   final Map<String, Timer> _broadcasterTimers = {};
+  final Set<String> remoteUploadingUsers = {}; // 👥 Utilizadores a carregar ficheiros
   Timer? _autoSyncPushTimer; // 🚀 Timer para o Dono enviar dados para a nuvem
   final Set<String> uploadingImageIds = {}; // 🖼️ IDs das imagens em upload de fundo
 
@@ -124,8 +127,7 @@ class CanvasController extends ChangeNotifier {
     _pageEventSubscription?.cancel();
     _pageUpdatedSubscription?.cancel();
     _handSubscription?.cancel();
-    _dbPagesSubscription?.cancel();
-    _dbNotebookSubscription?.cancel();
+    _uploadingSubscription?.cancel();
     _viewportBroadcastTimer?.cancel();
     _autoSyncPushTimer?.cancel();
     for (var timer in _pageSaveDebouncers.values) { timer.cancel(); }
@@ -145,17 +147,17 @@ class CanvasController extends ChangeNotifier {
     currentPaperSize = paperSize;
     currentUserRole = role;
     if (userId != null) myUserId = userId;
-    SyncService.isCollaborationActive = true;
+    
+    // 🛡️ OFFLINE-FIRST: A colaboração NÃO ativa automaticamente mais.
+    SyncService.isCollaborationActive = false;
 
     // 📡 ASSINAR METADADOS DO CADERNO (Reatividade para o Server ID)
     _dbNotebookSubscription?.cancel();
     final database = db.AppDatabase.instance;
     _dbNotebookSubscription = (database.select(database.notebooks)..where((t) => t.id.equals(notebookId))).watchSingle().listen((row) {
       if (row.serverId != null && liveNotebookSid == null) {
-        debugPrint('☁️ [Canvas] Server ID detetado via reatividade do banco! Ativando Realtime...');
+        debugPrint('☁️ [Canvas] Server ID detetado via reatividade do banco!');
         liveNotebookSid = row.serverId;
-        initRealtimeCollaboration();
-        isRealtimeActive = true;
         notifyListeners();
       }
     });
@@ -180,12 +182,52 @@ class CanvasController extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     });
+  }
 
-    if (liveNotebookSid != null && liveNotebookSid != 0) {
-      initRealtimeCollaboration();
-      isRealtimeActive = true;
-      notifyListeners();
+  Future<void> toggleCollaboration(bool enable) async {
+    if (isCollaborationEnabled == enable) return;
+    
+    isCollaborationEnabled = enable;
+    SyncService.isCollaborationActive = enable;
+    
+    if (enable) {
+      debugPrint('🌐 [Canvas] Ativando modo colaborativo...');
+      
+      // 🚀 TENTAR OBTER SERVER ID SE ESTIVER EM FALTA
+      if (liveNotebookSid == null || liveNotebookSid == 0) {
+        debugPrint('☁️ [Canvas] Server ID em falta. A tentar sincronizar caderno...');
+        try {
+          await SyncService().pushOfflineSubjects();
+          await SyncService().pushNotebooks();
+          // O listener no initNotebook deve apanhar o novo serverId via reatividade do Drift
+          
+          // Aguardar um pouco para a reatividade do banco disparar
+          await Future.delayed(const Duration(seconds: 1));
+        } catch (e) {
+          debugPrint('❌ [Canvas] Falha na sincronização pré-colaboração: $e');
+        }
+      }
+
+      if (liveNotebookSid != null && liveNotebookSid != 0) {
+        await initRealtimeCollaboration();
+        isRealtimeActive = true;
+      } else {
+        debugPrint('⚠️ [Canvas] Ainda sem Server ID. Colaboração indisponível.');
+        isCollaborationEnabled = false;
+        SyncService.isCollaborationActive = false;
+        isRealtimeActive = false;
+      }
+    } else {
+      debugPrint('📴 [Canvas] Entrando em modo offline (por opção)...');
+      if (liveNotebookSid != null) _realtimeService.leaveNotebookChannel(liveNotebookSid!);
+      if (isInVoiceCall) {
+        _webrtcService.leaveVoiceRoom();
+        isInVoiceCall = false;
+      }
+      isRealtimeActive = false;
+      onlineUsers = [];
     }
+    notifyListeners();
   }
 
   void _resetZoomForPage(LocalPage page, String paperSize) {
@@ -292,13 +334,13 @@ class CanvasController extends ChangeNotifier {
 
         for (var strokeMap in data['strokes']) {
           final String strokeId = strokeMap['id'];
-          final bool isFinal = strokeMap['is_final'] == true;
           final bool isDeleted = strokeMap['is_deleted'] == true;
 
           if (isDeleted) {
             targetPage.strokes.removeWhere((s) => s.id == strokeId);
             notifyListeners();
-            if (currentUserRole == 'owner') triggerAutoSave(targetPage);
+            // 🚀 PERSISTÊNCIA COLETIVA: Todos salvam a remoção no SQLite local
+            _repository.savePage(targetPage, liveNotebookSid);
             continue;
           }
 
@@ -592,6 +634,28 @@ class CanvasController extends ChangeNotifier {
       final String senderId = data['sender_id'].toString();
       final bool isRaised = data['is_raised'] == true;
       _realtimeService.updateUserHandState(senderId, isRaised);
+      
+      // 🚀 AVISO VISUAL: Notificar se alguém pedir a palavra
+      if (isRaised) {
+        final user = onlineUsers.firstWhere((u) => u['id'].toString() == senderId, orElse: () => {});
+        if (user.isNotEmpty) {
+          debugPrint('✋ [Hand] O colega ${user['name']} pediu a palavra!');
+        }
+      }
+      notifyListeners();
+    });
+
+    _uploadingSubscription?.cancel();
+    _uploadingSubscription = realtime.onRemoteUploading.listen((data) {
+      final String senderId = data['sender_id'].toString();
+      final bool isUploading = data['is_uploading'] == true;
+      
+      if (isUploading) {
+        remoteUploadingUsers.add(senderId);
+      } else {
+        remoteUploadingUsers.remove(senderId);
+      }
+      notifyListeners();
     });
 
     // Agora sim, entrar no canal
@@ -785,12 +849,12 @@ class CanvasController extends ChangeNotifier {
       notifyListeners(); triggerAutoSave(page);
       if (isRealtimeActive && liveNotebookSid != null) {
         for (var id in deletedStrokeIds) {
-          _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, strokeData: {
+          _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {
             'page_number': page.pageNumber, 'strokes': [{'id': id, 'is_deleted': true}]
           });
         }
         for (var id in deletedTextIds) {
-          _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
+          _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, myUserId: myUserId, textData: {
             'page_number': page.pageNumber, 'block': {'id': id}, 'is_deleted': true
           });
         }
@@ -840,12 +904,15 @@ class CanvasController extends ChangeNotifier {
       // 🌐 UPLOAD EM BACKGROUND: Se estiver online, sobe para a nuvem sem travar a UI
       if (isRealtimeActive) {
         uploadingImageIds.add(localId);
+        _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: true);
         notifyListeners();
 
         final Uint8List bytes = await pickedFile.readAsBytes();
         
         _repository.uploadImage(currentNotebookId, pickedFile.name, bytes).then((remoteUrl) {
           uploadingImageIds.remove(localId);
+          _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: false);
+          
           if (remoteUrl != null) {
             // Atualiza o path para o URL oficial e avisa os outros
             newImageBlock.imagePath = remoteUrl;
@@ -929,10 +996,15 @@ class CanvasController extends ChangeNotifier {
 
   void broadcastImageBlockUpdate(LocalPage page, ImageBlock block, [String? senderId]) {
     if (isRealtimeActive && liveNotebookSid != null) {
+      // 🛡️ SEGURANÇA: Não enviar paths locais para os colegas (evita o quadrado vazio)
+      if (!block.imagePath.startsWith('http')) {
+        debugPrint('⏳ [ImageSync] Ignorando broadcast de path local: ${block.imagePath}');
+        return;
+      }
+
       final String id = senderId ?? myUserId;
       // 🚀 AGORA É SINCRONO E LEVE: Enviamos apenas o URL que já está no block.imagePath
-      _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, imageData: {
-        'sender_id': id,
+      _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, myUserId: id, imageData: {
         'page_number': page.pageNumber,
         'block': block.toJson(),
       });

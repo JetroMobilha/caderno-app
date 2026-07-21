@@ -11,6 +11,7 @@ import '../../../core/network/sync_provider.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/views/login_screen.dart';
 import '../../auth/views/profile_screen.dart';
+import '../../notebooks/models/notebook_model.dart';
 import '../../notebooks/controllers/notebooks_controller.dart';
 import '../../notebooks/views/notebooks_list_screen.dart';
 import '../models/subject_model.dart';
@@ -302,11 +303,11 @@ class SubjectsListBody extends ConsumerWidget {
   }
 
   Widget _buildSubjectCard(BuildContext context, WidgetRef ref, Subject subject) {
-    // 1. 🚀 O Riverpod 2.0 devolve diretamente a Lista (List<Notebook>)!
-    final allNotebooks = ref.watch(notebooksProvider);
+    // 1. 🚀 O Riverpod 2.0 devolve o estado complexo (List + Loading)!
+    final NotebooksState notebooksState = ref.watch(notebooksProvider);
 
-    // 2. 🎯 Fazemos o ".where" diretamente na variável!
-    final notebookCount = allNotebooks.where((n) =>
+    // 2. 🎯 Fazemos o ".where" na lista interna!
+    final notebookCount = notebooksState.notebooks.where((Notebook n) =>
     n.subjectId == subject.id ||
         (subject.serverId != null && n.subjectId == subject.serverId)
     ).length;

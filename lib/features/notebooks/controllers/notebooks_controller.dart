@@ -8,68 +8,117 @@ import 'package:caderno_digital_app/features/notebooks/repositories/shared_noteb
 import '../../auth/controllers/auth_controller.dart';
 import '../../subjects/controllers/subjects_controller.dart';
 
-class NotebooksController extends Notifier<List<Notebook>> {
+class NotebooksState {
+  final List<Notebook> notebooks;
+  final bool isLoading;
+
+  NotebooksState({required this.notebooks, this.isLoading = false});
+
+  NotebooksState copyWith({List<Notebook>? notebooks, bool? isLoading}) {
+    return NotebooksState(
+      notebooks: notebooks ?? this.notebooks,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
+class NotebooksController extends Notifier<NotebooksState> {
   StreamSubscription? _subscription;
 
   int? _currentSubjectId;
   bool _isShowingShared = false;
+  bool _hasStreamEmitted = false; // 🚩 Flag para saber se o banco já respondeu
   List<Notebook> _lastData = [];
 
   @override
-  List<Notebook> build() {
+  NotebooksState build() {
     // 📡 REATIVIDADE MÁXIMA: Escuta a disciplina ativa e troca o stream automaticamente!
     final activeSubject = ref.watch(activeSubjectProvider);
     // Escuta mudanças no utilizador (Login/Logout/Update)
     final auth = ref.watch(authProvider);
 
-    if (!auth.isAuthenticated || activeSubject == null) {
+    if (!auth.isAuthenticated || activeSubject == null || activeSubject.id == null) {
       _currentSubjectId = null;
       _subscription?.cancel();
       _lastData = [];
-      return [];
+      _hasStreamEmitted = false;
+      return NotebooksState(notebooks: [], isLoading: false);
     }
 
+    // 🚀 LÓGICA DE CARREGAMENTO SEGURO
     if (activeSubject.id == -1) {
-      _loadSharedStream();
+      _loadSharedStream(fromBuild: true);
     } else {
-      _loadNormalStream(activeSubject.id!);
+      _loadNormalStream(activeSubject.id!, fromBuild: true);
     }
 
-    return _lastData;
+    // Só é loading se ainda não recebemos NADA do stream desta matéria E o subject é válido
+    bool stillLoading = !_hasStreamEmitted && _currentSubjectId != null;
+    
+    return NotebooksState(notebooks: _lastData, isLoading: stillLoading);
   }
 
   NotebookRepository get _repository => ref.read(notebookRepositoryProvider);
   SharedNotebookRepository get _sharedRepository => ref.read(sharedNotebookRepositoryProvider);
 
-  void _loadNormalStream(int subjectId) {
+  void _loadNormalStream(int subjectId, {bool fromBuild = false}) {
     if (_currentSubjectId == subjectId && !_isShowingShared) return;
 
     _isShowingShared = false;
     _currentSubjectId = subjectId;
+    _hasStreamEmitted = false; // Reset ao mudar de matéria
     _subscription?.cancel();
     
     // Se mudou de matéria, limpamos o cache para não mostrar cadernos da matéria anterior
     _lastData = [];
+    if (!fromBuild) {
+      state = NotebooksState(notebooks: [], isLoading: true);
+    }
 
     _subscription = _repository.watchNotebooksBySubject(subjectId).listen((list) {
+      debugPrint('📡 [Notebooks] Stream emitiu ${list.length} cadernos para subject $subjectId');
       _lastData = list;
-      state = list;
+      _hasStreamEmitted = true;
+      // 🚀 SEGURANÇA TOTAL: Sempre agendar a atualização para evitar conflitos de ciclo de vida
+      Future.microtask(() {
+        if (_currentSubjectId == subjectId) {
+          state = NotebooksState(notebooks: list, isLoading: false);
+        }
+      });
+    });
+
+    // 🛡️ FAILSAFE: Se o banco demorar mais de 500ms (raro), paramos o spinner para não prender o utilizador
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!_hasStreamEmitted && _currentSubjectId == subjectId) {
+        debugPrint('⚠️ [Notebooks] Failsafe ativado: Parando spinner por timeout.');
+        _hasStreamEmitted = true;
+        // Só atualizamos o estado se o controlador ainda estiver montado
+        try {
+          state = NotebooksState(notebooks: _lastData, isLoading: false);
+        } catch (_) {}
+      }
     });
   }
 
-  void _loadSharedStream() {
+  void _loadSharedStream({bool fromBuild = false}) {
     if (_isShowingShared) return;
 
     _isShowingShared = true;
     _currentSubjectId = -1;
+    _hasStreamEmitted = false;
     _subscription?.cancel();
 
-    // Limpar cache ao mudar para partilhados
     _lastData = [];
+    if (!fromBuild) {
+      state = NotebooksState(notebooks: [], isLoading: true);
+    }
 
     final currentUser = ref.read(authProvider).currentUser;
     if (currentUser == null || currentUser.id == null) {
-      state = [];
+      _hasStreamEmitted = true;
+      if (!fromBuild) {
+        state = NotebooksState(notebooks: [], isLoading: false);
+      }
       return;
     }
 
@@ -77,7 +126,10 @@ class NotebooksController extends Notifier<List<Notebook>> {
         .watchSharedNotebooks(currentUser.id!, serverUserId: currentUser.serverId)
         .listen((list) {
       _lastData = list;
-      state = list;
+      _hasStreamEmitted = true;
+      Future.microtask(() {
+        state = NotebooksState(notebooks: list, isLoading: false);
+      });
     });
   }
 
@@ -115,6 +167,6 @@ class NotebooksController extends Notifier<List<Notebook>> {
   }
 }
 
-final notebooksProvider = NotifierProvider<NotebooksController, List<Notebook>>(() {
+final notebooksProvider = NotifierProvider<NotebooksController, NotebooksState>(() {
   return NotebooksController();
 });

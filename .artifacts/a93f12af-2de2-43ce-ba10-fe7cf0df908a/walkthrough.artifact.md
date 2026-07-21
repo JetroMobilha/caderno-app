@@ -1,27 +1,36 @@
-# Walkthrough: Sinalização de Voz e Melhoria na Colaboração
+# Walkthrough: Otimização de Colaboração e Voz (WebRTC)
 
-Este documento detalha a implementação do sistema de "Pedir a Palavra" (Raise Hand) para organizar as chamadas de voz e evitar confusão durante a colaboração em tempo real.
+Este documento detalha as correções e melhorias efetuadas para garantir uma colaboração em tempo real sem falhas e uma comunicação de voz funcional.
 
 ## Mudanças Realizadas
 
-### 1. Sistema de Sinalização "Pedir a Palavra"
-Para melhorar a dinâmica das aulas e reuniões, introduzi uma funcionalidade de sinalização visual:
-* **[RealtimeService](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/core/network/realtime_service.dart):** Adicionado o evento `client-hand-event`. Agora, quando um utilizador clica no ícone da mão, todos os outros recebem instantaneamente esse sinal via WebSockets.
-* **[CanvasController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/controllers/canvas_controller.dart):** Implementada a gestão de estado `isMyHandRaised`. O controlador coordena o envio do sinal para a nuvem e a atualização da lista local de utilizadores online.
+### 1. Borracha Compartilhada e Universal
+*   **Problema:** Os utilizadores só conseguiam apagar os seus próprios traços e a remoção não sincronizava para os colegas.
+*   **Solução:**
+    *   Removi a restrição de propriedade na receção de eventos de remoção. Agora, qualquer editor pode apagar qualquer elemento.
+    *   Garanti que a remoção é guardada no SQLite local de **todos** os participantes mal o sinal é recebido, impedindo que os traços apagados reapareçam ao navegar.
+    *   Incluí o `myUserId` em todos os sinais de remoção para uma filtragem de eco mais precisa.
 
-### 2. Interface de Controlo (Cockpit)
-* **[LiveVoiceCockpit](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/widgets/live_voice_cockpit.dart):**
-    * **Botão ✋:** Adicionado um novo botão de "Mão Erguida" no painel de controlo de voz. Quando ativo, o botão fica cor-de-laranja.
-    * **Indicador Visual:** Se um colega "pedir a palavra", aparece um ícone de mão cor-de-laranja sobre o seu avatar no cockpit, permitindo identificar rapidamente quem quer falar.
-    * **Aro Dinâmico:** Mantivemos o aro verde que brilha quando alguém está efetivamente a falar (deteção automática de volume).
+### 2. Sincronização Inteligente de Imagens
+*   **Problema:** Redimensionar imagens antes do upload terminar resultava em quadrados vazios para os colegas.
+*   **Solução:** Implementei um filtro de segurança que impede a partilha de coordenadas de imagem enquanto o ficheiro ainda é local (`/data/user/...`). A imagem só é "anunciada" à sala quando possui um URL remoto válido.
+*   **Feedback Global:** Adicionado um sinal de rede `client-image-uploading`. Se um colega estiver a carregar uma imagem pesada, verás um aviso visual: *"X colega(s) a carregar imagens..."*.
 
-### 3. Testes de Sincronização
-* **[CanvasController Test](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/test/features/canvas/controllers/canvas_controller_test.dart):** Adicionado um novo teste unitário para validar se o estado da mão erguida alterna corretamente e se a reatividade do Riverpod se mantém estável.
+### 3. Ativação de Áudio WebRTC
+*   **Problema:** As chamadas de voz eram estabelecidas mas não se ouvia som.
+*   **Solução:**
+    *   Configurei o modo de áudio para `communication` (essencial para Android/iOS).
+    *   Ativei o `Speakerphone` (Altifalante) por padrão.
+    *   Implementei o listener `pc.onTrack` e `pc.onAddStream` para garantir que as faixas de áudio remotas são recebidas e ativadas programaticamente.
+    *   Adicionei cancelamento de eco e supressão de ruído nas configurações iniciais do microfone.
 
-## Verificação Realizada
-* **Colaboração Multi-Utilizador:** Validado que múltiplos utilizadores podem estar na chamada e sinalizar a intenção de falar sem interferir uns nos outros.
-* **UX de Voz:** A deteção de atividade de voz continua a funcionar em paralelo com a sinalização manual.
-* **Execução de Testes:** Os testes automatizados confirmam que o fluxo de sinalização local está a funcionar como esperado.
+### 4. Melhorias de UX
+*   **Mão Erguida (✋):** O sistema de pedir a palavra agora é mais reativo e gera logs de depuração para facilitar a monitorização.
+
+## Verificação Sugerida
+1.  **Borracha:** Apaga um traço feito por outro dispositivo e confirma que ele desaparece e não volta ao recarregar a folha.
+2.  **Imagem:** Insere uma imagem e mexe nela enquanto sobe. Confirma que o colega só a vê quando ela estiver pronta na nuvem.
+3.  **Voz:** Inicia uma chamada e confirma se o som sai pelo altifalante com clareza.
 
 > [!TIP]
-> Incentiva os teus alunos a usarem o ícone ✋ antes de desmutarem o microfone. Isto cria uma experiência de aprendizagem muito mais organizada e profissional!
+> Estas mudanças transformam a colaboração de uma "preview visual" num sistema de edição coletiva robusto e persistente.

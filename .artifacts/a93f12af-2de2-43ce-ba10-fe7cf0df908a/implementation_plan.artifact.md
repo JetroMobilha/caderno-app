@@ -1,40 +1,35 @@
-# Plano de Implementação: Robustez da Colaboração em Tempo Real e Testes
+# Plano de Implementação: Otimização de Colaboração e Voz (WebRTC)
 
-Este plano foca em melhorar a estabilidade da colaboração em tempo real (WebSockets/Reverb) e introduzir testes unitários para garantir que o fluxo de dados entre utilizadores não se quebre durante o desenvolvimento.
+Este plano visa resolver as falhas na borracha compartilhada, sincronização de imagens, indicadores de upload global e a ausência de áudio nas chamadas de voz.
 
 ## Problemas Identificados
-1. **Conectividade Instável:** Logs mostram tentativas repetidas de reconexão.
-2. **Dificuldade de Teste:** O `RealtimeService` é um Singleton difícil de mockar, impossibilitando testes automatizados do `CanvasController`.
-3. **Gestão de Estado de Conexão:** A UI não reflete claramente se o utilizador está realmente "online" na sala ou se a ligação caiu.
+1.  **Borracha Restrita:** Usuários não conseguem apagar traços de colegas e as remoções locais não sincronizam.
+2.  **Imagens "Quebradas":** Redimensionar uma imagem antes do upload terminar envia um path local para os colegas, resultando num quadrado vazio.
+3.  **Falta de Feedback:** Os colegas não sabem quando alguém está a carregar uma imagem pesada.
+4.  **WebRTC Silencioso:** As conexões Peer-to-Peer são estabelecidas, mas os fluxos de áudio remotos não estão a ser "ouvidos" (falta o `onTrack`).
 
 ## Mudanças Propostas
 
-### 1. Refatoração para Testabilidade (Injeção de Dependência)
-* **[RealtimeService](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/core/network/realtime_service.dart):**
-    * Criar uma interface `IRealtimeService` (opcional) ou permitir a injeção do cliente Pusher.
-    * Criar o `realtimeServiceProvider` no Riverpod para gerir a instância.
-* **[CanvasController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/controllers/canvas_controller.dart):**
-    * Refatorar para receber o `RealtimeService` no construtor ou via provider.
-    * Isto permitirá injetar um `MockRealtimeService` nos testes.
+### 1. Borracha Universal e Broadcast Consistente
+*   **[RealtimeService](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/core/network/realtime_service.dart):** Garantir que todos os métodos de broadcast incluem o `sender_id` para evitar auto-echo e permitir validação no receptor.
+*   **[CanvasController](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/controllers/canvas_controller.dart):** Garantir que o `eraseAtPosition` envia o `myUserId`. Remover qualquer barreira lógica que impeça a remoção de elementos de terceiros (desde que o usuário seja editor).
 
-### 2. Melhoria na Estabilidade do Realtime
-* **Reconexão Inteligente:** Adicionar um estado de conexão observável (`ConnectionState`) para que a UI possa mostrar avisos.
-* **Throttling e Buffering:** Otimizar o envio de traços para evitar saturação do socket em redes lentas.
-* **Keep-Alive:** Garantir que o canal de presença não "caduca" por inatividade.
+### 2. Sincronização Inteligente de Imagens
+*   **Filtro de Path:** Alterar `broadcastImageBlockUpdate` para apenas disparar o evento se a imagem já possuir um URL remoto (`http://...`). Se for um path local, o broadcast aguarda o fim do upload.
+*   **Indicador de Upload:**
+    *   Criar evento `client-image-uploading` no Reverb.
+    *   No `CanvasController`, adicionar uma lista `remoteUploadingUsers`.
+    *   **[CanvasScreen](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/features/canvas/views/canvas_screen.dart):** Exibir um pequeno aviso (Toast ou Badge) quando um colega estiver a carregar ficheiros.
 
-### 3. Testes Unitários e de Fluxo
-* **[NEW] [canvas_controller_test.dart](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/test/features/canvas/controllers/canvas_controller_test.dart):**
-    * Testar receção de traços remotos.
-    * Testar broadcast de eventos ao desenhar localmente.
-    * Validar se o `currentPageIndex` muda corretamente ao seguir um utilizador.
+### 3. Ativação de Áudio WebRTC
+*   **[WebRTCService](file:///C:/Users/Jetro.Domingos/StudioProjects/caderno_digital_app/lib/core/network/webrtc_service.dart):**
+    *   Implementar o listener `pc.onTrack`.
+    *   Capturar o `MediaStream` remoto e garantir que a track de áudio é ativada.
+    *   Configurar a categoria de áudio para `playAndRecord` no Android/iOS (via `flutter_webrtc` helper) para garantir saída pelo altifalante.
 
 ## Plano de Verificação
 
-### Automated Tests
-* Executar `flutter test test/features/canvas/controllers/canvas_controller_test.dart`.
-* Validar 100% de cobertura na lógica de sincronização de traços.
-
 ### Manual Verification
-* Abrir a app em dois dispositivos (ou browser + mobile).
-* Desenhar em simultâneo e verificar se o atraso é mínimo e se não ocorrem quedas de ligação.
-* Forçar a queda da internet e verificar se a app tenta reconectar de forma graciosa.
+*   **Borracha:** Apagar um traço feito por outro telemóvel e confirmar que desaparece em ambos.
+*   **Imagem:** Inserir imagem, redimensionar imediatamente e confirmar que o colega só vê a imagem quando o upload termina (evitando o quadrado vazio).
+*   **Voz:** Iniciar chamada entre dois dispositivos e confirmar que o som sai pelos altifalantes.

@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/theme/app_theme.dart'; // 🚀 Importa o tema unificado
 import 'package:caderno_digital_app/features/auth/views/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 🛡️ OFFLINE-FIRST: Evitar crashes ao tentar baixar fontes sem internet.
+  // Isto obriga a app a usar fontes do sistema se não houver internet nem fontes em assets.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  
   runApp(
     const ProviderScope(
       child: MyApp(),

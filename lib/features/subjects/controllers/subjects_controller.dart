@@ -32,12 +32,16 @@ class SubjectsController extends Notifier<List<Subject>> {
   void _subscribe() {
     _subscription?.cancel();
     _subscription = _repository.watchAllSubjects().listen((lista) {
-      state = lista;
+      // 🚀 SEGURANÇA: Evita atualizar o estado durante o ciclo de construção
+      Future.microtask(() {
+        state = lista;
+      });
     });
   }
 
-  Future<void> addSubject(Subject subject) async {
-    await _repository.addSubject(subject);
+  Future<Subject?> addSubject(Subject subject) async {
+    final newSubject = await _repository.addSubject(subject);
+    return newSubject;
   }
 
   Future<void> updateSubject(Subject subject) async {

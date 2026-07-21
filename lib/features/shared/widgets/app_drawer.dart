@@ -116,7 +116,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             onPressed: () async {
               final rootNavigator = Navigator.of(context, rootNavigator: true);
               final authCtrl = ref.read(authProvider);
+              
+              // 🚀 O logout agora trata da limpeza de ficheiros, SQLite e Notifiers internamente
               await authCtrl.logout();
+              
               rootNavigator.pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                       (route) => false
@@ -664,8 +667,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             icon: pickedIconName,
                             syncedWithCloud: 0,
                           );
-                          await subNotifier.addSubject(novaDisciplina);
-                          activeNotifier.setSubject(novaDisciplina);
+                          await subNotifier.addSubject(novaDisciplina).then((s) {
+                            if (s != null) activeNotifier.setSubject(s);
+                          });
                         }
 
                         if (contextDialog.mounted) Navigator.pop(contextDialog);

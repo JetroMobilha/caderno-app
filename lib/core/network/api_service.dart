@@ -70,9 +70,16 @@ class ApiService {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
     debugPrint('🛫 POST $url');
-    debugPrint('📦 DADOS: ${jsonEncode(body)}');
 
-    final response = await http.post(url, headers: headers, body: jsonEncode(body));
+    // 🚀 OTIMIZAÇÃO: Encode pesado em Isolate para payloads grandes
+    final String bodyStr = await compute<Map<String, dynamic>, String>(
+      (map) => jsonEncode(map),
+      body,
+    );
+
+    final response = await http
+        .post(url, headers: headers, body: bodyStr)
+        .timeout(const Duration(seconds: 15));
 
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
@@ -84,7 +91,9 @@ class ApiService {
 
     debugPrint('🛫 GET $url');
 
-    final response = await http.get(url, headers: headers);
+    final response = await http
+        .get(url, headers: headers)
+        .timeout(const Duration(seconds: 15));
 
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
@@ -95,9 +104,15 @@ class ApiService {
     final headers = await _getHeaders(requireAuth: requireAuth);
 
     debugPrint('🔄 PUT $url');
-    debugPrint('📦 DADOS: ${jsonEncode(body)}');
+    
+    final String bodyStr = await compute<Map<String, dynamic>, String>(
+      (map) => jsonEncode(map),
+      body,
+    );
 
-    final response = await http.put(url, headers: headers, body: jsonEncode(body));
+    final response = await http
+        .put(url, headers: headers, body: bodyStr)
+        .timeout(const Duration(seconds: 15));
 
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
@@ -109,7 +124,9 @@ class ApiService {
 
     debugPrint('🗑️ DELETE $url');
 
-    final response = await http.delete(url, headers: headers);
+    final response = await http
+        .delete(url, headers: headers)
+        .timeout(const Duration(seconds: 15));
     return response;
   }
 
@@ -119,11 +136,16 @@ class ApiService {
     final headers = await _getHeaders(requireAuth: requireAuth);
     debugPrint('🗑️ DELETE (With Body) $url');
 
+    final String bodyStr = await compute<Map<String, dynamic>, String>(
+      (map) => jsonEncode(map),
+      body,
+    );
+
     final request = http.Request('DELETE', url);
     request.headers.addAll(headers);
-    request.body = jsonEncode(body);
+    request.body = bodyStr;
 
-    final streamedResponse = await request.send();
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
     final response = await http.Response.fromStream(streamedResponse);
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;

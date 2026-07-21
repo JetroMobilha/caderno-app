@@ -25,6 +25,7 @@ class RealtimeService {
   final _pageEventStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _pageUpdatedStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _handStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _uploadingStreamController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -35,6 +36,7 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onPageEventReceived => _pageEventStreamController.stream;
   Stream<Map<String, dynamic>> get onPageUpdated => _pageUpdatedStreamController.stream;
   Stream<Map<String, dynamic>> get onHandEventReceived => _handStreamController.stream;
+  Stream<Map<String, dynamic>> get onRemoteUploading => _uploadingStreamController.stream;
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
@@ -50,30 +52,49 @@ class RealtimeService {
     statusNotifier.value = RealtimeStatus.connecting;
 
     final options = PusherChannelsOptions.fromHost(
-      scheme: 'wss',
-      host: 'appcaderno.duckdns.org',
+      scheme: 'ws',
+      host: '35.205.132.251',
       key: '6572db37e0db7615a423',
-      port: 9001, // 🚀 Porta WSS do Reverb
+      port: 6001, // 🚀 Porta WS do Reverb
       shouldSupplyMetadataQueries: true,
       metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
     );
 
     _pusher = PusherChannelsClient.websocket(
       options: options,
-      connectionErrorHandler: (exception, trace, refresh) {
-        debugPrint('⚠️ [Realtime] Erro na conexão, a tentar reconectar...');
+      connectionErrorHandler: (exception, trace, refresh) async {
+        debugPrint('⚠️ [Realtime] Erro na conexão: $exception');
         statusNotifier.value = RealtimeStatus.error;
+        
+        // 🚀 ABRADAMENTO: Esperar 5s antes de tentar de novo para não travar a CPU
+        await Future.delayed(const Duration(seconds: 5));
         refresh();
       },
     );
 
+    // 🚀 ESCUTAR ESTADO REAL DO SOCKET
+    _pusher!.lifecycleStream.listen((state) {
+      debugPrint('📡 [Realtime] Estado do Socket: $state');
+      
+      if (state == PusherChannelsClientLifeCycleState.establishedConnection) {
+        statusNotifier.value = RealtimeStatus.connected;
+      } else if (state == PusherChannelsClientLifeCycleState.pendingConnection) {
+        statusNotifier.value = RealtimeStatus.connecting;
+      } else if (state == PusherChannelsClientLifeCycleState.disconnected) {
+        statusNotifier.value = RealtimeStatus.disconnected;
+      } else if (state == PusherChannelsClientLifeCycleState.reconnecting) {
+        statusNotifier.value = RealtimeStatus.connecting;
+      } else if (state == PusherChannelsClientLifeCycleState.connectionError || 
+                 state == PusherChannelsClientLifeCycleState.gotPusherError) {
+        statusNotifier.value = RealtimeStatus.error;
+      }
+    });
+
     try {
       _pusher!.connect();
-      statusNotifier.value = RealtimeStatus.connected;
-      debugPrint('✅ [Realtime] Conectado com sucesso ao servidor Reverb!');
     } catch (e) {
       statusNotifier.value = RealtimeStatus.error;
-      debugPrint('❌ [Realtime] Erro de rede Reverb: $e');
+      debugPrint('❌ [Realtime] Falha ao ligar Reverb: $e');
     }
   }
 
@@ -81,12 +102,20 @@ class RealtimeService {
   // 📡 2. ENTRAR NA SALA DO CADERNO (Presence Channel via Sanctum)
   // =========================================================================
   Future<void> joinNotebookChannel({required int notebookId}) async {
-    if (_pusher == null) await initConnection();
-    if (_pusher == null) return;
+    if (statusNotifier.value != RealtimeStatus.connected) {
+      await initConnection();
+    }
+    
+    // ⏳ AGUARDAR ATÉ ESTAR LIGADO (Máximo 10s)
+    int attempts = 0;
+    while (statusNotifier.value != RealtimeStatus.connected && attempts < 20) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      attempts++;
+    }
 
-    // Se já estava num canal anterior, sai primeiro para não sobrepor áudios/tintas
-    if (_notebookChannel != null) {
-      _notebookChannel!.unsubscribe();
+    if (statusNotifier.value != RealtimeStatus.connected) {
+      debugPrint('🚨 [Realtime] Impossível entrar no canal: Socket não ligou a tempo.');
+      return;
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -96,7 +125,7 @@ class RealtimeService {
     debugPrint('📡 [Realtime] A tentar autenticar e subscrever na sala: $channelName');
 
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPresenceChannel(
-      authorizationEndpoint: Uri.parse('https://appcaderno.duckdns.org:9000/api/broadcasting/auth'),
+      authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
       headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -224,6 +253,13 @@ class RealtimeService {
       }
     });
 
+    _notebookChannel!.bind('client-image-uploading').listen((event) {
+      if (event.data != null) {
+        final data = event.data is Map ? Map<String, dynamic>.from(event.data) : jsonDecode(event.data.toString());
+        _uploadingStreamController.add(data);
+      }
+    });
+
     _notebookChannel!.subscribe();
   }
 
@@ -234,9 +270,10 @@ class RealtimeService {
   // =========================================================================
   // 🛫 3. DISPARAR EVENTOS PARA OS COLEGAS (Broadcast P2P)
   // =========================================================================
-  Future<bool> broadcastStroke({required int notebookId, required Map<String, dynamic> strokeData}) async {
+  Future<bool> broadcastStroke({required int notebookId, required Map<String, dynamic> strokeData, String? myUserId}) async {
     if (_notebookChannel == null) return false;
     try {
+      if (myUserId != null) strokeData['sender_id'] = myUserId;
       _notebookChannel!.trigger(eventName: 'client-ink-stroke', data: jsonEncode(strokeData));
       return true;
     } catch (e) {
@@ -245,9 +282,10 @@ class RealtimeService {
     }
   }
 
-  Future<bool> broadcastTextBlock({required int notebookId, required Map<String, dynamic> textData}) async {
+  Future<bool> broadcastTextBlock({required int notebookId, required Map<String, dynamic> textData, String? myUserId}) async {
     if (_notebookChannel == null) return false;
     try {
+      if (myUserId != null) textData['sender_id'] = myUserId;
       _notebookChannel!.trigger(eventName: 'client-text-block', data: jsonEncode(textData));
       return true;
     } catch (e) {
@@ -256,13 +294,26 @@ class RealtimeService {
     }
   }
 
-  Future<bool> broadcastImageBlock({required int notebookId, required Map<String, dynamic> imageData}) async {
+  Future<bool> broadcastImageBlock({required int notebookId, required Map<String, dynamic> imageData, String? myUserId}) async {
     if (_notebookChannel == null) return false;
     try {
+      if (myUserId != null) imageData['sender_id'] = myUserId;
       _notebookChannel!.trigger(eventName: 'client-image-block', data: jsonEncode(imageData));
       return true;
     } catch (e) {
       debugPrint('🚨 [Realtime] Falha ao disparar imagem: $e');
+      return false;
+    }
+  }
+
+  Future<bool> broadcastImageUploading({required int notebookId, required String myUserId, required bool isUploading}) async {
+    if (_notebookChannel == null) return false;
+    try {
+      final data = {'sender_id': myUserId, 'is_uploading': isUploading};
+      _notebookChannel!.trigger(eventName: 'client-image-uploading', data: jsonEncode(data));
+      return true;
+    } catch (e) {
+      debugPrint('🚨 [Realtime] Falha ao disparar status upload: $e');
       return false;
     }
   }
@@ -353,7 +404,7 @@ class RealtimeService {
     final channelName = 'private-user.$userId';
 
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPrivateChannel(
-      authorizationEndpoint: Uri.parse('https://appcaderno.duckdns.org:9000/api/broadcasting/auth'),
+      authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
       headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',

@@ -17,6 +17,7 @@ import '../models/text_block_model.dart';
 import '../widgets/canvas_painter.dart';
 import '../widgets/canvas_toolbar.dart';
 import '../widgets/ai_assistant_sheet.dart';
+import '../widgets/collaboration_center_sheet.dart';
 import '../widgets/live_voice_cockpit.dart';
 import '../widgets/share_notebook_sheet.dart'; // 🚀 Importado para a AppBar
 
@@ -119,6 +120,15 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
           pageId: page?.id,
         ),
       ),
+    );
+  }
+
+  void _showCollaborationCenter(CanvasController controller) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CollaborationCenterSheet(notebook: widget.notebook),
     );
   }
 
@@ -405,8 +415,8 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                           if (newPoints.isNotEmpty) {
                                             ref.read(realtimeServiceProvider).broadcastStroke(
                                                 notebookId: controller.liveNotebookSid!,
+                                                myUserId: myUserId,
                                                 strokeData: {
-                                                  'sender_id': myUserId,
                                                   'page_number': page.pageNumber,
                                                   'strokes': [{
                                                     'id': _liveStrokeId,
@@ -673,6 +683,18 @@ else if (controller.currentTool == ToolMode.select) {
               ),
             ),
 
+          // 📡 AVISO DE UPLOAD REMOTO
+          if (controller.remoteUploadingUsers.isNotEmpty)
+            Positioned(
+              top: 130, left: 20,
+              child: _buildStatusBadge(
+                icon: Icons.cloud_upload,
+                label: '${controller.remoteUploadingUsers.length} colega(s) a carregar imagens...',
+                color: Colors.blueGrey,
+                onClose: () {},
+              ),
+            ),
+
           // ☁️ INDICADOR DE UPLOAD DE IMAGEM
           if (controller.isUploadingImage)
             Positioned.fill(
@@ -750,40 +772,41 @@ else if (controller.currentTool == ToolMode.select) {
           ? _buildAppBarDropdown(controller)
           : Text(widget.notebook.title, style: GoogleFonts.inter(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16)),
 
-      // 🚀 AÇÕES MOVIDAS PARA FORA DAS RESTRIÇÕES, FICAM SEMPRE VISÍVEIS
+      // 🚀 AÇÕES MOVIDAS PARA O CENTRO DE COLABORAÇÃO
       actions: [
         
-        // 🛰️ INDICADOR DE STATUS DA CONEXÃO
+        // 🛰️ BOTÃO CENTRAL DE COLABORAÇÃO
         ValueListenableBuilder<RealtimeStatus>(
-          valueListenable: realtimeStatus,
+          valueListenable: ref.watch(realtimeServiceProvider).statusNotifier,
           builder: (context, status, _) {
             Color statusColor = Colors.grey;
-            String tooltip = 'Desconectado';
+            IconData statusIcon = Icons.wifi_tethering_off;
             
-            if (status == RealtimeStatus.connected) {
+            if (!controller.isCollaborationEnabled) {
+              statusColor = Colors.grey;
+              statusIcon = Icons.portable_wifi_off;
+            } else if (status == RealtimeStatus.connected) {
               statusColor = Colors.green;
-              tooltip = 'Online e Colaborativo';
+              statusIcon = Icons.wifi_tethering;
             } else if (status == RealtimeStatus.connecting) {
               statusColor = Colors.orange;
-              tooltip = 'A conectar...';
+              statusIcon = Icons.settings_input_antenna;
             } else if (status == RealtimeStatus.error) {
               statusColor = Colors.red;
-              tooltip = 'Erro na ligação';
+              statusIcon = Icons.error_outline;
             }
             
-            return Tooltip(
-              message: tooltip,
-              child: Container(
-                width: 12, height: 12,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-              ),
+            return IconButton(
+              icon: Icon(statusIcon),
+              color: statusColor,
+              tooltip: 'Centro de Colaboração',
+              onPressed: () => _showCollaborationCenter(controller),
             );
           },
         ),
 
-        // 🔭 0. BOTÃO DE TRANSMITIR CÂMARA
-        if (controller.followingUserId == null)
+        // 🔭 BOTÃO DE TRANSMITIR CÂMARA (Visível apenas se estiver online)
+        if (controller.isCollaborationEnabled && controller.followingUserId == null)
           IconButton(
             icon: Icon(controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off),
             color: controller.isBroadcastingViewport ? Colors.redAccent : const Color(0xFF0F4C5C),
@@ -797,68 +820,18 @@ else if (controller.currentTool == ToolMode.select) {
             },
           ),
 
-        // 👥 1. CONTADOR DE QUEM ESTÁ ONLINE
-        if (controller.onlineUsers.isNotEmpty)
+        // 👥 CONTADOR DE QUEM ESTÁ ONLINE
+        if (controller.isCollaborationEnabled && controller.onlineUsers.isNotEmpty)
           Center(
             child: Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(color: const Color(0xFF27AE60).withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF27AE60), shape: BoxShape.circle)),
-                  const SizedBox(width: 6),
-                  Text('${controller.onlineUsers.length} Online', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))),
-                ],
+              child: Text(
+                '${controller.onlineUsers.length}', 
+                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))
               ),
             ),
-          ),
-
-        // 🎙️ 2. BOTÃO DE CHAMADA DE VOZ (WebRTC)
-        IconButton(
-          icon: Icon(
-              controller.isInVoiceCall ? Icons.phone_in_talk : Icons.add_ic_call_outlined,
-              color: controller.isInVoiceCall ? const Color(0xFF27AE60) : const Color(0xFF0F4C5C)
-          ),
-          tooltip: controller.isInVoiceCall ? 'Chamada em curso' : 'Sala de Voz P2P',
-          onPressed: () => controller.toggleVoiceCall(myUserId),
-        ),
-
-        // 🤝 3. BOTÃO DE PARTILHAR CADERNO
-        if (safeRole == 'owner')
-          IconButton(
-            icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF0F4C5C)),
-            tooltip: 'Partilhar Caderno',
-            onPressed: () async {
-              if ((controller.liveNotebookSid == null || controller.liveNotebookSid == 0) && !kIsWeb) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Este caderno ainda está a subir para a nuvem. Aguarda um momento! 📡'), backgroundColor: Color(0xFFE67E22)));
-                return;
-              }
-              final int? convidadosCount = await showModalBottomSheet<int>(
-                context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-                builder: (context) => ShareNotebookBottomSheet(notebook: widget.notebook),
-              );
-              if (convidadosCount != null && convidadosCount > 0) {
-                controller.initRealtimeCollaboration();
-                setState(() => controller.isRealtimeActive = true);
-              }
-            },
-          ),
-
-        // 📡 4. BOTÃO DE RECONECTAR
-        if (controller.liveNotebookSid != null && !controller.isRealtimeActive)
-          IconButton(
-            icon: const Icon(Icons.cloud_off, color: Colors.orange),
-            tooltip: 'Entrar na Sala em Tempo Real',
-            onPressed: () {
-              if (myUserId.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro: Precisas de estar ligado à nuvem para colaborar. ☁️')));
-                return;
-              }
-              controller.initRealtimeCollaboration();
-              setState(() => controller.isRealtimeActive = true);
-            },
           ),
       ],
     );
@@ -917,121 +890,29 @@ else if (controller.currentTool == ToolMode.select) {
       selectedWidgets.add(const SizedBox.shrink());
     }
 
-    // 3. Secção de Colaboradores Online
-    if (controller.onlineUsers.isNotEmpty) {
-      // Divider
-      dropdownItems.add(const DropdownMenuItem<int>(
-        enabled: false,
-        child: Divider(),
-      ));
-      selectedWidgets.add(const SizedBox.shrink());
-
-      // Header
-      dropdownItems.add(const DropdownMenuItem<int>(
-        enabled: false,
-        child: Text(
-          'ASSISTIR EM DIRETO:',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
-        ),
-      ));
-      selectedWidgets.add(const SizedBox.shrink());
-
-      // Lista de Utilizadores
-      for (var u in controller.onlineUsers) {
-        final String uId = u['id'].toString();
-        final bool isLive = controller.activeBroadcasters.contains(uId);
-        
-        if (uId == myUserId) continue;
-
-        final bool isFollowing = controller.followingUserId == uId;
-        
-        // 🚀 Usamos um valor negativo único baseado no hash do ID para evitar conflitos no Dropdown
-        final int uniqueValue = -100 - uId.hashCode.abs() % 10000;
-
-        dropdownItems.add(DropdownMenuItem<int>(
-          value: uniqueValue, 
-          onTap: () => controller.toggleFollowUser(uId, myUserId),
-          child: Row(
-            children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundColor: u['color'],
-                    child: Text(u['name'][0], style: const TextStyle(fontSize: 10, color: Colors.white)),
-                  ),
-                  if (isLive)
-                    Positioned(
-                      right: -2, bottom: -2,
-                      child: Container(
-                        width: 8, height: 8,
-                        decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1)),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  isLive ? '${u['name']} (AO VIVO 🔴)' : 'Assistir ${u['name']}',
-                  style: TextStyle(
-                    color: isLive ? Colors.redAccent : Colors.black87, 
-                    fontWeight: isLive ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                  overflow: TextOverflow.ellipsis
-                )
-              ),
-              // 👁️ INDICADOR PARA O TRANSMISSOR: Alguém que te está a assistir
-              if (controller.whoIsWatchingMe.contains(uId))
-                const Padding(
-                  padding: EdgeInsets.only(right: 6),
-                  child: Tooltip(
-                    message: 'Está a assistir-te',
-                    child: Icon(Icons.remove_red_eye, color: Colors.blueAccent, size: 16),
-                  ),
-                ),
-              if (isFollowing) const Icon(Icons.visibility, color: Colors.green, size: 16),
-            ],
-          ),
-        ));
-        selectedWidgets.add(const SizedBox.shrink());
-      }
-    }
-
-    // 👥 4. Secção: A ASSISTIR-ME (Quem me está a seguir)
-    if (controller.whoIsWatchingMe.isNotEmpty) {
+    // 3. Secção de Colaboradores Online (Simplificada para apenas indicador de quem te assiste)
+    if (controller.isCollaborationEnabled && (controller.onlineUsers.isNotEmpty || controller.whoIsWatchingMe.isNotEmpty)) {
       dropdownItems.add(const DropdownMenuItem<int>(enabled: false, child: Divider()));
       selectedWidgets.add(const SizedBox.shrink());
 
       dropdownItems.add(const DropdownMenuItem<int>(
         enabled: false,
-        child: Text('A ASSISTIR-ME:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+        child: Text('GESTÃO DE REDE:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
       ));
       selectedWidgets.add(const SizedBox.shrink());
 
-      for (var viewerId in controller.whoIsWatchingMe) {
-        final viewer = controller.onlineUsers.firstWhere((u) => u['id'].toString() == viewerId, orElse: () => {});
-        if (viewer.isEmpty) continue;
-
-        dropdownItems.add(DropdownMenuItem<int>(
-          enabled: false,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 10, backgroundColor: viewer['color'],
-                child: Text(viewer['name'][0], style: const TextStyle(fontSize: 9, color: Colors.white)),
-              ),
-              const SizedBox(width: 8),
-              Flexible(child: Text(viewer['name'], style: const TextStyle(fontSize: 12, color: Colors.black54), overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: 4),
-              const Icon(Icons.person_outline, size: 14, color: Colors.grey),
-            ],
-          ),
-        ));
-        selectedWidgets.add(const SizedBox.shrink());
-      }
+      dropdownItems.add(DropdownMenuItem<int>(
+        value: -1,
+        onTap: () => _showCollaborationCenter(controller),
+        child: const Row(
+          children: [
+            Icon(Icons.hub_outlined, size: 18, color: Color(0xFF0F4C5C)),
+            SizedBox(width: 12),
+            Text('Abrir Centro de Colaboração', style: TextStyle(fontSize: 13)),
+          ],
+        ),
+      ));
+      selectedWidgets.add(const SizedBox.shrink());
     }
 
     return DropdownButtonHideUnderline(

@@ -40,9 +40,19 @@ class WebRTCService {
 
     try {
       _localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': true,
+        'audio': {
+          'echoCancellation': true,
+          'noiseSuppression': true,
+          'autoGainControl': true,
+        },
         'video': false,
       });
+
+      // 🔊 CONFIGURAR ÁUDIO PARA MÓVEL
+      if (!kIsWeb) {
+        Helper.setSpeakerphoneOn(true);
+        Helper.setAudioMode('communication'); // 🚀 MODO DE CONVERSAÇÃO (Resolve falta de som em muitos Androids)
+      }
 
       _realtimeService.onWebRTCSignalReceived.listen(_handleIncomingSignal);
 
@@ -70,6 +80,23 @@ class WebRTCService {
     _localStream?.getTracks().forEach((track) {
       pc.addTrack(track, _localStream!);
     });
+
+    // 🎧 OUVIR ÁUDIO REMOTO
+    pc.onTrack = (RTCTrackEvent event) {
+      if (event.track.kind == 'audio' && event.streams.isNotEmpty) {
+        debugPrint('🎧 [WebRTC] Áudio remoto recebido de $targetUserId');
+        event.track.enabled = true;
+      }
+    };
+
+    pc.onAddStream = (MediaStream stream) {
+      debugPrint('🌊 [WebRTC] Stream recebido de $targetUserId');
+      stream.getAudioTracks().forEach((track) => track.enabled = true);
+    };
+
+    pc.onConnectionState = (state) {
+      debugPrint('📡 [WebRTC] Estado da ligação com $targetUserId: ${state.name}');
+    };
 
     // Enviar ICE Candidates descobertos para o outro aluno via Reverb
     pc.onIceCandidate = (candidate) {

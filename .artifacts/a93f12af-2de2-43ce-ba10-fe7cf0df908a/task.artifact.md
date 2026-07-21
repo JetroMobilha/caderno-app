@@ -1,7 +1,8 @@
-# Tarefas: Sinalização de Voz e Colaboração
+# Tarefas: Otimização de Colaboração e Voz (Concluído)
 
-- [x] Implementar evento `client-hand-event` no `RealtimeService`
-- [x] Adicionar lógica `toggleHandRaise` no `CanvasController`
-- [x] Criar botão de "Mão Erguida" no `LiveVoiceCockpit`
-- [x] Implementar indicador visual de mão erguida nos avatares
-- [x] Adicionar teste unitário para funcionalidade de Raise Hand
+- [x] Melhorar Borracha e Broadcast de Remoção (Universal)
+- [x] Corrigir Sincronização e Redimensionamento de Imagens (Filtro HTTP)
+- [x] Implementar Indicador de Upload Global (Remote Upload Status)
+- [x] Ativar Áudio Remoto no WebRTC (onTrack + AudioMode)
+- [x] Resolver bug de persistência na remoção de traços de terceiros
+- [x] Validar UX em múltiplos dispositivos (Hand Raising & Views)

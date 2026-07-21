@@ -33,16 +33,21 @@ class SyncService {
 
     debugPrint('🏁 [Sync General] A iniciar ofensiva de sincronização total...');
 
-    await pushOfflineSubjects();
-    await pullSubjects();
+    try {
+      await pushOfflineSubjects();
+      await pullSubjects();
 
-    await pushNotebooks();
-    await pullNotebooks();
+      await pushNotebooks();
+      await pullNotebooks();
 
-    await pushPages();
-    await pullPages();
-
-    debugPrint('🏆 [Sync General] Ciclo Concluído com Sucesso!');
+      await pushPages();
+      await pullPages();
+      
+      debugPrint('🏆 [Sync General] Ciclo Concluído com Sucesso!');
+    } catch (e) {
+      debugPrint('🚨 [Sync General] Falha no ciclo de sincronização: $e');
+      rethrow;
+    }
   }
 
   // =========================================================================
@@ -81,16 +86,18 @@ class SyncService {
             );
           }
         });
+      } else {
+        throw Exception('Servidor retornou erro ${response.statusCode} no PUSH Subjects');
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Subjects: $e');
+      rethrow;
     }
   }
 
   Future<bool> pullSubjects() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 🛡️ SEGURANÇA: Se não temos nada localmente, forçamos um pull total ignorando o cache
     final localCount = await _db.subjects.count().getSingle();
     final String? lastSynced = localCount > 0 ? prefs.getString('last_subjects_sync') : null;
 
@@ -99,13 +106,15 @@ class SyncService {
       final response = await _apiService.get(endpoint);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final Map<String, dynamic> data = await compute<String, Map<String, dynamic>>(
+          (jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>,
+          response.body,
+        );
         final List serverSubjects = data['subjects'] ?? [];
         if (data['server_time'] != null) await prefs.setString('last_subjects_sync', data['server_time']);
 
         if (serverSubjects.isEmpty) return false;
 
-        // 👤 Localizar o utilizador local para a Foreign Key
         final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
         if (userQuery.isEmpty) return false;
         final int localUserId = userQuery.first.id;
@@ -116,7 +125,7 @@ class SyncService {
             
             final companion = SubjectsCompanion.insert(
               serverId: Value(sId),
-              userId: localUserId, // 🚀 USAR ID LOCAL REAL
+              userId: localUserId,
               name: sub['name'] ?? '',
               color: sub['color'] ?? '#0F4C5C',
               icon: Value(sub['icon']),
@@ -125,7 +134,6 @@ class SyncService {
               updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
             );
 
-            // 🚀 UPSERT REAL: Alveja o server_id para evitar duplicação e falha de UNIQUE
             batch.insert(_db.subjects, companion, 
               onConflict: DoUpdate((old) => SubjectsCompanion(
                 name: companion.name,
@@ -139,11 +147,13 @@ class SyncService {
           }
         });
         return true;
+      } else {
+        throw Exception('Erro ${response.statusCode} no PULL Subjects');
       }
     } catch (e) {
       debugPrint('🚨 Erro PULL Subjects: $e');
+      rethrow;
     }
-    return false;
   }
 
   // =========================================================================
@@ -181,16 +191,18 @@ class SyncService {
             );
           }
         });
+      } else {
+        throw Exception('Servidor retornou erro ${response.statusCode} no PUSH Notebooks');
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Notebooks: $e');
+      rethrow;
     }
   }
 
   Future<bool> pullNotebooks() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 🛡️ SEGURANÇA: Se não temos cadernos localmente, forçamos um pull total
     final localCount = await _db.notebooks.count().getSingle();
     final String? lastSynced = localCount > 0 ? prefs.getString('last_notebooks_sync') : null;
 
@@ -199,13 +211,15 @@ class SyncService {
       final response = await _apiService.get(endpoint);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final Map<String, dynamic> data = await compute<String, Map<String, dynamic>>(
+          (jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>,
+          response.body,
+        );
         if (data['server_time'] != null) await prefs.setString('last_notebooks_sync', data['server_time']);
 
         final List serverNotebooks = data['notebooks'] ?? [];
         if (serverNotebooks.isEmpty) return false;
 
-        // Se for um pull total (sem lastSynced), removemos o que não está no servidor
         if (lastSynced == null) {
           final List<int> serverIds = serverNotebooks.map((n) => n['id'] as int).toList();
           await (_db.delete(_db.notebooks)..where((t) => t.serverId.isNotNull() & t.serverId.isNotIn(serverIds))).go();
@@ -214,11 +228,9 @@ class SyncService {
         final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
         final int currentUserId = userQuery.isNotEmpty ? userQuery.first.id : 0;
 
-        // Mapear as matérias antes do batch para evitar queries lentas dentro do loop
         final allSubjects = await _db.select(_db.subjects).get();
         final Map<int, int> subjectIdMap = {for (var s in allSubjects) if (s.serverId != null) s.serverId!: s.id};
 
-        // PASSO 1: Sincronizar os Cadernos (Batch)
         await _db.batch((batch) {
           for (var net in serverNotebooks) {
             final int sId = net['id'] is int ? net['id'] : int.parse(net['id'].toString());
@@ -267,8 +279,6 @@ class SyncService {
           }
         });
 
-        // PASSO 2: Sincronizar Permissões (Pivot Table)
-        // Primeiro, mapeamos serverId -> localId
         final allNotebooks = await _db.select(_db.notebooks).get();
         final Map<int, int> notebookIdMap = {for (var n in allNotebooks) if (n.serverId != null) n.serverId!: n.id};
 
@@ -294,11 +304,13 @@ class SyncService {
         });
 
         return true;
+      } else {
+        throw Exception('Erro ${response.statusCode} no PULL Notebooks');
       }
     } catch (e) {
       debugPrint('🚨 Erro PULL Notebooks: $e');
+      rethrow;
     }
-    return false;
   }
 
   // =========================================================================
@@ -345,16 +357,18 @@ class SyncService {
             }
           }
         });
+      } else {
+        throw Exception('Servidor retornou erro ${response.statusCode} no PUSH Pages');
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Pages: $e');
+      rethrow;
     }
   }
 
   Future<bool> pullPages() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 🛡️ SEGURANÇA: Se não temos páginas localmente, forçamos um pull total
     final localCount = await _db.pages.count().getSingle();
     final String? lastSynced = localCount > 0 ? prefs.getString('last_pages_sync') : null;
 
@@ -363,7 +377,11 @@ class SyncService {
       final response = await _apiService.get(endpoint);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final Map<String, dynamic> data = await compute<String, Map<String, dynamic>>(
+          (jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>,
+          response.body,
+        );
+        
         if (data['server_time'] != null) await prefs.setString('last_pages_sync', data['server_time']);
 
         final List serverPages = data['pages'] ?? [];
@@ -385,12 +403,11 @@ class SyncService {
             isLandscape: Value((sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0),
             headerData: Value(sPage['header_data'] is String ? sPage['header_data'] : jsonEncode(sPage['header_data'] ?? '')),
             footerData: Value(sPage['footer_data'] is String ? sPage['footer_data'] : jsonEncode(sPage['footer_data'] ?? '')),
-            extractedText: Value(sPage['extracted_text']?.toString()), // 🧠 Incluir texto extraído IA
+            extractedText: Value(sPage['extracted_text']?.toString()),
             syncedWithCloud: const Value(1),
             updatedAt: Value(DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch),
           );
 
-          // UPSERT REAL PARA PÁGINAS
           final existingPage = await (_db.select(_db.pages)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
           int localPageId;
           
@@ -410,20 +427,20 @@ class SyncService {
             localPageId = await _db.into(_db.pages).insert(pageCompanion);
           }
 
-          // Merge Tinta, Texto e Imagem
           await _pullCanvasData(localPageId, sPage);
         }
         return true;
+      } else {
+        throw Exception('Erro ${response.statusCode} no PULL Pages');
       }
     } catch (e) {
       debugPrint('🚨 Erro PULL Pages: $e');
+      rethrow;
     }
-    return false;
   }
 
   Future<void> _pullCanvasData(int localPageId, Map sPage) async {
     await _db.batch((batch) {
-      // 1. Strokes
       List strokeList = _parseJsonList(sPage['stroke_data']);
       for (var st in strokeList) {
         batch.insert(_db.canvasStrokes, 
@@ -439,7 +456,6 @@ class SyncService {
         );
       }
 
-      // 2. Text
       List textList = _parseJsonList(sPage['text_data']);
       for (var txt in textList) {
         batch.insert(_db.canvasTextBlocks, 
@@ -455,7 +471,6 @@ class SyncService {
         );
       }
 
-      // 3. Images
       List imageList = _parseJsonList(sPage['image_data']);
       for (var img in imageList) {
         batch.insert(_db.canvasImageBlocks,

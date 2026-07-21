@@ -37,9 +37,13 @@ class SyncNotifier extends StateNotifier<SyncState> {
       debugPrint('✅ [SyncProvider] Ciclo concluído.');
     } catch (e) {
       debugPrint('❌ [SyncProvider] Erro no ciclo: $e');
-      state = SyncState.error;
+      if (mounted) state = SyncState.error;
       // Volta para idle após um tempo para permitir novas tentativas
-      Future.delayed(const Duration(seconds: 30), () => state = SyncState.idle);
+      Future.delayed(const Duration(seconds: 10), () {
+        if (mounted && state == SyncState.error) {
+          state = SyncState.idle;
+        }
+      });
     }
   }
 

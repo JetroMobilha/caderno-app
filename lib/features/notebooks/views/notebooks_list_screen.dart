@@ -30,11 +30,12 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
   @override
   Widget build(BuildContext context) {
     final activeSubject = ref.watch(activeSubjectProvider);
-    final notebooks = ref.watch(notebooksProvider);
+    final notebooksState = ref.watch(notebooksProvider);
+    final notebooks = notebooksState.notebooks;
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
     // Se estiver carregando inicialmente ou mudando de stream
-    final bool isLoading = activeSubject != null && notebooks.isEmpty && activeSubject.id != -1;
+    final bool isLoading = notebooksState.isLoading;
 
     // 📱 CALCULA COLUNAS CONFORME O ESPAÇO DISPONÍVEL (Responsividade Pura)
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -136,8 +137,8 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                           await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
 
                           // 3. Atualiza o objeto do caderno com o novo Server ID que acabou de chegar
-                          final updatedNotebooks = ref.read(notebooksProvider);
-                          currentNotebook = updatedNotebooks.firstWhere((n) => n.id == notebook.id, orElse: () => notebook);
+                          final notebooksState = ref.read(notebooksProvider);
+                          currentNotebook = notebooksState.notebooks.firstWhere((n) => n.id == notebook.id, orElse: () => notebook);
                         }
 
                         // Se a internet falhou e mesmo assim não obteve serverId, aborta com graciosidade

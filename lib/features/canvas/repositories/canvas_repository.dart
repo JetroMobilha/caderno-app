@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
+import '../../../core/network/api_config.dart';
 import '../../../core/network/api_service.dart';
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
@@ -317,7 +318,7 @@ class CanvasRepository {
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('sanctum_token');
       
-      final uri = Uri.parse('https://appcaderno.duckdns.org:9000/api/notebooks/$notebookId/upload-image');
+      final uri = Uri.parse('${ApiConfig.baseUrl}/notebooks/$notebookId/upload-image');
       final request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $token'
         ..headers['Accept'] = 'application/json'

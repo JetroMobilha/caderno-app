@@ -3,13 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/theme/app_theme.dart'; // 🚀 Importa o tema unificado
 import 'package:caderno_digital_app/features/auth/views/splash_screen.dart';
+import 'dart:io';
+
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+  }
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = MyHttpOverrides();
 
-  // 🛡️ OFFLINE-FIRST: Evitar crashes ao tentar baixar fontes sem internet.
-  // Isto obriga a app a usar fontes do sistema se não houver internet nem fontes em assets.
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // 🛡️ OFFLINE-FIRST: Por padrão, o google_fonts tenta baixar fontes.
+  // Se quiser suporte offline total, baixe os .ttf, coloque em assets/ e registre no pubspec.yaml.
+  // Por agora, permitimos o download para evitar o erro de inicialização.
+  GoogleFonts.config.allowRuntimeFetching = true;
   
   runApp(
     const ProviderScope(

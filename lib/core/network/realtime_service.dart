@@ -5,17 +5,24 @@ import 'package:dart_pusher_channels/dart_pusher_channels.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api_config.dart';
+
 enum RealtimeStatus { disconnected, connecting, connected, error }
 
 class RealtimeService {
   PrivateChannel? _userChannel;
   PusherChannelsClient? _pusher;
   PresenceChannel? _notebookChannel;
+  final Set<String> _boundEvents = {}; 
   
-  final ValueNotifier<RealtimeStatus> statusNotifier = ValueNotifier(RealtimeStatus.disconnected);
+  // 🛡️ Subscrições e Estado de Membros
+  StreamSubscription? _subSucceededSub;
+  StreamSubscription? _memberAddedSub;
+  StreamSubscription? _memberRemovedSub;
   final Map<String, dynamic> _estudantesNaSala = {};
 
-  // 📡 AS NOSSAS ANTENAS DE RÁDIO (Streams Broadcast)
+  final ValueNotifier<RealtimeStatus> statusNotifier = ValueNotifier(RealtimeStatus.disconnected);
+
   final _strokeStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _textStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _imageStreamController = StreamController<Map<String, dynamic>>.broadcast();
@@ -26,6 +33,9 @@ class RealtimeService {
   final _pageUpdatedStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _handStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _uploadingStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _inviteStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _voiceCallStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _voiceStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -37,25 +47,24 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onPageUpdated => _pageUpdatedStreamController.stream;
   Stream<Map<String, dynamic>> get onHandEventReceived => _handStreamController.stream;
   Stream<Map<String, dynamic>> get onRemoteUploading => _uploadingStreamController.stream;
+  Stream<Map<String, dynamic>> get onLiveInviteReceived => _inviteStreamController.stream;
+  Stream<Map<String, dynamic>> get onVoiceCallStarted => _voiceCallStreamController.stream;
+  Stream<Map<String, dynamic>> get onVoiceStateReceived => _voiceStateStreamController.stream;
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
   final _webrtcStreamController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onWebRTCSignalReceived => _webrtcStreamController.stream;
 
-  // =========================================================================
-  // 🔌 1. INICIAR CONEXÃO WEBSOCKET (Laravel Reverb / Pusher)
-  // =========================================================================
   Future<void> initConnection() async {
     if (statusNotifier.value == RealtimeStatus.connected && _pusher != null) return;
-
     statusNotifier.value = RealtimeStatus.connecting;
 
     final options = PusherChannelsOptions.fromHost(
       scheme: 'ws',
-      host: '35.205.132.251',
-      key: '6572db37e0db7615a423',
-      port: 6001, // 🚀 Porta WS do Reverb
+      host: ApiConfig.reverbHost,
+      key: ApiConfig.reverbKey,
+      port: ApiConfig.reverbPort,
       shouldSupplyMetadataQueries: true,
       metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
     );
@@ -65,19 +74,18 @@ class RealtimeService {
       connectionErrorHandler: (exception, trace, refresh) async {
         debugPrint('⚠️ [Realtime] Erro na conexão: $exception');
         statusNotifier.value = RealtimeStatus.error;
-        
-        // 🚀 ABRADAMENTO: Esperar 5s antes de tentar de novo para não travar a CPU
         await Future.delayed(const Duration(seconds: 5));
         refresh();
       },
     );
 
-    // 🚀 ESCUTAR ESTADO REAL DO SOCKET
-    _pusher!.lifecycleStream.listen((state) {
+    _pusher!.lifecycleStream.listen((state) async {
       debugPrint('📡 [Realtime] Estado do Socket: $state');
-      
       if (state == PusherChannelsClientLifeCycleState.establishedConnection) {
         statusNotifier.value = RealtimeStatus.connected;
+        final prefs = await SharedPreferences.getInstance();
+        final currentUserIdStr = prefs.getString('user_id');
+        if (currentUserIdStr != null) _rebindGlobalListeners(int.parse(currentUserIdStr));
       } else if (state == PusherChannelsClientLifeCycleState.pendingConnection) {
         statusNotifier.value = RealtimeStatus.connecting;
       } else if (state == PusherChannelsClientLifeCycleState.disconnected) {
@@ -98,34 +106,54 @@ class RealtimeService {
     }
   }
 
-  // =========================================================================
-  // 📡 2. ENTRAR NA SALA DO CADERNO (Presence Channel via Sanctum)
-  // =========================================================================
-  Future<void> joinNotebookChannel({required int notebookId}) async {
-    if (statusNotifier.value != RealtimeStatus.connected) {
-      await initConnection();
+  void _bindEvent(String eventName, void Function(ChannelReadEvent) onEvent) {
+    if (_notebookChannel == null) return;
+    if (_boundEvents.contains(eventName)) return;
+    _boundEvents.add(eventName);
+    _notebookChannel!.bind(eventName).listen(onEvent);
+  }
+
+  Map<String, dynamic> _safeParse(dynamic data) {
+    if (data == null) return {};
+    if (data is Map) return Map<String, dynamic>.from(data);
+    if (data is String) {
+      if (data.trim().isEmpty) return {};
+      try {
+        return jsonDecode(data);
+      } catch (e) {
+        debugPrint('❌ [Realtime] Erro ao decodificar JSON: $e | Data: $data');
+        return {};
+      }
     }
+    return {};
+  }
+
+  Future<void> joinNotebookChannel({required int notebookId}) async {
+    if (statusNotifier.value != RealtimeStatus.connected) await initConnection();
     
-    // ⏳ AGUARDAR ATÉ ESTAR LIGADO (Máximo 10s)
     int attempts = 0;
     while (statusNotifier.value != RealtimeStatus.connected && attempts < 20) {
       await Future.delayed(const Duration(milliseconds: 500));
       attempts++;
     }
 
-    if (statusNotifier.value != RealtimeStatus.connected) {
-      debugPrint('🚨 [Realtime] Impossível entrar no canal: Socket não ligou a tempo.');
-      return;
+    if (statusNotifier.value != RealtimeStatus.connected) return;
+
+    // 🛡️ LIMPEZA RADICAL: Antes de criar novo canal, garantir que o anterior morreu
+    if (_notebookChannel != null) {
+      debugPrint('🧹 [Realtime] Limpando canal anterior antes de re-entrar...');
+      leaveNotebookChannel(0); // 0 é apenas placeholder aqui
     }
 
     final prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('sanctum_token');
     final channelName = 'presence-notebook.$notebookId';
-
-    debugPrint('📡 [Realtime] A tentar autenticar e subscrever na sala: $channelName');
+    
+    // 🛡️ RESET BINDINGS
+    _boundEvents.clear();
 
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPresenceChannel(
-      authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
+      authorizationEndpoint: Uri.parse(ApiConfig.authEndpoint),
       headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -134,298 +162,220 @@ class RealtimeService {
 
     _notebookChannel = _pusher!.presenceChannel(channelName, authorizationDelegate: authDelegate);
 
-    // 👥 Quando a subscrição tem sucesso
-    _notebookChannel!.whenSubscriptionSucceeded().listen((event) {
-      final payload = jsonDecode(event.data);
+    _subSucceededSub = _notebookChannel!.whenSubscriptionSucceeded().listen((event) {
+      final data = _safeParse(event.data);
+      debugPrint('📡 [Realtime] Subscrição Presence confirmada para $channelName');
       
-      if (payload['presence'] != null && payload['presence']['hash'] != null) {
-        _estudantesNaSala.clear();
-        final hash = Map<String, dynamic>.from(payload['presence']['hash']);
+      _estudantesNaSala.clear();
+      if (data['presence'] != null && data['presence']['hash'] != null) {
+        final hash = Map<String, dynamic>.from(data['presence']['hash']);
         hash.forEach((uid, info) {
           final infoMap = Map<String, dynamic>.from(info);
-          infoMap['id'] = uid; 
-          _estudantesNaSala[uid.toString()] = infoMap;
+          
+          // 🛡️ ACHATAR user_info se existir (Laravel/Reverb pattern)
+          Map<String, dynamic> flattenedInfo = {};
+          if (infoMap.containsKey('user_info')) {
+            flattenedInfo = Map<String, dynamic>.from(infoMap['user_info']);
+          } else {
+            flattenedInfo = infoMap;
+          }
+          
+          flattenedInfo['id'] = uid.toString(); 
+          _estudantesNaSala[uid.toString()] = flattenedInfo;
         });
-        _usersStreamController.add(_estudantesNaSala.values.toList());
+      }
+      _broadcastUsersList();
+      debugPrint('👥 [Realtime] Lista inicial: ${_estudantesNaSala.keys.join(", ")}');
+    });
+
+    _memberAddedSub = _notebookChannel!.whenMemberAdded().listen((event) {
+      final data = _safeParse(event.data);
+      final String? uid = event.userId ?? data['id']?.toString() ?? data['user_id']?.toString();
+      
+      debugPrint('🟢 [Realtime] EVENTO MEMBER_ADDED DETECTADO: $uid | Data: ${event.data}');
+      if (uid == null) return;
+
+      // 🛡️ ACHATAR user_info se existir
+      Map<String, dynamic> userInfo = {};
+      if (data.containsKey('user_info')) {
+        userInfo = Map<String, dynamic>.from(data['user_info']);
+      } else {
+        userInfo = data;
+      }
+      
+      userInfo['id'] = uid; 
+      _estudantesNaSala[uid] = userInfo;
+      _broadcastUsersList();
+      debugPrint('👥 [Realtime] Utilizadores atuais: ${_estudantesNaSala.keys.join(", ")}');
+    });
+
+    _memberRemovedSub = _notebookChannel!.whenMemberRemoved().listen((event) {
+      final String? uid = event.userId;
+      debugPrint('🔴 [Realtime] EVENTO MEMBER_REMOVED DETECTADO: $uid');
+      if (uid != null) {
+        _estudantesNaSala.remove(uid);
+        _broadcastUsersList();
       }
     });
 
-    // ➕ Quando um colega entra na sala
-    _notebookChannel!.whenMemberAdded().listen((event) {
-      final payload = jsonDecode(event.data);
-      final info = Map<String, dynamic>.from(payload['user_info']);
-      final String uid = payload['user_id'].toString();
-      info['id'] = uid; // 🚀 Garante que o ID do servidor está no mapa
-      _estudantesNaSala[uid] = info;
-      _usersStreamController.add(_estudantesNaSala.values.toList());
-      debugPrint('🟢 [Realtime] Entrou o colega $uid');
+    _bindEvent('client-ink-stroke', (event) => _strokeStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-text-block', (event) => _textStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-image-block', (event) => _imageStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-viewport-sync', (event) => _viewportStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-follow-update', (event) => _followStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-page-event', (event) => _pageEventStreamController.add(_safeParse(event.data)));
+    _bindEvent('PageUpdated', (event) => _pageUpdatedStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-webrtc-signal', (event) {
+      final data = _safeParse(event.data);
+      debugPrint('📡 [Realtime] Sinal WebRTC bruto recebido: ${event.data}');
+      _webrtcStreamController.add(data);
     });
-
-    // ➖ Quando um colega sai ou fecha a App
-    _notebookChannel!.whenMemberRemoved().listen((event) {
-      final payload = jsonDecode(event.data);
-      _estudantesNaSala.remove(payload['user_id'].toString());
-      _usersStreamController.add(_estudantesNaSala.values.toList());
-      debugPrint('🔴 [Realtime] Um colega saiu! ID: ${payload['user_id']}');
-    });
-
-    // 🎨 Quando um colega desenha um traço na tela!
-    _notebookChannel!.bind('client-ink-stroke').listen((event) {
-      debugPrint('📡 [WebSocket] Evento recebido: client-ink-stroke');
-      if (event.data != null) {
-        final rawData = event.data;
-        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
-        _strokeStreamController.add(parsedData);
-      }
-    });
-
-    // 📝 Quando um colega mexe num bloco de texto!
-    _notebookChannel!.bind('client-text-block').listen((event) {
-      debugPrint('📡 [WebSocket] Evento recebido: client-text-block');
-      if (event.data != null) {
-        final rawData = event.data;
-        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
-        _textStreamController.add(parsedData);
-      }
-    });
-
-    // 🖼️ Quando um colega mexe numa imagem!
-    _notebookChannel!.bind('client-image-block').listen((event) {
-      debugPrint('📡 [WebSocket] Evento recebido: client-image-block');
-      if (event.data != null) {
-        final rawData = event.data;
-        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
-        _imageStreamController.add(parsedData);
-      }
-    });
-
-    // 🔭 Quando um colega mexe na câmara (Viewport Sync)!
-    _notebookChannel!.bind('client-viewport-sync').listen((event) {
-      // Log omitido para evitar spam no console (ocorre a cada 80ms)
-      if (event.data != null) {
-        final rawData = event.data;
-        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
-        _viewportStreamController.add(parsedData);
-      }
-    });
-
-    // 👥 Quando alguém começa ou para de seguir alguém!
-    _notebookChannel!.bind('client-follow-update').listen((event) {
-      debugPrint('📡 [WebSocket] Evento recebido: client-follow-update');
-      if (event.data != null) {
-        final rawData = event.data;
-        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
-        _followStreamController.add(parsedData);
-      }
-    });
-
-    // 📄 Quando alguém adiciona ou remove uma página!
-    _notebookChannel!.bind('client-page-event').listen((event) {
-      debugPrint('📡 [WebSocket] Evento recebido: client-page-event');
-      if (event.data != null) {
-        final rawData = event.data;
-        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
-        _pageEventStreamController.add(parsedData);
-      }
-    });
-
-    // 🏆 SERVER-AUTHORITATIVE: Quando o Laravel confirma o salvamento da página!
-    _notebookChannel!.bind('PageUpdated').listen((event) {
-      debugPrint('📡 [WebSocket] Evento CRÍTICO recebido: PageUpdated (Confirmação do Servidor)');
-      if (event.data != null) {
-        final rawData = event.data;
-        Map<String, dynamic> parsedData = rawData is Map ? Map<String, dynamic>.from(rawData) : jsonDecode(rawData.toString());
-        _pageUpdatedStreamController.add(parsedData);
-      }
-    });
-
-    _notebookChannel!.bind('client-webrtc-signal').listen((event) {
-      if (event.data != null) {
-        final data = event.data is Map ? Map<String, dynamic>.from(event.data) : jsonDecode(event.data.toString());
-        _webrtcStreamController.add(data);
-      }
-    });
-
-    _notebookChannel!.bind('client-hand-event').listen((event) {
-      if (event.data != null) {
-        final data = event.data is Map ? Map<String, dynamic>.from(event.data) : jsonDecode(event.data.toString());
-        _handStreamController.add(data);
-      }
-    });
-
-    _notebookChannel!.bind('client-image-uploading').listen((event) {
-      if (event.data != null) {
-        final data = event.data is Map ? Map<String, dynamic>.from(event.data) : jsonDecode(event.data.toString());
-        _uploadingStreamController.add(data);
-      }
-    });
+    _bindEvent('client-hand-event', (event) => _handStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-image-uploading', (event) => _uploadingStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-voice-call-started', (event) => _voiceCallStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-voice-state-update', (event) => _voiceStateStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
 
     _notebookChannel!.subscribe();
   }
 
   void sendWebRTCSignal(int notebookId, Map<String, dynamic> signalData) {
+    if (signalData.containsKey('sender_id')) {
+      signalData['sender_id'] = signalData['sender_id'].toString();
+    }
+    if (signalData.containsKey('target_id')) {
+      signalData['target_id'] = signalData['target_id'].toString();
+    }
     _notebookChannel?.trigger(eventName: 'client-webrtc-signal', data: jsonEncode(signalData));
   }
 
-  // =========================================================================
-  // 🛫 3. DISPARAR EVENTOS PARA OS COLEGAS (Broadcast P2P)
-  // =========================================================================
   Future<bool> broadcastStroke({required int notebookId, required Map<String, dynamic> strokeData, String? myUserId}) async {
     if (_notebookChannel == null) return false;
-    try {
-      if (myUserId != null) strokeData['sender_id'] = myUserId;
-      _notebookChannel!.trigger(eventName: 'client-ink-stroke', data: jsonEncode(strokeData));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar traço: $e');
-      return false;
-    }
+    if (myUserId != null) strokeData['sender_id'] = myUserId;
+    _notebookChannel!.trigger(eventName: 'client-ink-stroke', data: jsonEncode(strokeData));
+    return true;
   }
 
   Future<bool> broadcastTextBlock({required int notebookId, required Map<String, dynamic> textData, String? myUserId}) async {
     if (_notebookChannel == null) return false;
-    try {
-      if (myUserId != null) textData['sender_id'] = myUserId;
-      _notebookChannel!.trigger(eventName: 'client-text-block', data: jsonEncode(textData));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar texto: $e');
-      return false;
-    }
+    if (myUserId != null) textData['sender_id'] = myUserId;
+    _notebookChannel!.trigger(eventName: 'client-text-block', data: jsonEncode(textData));
+    return true;
   }
 
   Future<bool> broadcastImageBlock({required int notebookId, required Map<String, dynamic> imageData, String? myUserId}) async {
     if (_notebookChannel == null) return false;
-    try {
-      if (myUserId != null) imageData['sender_id'] = myUserId;
-      _notebookChannel!.trigger(eventName: 'client-image-block', data: jsonEncode(imageData));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar imagem: $e');
-      return false;
-    }
+    if (myUserId != null) imageData['sender_id'] = myUserId;
+    _notebookChannel!.trigger(eventName: 'client-image-block', data: jsonEncode(imageData));
+    return true;
   }
 
   Future<bool> broadcastImageUploading({required int notebookId, required String myUserId, required bool isUploading}) async {
     if (_notebookChannel == null) return false;
-    try {
-      final data = {'sender_id': myUserId, 'is_uploading': isUploading};
-      _notebookChannel!.trigger(eventName: 'client-image-uploading', data: jsonEncode(data));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar status upload: $e');
-      return false;
-    }
+    final data = {'sender_id': myUserId, 'is_uploading': isUploading};
+    _notebookChannel!.trigger(eventName: 'client-image-uploading', data: jsonEncode(data));
+    return true;
   }
 
   Future<bool> broadcastViewport({required int notebookId, required Map<String, dynamic> viewportData, required String myUserId}) async {
     if (_notebookChannel == null) return false;
-    try {
-      // Adicionamos o ID do autor para os seguidores saberem quem estão a acompanhar
-      viewportData['sender_id'] = myUserId;
-      _notebookChannel!.trigger(eventName: 'client-viewport-sync', data: jsonEncode(viewportData));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar viewport: $e');
-      return false;
-    }
+    viewportData['sender_id'] = myUserId;
+    _notebookChannel!.trigger(eventName: 'client-viewport-sync', data: jsonEncode(viewportData));
+    return true;
   }
 
   Future<bool> broadcastFollowUpdate({required int notebookId, required String myUserId, String? followingUserId}) async {
     if (_notebookChannel == null) return false;
-    try {
-      final data = {
-        'follower_id': myUserId,
-        'following_id': followingUserId, // Se for null, parou de seguir
-      };
-      _notebookChannel!.trigger(eventName: 'client-follow-update', data: jsonEncode(data));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar follow update: $e');
-      return false;
-    }
+    final data = {'follower_id': myUserId, 'following_id': followingUserId};
+    _notebookChannel!.trigger(eventName: 'client-follow-update', data: jsonEncode(data));
+    return true;
   }
 
   Future<bool> broadcastPageEvent({required int notebookId, required Map<String, dynamic> pageData, required String myUserId}) async {
     if (_notebookChannel == null) return false;
-    try {
-      pageData['sender_id'] = myUserId; // 🚀 Identifica quem causou a mudança
-      _notebookChannel!.trigger(eventName: 'client-page-event', data: jsonEncode(pageData));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar evento de página: $e');
-      return false;
-    }
+    pageData['sender_id'] = myUserId;
+    _notebookChannel!.trigger(eventName: 'client-page-event', data: jsonEncode(pageData));
+    return true;
   }
 
   Future<bool> broadcastHandEvent({required int notebookId, required String myUserId, required bool isRaised}) async {
     if (_notebookChannel == null) return false;
-    try {
-      final data = {
-        'sender_id': myUserId,
-        'is_raised': isRaised,
-      };
-      _notebookChannel!.trigger(eventName: 'client-hand-event', data: jsonEncode(data));
-      return true;
-    } catch (e) {
-      debugPrint('🚨 [Realtime] Falha ao disparar hand event: $e');
-      return false;
-    }
+    final data = {'sender_id': myUserId, 'is_raised': isRaised};
+    _notebookChannel!.trigger(eventName: 'client-hand-event', data: jsonEncode(data));
+    return true;
   }
 
-  // =========================================================================
-  // 🚪 4. SAIR DA SALA DO CADERNO
-  // =========================================================================
+  Future<bool> broadcastVoiceCallStarted({required int notebookId, required String myUserId, required String senderName}) async {
+    if (_notebookChannel == null) return false;
+    final data = {'notebook_id': notebookId, 'sender_id': myUserId, 'sender_name': senderName};
+    _notebookChannel!.trigger(eventName: 'client-voice-call-started', data: jsonEncode(data));
+    return true;
+  }
+
+  Future<bool> broadcastLiveInvite({required int notebookId, required String myUserId, required String senderName, required List<String> targetUserIds}) async {
+    if (_notebookChannel == null) return false;
+    final data = {'notebook_id': notebookId, 'sender_id': myUserId, 'sender_name': senderName, 'targets': targetUserIds};
+    _notebookChannel!.trigger(eventName: 'client-live-invite', data: jsonEncode(data));
+    return true;
+  }
+
+  Future<bool> broadcastVoiceStateUpdate({required int notebookId, required String myUserId, required bool isInCall}) async {
+    if (_notebookChannel == null) return false;
+    final data = {'sender_id': myUserId, 'is_in_call': isInCall};
+    _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
+    return true;
+  }
+
+  void _broadcastUsersList() {
+    _usersStreamController.add(_estudantesNaSala.values.toList());
+  }
+
+  List<Map<String, dynamic>> getConnectedUsers() {
+    return _estudantesNaSala.values.map((v) => Map<String, dynamic>.from(v)).toList();
+  }
+
   void leaveNotebookChannel(int notebookId) {
     debugPrint('🚪 [Realtime] A sair da sala do caderno $notebookId');
+    _subSucceededSub?.cancel();
+    _memberAddedSub?.cancel();
+    _memberRemovedSub?.cancel();
     _notebookChannel?.unsubscribe();
     _notebookChannel = null;
+    _boundEvents.clear(); 
     _estudantesNaSala.clear();
-    _usersStreamController.add([]); // Avisa a UI para limpar a lista de avatares
+    _usersStreamController.add([]); 
   }
 
-  // =========================================================================
-  // 🛑 5. DESCONECTAR TOTALMENTE
-  // =========================================================================
   void disconnect() {
     _pusher?.disconnect();
     statusNotifier.value = RealtimeStatus.disconnected;
   }
 
-  // =========================================================================
-  // 📡 6. ESCUTAR ALTERAÇÕES DA PRÓPRIA CONTA (Sincronização Multi-Dispositivo)
-  // =========================================================================
   Future<void> listenToUserAccount(int userId, Function onGlobalSyncNeeded) async {
     if (_pusher == null) await initConnection();
     if (_pusher == null) return;
-
     final prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('sanctum_token');
     final channelName = 'private-user.$userId';
-
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPrivateChannel(
-      authorizationEndpoint: Uri.parse('http://35.205.132.251:8080/api/broadcasting/auth'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
+      authorizationEndpoint: Uri.parse(ApiConfig.authEndpoint),
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
     );
-
     _userChannel = _pusher!.privateChannel(channelName, authorizationDelegate: authDelegate);
-
-    // Quando o Servidor Laravel gritar "A TUA CONTA MUDOU NOURO DISPOSITIVO!"
-    _userChannel!.bind('SyncRequested').listen((event) {
-      debugPrint('⚡ [Reverb] Sincronização Global Exigida pelo Servidor!');
-      onGlobalSyncNeeded(); // Aciona o sync do SubjectsController
-    });
-
+    _userChannel!.bind('SyncRequested').listen((event) => onGlobalSyncNeeded());
+    _rebindGlobalListeners(userId);
     _userChannel!.subscribe();
   }
 
-  // No RealtimeService em Flutter
+  void _rebindGlobalListeners(int userId) {
+    if (_userChannel == null) return;
+    _userChannel!.bind('LiveSessionInvite').listen((event) {
+      _inviteStreamController.add(_safeParse(event.data));
+    });
+  }
+
   void updateUserTalkingState(String userId, bool isTalking) {
     if (_estudantesNaSala.containsKey(userId)) {
-      // Só dispara se o estado tiver realmente mudado (para evitar rebuilds desnecessários)
       if (_estudantesNaSala[userId]['isTalking'] != isTalking) {
         _estudantesNaSala[userId]['isTalking'] = isTalking;
         _usersStreamController.add(_estudantesNaSala.values.toList());

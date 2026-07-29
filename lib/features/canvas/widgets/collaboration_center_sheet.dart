@@ -29,14 +29,27 @@ class CollaborationCenterSheet extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Centro de Colaboração 🛰️',
-                style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Centro de Colaboração 🛰️',
+                    style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+                  ),
+                  const SizedBox(height: 4),
+                  _buildRoleBadge(controller.currentUserRole),
+                ],
               ),
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
             ],
           ),
           const SizedBox(height: 20),
+
+          // 🎙️ CONVITE DE VOZ ATIVO (Se existir)
+          if (controller.incomingVoiceCall != null) ...[
+            _buildInternalVoiceInvite(controller),
+            const SizedBox(height: 16),
+          ],
 
           // 🌐 MODO ONLINE TOGGLE
           _buildOnlineToggle(controller),
@@ -71,15 +84,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: _buildActionButton(
-                    icon: controller.isInVoiceCall ? Icons.phone_disabled : Icons.phone_callback,
-                    label: controller.isInVoiceCall ? 'Sair da Chamada' : 'Iniciar Voz',
-                    color: controller.isInVoiceCall ? Colors.redAccent : const Color(0xFF27AE60),
-                    onTap: () {
-                      controller.toggleVoiceCall(controller.myUserId);
-                      Navigator.pop(context);
-                    },
-                  ),
+                  child: _buildVoiceButton(controller, context),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -268,7 +273,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+  Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback? onTap}) {
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
@@ -276,10 +281,125 @@ class CollaborationCenterSheet extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 0,
+        disabledBackgroundColor: color.withValues(alpha: 0.3),
+        disabledForegroundColor: Colors.white70,
       ),
       onPressed: onTap,
       icon: Icon(icon, size: 18),
       label: Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildRoleBadge(String role) {
+    Color color = Colors.grey;
+    String label = 'Visitante';
+
+    if (role == 'owner') { color = Colors.orange; label = 'Dono do Caderno'; }
+    else if (role == 'editor') { color = Colors.blue; label = 'Editor'; }
+    else if (role == 'student') { color = Colors.teal; label = 'Aluno'; }
+    else if (role == 'viewer') { color = Colors.blueGrey; label = 'Leitor'; }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.5), width: 1)),
+      child: Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+    );
+  }
+
+  Widget _buildVoiceButton(CanvasController controller, BuildContext context) {
+    final bool isModerator = controller.currentUserRole == 'owner' || controller.currentUserRole == 'editor';
+    final bool canStart = isModerator || controller.isRemoteVoiceCallActive;
+
+    String label = 'Iniciar Voz';
+    IconData icon = Icons.phone_callback;
+    Color color = const Color(0xFF0F4C5C);
+    VoidCallback? action = () => controller.toggleVoiceCall(controller.myUserId);
+
+    if (controller.isInVoiceCall) {
+      label = 'Sair da Chamada';
+      icon = Icons.phone_disabled;
+      color = Colors.redAccent;
+    } else if (controller.isRemoteVoiceCallActive) {
+      label = 'Entrar na Voz';
+      icon = Icons.group_add;
+      color = const Color(0xFF27AE60);
+    } else if (!isModerator) {
+      label = 'Aguardar Moderador';
+      icon = Icons.hourglass_empty;
+      color = Colors.grey;
+      action = null;
+    }
+
+    return _buildActionButton(
+      icon: icon,
+      label: label,
+      color: color,
+      onTap: action != null ? () { action!(); Navigator.pop(context); } : null,
+    );
+  }
+
+  Widget _buildInternalVoiceInvite(CanvasController controller) {
+    final call = controller.incomingVoiceCall!;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF27AE60).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF27AE60), width: 1.5),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.record_voice_over, color: Color(0xFF27AE60)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Conversa de Voz!',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF27AE60)),
+                    ),
+                    Text(
+                      '${call['sender_name'] ?? 'Um colega'} iniciou a chamada.',
+                      style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => controller.dismissVoiceCall(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                    side: const BorderSide(color: Colors.redAccent),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Recusar'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => controller.acceptVoiceCall(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF27AE60),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Aceitar'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -3,9 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vector_math/vector_math_64.dart' as vector_math;
 
 import '../../../core/network/realtime_service.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -19,7 +17,6 @@ import '../widgets/canvas_toolbar.dart';
 import '../widgets/ai_assistant_sheet.dart';
 import '../widgets/collaboration_center_sheet.dart';
 import '../widgets/live_voice_cockpit.dart';
-import '../widgets/share_notebook_sheet.dart'; // 🚀 Importado para a AppBar
 
 class CanvasScreen extends ConsumerStatefulWidget {
   final Notebook notebook;
@@ -76,7 +73,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       
       ref.read(canvasProvider).initNotebook(
         widget.notebook.id ?? 0, widget.notebook.serverId,
-        widget.notebook.lineType ?? 'ruled', widget.notebook.paperSize ?? 'A4', 
+        widget.notebook.lineType, widget.notebook.paperSize, 
         widget.notebook.role, uid,
       );
     });
@@ -121,6 +118,47 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         ),
       ),
     );
+  }
+
+  void _handleMuteToggle(CanvasController controller) {
+    if (!controller.isAudioConsentGiven) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          title: Row(
+            children: [
+              const Icon(Icons.security, color: Color(0xFF0F4C5C)),
+              const SizedBox(width: 12),
+              const Expanded( // 🚀 Previne overflow no título
+                child: Text(
+                  'Segurança de Áudio', 
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Para participar na conversa, o teu microfone será ativado. '
+            'Garantimos que o áudio é transmitido apenas enquanto estiveres na sala e não é gravado.',
+            style: GoogleFonts.inter(fontSize: 14),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Agora não', style: TextStyle(color: Colors.black54))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                controller.requestAudioConsent();
+              },
+              child: const Text('Ativar Microfone', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      controller.toggleMute();
+    }
   }
 
   void _showCollaborationCenter(CanvasController controller) {
@@ -274,7 +312,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                               // 🚀 INDICADOR DE UPLOAD (Para quem está a carregar)
                                               if (controller.uploadingImageIds.contains(img.id))
                                                 Container(
-                                                  color: Colors.black.withOpacity(0.3),
+                                                  color: Colors.black.withValues(alpha: 0.3),
                                                   child: const Center(
                                                     child: Column(
                                                       mainAxisSize: MainAxisSize.min,
@@ -575,7 +613,7 @@ else if (controller.currentTool == ToolMode.select) {
                                     decoration: BoxDecoration(
                                       border: isTextSelected
                                           ? Border.all(color: const Color(0xFF1976D2), width: 1.5)
-                                          : (controller.currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withOpacity(0.15)) : null),
+                                          : (controller.currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.15)) : null),
                                       color: isTextSelected ? const Color(0x1F1976D2) : null,
                                     ),
                                     child: Text(tb.text, style: GoogleFonts.inter(
@@ -649,10 +687,12 @@ else if (controller.currentTool == ToolMode.select) {
                 child: Center(
                     child: LiveVoiceCockpit(
                       onlineUsers: controller.onlineUsers,
+                      userAudioLevels: controller.userAudioLevels,
                       isMuted: controller.isMuted,
                       isSpeakerOn: controller.isSpeakerOn,
                       isHandRaised: controller.isMyHandRaised,
-                      onMuteToggle: controller.toggleMute,
+                      isLoading: controller.isConnectingVoice,
+                      onMuteToggle: () => _handleMuteToggle(controller),
                       onSpeakerToggle: controller.toggleSpeaker,
                       onHandToggle: controller.toggleHandRaise,
                       onHangUp: () => controller.toggleVoiceCall(myUserId),
@@ -699,7 +739,7 @@ else if (controller.currentTool == ToolMode.select) {
           if (controller.isUploadingImage)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 child: Center(
                   child: Card(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -719,6 +759,20 @@ else if (controller.currentTool == ToolMode.select) {
                 ),
               ),
             ),
+
+          // 🔔 BANNER DE CONVITE AO VIVO
+          if (controller.pendingInvite != null)
+            Positioned(
+              top: 100, left: 20, right: 20,
+              child: _buildInviteBanner(controller),
+            ),
+
+          // 🎙️ BANNER DE CONVITE DE VOZ
+          if (controller.incomingVoiceCall != null)
+            Positioned(
+              top: 100, left: 20, right: 20,
+              child: _buildVoiceInviteBanner(controller),
+            ),
         ],
       ),
       floatingActionButton: hasPages || widget.notebook.role == 'viewer'
@@ -734,18 +788,25 @@ else if (controller.currentTool == ToolMode.select) {
 
   Widget _buildStatusBadge({required IconData icon, required String label, required Color color, required VoidCallback onClose}) {
     return Container(
+      constraints: const BoxConstraints(maxWidth: 250), // 🚀 Limite de largura
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.9),
+        color: color.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: Colors.white, size: 16),
           const SizedBox(width: 8),
-          Text(label, style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+          Flexible( // 🚀 Torna o texto adaptável
+            child: Text(
+              label, 
+              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: onClose,
@@ -756,14 +817,84 @@ else if (controller.currentTool == ToolMode.select) {
     );
   }
 
+  Widget _buildInviteBanner(CanvasController controller) {
+    final invite = controller.pendingInvite!;
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: const Color(0xFF0F4C5C),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            const Icon(Icons.bolt, color: Colors.orangeAccent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Sessão ao Vivo Iniciada!', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text('${invite['sender_name'] ?? 'Um colega'} começou a desenhar agora.', style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => controller.dismissInvite(),
+              child: const Text('Ignorar', style: TextStyle(color: Colors.white60)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black),
+              onPressed: () => controller.acceptInvite(),
+              child: const Text('Entrar', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVoiceInviteBanner(CanvasController controller) {
+    final call = controller.incomingVoiceCall!;
+    return Card(
+      elevation: 10,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: const Color(0xFF27AE60), // Verde para voz
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            const Icon(Icons.record_voice_over, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Conversa de Voz!', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text('${call['sender_name'] ?? 'Um colega'} iniciou a chamada.', style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => controller.dismissVoiceCall(),
+              child: const Text('Ignorar', style: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF27AE60)),
+              onPressed: () => controller.acceptVoiceCall(),
+              child: const Text('Aceitar', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // =========================================================================
   // 🧰 CONSTRUTORES DE APPBAR E BOTÕES GLOBAIS
   // =========================================================================
   PreferredSizeWidget _buildAppBar(CanvasController controller, bool hasPages) {
-    // Se o Role for nulo (caderno acabado de criar offline), assumimos que o criador é o Dono!
-    final String safeRole = widget.notebook.role ?? 'owner';
-    final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
-
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 1,
@@ -826,7 +957,7 @@ else if (controller.currentTool == ToolMode.select) {
             child: Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: const Color(0xFF27AE60).withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: const Color(0xFF27AE60).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
               child: Text(
                 '${controller.onlineUsers.length}', 
                 style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))
@@ -1045,7 +1176,7 @@ else if (controller.currentTool == ToolMode.select) {
           child: Wrap(
             spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
             children: _colorPalette.entries.map((entry) {
-              final hex = '#${entry.value.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final hex = '#${entry.value.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
               final bool isSelected = isForText ? controller.activeTextBlock?.textColorHex == hex : controller.selectedColorHex == hex;
               return GestureDetector(
                   onTap: () {
@@ -1057,7 +1188,7 @@ else if (controller.currentTool == ToolMode.select) {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2),
-                      boxShadow: isSelected ? [BoxShadow(color: entry.value.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 2))] : null,
+                      boxShadow: isSelected ? [BoxShadow(color: entry.value.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 2))] : null,
                     ),
                     child: CircleAvatar(radius: 16, backgroundColor: entry.value, child: isSelected ? Icon(Icons.check, size: 16, color: entry.value.computeLuminance() > 0.5 ? Colors.black : Colors.white) : null),
                   )
@@ -1106,7 +1237,7 @@ else if (controller.currentTool == ToolMode.select) {
                       onTap: () => setModalState(() => tempThickness = preset), borderRadius: BorderRadius.circular(8),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150), width: 38, height: 34, alignment: Alignment.center,
-                        decoration: BoxDecoration(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black.withOpacity(0.04), borderRadius: BorderRadius.circular(8), border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent)),
+                        decoration: BoxDecoration(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(8), border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent)),
                         child: Text('${preset.toInt()}', style: GoogleFonts.inter(fontSize: 13, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: isSelected ? Colors.white : const Color(0xFF1A1A24))),
                       ),
                     );
@@ -1153,7 +1284,7 @@ else if (controller.currentTool == ToolMode.select) {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.12) : Colors.transparent, borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12, width: 1.5)),
+        decoration: BoxDecoration(color: isSelected ? const Color(0xFF0F4C5C).withValues(alpha: 0.12) : Colors.transparent, borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12, width: 1.5)),
         child: Row(
           children: [
             Icon(icon, color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54), const SizedBox(width: 12),

@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -6,21 +6,54 @@ import 'package:permission_handler/permission_handler.dart';
 import 'realtime_service.dart';
 import 'dart:async';
 
+class AudioLevelEvent {
+  final String userId;
+  final double level;
+  AudioLevelEvent(this.userId, this.level);
+}
+
+class PeerState {
+  bool makingOffer = false;
+  bool isCreating = false;
+  bool isProcessingSignal = false;
+  String? lastOfferSdp;
+  String? lastAnswerSdp;
+  DateTime lastOfferSentAt = DateTime.fromMillisecondsSinceEpoch(0);
+  final List<RTCIceCandidate> iceQueue = [];
+}
+
+class PeerConnectionState {
+  final RTCPeerConnection pc;
+  final PeerState state;
+  bool remoteDescriptionSet = false;
+  MediaStream? remoteStream;
+
+  PeerConnectionState(this.pc, this.state);
+}
+
 class WebRTCService {
   final RealtimeService _realtimeService;
   Timer? _talkingTimer;
 
   MediaStream? _localStream;
-  final Map<String, RTCPeerConnection> _peerConnections = {};
+  final Map<String, PeerConnectionState> _peers = {};
+  final Map<String, PeerState> _peerStates = {}; // Persistir estados entre re-criações
+  StreamSubscription? _signalSubscription;
+
+  final _audioLevelController = StreamController<AudioLevelEvent>.broadcast();
+  Stream<AudioLevelEvent> get onAudioLevel => _audioLevelController.stream;
 
   WebRTCService(this._realtimeService);
 
-  // Servidores STUN públicos da Google (Gratuitos e estáveis)
   final Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
-    ]
+      {'urls': 'stun:stun2.l.google.com:19302'},
+      {'urls': 'stun:stun3.l.google.com:19302'},
+      {'urls': 'stun:stun4.l.google.com:19302'},
+    ],
+    'sdpSemantics': 'unified-plan'
   };
 
   bool _isMuted = false;
@@ -28,14 +61,77 @@ class WebRTCService {
   String? _currentUserId;
   int? _currentNotebookId;
 
-  // 1. INICIAR ÁUDIO E OUVIR SINALIZAÇÃO
   Future<bool> joinVoiceRoom(int notebookId, String myUserId, List<String> existingUserIds) async {
     _currentNotebookId = notebookId;
     _currentUserId = myUserId;
 
-    if (!kIsWeb) {
-      final status = await Permission.microphone.request();
-      if (!status.isGranted) return false;
+    try {
+      await _signalSubscription?.cancel();
+      _signalSubscription = _realtimeService.onWebRTCSignalReceived.listen(_handleIncomingSignal);
+
+      final int myIdNum = int.tryParse(myUserId) ?? 0;
+
+      for (var targetUserId in existingUserIds) {
+        if (targetUserId != _currentUserId) {
+          final int targetIdNum = int.tryParse(targetUserId) ?? 0;
+          if (myIdNum > targetIdNum) {
+            debugPrint('📡 [WebRTC] SOU o iniciador para $targetUserId');
+            if (!_peers.containsKey(targetUserId)) {
+              await _createPeerConnection(targetUserId, isInitiator: true);
+            }
+          } else {
+            debugPrint('⏳ [WebRTC] Aguardando oferta de $targetUserId');
+          }
+        }
+      }
+
+      _startVoiceActivityDetection();
+      return true;
+    } catch (e) {
+      debugPrint('🚨 Erro ao entrar na sala WebRTC: $e');
+      return false;
+    }
+  }
+
+  void handleNewUserJoined(List<String> currentOnlineIds) async {
+    if (_currentUserId == null) return;
+    final int myIdNum = int.tryParse(_currentUserId!) ?? 0;
+
+    for (var userId in currentOnlineIds) {
+      if (userId != _currentUserId && !_peers.containsKey(userId)) {
+        final int targetIdNum = int.tryParse(userId) ?? 0;
+        if (myIdNum > targetIdNum) {
+          debugPrint('📡 [WebRTC] Novo utilizador detectado ($userId). Iniciando oferta...');
+          await _createPeerConnection(userId, isInitiator: true);
+        }
+      }
+    }
+  }
+
+  void onUserJoinedVoice(String userId) async {
+    if (_currentUserId == null || userId == _currentUserId) return;
+    
+    final int myIdNum = int.tryParse(_currentUserId!) ?? 0;
+    final int targetIdNum = int.tryParse(userId) ?? 0;
+
+    if (myIdNum > targetIdNum) {
+      PeerConnectionState? peer = _peers[userId];
+      if (peer == null) {
+        debugPrint('📡 [WebRTC] Utilizador $userId entrou na VOZ. Criando ligação...');
+        await _createPeerConnection(userId, isInitiator: true);
+      } else {
+        final signalingState = await peer.pc.getSignalingState();
+        if (signalingState == RTCSignalingState.RTCSignalingStateStable) return;
+        _makeOffer(userId, peer.pc);
+      }
+    }
+  }
+
+  Future<bool> enableLocalAudio() async {
+    if (_localStream != null) return true;
+
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await Permission.microphone.request();
     }
 
     try {
@@ -48,58 +144,90 @@ class WebRTCService {
         'video': false,
       });
 
-      // 🔊 CONFIGURAR ÁUDIO PARA MÓVEL
-      if (!kIsWeb) {
-        Helper.setSpeakerphoneOn(true);
-        Helper.setAudioMode('communication'); // 🚀 MODO DE CONVERSAÇÃO (Resolve falta de som em muitos Androids)
-      }
-
-      _realtimeService.onWebRTCSignalReceived.listen(_handleIncomingSignal);
-
-      for (var targetUserId in existingUserIds) {
-        if (targetUserId != _currentUserId) {
-          await _createPeerConnection(targetUserId, isInitiator: true);
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        await Helper.setSpeakerphoneOn(_isSpeakerOn);
+        if (Platform.isAndroid) {
+          await Helper.setAndroidAudioConfiguration(AndroidAudioConfiguration.communication);
         }
       }
 
-      // 🚀 PONTO DE IGNIÇÃO: Liga o radar de voz mal entramos na sala!
-      _startVoiceActivityDetection();
+      final audioTrack = _localStream!.getAudioTracks().firstOrNull;
+      if (audioTrack != null) {
+        audioTrack.enabled = !_isMuted;
+        for (var peer in _peers.values) {
+          final transceivers = await peer.pc.getTransceivers();
+          final audioT = transceivers.where((t) => t.sender.track?.kind == 'audio' || t.receiver.track?.kind == 'audio').firstOrNull;
+          if (audioT != null) await audioT.sender.replaceTrack(audioTrack);
+        }
+      }
 
+      debugPrint('🎙️ [WebRTC] Microfone ativado localmente.');
       return true;
     } catch (e) {
-      debugPrint('🚨 Erro ao iniciar WebRTC: $e');
+      debugPrint('🚨 Erro ao capturar áudio local: $e');
       return false;
     }
   }
-  // 2. CRIAR CONEXÃO PEER-TO-PEER
+
   Future<RTCPeerConnection> _createPeerConnection(String targetUserId, {required bool isInitiator}) async {
     final pc = await createPeerConnection(_iceServers);
-    _peerConnections[targetUserId] = pc;
+    
+    final state = _peerStates[targetUserId] ?? PeerState();
+    _peerStates[targetUserId] = state;
+    _peers[targetUserId] = PeerConnectionState(pc, state);
 
-    // Adicionar o nosso microfone à ligação
-    _localStream?.getTracks().forEach((track) {
-      pc.addTrack(track, _localStream!);
-    });
+    // 🛡️ UNIFIED PLAN SYNC: Adicionar Audio E Video (mesmo que vídeo seja inativo)
+    // Isto garante que o número de m-lines no SDP coincide com o que o Windows envia.
+    await pc.addTransceiver(
+      kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
+      init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+    );
+    
+    await pc.addTransceiver(
+      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+      init: RTCRtpTransceiverInit(direction: TransceiverDirection.Inactive),
+    );
 
-    // 🎧 OUVIR ÁUDIO REMOTO
-    pc.onTrack = (RTCTrackEvent event) {
-      if (event.track.kind == 'audio' && event.streams.isNotEmpty) {
-        debugPrint('🎧 [WebRTC] Áudio remoto recebido de $targetUserId');
-        event.track.enabled = true;
-      }
+    if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
+      final transceivers = await pc.getTransceivers();
+      final audioT = transceivers.where((t) => t.sender.track?.kind == 'audio').firstOrNull;
+      if (audioT != null) await audioT.sender.replaceTrack(_localStream!.getAudioTracks().first);
+    }
+
+    pc.onRenegotiationNeeded = () {
+      debugPrint('🔄 [WebRTC] Renegociação necessária para $targetUserId');
+      _makeOffer(targetUserId, pc);
     };
 
-    pc.onAddStream = (MediaStream stream) {
-      debugPrint('🌊 [WebRTC] Stream recebido de $targetUserId');
-      stream.getAudioTracks().forEach((track) => track.enabled = true);
+    pc.onTrack = (RTCTrackEvent event) {
+      if (event.track.kind == 'audio') {
+        debugPrint('🎧 [WebRTC] Áudio remoto recebido de $targetUserId');
+        event.track.enabled = true;
+        if (event.streams.isNotEmpty) {
+          _peers[targetUserId]?.remoteStream = event.streams.first;
+        }
+      }
     };
 
     pc.onConnectionState = (state) {
       debugPrint('📡 [WebRTC] Estado da ligação com $targetUserId: ${state.name}');
     };
 
-    // Enviar ICE Candidates descobertos para o outro aluno via Reverb
+    pc.onIceConnectionState = (state) {
+      debugPrint('🕸️ [WebRTC] ICE Connection ($targetUserId): ${state.name}');
+      if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+        debugPrint('🔄 [WebRTC] ICE falhou. Tentando RESTART em 2s...');
+        Timer(const Duration(seconds: 2), () {
+          if (_peers.containsKey(targetUserId)) _makeOffer(targetUserId, pc, restartIce: true);
+        });
+      }
+    };
+
     pc.onIceCandidate = (candidate) {
+      final candStr = candidate.candidate ?? '';
+      String type = candStr.contains('typ srflx') ? 'SRFLX' : (candStr.contains('typ relay') ? 'RELAY' : 'HOST');
+      debugPrint('📍 [WebRTC] Candidate ($type) para $targetUserId: ${candStr.substring(0, candStr.length > 25 ? 25 : candStr.length)}...');
+      
       _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
         'type': 'ice',
         'target_id': targetUserId,
@@ -112,122 +240,168 @@ class WebRTCService {
       });
     };
 
-    // Se nós formos os iniciadores, criamos a Oferta (SDP Offer)
-    if (isInitiator) {
-      RTCSessionDescription offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
-        'type': 'offer',
-        'target_id': targetUserId,
-        'sender_id': _currentUserId,
-        'sdp': offer.sdp,
-      });
-    }
-
+    if (isInitiator) _makeOffer(targetUserId, pc);
     return pc;
   }
 
-  // 3. PROCESSAR SINALIZAÇÃO RECEBIDA DO REVERB
-  void _handleIncomingSignal(Map<String, dynamic> data) async {
-    if (data['target_id'] != _currentUserId) return; // Não é para mim
+  Future<void> _makeOffer(String targetUserId, RTCPeerConnection pc, {bool restartIce = false}) async {
+    final peer = _peers[targetUserId];
+    if (peer == null || peer.state.makingOffer) return;
 
-    final String senderId = data['sender_id'].toString();
-    final String type = data['type'];
+    final now = DateTime.now();
+    if (!restartIce && now.difference(peer.state.lastOfferSentAt).inMilliseconds < 1500) return;
 
-    RTCPeerConnection? pc = _peerConnections[senderId];
-
-    if (type == 'offer') {
-      pc ??= await _createPeerConnection(senderId, isInitiator: false);
-      await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], 'offer'));
-
-      RTCSessionDescription answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
+    try {
+      peer.state.makingOffer = true;
+      peer.state.lastOfferSentAt = now;
+      debugPrint('📤 [WebRTC] Criando oferta para $targetUserId...');
+      
+      RTCSessionDescription offer = await pc.createOffer(restartIce ? {'iceRestart': true} : {});
+      await pc.setLocalDescription(offer);
+      
       _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
-        'type': 'answer',
-        'target_id': senderId,
-        'sender_id': _currentUserId,
-        'sdp': answer.sdp,
+        'type': 'offer', 'target_id': targetUserId, 'sender_id': _currentUserId, 'sdp': offer.sdp,
       });
-    } else if (type == 'answer' && pc != null) {
-      await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], 'answer'));
-    } else if (type == 'ice' && pc != null) {
-      final cData = data['candidate'];
-      await pc.addCandidate(RTCIceCandidate(cData['candidate'], cData['sdpMid'], cData['sdpMLineIndex']));
-    } else if (type == 'leave') {
-      _closePeer(senderId);
+    } catch (e) {
+      debugPrint('🚨 Erro oferta: $e');
+    } finally {
+      peer.state.makingOffer = false;
     }
   }
 
-  // 4. CONTROLO DE ÁUDIO
+  void _handleIncomingSignal(Map<String, dynamic> data) async {
+    try {
+      final String senderId = data['sender_id'].toString();
+      final String targetId = data['target_id'].toString();
+      final String type = data['type'];
+      
+      if (targetId != _currentUserId.toString() || senderId == _currentUserId.toString()) return;
+
+      PeerConnectionState? peer = _peers[senderId];
+      if (peer == null && type != 'leave') {
+        await _createPeerConnection(senderId, isInitiator: false);
+        peer = _peers[senderId];
+      }
+      if (peer == null) return;
+
+      if (peer.state.isProcessingSignal && type != 'ice') return;
+
+      if (type == 'offer') {
+        final String sdp = data['sdp'];
+        if (peer.state.lastOfferSdp == sdp) return;
+        peer.state.isProcessingSignal = true;
+        peer.state.lastOfferSdp = sdp;
+
+        final int myIdNum = int.tryParse(_currentUserId ?? '0') ?? 0;
+        final int senderIdNum = int.tryParse(senderId) ?? 0;
+        
+        bool collision = (peer.state.makingOffer) || (await peer.pc.getSignalingState() != RTCSignalingState.RTCSignalingStateStable);
+        if (collision && myIdNum < senderIdNum) {
+           debugPrint('🔄 [WebRTC] Glare: Eu ignoro a oferta de $senderId');
+           peer.state.isProcessingSignal = false;
+           return;
+        }
+
+        await peer.pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
+        peer.remoteDescriptionSet = true;
+        RTCSessionDescription answer = await peer.pc.createAnswer();
+        await peer.pc.setLocalDescription(answer);
+
+        _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
+          'type': 'answer', 'target_id': senderId, 'sender_id': _currentUserId, 'sdp': answer.sdp,
+        });
+        _processIceQueue(senderId);
+        peer.state.isProcessingSignal = false;
+
+      } else if (type == 'answer') {
+        final sigState = await peer.pc.getSignalingState();
+        if (sigState != RTCSignalingState.RTCSignalingStateHaveLocalOffer) return;
+
+        peer.state.isProcessingSignal = true;
+        await peer.pc.setRemoteDescription(RTCSessionDescription(data['sdp'], 'answer'));
+        peer.remoteDescriptionSet = true;
+        _processIceQueue(senderId);
+        peer.state.isProcessingSignal = false;
+
+      } else if (type == 'ice') {
+        final candidate = RTCIceCandidate(data['candidate']['candidate'], data['candidate']['sdpMid'], data['candidate']['sdpMLineIndex']);
+        if (!peer.remoteDescriptionSet) {
+          peer.state.iceQueue.add(candidate);
+        } else {
+          await peer.pc.addCandidate(candidate);
+        }
+      } else if (type == 'leave') {
+        _closePeer(senderId);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erro sinal: $e');
+    }
+  }
+
+  void _processIceQueue(String userId) async {
+    final peer = _peers[userId];
+    if (peer != null) {
+      for (var cand in peer.state.iceQueue) {
+        await peer.pc.addCandidate(cand).catchError((e) => debugPrint('! Erro ICE Queue: $e'));
+      }
+      peer.state.iceQueue.clear();
+    }
+  }
+
   void toggleMute() {
     _isMuted = !_isMuted;
-    _localStream?.getAudioTracks().forEach((track) => track.enabled = !_isMuted);
+    _localStream?.getAudioTracks().forEach((t) => t.enabled = !_isMuted);
   }
 
   void toggleSpeaker() {
     _isSpeakerOn = !_isSpeakerOn;
-    _localStream?.getAudioTracks().forEach((track) => track.enableSpeakerphone(_isSpeakerOn));
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) Helper.setSpeakerphoneOn(_isSpeakerOn);
   }
 
   void _closePeer(String userId) {
-    _peerConnections[userId]?.close();
-    _peerConnections.remove(userId);
+    _peers[userId]?.pc.dispose();
+    _peers.remove(userId);
   }
 
   void leaveVoiceRoom() {
-    // 🛑 DESLIGA O RADAR DE VOZ IMEDIATAMENTE
     _talkingTimer?.cancel();
-    _talkingTimer = null;
-
+    _signalSubscription?.cancel();
     if (_currentNotebookId != null && _currentUserId != null) {
-      _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
-        'type': 'leave',
-        'sender_id': _currentUserId,
-      });
+      _realtimeService.sendWebRTCSignal(_currentNotebookId!, {'type': 'leave', 'sender_id': _currentUserId});
     }
-
+    _localStream?.getTracks().forEach((t) => t.stop());
     _localStream?.dispose();
     _localStream = null;
-    _peerConnections.forEach((_, pc) => pc.close());
-    _peerConnections.clear();
-
-    debugPrint('🔇 [WebRTC] Sala de voz encerrada e radar de áudio limpo.');
+    _peers.forEach((id, peer) => peer.pc.dispose());
+    _peers.clear();
+    debugPrint('🔇 [WebRTC] Sala encerrada.');
   }
-
 
   void _startVoiceActivityDetection() {
     _talkingTimer?.cancel();
-
-    // Verifica o volume da voz a cada 400ms
     _talkingTimer = Timer.periodic(const Duration(milliseconds: 400), (_) async {
-      for (var entry in _peerConnections.entries) {
-        final String remoteUserId = entry.key;
-        final RTCPeerConnection pc = entry.value;
-
+      if (_localStream != null && _currentUserId != null) {
+        final audioTracks = _localStream!.getAudioTracks();
+        if (audioTracks.isNotEmpty && audioTracks.first.enabled) {
+          _audioLevelController.add(AudioLevelEvent(_currentUserId!, _isMuted ? 0.0 : 0.01));
+        }
+      }
+      for (var entry in _peers.entries.toList()) {
         try {
-          final stats = await pc.getStats();
+          final stats = await entry.value.pc.getStats();
           for (var report in stats) {
-            // Procura pelo relatório da faixa de áudio que estamos a receber
             if (report.type == 'inbound-rtp' && report.values['kind'] == 'audio') {
               final double audioLevel = (report.values['audioLevel'] as num?)?.toDouble() ?? 0.0;
-
-              // 🎙️ Se o nível de áudio for maior que 0.05, o aluno está a falar!
-              final bool isSpeaking = audioLevel > 0.05;
-
-              // Avisa o CanvasController para atualizar o aro verde desse ID
-              _realtimeService.updateUserTalkingState(remoteUserId, isSpeaking);
+              _audioLevelController.add(AudioLevelEvent(entry.key, audioLevel));
+              _realtimeService.updateUserTalkingState(entry.key, audioLevel > 0.05);
             }
           }
-        } catch (_) {
-          // Ignora erros momentâneos de estatísticas durante a renegociação P2P
-        }
+        } catch (_) { }
       }
     });
   }
 }
 
 final webrtcServiceProvider = Provider<WebRTCService>((ref) {
-  final realtime = ref.read(realtimeServiceProvider);
-  return WebRTCService(realtime);
+  return WebRTCService(ref.read(realtimeServiceProvider));
 });

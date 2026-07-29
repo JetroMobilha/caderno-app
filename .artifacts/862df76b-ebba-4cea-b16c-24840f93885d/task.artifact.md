@@ -1,0 +1,8 @@
+- [x] Create centralized API configuration
+    - [x] Create `lib/core/network/api_config.dart`
+- [x] Update network services to use `ApiConfig`
+    - [x] Modify `lib/core/network/api_service.dart`
+    - [x] Modify `lib/core/network/realtime_service.dart`
+    - [x] Modify `lib/features/canvas/repositories/canvas_repository.dart`
+- [ ] Verification
+    - [ ] Check code for any remaining hardcoded IPs/URLs

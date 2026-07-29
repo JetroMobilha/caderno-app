@@ -6,17 +6,19 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api_config.dart';
+
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
 
   static String get baseUrl {
-    return 'https://appcaderno.duckdns.org:9000/api';
+    return ApiConfig.baseUrl;
   }
 
   static String get baseUrlImagem {
-    return 'https://appcaderno.duckdns.org:9000/storage/';
+    return ApiConfig.storageUrl;
   }
 
   // =========================================================================

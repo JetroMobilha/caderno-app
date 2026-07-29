@@ -3,9 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 class LiveVoiceCockpit extends StatelessWidget {
   final List<Map<String, dynamic>> onlineUsers;
+  final Map<String, double> userAudioLevels;
   final bool isMuted;
   final bool isSpeakerOn;
   final bool isHandRaised;
+  final bool isLoading; // 🚀 Novo estado
   final VoidCallback onMuteToggle;
   final VoidCallback onSpeakerToggle;
   final VoidCallback onHandToggle;
@@ -14,9 +16,11 @@ class LiveVoiceCockpit extends StatelessWidget {
   const LiveVoiceCockpit({
     super.key,
     required this.onlineUsers,
+    required this.userAudioLevels,
     required this.isMuted,
     required this.isSpeakerOn,
     required this.isHandRaised,
+    this.isLoading = false,
     required this.onMuteToggle,
     required this.onSpeakerToggle,
     required this.onHandToggle,
@@ -36,7 +40,7 @@ class LiveVoiceCockpit extends StatelessWidget {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF27AE60).withOpacity(0.25),
+              color: const Color(0xFF27AE60).withValues(alpha: 0.25),
               blurRadius: 20,
               offset: const Offset(0, 8)
           ),
@@ -45,7 +49,7 @@ class LiveVoiceCockpit extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.graphic_eq, color: Color(0xFF27AE60), size: 18),
+          _buildSoundWaveIcon(onlineUsers.any((u) => u['isTalking'] == true)),
           const SizedBox(width: 8),
           Text(
               'Sala de Voz P2P',
@@ -63,15 +67,31 @@ class LiveVoiceCockpit extends StatelessWidget {
             final String name = (s['name'] ?? '?').toString();
             final String initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
-            return Container(
+            final String uid = (s['id'] ?? '').toString();
+            final double level = userAudioLevels[uid] ?? 0.0;
+            // 🚀 ULTRA-SENSÍVEL: Qualquer sinal > 0 já faz o avatar reagir
+            final bool isTalking = s['isTalking'] == true || level > 0.001;
+
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 150), // Mais rápido
               margin: const EdgeInsets.only(right: 4),
-              padding: const EdgeInsets.all(1.5),
+              padding: const EdgeInsets.all(2.0),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: s['isTalking'] == true ? const Color(0xFF27AE60) : Colors.transparent,
-                    width: 1.5
+                    color: isTalking 
+                        ? const Color(0xFF2ECC71) 
+                        : (s['isInCall'] == true ? Colors.blueAccent : Colors.transparent),
+                    width: isTalking ? 2.5 : 1.5
                 ),
+                boxShadow: isTalking ? [
+                  BoxShadow(
+                    // Brilho mais forte mesmo com volume baixo
+                    color: const Color(0xFF2ECC71).withValues(alpha: (level * 8).clamp(0.4, 0.9)), 
+                    blurRadius: 10 + (level * 60), 
+                    spreadRadius: 2 + (level * 15)
+                  )
+                ] : null,
               ),
               child: Tooltip(
                 message: name,
@@ -79,17 +99,22 @@ class LiveVoiceCockpit extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     CircleAvatar(
-                      radius: 9,
+                      radius: 10,
                       backgroundColor: (s['color'] as Color?) ?? Colors.blueGrey,
                       child: Text(
                           initial,
-                          style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)
+                          style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)
                       ),
                     ),
+                    if (s['isInCall'] == true)
+                      const Positioned(
+                        left: -3, bottom: -3,
+                        child: Icon(Icons.mic, color: Color(0xFF27AE60), size: 12),
+                      ),
                     if (s['isHandRaised'] == true)
                       const Positioned(
-                        right: -4, top: -4,
-                        child: Icon(Icons.pan_tool, color: Colors.orange, size: 10),
+                        right: -5, top: -5,
+                        child: Icon(Icons.pan_tool, color: Colors.orange, size: 11),
                       ),
                   ],
                 ),
@@ -135,12 +160,14 @@ class LiveVoiceCockpit extends StatelessWidget {
           ),
           const SizedBox(width: 6),
 
-          // 📞 Terminar Chamada
-          _buildVoiceButton(
-            icon: Icons.call_end,
-            color: Colors.redAccent,
-            onTap: onHangUp,
-          ),
+          // 📞 Terminar Chamada ou Spinner
+          isLoading 
+            ? const SizedBox(width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70))
+            : _buildVoiceButton(
+                icon: Icons.call_end,
+                color: Colors.redAccent,
+                onTap: onHangUp,
+              ),
         ],
       ),
     );
@@ -155,6 +182,15 @@ class LiveVoiceCockpit extends StatelessWidget {
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         child: Icon(icon, size: 14, color: Colors.white),
       ),
+    );
+  }
+
+  Widget _buildSoundWaveIcon(bool active) {
+    return SizedBox(
+      width: 18, height: 18,
+      child: active 
+        ? const Icon(Icons.graphic_eq, color: Color(0xFF2ECC71), size: 18)
+        : const Icon(Icons.graphic_eq, color: Colors.white24, size: 18),
     );
   }
 }

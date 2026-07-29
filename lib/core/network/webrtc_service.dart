@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -31,13 +32,14 @@ class PeerConnectionState {
   PeerConnectionState(this.pc, this.state);
 }
 
-class WebRTCService {
+/// 🎙️ WebRTCService simplificado para Áudio-Only
+class WebRTCService extends ChangeNotifier {
   final RealtimeService _realtimeService;
   Timer? _talkingTimer;
 
   MediaStream? _localStream;
   final Map<String, PeerConnectionState> _peers = {};
-  final Map<String, PeerState> _peerStates = {}; // Persistir estados entre re-criações
+  final Map<String, PeerState> _peerStates = {};
   StreamSubscription? _signalSubscription;
 
   final _audioLevelController = StreamController<AudioLevelEvent>.broadcast();
@@ -50,8 +52,6 @@ class WebRTCService {
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
       {'urls': 'stun:stun2.l.google.com:19302'},
-      {'urls': 'stun:stun3.l.google.com:19302'},
-      {'urls': 'stun:stun4.l.google.com:19302'},
     ],
     'sdpSemantics': 'unified-plan'
   };
@@ -60,6 +60,8 @@ class WebRTCService {
   bool _isSpeakerOn = true;
   String? _currentUserId;
   int? _currentNotebookId;
+
+  Map<String, PeerConnectionState> get peers => _peers;
 
   Future<bool> joinVoiceRoom(int notebookId, String myUserId, List<String> existingUserIds) async {
     _currentNotebookId = notebookId;
@@ -70,25 +72,22 @@ class WebRTCService {
       _signalSubscription = _realtimeService.onWebRTCSignalReceived.listen(_handleIncomingSignal);
 
       final int myIdNum = int.tryParse(myUserId) ?? 0;
-
       for (var targetUserId in existingUserIds) {
         if (targetUserId != _currentUserId) {
           final int targetIdNum = int.tryParse(targetUserId) ?? 0;
           if (myIdNum > targetIdNum) {
-            debugPrint('📡 [WebRTC] SOU o iniciador para $targetUserId');
             if (!_peers.containsKey(targetUserId)) {
               await _createPeerConnection(targetUserId, isInitiator: true);
             }
-          } else {
-            debugPrint('⏳ [WebRTC] Aguardando oferta de $targetUserId');
           }
         }
       }
 
       _startVoiceActivityDetection();
+      notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('🚨 Erro ao entrar na sala WebRTC: $e');
+      debugPrint('🚨 Erro WebRTC Join: $e');
       return false;
     }
   }
@@ -101,7 +100,6 @@ class WebRTCService {
       if (userId != _currentUserId && !_peers.containsKey(userId)) {
         final int targetIdNum = int.tryParse(userId) ?? 0;
         if (myIdNum > targetIdNum) {
-          debugPrint('📡 [WebRTC] Novo utilizador detectado ($userId). Iniciando oferta...');
           await _createPeerConnection(userId, isInitiator: true);
         }
       }
@@ -110,19 +108,18 @@ class WebRTCService {
 
   void onUserJoinedVoice(String userId) async {
     if (_currentUserId == null || userId == _currentUserId) return;
-    
     final int myIdNum = int.tryParse(_currentUserId!) ?? 0;
     final int targetIdNum = int.tryParse(userId) ?? 0;
 
     if (myIdNum > targetIdNum) {
       PeerConnectionState? peer = _peers[userId];
       if (peer == null) {
-        debugPrint('📡 [WebRTC] Utilizador $userId entrou na VOZ. Criando ligação...');
         await _createPeerConnection(userId, isInitiator: true);
       } else {
-        final signalingState = await peer.pc.getSignalingState();
-        if (signalingState == RTCSignalingState.RTCSignalingStateStable) return;
-        _makeOffer(userId, peer.pc);
+        final sigState = await peer.pc.getSignalingState();
+        if (sigState == RTCSignalingState.RTCSignalingStateStable) {
+          _makeOffer(userId, peer.pc);
+        }
       }
     }
   }
@@ -136,11 +133,7 @@ class WebRTCService {
 
     try {
       _localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'echoCancellation': true,
-          'noiseSuppression': true,
-          'autoGainControl': true,
-        },
+        'audio': {'echoCancellation': true, 'noiseSuppression': true},
         'video': false,
       });
 
@@ -151,92 +144,73 @@ class WebRTCService {
         }
       }
 
-      final audioTrack = _localStream!.getAudioTracks().firstOrNull;
+      final audioTrack = _localStream!.getAudioTracks().isNotEmpty ? _localStream!.getAudioTracks()[0] : null;
       if (audioTrack != null) {
         audioTrack.enabled = !_isMuted;
         for (var peer in _peers.values) {
           final transceivers = await peer.pc.getTransceivers();
-          final audioT = transceivers.where((t) => t.sender.track?.kind == 'audio' || t.receiver.track?.kind == 'audio').firstOrNull;
+          final audioT = transceivers.where((t) => t.sender.track?.kind == 'audio').firstOrNull;
           if (audioT != null) await audioT.sender.replaceTrack(audioTrack);
         }
       }
 
-      debugPrint('🎙️ [WebRTC] Microfone ativado localmente.');
+      debugPrint('🎙️ [WebRTC] Áudio local ativado.');
+      notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('🚨 Erro ao capturar áudio local: $e');
+      debugPrint('🚨 Erro enableLocalAudio: $e');
       return false;
     }
   }
 
   Future<RTCPeerConnection> _createPeerConnection(String targetUserId, {required bool isInitiator}) async {
     final pc = await createPeerConnection(_iceServers);
-    
     final state = _peerStates[targetUserId] ?? PeerState();
     _peerStates[targetUserId] = state;
     _peers[targetUserId] = PeerConnectionState(pc, state);
 
-    // 🛡️ UNIFIED PLAN SYNC: Adicionar Audio E Video (mesmo que vídeo seja inativo)
-    // Isto garante que o número de m-lines no SDP coincide com o que o Windows envia.
     await pc.addTransceiver(
       kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
       init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
-    );
-    
-    await pc.addTransceiver(
-      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-      init: RTCRtpTransceiverInit(direction: TransceiverDirection.Inactive),
     );
 
     if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
       final transceivers = await pc.getTransceivers();
       final audioT = transceivers.where((t) => t.sender.track?.kind == 'audio').firstOrNull;
-      if (audioT != null) await audioT.sender.replaceTrack(_localStream!.getAudioTracks().first);
+      if (audioT != null) await audioT.sender.replaceTrack(_localStream!.getAudioTracks()[0]);
     }
 
-    pc.onRenegotiationNeeded = () {
-      debugPrint('🔄 [WebRTC] Renegociação necessária para $targetUserId');
-      _makeOffer(targetUserId, pc);
-    };
+    pc.onRenegotiationNeeded = () => _makeOffer(targetUserId, pc);
 
     pc.onTrack = (RTCTrackEvent event) {
+      final peer = _peers[targetUserId];
+      if (peer == null) return;
       if (event.track.kind == 'audio') {
-        debugPrint('🎧 [WebRTC] Áudio remoto recebido de $targetUserId');
         event.track.enabled = true;
-        if (event.streams.isNotEmpty) {
-          _peers[targetUserId]?.remoteStream = event.streams.first;
-        }
+        if (event.streams.isNotEmpty) peer.remoteStream = event.streams[0];
+        notifyListeners();
       }
     };
 
     pc.onConnectionState = (state) {
-      debugPrint('📡 [WebRTC] Estado da ligação com $targetUserId: ${state.name}');
+      if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) notifyListeners();
     };
 
     pc.onIceConnectionState = (state) {
-      debugPrint('🕸️ [WebRTC] ICE Connection ($targetUserId): ${state.name}');
       if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
-        debugPrint('🔄 [WebRTC] ICE falhou. Tentando RESTART em 2s...');
         Timer(const Duration(seconds: 2), () {
           if (_peers.containsKey(targetUserId)) _makeOffer(targetUserId, pc, restartIce: true);
         });
       }
+      notifyListeners();
     };
 
     pc.onIceCandidate = (candidate) {
-      final candStr = candidate.candidate ?? '';
-      String type = candStr.contains('typ srflx') ? 'SRFLX' : (candStr.contains('typ relay') ? 'RELAY' : 'HOST');
-      debugPrint('📍 [WebRTC] Candidate ($type) para $targetUserId: ${candStr.substring(0, candStr.length > 25 ? 25 : candStr.length)}...');
-      
       _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
         'type': 'ice',
         'target_id': targetUserId,
         'sender_id': _currentUserId,
-        'candidate': {
-          'candidate': candidate.candidate,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-        }
+        'candidate': {'candidate': candidate.candidate, 'sdpMid': candidate.sdpMid, 'sdpMLineIndex': candidate.sdpMLineIndex}
       });
     };
 
@@ -254,22 +228,17 @@ class WebRTCService {
     try {
       peer.state.makingOffer = true;
       peer.state.lastOfferSentAt = now;
-      debugPrint('📤 [WebRTC] Criando oferta para $targetUserId...');
-      
       RTCSessionDescription offer = await pc.createOffer(restartIce ? {'iceRestart': true} : {});
       await pc.setLocalDescription(offer);
-      
       _realtimeService.sendWebRTCSignal(_currentNotebookId!, {
         'type': 'offer', 'target_id': targetUserId, 'sender_id': _currentUserId, 'sdp': offer.sdp,
       });
-    } catch (e) {
-      debugPrint('🚨 Erro oferta: $e');
-    } finally {
+    } catch (_) {} finally {
       peer.state.makingOffer = false;
     }
   }
 
-  void _handleIncomingSignal(Map<String, dynamic> data) async {
+  Future<void> _handleIncomingSignal(Map<String, dynamic> data) async {
     try {
       final String senderId = data['sender_id'].toString();
       final String targetId = data['target_id'].toString();
@@ -287,22 +256,20 @@ class WebRTCService {
       if (peer.state.isProcessingSignal && type != 'ice') return;
 
       if (type == 'offer') {
-        final String sdp = data['sdp'];
-        if (peer.state.lastOfferSdp == sdp) return;
+        if (peer.state.lastOfferSdp == data['sdp']) return;
         peer.state.isProcessingSignal = true;
-        peer.state.lastOfferSdp = sdp;
+        peer.state.lastOfferSdp = data['sdp'];
 
         final int myIdNum = int.tryParse(_currentUserId ?? '0') ?? 0;
         final int senderIdNum = int.tryParse(senderId) ?? 0;
         
         bool collision = (peer.state.makingOffer) || (await peer.pc.getSignalingState() != RTCSignalingState.RTCSignalingStateStable);
         if (collision && myIdNum < senderIdNum) {
-           debugPrint('🔄 [WebRTC] Glare: Eu ignoro a oferta de $senderId');
            peer.state.isProcessingSignal = false;
            return;
         }
 
-        await peer.pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
+        await peer.pc.setRemoteDescription(RTCSessionDescription(data['sdp'], 'offer'));
         peer.remoteDescriptionSet = true;
         RTCSessionDescription answer = await peer.pc.createAnswer();
         await peer.pc.setLocalDescription(answer);
@@ -332,17 +299,16 @@ class WebRTCService {
         }
       } else if (type == 'leave') {
         _closePeer(senderId);
+        notifyListeners();
       }
-    } catch (e) {
-      debugPrint('⚠️ Erro sinal: $e');
-    }
+    } catch (_) {}
   }
 
   void _processIceQueue(String userId) async {
     final peer = _peers[userId];
     if (peer != null) {
       for (var cand in peer.state.iceQueue) {
-        await peer.pc.addCandidate(cand).catchError((e) => debugPrint('! Erro ICE Queue: $e'));
+        await peer.pc.addCandidate(cand).catchError((_) => null);
       }
       peer.state.iceQueue.clear();
     }
@@ -351,11 +317,13 @@ class WebRTCService {
   void toggleMute() {
     _isMuted = !_isMuted;
     _localStream?.getAudioTracks().forEach((t) => t.enabled = !_isMuted);
+    notifyListeners();
   }
 
   void toggleSpeaker() {
     _isSpeakerOn = !_isSpeakerOn;
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) Helper.setSpeakerphoneOn(_isSpeakerOn);
+    notifyListeners();
   }
 
   void _closePeer(String userId) {
@@ -374,7 +342,7 @@ class WebRTCService {
     _localStream = null;
     _peers.forEach((id, peer) => peer.pc.dispose());
     _peers.clear();
-    debugPrint('🔇 [WebRTC] Sala encerrada.');
+    notifyListeners();
   }
 
   void _startVoiceActivityDetection() {
@@ -402,6 +370,6 @@ class WebRTCService {
   }
 }
 
-final webrtcServiceProvider = Provider<WebRTCService>((ref) {
+final webrtcServiceProvider = ChangeNotifierProvider<WebRTCService>((ref) {
   return WebRTCService(ref.read(realtimeServiceProvider));
 });

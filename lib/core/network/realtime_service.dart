@@ -69,6 +69,8 @@ class RealtimeService {
       metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
     );
 
+    debugPrint('📡 [Realtime] Iniciando ligação Reverb em ${ApiConfig.reverbHost}:${ApiConfig.reverbPort}');
+
     _pusher = PusherChannelsClient.websocket(
       options: options,
       connectionErrorHandler: (exception, trace, refresh) async {

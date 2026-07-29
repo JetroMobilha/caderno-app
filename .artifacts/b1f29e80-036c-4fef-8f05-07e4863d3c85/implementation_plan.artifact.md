@@ -1,37 +1,34 @@
-# Plano de Implementação - Estabilização de Presença e Testes Automatizados
+# Plano de Implementação - Estabilização WebRTC e Depuração Visual
 
-Este plano visa resolver o problema de visibilidade onde o primeiro utilizador a entrar na sala não deteta a entrada do segundo, além de introduzir testes para garantir a robustez da lógica.
+Este plano visa resolver a falha de áudio persistente (ICE Failed) através da introdução de uma camada de vídeo de depuração que servirá como "Ping Visual" para confirmar a conectividade P2P.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> Vamos redesenhar o ciclo de vida do canal de presença no `RealtimeService`. A falha observada indica que o ouvinte de "Membro Adicionado" (`whenMemberAdded`) está a ser perdido ou não é registado corretamente devido a subscrições anteriores não finalizadas.
+> A ativação do vídeo exigirá permissões de câmara em ambos os dispositivos. O objetivo não é uma funcionalidade final de vídeo, mas sim isolar se o problema é de **Rede (ICE)** ou de **Hardware/Codec de Áudio**.
 
 ## Proposed Changes
 
-### Fase 1: Estabilização da Presença (AGORA)
+### Fase 3: Depuração Visual (Ping Visual)
 
-#### [MODIFY] [realtime_service.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/network/realtime_service.dart)
-- **Unsubscribe Preventivo**: Garantir que qualquer subscrição anterior ao canal é cancelada e o canal antigo é destruído antes de iniciar uma nova ligação.
-- **Deteção de Membros Robusta**: Adicionar logs para o evento bruto `pusher:member_added` e garantir que o processamento do mapa `_estudantesNaSala` é imutável para evitar erros de concorrência.
-- **Exposição de Estado**: Criar um método `getConnectedUsers()` para permitir que o controlador peça a lista atual a qualquer momento.
+#### [MODIFY] [webrtc_service.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/network/webrtc_service.dart)
+- **Ativar Vídeo Local**: Alterar `getUserMedia` para capturar vídeo.
+- **Gestão de Renderizadores**: Introduzir `RTCVideoRenderer` para o vídeo local e um para cada peer remoto.
+- **Unified Plan Video**: Mudar transceivers de vídeo para `SendRecv`.
+- **Exposição de Streams**: Criar streams para que a UI saiba quando um novo vídeo está disponível.
 
-#### [MODIFY] [canvas_controller.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/controllers/canvas_controller.dart)
-- **Gatilho de Entrada**: Ao entrar na sala, disparar um pedido explícito de atualização da lista de utilizadores.
+#### [NEW] [webrtc_debug_overlay.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/webrtc_debug_overlay.dart)
+- Widget flutuante que mostra miniaturas dos vídeos e o estado detalhado da ligação (IPs, RTT, Codecs).
 
-#### [NEW] [presence_logic_test.dart](file:///C:/Users/HP/StudioProjects/caderno-app/test/core/network/presence_logic_test.dart)
-- Testar a lógica de adição e remoção de membros no mapa interno do serviço.
-
-### Fase 2: Testes WebRTC
-- Implementar o teste de sinalização WebRTC anteriormente proposto para validar o handshake.
+#### [MODIFY] [canvas_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/views/canvas_screen.dart)
+- Integrar o overlay de depuração no topo da pilha do Canvas.
 
 ## Verification Plan
 
-### Automated Tests
-- `flutter test test/core/network/presence_logic_test.dart`
-
 ### Manual Verification
-1. Entrar com o Utilizador 1.
-2. Entrar com o Utilizador 2.
-3. Verificar no Utilizador 1 se aparece o log: `🟢 [Realtime] EVENTO MEMBER_ADDED RECEBIDO: 2`.
-4. Confirmar se o avatar aparece na barra superior.
+1. Entrar na sala de voz.
+2. Confirmar se a minha câmara liga (Self-view).
+3. Verificar se o vídeo do colega aparece ao conectar.
+4. **Diagnóstico**:
+   - Se houver vídeo mas não áudio -> Problema de Configuração de Áudio/Codecs.
+   - Se não houver vídeo e o estado for `Failed` -> Problema de Rede (Necessário TURN).

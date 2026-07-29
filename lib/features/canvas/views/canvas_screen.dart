@@ -699,7 +699,7 @@ else if (controller.currentTool == ToolMode.select) {
                     )
                 )
             ),
-
+          
           // 🔭 INDICADORES DE ESTADO (FOLLOW/BROADCAST)
           if (controller.followingUserId != null)
             Positioned(

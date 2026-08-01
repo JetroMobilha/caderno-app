@@ -531,6 +531,18 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
   static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
   @override
   late final GeneratedColumn<int> userId = GeneratedColumn<int>(
@@ -610,6 +622,7 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
   List<GeneratedColumn> get $columns => [
     id,
     serverId,
+    clientId,
     userId,
     name,
     color,
@@ -637,6 +650,12 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
       context.handle(
         _serverIdMeta,
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
       );
     }
     if (data.containsKey('user_id')) {
@@ -707,6 +726,10 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      ),
       userId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}user_id'],
@@ -747,6 +770,7 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
 class Subject extends DataClass implements Insertable<Subject> {
   final int id;
   final int? serverId;
+  final String? clientId;
   final int userId;
   final String name;
   final String color;
@@ -757,6 +781,7 @@ class Subject extends DataClass implements Insertable<Subject> {
   const Subject({
     required this.id,
     this.serverId,
+    this.clientId,
     required this.userId,
     required this.name,
     required this.color,
@@ -771,6 +796,9 @@ class Subject extends DataClass implements Insertable<Subject> {
     map['id'] = Variable<int>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
+    }
+    if (!nullToAbsent || clientId != null) {
+      map['client_id'] = Variable<String>(clientId);
     }
     map['user_id'] = Variable<int>(userId);
     map['name'] = Variable<String>(name);
@@ -790,6 +818,9 @@ class Subject extends DataClass implements Insertable<Subject> {
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
+      clientId: clientId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientId),
       userId: Value(userId),
       name: Value(name),
       color: Value(color),
@@ -808,6 +839,7 @@ class Subject extends DataClass implements Insertable<Subject> {
     return Subject(
       id: serializer.fromJson<int>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
+      clientId: serializer.fromJson<String?>(json['clientId']),
       userId: serializer.fromJson<int>(json['userId']),
       name: serializer.fromJson<String>(json['name']),
       color: serializer.fromJson<String>(json['color']),
@@ -823,6 +855,7 @@ class Subject extends DataClass implements Insertable<Subject> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'serverId': serializer.toJson<int?>(serverId),
+      'clientId': serializer.toJson<String?>(clientId),
       'userId': serializer.toJson<int>(userId),
       'name': serializer.toJson<String>(name),
       'color': serializer.toJson<String>(color),
@@ -836,6 +869,7 @@ class Subject extends DataClass implements Insertable<Subject> {
   Subject copyWith({
     int? id,
     Value<int?> serverId = const Value.absent(),
+    Value<String?> clientId = const Value.absent(),
     int? userId,
     String? name,
     String? color,
@@ -846,6 +880,7 @@ class Subject extends DataClass implements Insertable<Subject> {
   }) => Subject(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
+    clientId: clientId.present ? clientId.value : this.clientId,
     userId: userId ?? this.userId,
     name: name ?? this.name,
     color: color ?? this.color,
@@ -858,6 +893,7 @@ class Subject extends DataClass implements Insertable<Subject> {
     return Subject(
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
       userId: data.userId.present ? data.userId.value : this.userId,
       name: data.name.present ? data.name.value : this.name,
       color: data.color.present ? data.color.value : this.color,
@@ -875,6 +911,7 @@ class Subject extends DataClass implements Insertable<Subject> {
     return (StringBuffer('Subject(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
           ..write('userId: $userId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
@@ -890,6 +927,7 @@ class Subject extends DataClass implements Insertable<Subject> {
   int get hashCode => Object.hash(
     id,
     serverId,
+    clientId,
     userId,
     name,
     color,
@@ -904,6 +942,7 @@ class Subject extends DataClass implements Insertable<Subject> {
       (other is Subject &&
           other.id == this.id &&
           other.serverId == this.serverId &&
+          other.clientId == this.clientId &&
           other.userId == this.userId &&
           other.name == this.name &&
           other.color == this.color &&
@@ -916,6 +955,7 @@ class Subject extends DataClass implements Insertable<Subject> {
 class SubjectsCompanion extends UpdateCompanion<Subject> {
   final Value<int> id;
   final Value<int?> serverId;
+  final Value<String?> clientId;
   final Value<int> userId;
   final Value<String> name;
   final Value<String> color;
@@ -926,6 +966,7 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
   const SubjectsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
     this.userId = const Value.absent(),
     this.name = const Value.absent(),
     this.color = const Value.absent(),
@@ -937,6 +978,7 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
   SubjectsCompanion.insert({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
     required int userId,
     required String name,
     required String color,
@@ -950,6 +992,7 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
   static Insertable<Subject> custom({
     Expression<int>? id,
     Expression<int>? serverId,
+    Expression<String>? clientId,
     Expression<int>? userId,
     Expression<String>? name,
     Expression<String>? color,
@@ -961,6 +1004,7 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
+      if (clientId != null) 'client_id': clientId,
       if (userId != null) 'user_id': userId,
       if (name != null) 'name': name,
       if (color != null) 'color': color,
@@ -974,6 +1018,7 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
   SubjectsCompanion copyWith({
     Value<int>? id,
     Value<int?>? serverId,
+    Value<String?>? clientId,
     Value<int>? userId,
     Value<String>? name,
     Value<String>? color,
@@ -985,6 +1030,7 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     return SubjectsCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
+      clientId: clientId ?? this.clientId,
       userId: userId ?? this.userId,
       name: name ?? this.name,
       color: color ?? this.color,
@@ -1003,6 +1049,9 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
     }
     if (userId.present) {
       map['user_id'] = Variable<int>(userId.value);
@@ -1033,6 +1082,7 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     return (StringBuffer('SubjectsCompanion(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
           ..write('userId: $userId, ')
           ..write('name: $name, ')
           ..write('color: $color, ')
@@ -1073,6 +1123,18 @@ class $NotebooksTable extends Notebooks
     aliasedName,
     true,
     type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
@@ -1236,6 +1298,7 @@ class $NotebooksTable extends Notebooks
   List<GeneratedColumn> get $columns => [
     id,
     serverId,
+    clientId,
     subjectId,
     title,
     coverType,
@@ -1270,6 +1333,12 @@ class $NotebooksTable extends Notebooks
       context.handle(
         _serverIdMeta,
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
       );
     }
     if (data.containsKey('subject_id')) {
@@ -1386,6 +1455,10 @@ class $NotebooksTable extends Notebooks
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      ),
       subjectId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}subject_id'],
@@ -1454,6 +1527,7 @@ class $NotebooksTable extends Notebooks
 class Notebook extends DataClass implements Insertable<Notebook> {
   final int id;
   final int? serverId;
+  final String? clientId;
   final int? subjectId;
   final String title;
   final String coverType;
@@ -1471,6 +1545,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   const Notebook({
     required this.id,
     this.serverId,
+    this.clientId,
     this.subjectId,
     required this.title,
     required this.coverType,
@@ -1492,6 +1567,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     map['id'] = Variable<int>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
+    }
+    if (!nullToAbsent || clientId != null) {
+      map['client_id'] = Variable<String>(clientId);
     }
     if (!nullToAbsent || subjectId != null) {
       map['subject_id'] = Variable<int>(subjectId);
@@ -1530,6 +1608,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
+      clientId: clientId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientId),
       subjectId: subjectId == null && nullToAbsent
           ? const Value.absent()
           : Value(subjectId),
@@ -1569,6 +1650,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     return Notebook(
       id: serializer.fromJson<int>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
+      clientId: serializer.fromJson<String?>(json['clientId']),
       subjectId: serializer.fromJson<int?>(json['subjectId']),
       title: serializer.fromJson<String>(json['title']),
       coverType: serializer.fromJson<String>(json['coverType']),
@@ -1591,6 +1673,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'serverId': serializer.toJson<int?>(serverId),
+      'clientId': serializer.toJson<String?>(clientId),
       'subjectId': serializer.toJson<int?>(subjectId),
       'title': serializer.toJson<String>(title),
       'coverType': serializer.toJson<String>(coverType),
@@ -1611,6 +1694,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   Notebook copyWith({
     int? id,
     Value<int?> serverId = const Value.absent(),
+    Value<String?> clientId = const Value.absent(),
     Value<int?> subjectId = const Value.absent(),
     String? title,
     String? coverType,
@@ -1628,6 +1712,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   }) => Notebook(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
+    clientId: clientId.present ? clientId.value : this.clientId,
     subjectId: subjectId.present ? subjectId.value : this.subjectId,
     title: title ?? this.title,
     coverType: coverType ?? this.coverType,
@@ -1647,6 +1732,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     return Notebook(
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
       subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
       title: data.title.present ? data.title.value : this.title,
       coverType: data.coverType.present ? data.coverType.value : this.coverType,
@@ -1679,6 +1765,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     return (StringBuffer('Notebook(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
           ..write('subjectId: $subjectId, ')
           ..write('title: $title, ')
           ..write('coverType: $coverType, ')
@@ -1701,6 +1788,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   int get hashCode => Object.hash(
     id,
     serverId,
+    clientId,
     subjectId,
     title,
     coverType,
@@ -1722,6 +1810,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       (other is Notebook &&
           other.id == this.id &&
           other.serverId == this.serverId &&
+          other.clientId == this.clientId &&
           other.subjectId == this.subjectId &&
           other.title == this.title &&
           other.coverType == this.coverType &&
@@ -1741,6 +1830,7 @@ class Notebook extends DataClass implements Insertable<Notebook> {
 class NotebooksCompanion extends UpdateCompanion<Notebook> {
   final Value<int> id;
   final Value<int?> serverId;
+  final Value<String?> clientId;
   final Value<int?> subjectId;
   final Value<String> title;
   final Value<String> coverType;
@@ -1758,6 +1848,7 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   const NotebooksCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
     this.subjectId = const Value.absent(),
     this.title = const Value.absent(),
     this.coverType = const Value.absent(),
@@ -1776,6 +1867,7 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   NotebooksCompanion.insert({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
     this.subjectId = const Value.absent(),
     required String title,
     required String coverType,
@@ -1795,6 +1887,7 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   static Insertable<Notebook> custom({
     Expression<int>? id,
     Expression<int>? serverId,
+    Expression<String>? clientId,
     Expression<int>? subjectId,
     Expression<String>? title,
     Expression<String>? coverType,
@@ -1813,6 +1906,7 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
+      if (clientId != null) 'client_id': clientId,
       if (subjectId != null) 'subject_id': subjectId,
       if (title != null) 'title': title,
       if (coverType != null) 'cover_type': coverType,
@@ -1833,6 +1927,7 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   NotebooksCompanion copyWith({
     Value<int>? id,
     Value<int?>? serverId,
+    Value<String?>? clientId,
     Value<int?>? subjectId,
     Value<String>? title,
     Value<String>? coverType,
@@ -1851,6 +1946,7 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     return NotebooksCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
+      clientId: clientId ?? this.clientId,
       subjectId: subjectId ?? this.subjectId,
       title: title ?? this.title,
       coverType: coverType ?? this.coverType,
@@ -1876,6 +1972,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
     }
     if (subjectId.present) {
       map['subject_id'] = Variable<int>(subjectId.value);
@@ -1927,6 +2026,7 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     return (StringBuffer('NotebooksCompanion(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
           ..write('subjectId: $subjectId, ')
           ..write('title: $title, ')
           ..write('coverType: $coverType, ')
@@ -6068,6 +6168,7 @@ typedef $$SubjectsTableCreateCompanionBuilder =
     SubjectsCompanion Function({
       Value<int> id,
       Value<int?> serverId,
+      Value<String?> clientId,
       required int userId,
       required String name,
       required String color,
@@ -6080,6 +6181,7 @@ typedef $$SubjectsTableUpdateCompanionBuilder =
     SubjectsCompanion Function({
       Value<int> id,
       Value<int?> serverId,
+      Value<String?> clientId,
       Value<int> userId,
       Value<String> name,
       Value<String> color,
@@ -6145,6 +6247,11 @@ class $$SubjectsTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6246,6 +6353,11 @@ class $$SubjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -6314,6 +6426,9 @@ class $$SubjectsTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -6414,6 +6529,7 @@ class $$SubjectsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
                 Value<int> userId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> color = const Value.absent(),
@@ -6424,6 +6540,7 @@ class $$SubjectsTableTableManager
               }) => SubjectsCompanion(
                 id: id,
                 serverId: serverId,
+                clientId: clientId,
                 userId: userId,
                 name: name,
                 color: color,
@@ -6436,6 +6553,7 @@ class $$SubjectsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
                 required int userId,
                 required String name,
                 required String color,
@@ -6446,6 +6564,7 @@ class $$SubjectsTableTableManager
               }) => SubjectsCompanion.insert(
                 id: id,
                 serverId: serverId,
+                clientId: clientId,
                 userId: userId,
                 name: name,
                 color: color,
@@ -6544,6 +6663,7 @@ typedef $$NotebooksTableCreateCompanionBuilder =
     NotebooksCompanion Function({
       Value<int> id,
       Value<int?> serverId,
+      Value<String?> clientId,
       Value<int?> subjectId,
       required String title,
       required String coverType,
@@ -6563,6 +6683,7 @@ typedef $$NotebooksTableUpdateCompanionBuilder =
     NotebooksCompanion Function({
       Value<int> id,
       Value<int?> serverId,
+      Value<String?> clientId,
       Value<int?> subjectId,
       Value<String> title,
       Value<String> coverType,
@@ -6654,6 +6775,11 @@ class $$NotebooksTableFilterComposer
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6815,6 +6941,11 @@ class $$NotebooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get title => $composableBuilder(
     column: $table.title,
     builder: (column) => ColumnOrderings(column),
@@ -6918,6 +7049,9 @@ class $$NotebooksTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
 
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
@@ -7076,6 +7210,7 @@ class $$NotebooksTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
                 Value<int?> subjectId = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String> coverType = const Value.absent(),
@@ -7093,6 +7228,7 @@ class $$NotebooksTableTableManager
               }) => NotebooksCompanion(
                 id: id,
                 serverId: serverId,
+                clientId: clientId,
                 subjectId: subjectId,
                 title: title,
                 coverType: coverType,
@@ -7112,6 +7248,7 @@ class $$NotebooksTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
                 Value<int?> subjectId = const Value.absent(),
                 required String title,
                 required String coverType,
@@ -7129,6 +7266,7 @@ class $$NotebooksTableTableManager
               }) => NotebooksCompanion.insert(
                 id: id,
                 serverId: serverId,
+                clientId: clientId,
                 subjectId: subjectId,
                 title: title,
                 coverType: coverType,

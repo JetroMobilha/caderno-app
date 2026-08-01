@@ -21,6 +21,7 @@ class Users extends Table {
 class Subjects extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
+  TextColumn get clientId => text().nullable().unique()(); // 🆔 Identidade única global
   IntColumn get userId => integer().references(Users, #id, onDelete: KeyAction.cascade)();
   TextColumn get name => text()();
   TextColumn get color => text()();
@@ -33,6 +34,7 @@ class Subjects extends Table {
 class Notebooks extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
+  TextColumn get clientId => text().nullable().unique()(); // 🆔 Identidade única global
   IntColumn get subjectId => integer().nullable().references(Subjects, #id, onDelete: KeyAction.cascade)();
   TextColumn get title => text()();
   TextColumn get coverType => text()();
@@ -164,12 +166,18 @@ class AppDatabase extends _$AppDatabase {
           // Migração da v1 para v2: Adicionar coluna extractedText
           await m.addColumn(pages, pages.extractedText);
         }
+        if (from < 3) {
+          // 🚀 Migração v2 -> v3: Reconstrução total das tabelas para garantir UNIQUE no clientId
+          // Esta é a forma mais robusta no SQLite para evitar erros de constraint no ON CONFLICT
+          await m.alterTable(TableMigration(subjects));
+          await m.alterTable(TableMigration(notebooks));
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   // Função equivalente ao seu antigo clearAllData()
   Future<void> clearAllData() async {

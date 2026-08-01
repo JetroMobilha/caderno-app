@@ -13,7 +13,7 @@ import 'package:caderno_digital_app/features/subjects/controllers/subjects_contr
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 
-import '../../marketplace/views/marketplace_screen.dart';
+import 'package:caderno_digital_app/features/marketplace/views/marketplace_screen.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({super.key});
@@ -111,21 +111,27 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: AppColors.textMuted))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () async {
-              final rootNavigator = Navigator.of(context, rootNavigator: true);
-              final authCtrl = ref.read(authProvider);
-              
-              // 🚀 O logout agora trata da limpeza de ficheiros, SQLite e Notifiers internamente
-              await authCtrl.logout();
-              
-              rootNavigator.pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false
+          Consumer(
+            builder: (context, ref, child) {
+              final isLoading = ref.watch(authProvider).isLoading;
+              return ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                onPressed: isLoading ? null : () async {
+                  final rootNavigator = Navigator.of(context, rootNavigator: true);
+                  final authCtrl = ref.read(authProvider);
+                  
+                  await authCtrl.logout();
+                  
+                  rootNavigator.pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          (route) => false
+                  );
+                },
+                child: isLoading 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Sair', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               );
-            },
-            child: const Text('Sair', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            }
           ),
         ],
       ),
@@ -553,7 +559,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   children: [
                     Icon(isEditing ? Icons.edit_rounded : Icons.library_add_rounded, color: themeColor),
                     const SizedBox(width: 10),
-                    Text(isEditing ? 'Editar Matéria' : 'Nova Disciplina', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor)),
+                    Flexible(
+                      child: Text(isEditing ? 'Editar Matéria' : 'Nova Disciplina', 
+                        style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
                 content: SingleChildScrollView(

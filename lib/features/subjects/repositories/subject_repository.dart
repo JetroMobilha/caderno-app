@@ -20,6 +20,7 @@ class SubjectRepository {
     return rows.map((row) => Subject(
       id: row.id,
       serverId: row.serverId,
+      clientId: row.clientId, // 🆔 Restaurado do banco
       userId: row.userId,
       name: row.name,
       color: row.color,
@@ -39,6 +40,7 @@ class SubjectRepository {
         .map((rows) => rows.map((row) => Subject(
               id: row.id,
               serverId: row.serverId,
+              clientId: row.clientId, // 🆔 Restaurado do banco
               userId: row.userId,
               name: row.name,
               color: row.color,
@@ -53,6 +55,7 @@ class SubjectRepository {
   Future<Subject?> addSubject(Subject subject) async {
     final companion = SubjectsCompanion.insert(
       userId: subject.userId!,
+      clientId: Value(subject.clientId), // 🆔 Persistindo identidade única (Corrigido para Value)
       name: subject.name,
       color: subject.color,
       icon: Value(subject.icon),
@@ -65,6 +68,7 @@ class SubjectRepository {
     return Subject(
       id: insertedId,
       userId: subject.userId,
+      clientId: subject.clientId,
       serverId: null,
       name: subject.name,
       color: subject.color,

@@ -177,9 +177,9 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
                 final isOwner = user['role'] == 'owner';
 
                 String roleDisplay = 'Leitor';
-                if (isOwner) roleDisplay = 'Dono';
-                else if (user['role'] == 'editor') roleDisplay = 'Editor';
+                if (user['role'] == 'editor') roleDisplay = 'Editor';
                 else if (user['role'] == 'student') roleDisplay = 'Aluno';
+                else if (isOwner) roleDisplay = 'Dono'; // Mantido apenas para lógica interna se necessário, mas vamos esconder se preferires. Na verdade, o pedido é remover a tag.
 
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -189,8 +189,10 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
                   trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isOwner ? Colors.orange.withOpacity(0.1) : Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: Text(roleDisplay, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isOwner ? Colors.orange[800] : Colors.blue[800]))),
-                        if (!isOwner) IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20), onPressed: () => _removeUser(index, user['email']!))
+                        if (!isOwner) ...[
+                          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: Text(roleDisplay, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue[800]))),
+                          IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20), onPressed: () => _removeUser(index, user['email']!)),
+                        ]
                       ]
                   ),
                 );

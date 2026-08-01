@@ -1,12 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'api_config.dart';
+import 'package:caderno_digital_app/core/network/api_config.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();

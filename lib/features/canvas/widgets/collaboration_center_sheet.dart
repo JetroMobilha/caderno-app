@@ -16,114 +16,122 @@ class CollaborationCenterSheet extends ConsumerWidget {
     final controller = ref.watch(canvasProvider);
     final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Centro de Colaboração 🛰️',
-                    style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
-                  ),
-                  const SizedBox(height: 4),
-                  _buildRoleBadge(controller.currentUserRole),
-                ],
-              ),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // 🎙️ CONVITE DE VOZ ATIVO (Se existir)
-          if (controller.incomingVoiceCall != null) ...[
-            _buildInternalVoiceInvite(controller),
-            const SizedBox(height: 16),
-          ],
-
-          // 🌐 MODO ONLINE TOGGLE
-          _buildOnlineToggle(controller),
-          const SizedBox(height: 16),
-
-          // 🛰️ STATUS DA LIGAÇÃO
-          if (controller.isCollaborationEnabled)
-            ValueListenableBuilder<RealtimeStatus>(
-              valueListenable: realtimeStatus,
-              builder: (context, status, _) => _buildStatusIndicator(status),
-            ),
-
-          const Divider(height: 32),
-
-          // 👥 QUEM ESTÁ NA SALA
-          Text(
-            'Colegas na Sala:',
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
-          ),
-          const SizedBox(height: 12),
-          if (!controller.isCollaborationEnabled)
-            _buildEmptyState('Fica online para veres quem está a estudar contigo.')
-          else if (controller.onlineUsers.isEmpty)
-            _buildEmptyState('Estás sozinho na sala. Convida alguém!')
-          else
-            _buildUserList(controller, context),
-
-          const SizedBox(height: 24),
-
-          // 🛠️ AÇÕES RÁPIDAS
-          if (controller.isCollaborationEnabled) ...[
+    return DraggableScrollableSheet( // 🚀 Torna o sheet expansível se houver muitos colegas
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: ListView( // 🚀 Usa ListView com o controller do sheet
+          controller: scrollController,
+          children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: _buildVoiceButton(controller, context),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.pan_tool,
-                    label: controller.isMyHandRaised ? 'Baixar Mão' : 'Pedir Palavra',
-                    color: controller.isMyHandRaised ? Colors.orange : Colors.blueAccent,
-                    onTap: () {
-                      controller.toggleHandRaise();
-                      Navigator.pop(context);
-                    },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Centro de Colaboração 🛰️',
+                        style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      _buildRoleBadge(controller.currentUserRole),
+                    ],
                   ),
                 ),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
               ],
             ),
-            const SizedBox(height: 12),
-          ],
+            const SizedBox(height: 20),
 
-          // 🤝 BOTÃO DE PARTILHA (Integrado)
-          if (notebook.role == 'owner')
-            SizedBox(
-              width: double.infinity,
-              child: _buildActionButton(
-                icon: Icons.person_add_alt_1,
-                label: 'Convidar Amigos para o Caderno',
-                color: const Color(0xFF0F4C5C),
-                onTap: () {
-                  Navigator.pop(context);
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (context) => ShareNotebookBottomSheet(notebook: notebook),
-                  );
-                },
+            // 🎙️ CONVITE DE VOZ ATIVO (Se existir)
+            if (controller.incomingVoiceCall != null) ...[
+              _buildInternalVoiceInvite(controller),
+              const SizedBox(height: 16),
+            ],
+
+            // 🌐 MODO ONLINE TOGGLE
+            _buildOnlineToggle(controller),
+            const SizedBox(height: 16),
+
+            // 🛰️ STATUS DA LIGAÇÃO
+            if (controller.isCollaborationEnabled)
+              ValueListenableBuilder<RealtimeStatus>(
+                valueListenable: realtimeStatus,
+                builder: (context, status, _) => _buildStatusIndicator(status),
               ),
+
+            const Divider(height: 32),
+
+            // 👥 QUEM ESTÁ NA SALA
+            Text(
+              'Colegas na Sala:',
+              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
             ),
-          const SizedBox(height: 16),
-        ],
+            const SizedBox(height: 12),
+            if (!controller.isCollaborationEnabled)
+              _buildEmptyState('Fica online para veres quem está a estudar contigo.')
+            else if (controller.onlineUsers.isEmpty)
+              _buildEmptyState('Estás sozinho na sala. Convida alguém!')
+            else
+              _buildUserList(controller, context),
+
+            const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildVoiceButton(controller, context),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildActionButton(
+                      icon: controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off,
+                      label: controller.isBroadcastingViewport ? 'Parar Visão' : 'Transmitir Visão',
+                      color: controller.isBroadcastingViewport ? Colors.redAccent : const Color(0xFF0F4C5C),
+                      onTap: () {
+                        if (controller.isBroadcastingViewport) {
+                          controller.stopViewportBroadcasting();
+                        } else {
+                          controller.startViewportBroadcasting(controller.myUserId);
+                        }
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+
+            // 🤝 BOTÃO DE PARTILHA (Integrado)
+            if (notebook.role == 'owner')
+              SizedBox(
+                width: double.infinity,
+                child: _buildActionButton(
+                  icon: Icons.person_add_alt_1,
+                  label: 'Convidar Amigos para o Caderno',
+                  color: const Color(0xFF0F4C5C),
+                  onTap: () {
+                    Navigator.pop(context);
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => ShareNotebookBottomSheet(notebook: notebook),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -197,68 +205,82 @@ class CollaborationCenterSheet extends ConsumerWidget {
   }
 
   Widget _buildUserList(CanvasController controller, BuildContext context) {
-    return Container(
-      height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: controller.onlineUsers.length,
-        itemBuilder: (context, index) {
-          final u = controller.onlineUsers[index];
-          final String uId = u['id'].toString();
-          if (uId == controller.myUserId) return const SizedBox.shrink();
+    final others = controller.onlineUsers.where((u) => u['id'].toString() != controller.myUserId).toList();
 
-          final bool isFollowing = controller.followingUserId == uId;
-          final bool isTalking = u['isTalking'] == true;
-          final bool isHandRaised = u['isHandRaised'] == true;
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: others.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final u = others[index];
+        final String uId = u['id'].toString();
+        final bool isFollowing = controller.followingUserId == uId;
+        final bool isTalking = u['isTalking'] == true;
+        final bool isHandRaised = u['isHandRaised'] == true;
 
-          return GestureDetector(
-            onTap: () {
-              controller.toggleFollowUser(uId, controller.myUserId);
-              Navigator.pop(context);
-            },
-            child: Container(
-              width: 80,
-              margin: const EdgeInsets.only(right: 12),
-              child: Column(
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isFollowing ? Colors.blue.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isFollowing ? Colors.blue.withOpacity(0.3) : Colors.transparent),
+          ),
+          child: Row(
+            children: [
+              Stack(
                 children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(3),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: u['color'] as Color,
+                    child: Text(u['name'][0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  if (isTalking)
+                    Positioned.fill(
+                      child: Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isTalking ? Colors.green : (isFollowing ? Colors.blue : Colors.transparent),
-                            width: 2,
-                          ),
-                        ),
-                        child: CircleAvatar(
-                          radius: 24,
-                          backgroundColor: u['color'] as Color,
-                          child: Text(u['name'][0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          border: Border.all(color: Colors.green, width: 2),
                         ),
                       ),
-                      if (isHandRaised)
-                        const Positioned(
-                          right: 0, top: 0,
-                          child: CircleAvatar(radius: 10, backgroundColor: Colors.orange, child: Icon(Icons.pan_tool, size: 10, color: Colors.white)),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    u['name'],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontSize: 11, fontWeight: isFollowing ? FontWeight.bold : FontWeight.normal),
-                  ),
+                    ),
+                  if (isHandRaised)
+                    const Positioned(
+                      right: -2, top: -2,
+                      child: CircleAvatar(radius: 8, backgroundColor: Colors.orange, child: Icon(Icons.pan_tool, size: 8, color: Colors.white)),
+                    ),
                 ],
               ),
-            ),
-          );
-        },
-      ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(u['name'], style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(isFollowing ? 'A assistir visão...' : 'Online agora', 
+                         style: GoogleFonts.inter(fontSize: 11, color: isFollowing ? Colors.blue : Colors.black45)),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  controller.toggleFollowUser(uId, controller.myUserId);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isFollowing ? Colors.redAccent : Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(80, 32),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                child: Text(isFollowing ? 'Parar' : 'Assistir', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -310,18 +332,18 @@ class CollaborationCenterSheet extends ConsumerWidget {
     final bool isModerator = controller.currentUserRole == 'owner' || controller.currentUserRole == 'editor';
     final bool canStart = isModerator || controller.isRemoteVoiceCallActive;
 
-    String label = 'Iniciar Voz';
-    IconData icon = Icons.phone_callback;
+    String label = 'Iniciar Estudo Live';
+    IconData icon = Icons.podcasts;
     Color color = const Color(0xFF0F4C5C);
     VoidCallback? action = () => controller.toggleVoiceCall(controller.myUserId);
 
-    if (controller.isInVoiceCall) {
-      label = 'Sair da Chamada';
-      icon = Icons.phone_disabled;
+    if (controller.isLiveSessionActive) {
+      label = 'Sair do Estudo Live';
+      icon = Icons.stop_screen_share;
       color = Colors.redAccent;
     } else if (controller.isRemoteVoiceCallActive) {
-      label = 'Entrar na Voz';
-      icon = Icons.group_add;
+      label = 'Entrar no Estudo Live';
+      icon = Icons.record_voice_over;
       color = const Color(0xFF27AE60);
     } else if (!isModerator) {
       label = 'Aguardar Moderador';

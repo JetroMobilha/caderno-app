@@ -7,6 +7,9 @@ import 'package:caderno_digital_app/core/theme/app_profile.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 
 final appThemeProvider = Provider<ThemeData>((ref) {
+  // 🛡️ Garantia extra de modo offline
+  GoogleFonts.config.allowRuntimeFetching = false;
+
   final activeProfile = ref.watch(appProfileProvider);
   final activeSubject = ref.watch(activeSubjectProvider);
 
@@ -20,11 +23,19 @@ final appThemeProvider = Provider<ThemeData>((ref) {
     }
   }
 
-  // 🚀 Força a tipografia Sans-Serif em toda a estrutura do Material Design
-  final TextTheme baseTextTheme = GoogleFonts.getTextTheme(
-    activeProfile.fontFamilyName,
-    ThemeData.light().textTheme,
-  ).apply(
+  // 🚀 Lógica de tipografia robusta (Offline-Safe)
+  TextTheme baseTextTheme;
+  try {
+    baseTextTheme = GoogleFonts.getTextTheme(
+      activeProfile.fontFamilyName,
+      ThemeData.light().textTheme,
+    );
+  } catch (e) {
+    debugPrint('⚠️ GoogleFonts falhou (provavelmente offline): $e');
+    baseTextTheme = ThemeData.light().textTheme;
+  }
+
+  baseTextTheme = baseTextTheme.apply(
     bodyColor: AppColors.textDark,
     displayColor: AppColors.textDark,
   );
@@ -48,10 +59,16 @@ final appThemeProvider = Provider<ThemeData>((ref) {
       foregroundColor: AppColors.textLight,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: activeProfile.titleStyle.copyWith(
-        fontSize: 20,
-        color: AppColors.textLight,
-      ),
+      titleTextStyle: () {
+        try {
+          return activeProfile.titleStyle.copyWith(
+            fontSize: 20,
+            color: AppColors.textLight,
+          );
+        } catch (_) {
+          return const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white);
+        }
+      }(),
     ),
 
     floatingActionButtonTheme: FloatingActionButtonThemeData(

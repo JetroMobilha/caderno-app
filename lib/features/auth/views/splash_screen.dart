@@ -53,9 +53,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           children: [
             const Icon(Icons.menu_book_rounded, size: 80, color: AppColors.textLight),
             const SizedBox(height: 16),
-            Text('Caderno Digital', style: GoogleFonts.lora(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textLight)),
+            Builder(builder: (context) {
+              try {
+                return Text('Caderno Digital', style: GoogleFonts.lora(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textLight));
+              } catch (_) {
+                return const Text('Caderno Digital', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white));
+              }
+            }),
             const SizedBox(height: 8),
-            Text('O teu conhecimento em tempo real', style: GoogleFonts.inter(fontSize: 14, color: Colors.white70)),
+            Builder(builder: (context) {
+              try {
+                return Text('O teu conhecimento em tempo real', style: GoogleFonts.inter(fontSize: 14, color: Colors.white70));
+              } catch (_) {
+                return const Text('O teu conhecimento em tempo real', style: TextStyle(fontSize: 14, color: Colors.white70));
+              }
+            }),
           ],
         ),
       ),

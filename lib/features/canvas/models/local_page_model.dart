@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'image_block_model.dart';
 import 'stroke_model.dart';
 import 'text_block_model.dart';
@@ -58,13 +59,45 @@ class LocalPage {
       'notebook_id': notebookId,
       'page_number': pageNumber,
       'is_landscape': isLandscape,
-      'header_data': title,
-      'footer_data': footer,
+      'header_data': {'title': title}, // 🚀 JSON estruturado para o MySQL
+      'footer_data': {'title': footer}, // 🚀 JSON estruturado para o MySQL
       'extracted_text': extractedText,
       'stroke_data': strokes.map((s) => s.toJson()).toList(),
       'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': asyncImages,
     };
+  }
+
+  // 🛡️ Extração robusta para colunas JSON do MySQL/SQLite (Lida com aninhamento acidental)
+  static String parseMeta(dynamic data) {
+    if (data == null) return '';
+    
+    dynamic current = data;
+    // Tenta desempacotar até 5 níveis de JSON para limpar dados corrompidos
+    for (int i = 0; i < 5; i++) {
+      if (current is Map) {
+        current = current['title'];
+      } else if (current is String && current.trim().startsWith('{')) {
+        try {
+          final decoded = jsonDecode(current);
+          if (decoded is Map && decoded.containsKey('title')) {
+            current = decoded['title'];
+          } else {
+            break;
+          }
+        } catch (_) {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    
+    return current?.toString() ?? '';
+  }
+
+  static String encodeMeta(String text) {
+    return jsonEncode({'title': text});
   }
 
   factory LocalPage.fromJson(Map<String, dynamic> json) {
@@ -78,8 +111,8 @@ class LocalPage {
       notebookId: int.tryParse(json['notebook_id']?.toString() ?? '0') ?? 0,
       pageNumber: int.tryParse(json['page_number']?.toString() ?? '0') ?? 0,
       isLandscape: json['is_landscape'] == true || json['is_landscape'] == 1,
-      title: json['header_data']?.toString() ?? '',
-      footer: json['footer_data']?.toString() ?? '',
+      title: parseMeta(json['header_data']),
+      footer: parseMeta(json['footer_data']),
       extractedText: json['extracted_text']?.toString(),
       strokes: strokesList.map((s) => Stroke.fromJson(s)).toList(),
       textBlocks: textList.map((t) => TextBlock.fromJson(t)).toList(),

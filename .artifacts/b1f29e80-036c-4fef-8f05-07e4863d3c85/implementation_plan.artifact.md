@@ -1,34 +1,40 @@
-# Plano de Implementação - Estabilização WebRTC e Depuração Visual
+# Plano de Correção: Sincronização de Títulos e Tipos de Folha
 
-Este plano visa resolver a falha de áudio persistente (ICE Failed) através da introdução de uma camada de vídeo de depuração que servirá como "Ping Visual" para confirmar a conectividade P2P.
+Este plano visa corrigir as discrepâncias entre o Flutter e o Laravel que impedem a renderização correta das linhas das folhas e causam a exibição de JSON nos títulos.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> A ativação do vídeo exigirá permissões de câmara em ambos os dispositivos. O objetivo não é uma funcionalidade final de vídeo, mas sim isolar se o problema é de **Rede (ICE)** ou de **Hardware/Codec de Áudio**.
+> As mudanças no `SyncController.php` devem ser aplicadas no servidor. Vou fornecer o código corrigido para que possas atualizar o arquivo no teu backend Laravel.
 
 ## Proposed Changes
 
-### Fase 3: Depuração Visual (Ping Visual)
+### 1. Backend: Laravel (SyncController.php)
 
-#### [MODIFY] [webrtc_service.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/network/webrtc_service.dart)
-- **Ativar Vídeo Local**: Alterar `getUserMedia` para capturar vídeo.
-- **Gestão de Renderizadores**: Introduzir `RTCVideoRenderer` para o vídeo local e um para cada peer remoto.
-- **Unified Plan Video**: Mudar transceivers de vídeo para `SendRecv`.
-- **Exposição de Streams**: Criar streams para que a UI saiba quando um novo vídeo está disponível.
+#### [MODIFY] `SyncController.php`
+- **Ajuste de Tipos de Linha**: Mudar o default de `line_type` para `ruled` (o padrão do Flutter).
+- **Simplificação de Metadados**: Alterar `normalizeJsonColumn` para não forçar a criação de um objeto `{"title": "..."}` se receber uma string simples. Isso evitará que o Flutter receba JSON e o exiba como texto.
 
-#### [NEW] [webrtc_debug_overlay.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/webrtc_debug_overlay.dart)
-- Widget flutuante que mostra miniaturas dos vídeos e o estado detalhado da ligação (IPs, RTT, Codecs).
+```php
+// No pushNotebooks:
+'line_type' => !empty($notebookData['line_type']) ? $notebookData['line_type'] : 'ruled',
 
-#### [MODIFY] [canvas_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/views/canvas_screen.dart)
-- Integrar o overlay de depuração no topo da pilha do Canvas.
+// No normalizeJsonColumn:
+// Se for uma string que NÃO é JSON, retornar a string pura em vez de envolver em array.
+```
+
+### 2. Frontend: Flutter (Modelos)
+
+#### [MODIFY] [local_page_model.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/models/local_page_model.dart)
+- Garantir que o `fromJson` consegue lidar tanto com strings puras quanto com objetos JSON (por segurança).
+
+#### [MODIFY] [notebook_model.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/notebooks/models/notebook_model.dart)
+- Garantir que o default no `fromJson` é consistente.
 
 ## Verification Plan
 
 ### Manual Verification
-1. Entrar na sala de voz.
-2. Confirmar se a minha câmara liga (Self-view).
-3. Verificar se o vídeo do colega aparece ao conectar.
-4. **Diagnóstico**:
-   - Se houver vídeo mas não áudio -> Problema de Configuração de Áudio/Codecs.
-   - Se não houver vídeo e o estado for `Failed` -> Problema de Rede (Necessário TURN).
+1. Criar um caderno com linhas (`ruled`) no Telemóvel A.
+2. Sincronizar e abrir no Telemóvel B/Windows.
+3. Verificar se as linhas aparecem corretamente.
+4. Alterar o título da página e verificar se aparece o texto limpo (sem `{}` ou `"title"`).

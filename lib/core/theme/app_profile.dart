@@ -59,12 +59,17 @@ extension AppProfileExtension on AppProfile {
   }
 
   TextStyle get titleStyle {
-    switch (this) {
-      case AppProfile.corporativo: return GoogleFonts.inter(fontWeight: FontWeight.bold);
-      case AppProfile.academico: return GoogleFonts.inter(fontWeight: FontWeight.bold); // 🔥 Agora é Sans-Serif!
-      case AppProfile.desenho: return GoogleFonts.poppins(fontWeight: FontWeight.w600);
-      case AppProfile.notas: return GoogleFonts.nunito(fontWeight: FontWeight.bold, fontSize: 24);
-      case AppProfile.agenda: return GoogleFonts.ubuntu(fontWeight: FontWeight.w500, letterSpacing: 0.5);
+    // 🛡️ Fallback seguro para fontes em modo offline
+    try {
+      switch (this) {
+        case AppProfile.corporativo: return GoogleFonts.inter(fontWeight: FontWeight.bold);
+        case AppProfile.academico: return GoogleFonts.inter(fontWeight: FontWeight.bold);
+        case AppProfile.desenho: return GoogleFonts.poppins(fontWeight: FontWeight.w600);
+        case AppProfile.notas: return GoogleFonts.nunito(fontWeight: FontWeight.bold, fontSize: 24);
+        case AppProfile.agenda: return GoogleFonts.ubuntu(fontWeight: FontWeight.w500, letterSpacing: 0.5);
+      }
+    } catch (_) {
+      return const TextStyle(fontWeight: FontWeight.bold);
     }
   }
 }

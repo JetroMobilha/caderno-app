@@ -1,0 +1,5 @@
+- [ ] Implementar `Undo/Redo` sincronizado no `CanvasController`
+- [ ] Adicionar throttling (50ms) aos broadcasts de movimento e redimensionamento
+- [ ] Implementar `broadcastPageMetadataUpdate` para Pautas e Títulos
+- [ ] Reduzir debounce de edição de texto para 150ms
+- [ ] Testar sincronização bidirecional de apagar e mover

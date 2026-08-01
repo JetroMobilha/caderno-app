@@ -34,6 +34,7 @@ class NotebookRepository {
     return rows.map((row) => Notebook(
       id: row.id,
       serverId: row.serverId,
+      clientId: row.clientId, // 🆔 Restaurado do banco
       subjectId: row.subjectId,
       title: row.title,
       coverType: row.coverType,
@@ -62,6 +63,7 @@ class NotebookRepository {
         .map((rows) => rows.map((row) => Notebook(
               id: row.id,
               serverId: row.serverId,
+              clientId: row.clientId, // 🆔 Restaurado do banco
               subjectId: row.subjectId,
               title: row.title,
               coverType: row.coverType,
@@ -85,6 +87,7 @@ class NotebookRepository {
   Future<int> insertNotebook(Notebook notebook) async {
     final companion = NotebooksCompanion.insert(
       serverId: Value(notebook.serverId),
+      clientId: Value(notebook.clientId), // 🆔 Persistindo identidade única (Corrigido para Value)
       subjectId: Value(notebook.subjectId),
       title: notebook.title,
       coverType: notebook.coverType,

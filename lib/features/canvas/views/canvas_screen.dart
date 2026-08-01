@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -5,18 +6,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/network/realtime_service.dart';
-import '../../auth/controllers/auth_controller.dart';
-import '../../notebooks/models/notebook_model.dart';
-import '../controllers/canvas_controller.dart';
-import '../models/local_page_model.dart';
-import '../models/stroke_model.dart';
-import '../models/text_block_model.dart';
-import '../widgets/canvas_painter.dart';
-import '../widgets/canvas_toolbar.dart';
-import '../widgets/ai_assistant_sheet.dart';
-import '../widgets/collaboration_center_sheet.dart';
-import '../widgets/live_voice_cockpit.dart';
+import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/features/auth/controllers/auth_controller.dart';
+import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
+import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
+import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/canvas_painter.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/canvas_toolbar.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/ai_assistant_sheet.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/collaboration_center_sheet.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/live_voice_cockpit.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/collaboration_chat_widget.dart';
 
 class CanvasScreen extends ConsumerStatefulWidget {
   final Notebook notebook;
@@ -57,12 +59,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   DateTime _lastBroadcastTime = DateTime.now();
   int _lastBroadcastedPointIndex = 0;
   String myUserId ="";
-
-// Helper para arredondar pontos (Poupa extrema largura de banda no Reverb)
-  Map<String, num> _pointToMap(Offset pt) => {
-    'x': num.parse(pt.dx.toStringAsFixed(1)),
-    'y': num.parse(pt.dy.toStringAsFixed(1)),
-  };
+  StreamSubscription? _messageAlertSubscription;
 
   @override
   void initState() {
@@ -71,11 +68,14 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       final user = ref.read(authProvider).currentUser;
       final String uid = user?.serverId?.toString() ?? user?.id?.toString() ?? "";
       
-      ref.read(canvasProvider).initNotebook(
+      final controller = ref.read(canvasProvider);
+      controller.initNotebook(
         widget.notebook.id ?? 0, widget.notebook.serverId,
         widget.notebook.lineType, widget.notebook.paperSize, 
         widget.notebook.role, uid,
       );
+
+      // 🚀 ESCUTAR ALERTAS DE NOVAS MENSAGENS (Removido SnackBar redundante conforme pedido)
     });
   }
 
@@ -96,8 +96,10 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       if (cleanText.isEmpty) page.textBlocks.remove(controller.activeTextBlock);
     } else if (controller.activeInlineTarget == InlineTarget.title) {
       page.title = cleanText;
+      controller.broadcastPageMetadataUpdate(page); // 🚀 SINCRONIZAÇÃO IMEDIATA
     } else if (controller.activeInlineTarget == InlineTarget.footer) {
       page.footer = cleanText;
+      controller.broadcastPageMetadataUpdate(page); // 🚀 SINCRONIZAÇÃO IMEDIATA
     }
 
     controller.setTextEditing(InlineTarget.none);
@@ -120,46 +122,6 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     );
   }
 
-  void _handleMuteToggle(CanvasController controller) {
-    if (!controller.isAudioConsentGiven) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFFFDFBF7),
-          title: Row(
-            children: [
-              const Icon(Icons.security, color: Color(0xFF0F4C5C)),
-              const SizedBox(width: 12),
-              const Expanded( // 🚀 Previne overflow no título
-                child: Text(
-                  'Segurança de Áudio', 
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            'Para participar na conversa, o teu microfone será ativado. '
-            'Garantimos que o áudio é transmitido apenas enquanto estiveres na sala e não é gravado.',
-            style: GoogleFonts.inter(fontSize: 14),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Agora não', style: TextStyle(color: Colors.black54))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
-              onPressed: () {
-                Navigator.pop(ctx);
-                controller.requestAudioConsent();
-              },
-              child: const Text('Ativar Microfone', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      controller.toggleMute();
-    }
-  }
 
   void _showCollaborationCenter(CanvasController controller) {
     showModalBottomSheet(
@@ -227,6 +189,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFD6D6D6),
       appBar: _buildAppBar(controller, hasPages),
+      endDrawer: hasPages ? _buildPageDrawer(controller) : null, // 🚀 Drawer de Miniaturas
       body: !hasPages
           ? _buildEmptyState()
           : Stack(
@@ -287,6 +250,10 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                             // 🖼️ Z-INDEX 2: IMAGENS
                             ...page.imageBlocks.map((img) {
                               final bool isImageMode = controller.currentTool == ToolMode.imageEdit;
+                              final bool isSelected = controller.selectedImageIds.contains(img.id);
+                              final bool isUploading = controller.uploadingImageIds.contains(img.id);
+                              final bool hasFailed = controller.failedImageUploads.contains(img.id);
+
                               return Positioned(
                                 key: ValueKey('img_${img.id}'), left: img.position.dx, top: img.position.dy,
                                 child: SizedBox(
@@ -297,20 +264,26 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                       Positioned(
                                         left: 0, top: 0, width: img.width, height: img.height,
                                         child: Container(
-                                          decoration: BoxDecoration(border: isImageMode ? Border.all(color: const Color(0xFF0F4C5C), width: 2.0) : null),
+                                          decoration: BoxDecoration(
+                                            border: isImageMode || isSelected
+                                              ? Border.all(color: const Color(0xFF0F4C5C), width: isSelected ? 3.0 : 2.0) 
+                                              : (isUploading || hasFailed ? Border.all(color: Colors.grey.withValues(alpha: 0.5), width: 1.5, style: BorderStyle.solid) : null),
+                                            color: (isUploading || hasFailed || isSelected) ? (isSelected ? const Color(0x1F0F4C5C) : Colors.grey.withValues(alpha: 0.05)) : null,
+                                          ),
                                           child: Stack(
                                             fit: StackFit.expand,
                                             children: [
-                                              kIsWeb || img.imagePath.startsWith('http')
-                                                  ? Image.network(
-                                                      img.imagePath, 
-                                                      fit: BoxFit.fill,
-                                                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.error_outline, color: Colors.red),
-                                                    )
-                                                  : Image.file(File(img.imagePath), fit: BoxFit.fill),
+                                              if (!isUploading || img.imagePath.startsWith('http'))
+                                                kIsWeb || img.imagePath.startsWith('http')
+                                                    ? Image.network(
+                                                        img.imagePath, 
+                                                        fit: BoxFit.fill,
+                                                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.error_outline, color: Colors.red),
+                                                      )
+                                                    : Image.file(File(img.imagePath), fit: BoxFit.fill),
                                               
                                               // 🚀 INDICADOR DE UPLOAD (Para quem está a carregar)
-                                              if (controller.uploadingImageIds.contains(img.id))
+                                              if (isUploading)
                                                 Container(
                                                   color: Colors.black.withValues(alpha: 0.3),
                                                   child: const Center(
@@ -320,6 +293,31 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                                         CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
                                                         SizedBox(height: 8),
                                                         Text('A enviar...', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              
+                                              // ❌ INDICADOR DE FALHA E RETRY
+                                              if (hasFailed)
+                                                Container(
+                                                  color: Colors.redAccent.withValues(alpha: 0.1),
+                                                  child: Center(
+                                                    child: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(Icons.cloud_off, color: Colors.redAccent, size: 32),
+                                                        const SizedBox(height: 8),
+                                                        ElevatedButton(
+                                                          style: ElevatedButton.styleFrom(
+                                                            backgroundColor: Colors.redAccent,
+                                                            foregroundColor: Colors.white,
+                                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                                            minimumSize: const Size(60, 30),
+                                                          ),
+                                                          onPressed: () => controller.retryImageUpload(page, img),
+                                                          child: const Text('Repetir', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                                        ),
                                                       ],
                                                     ),
                                                   ),
@@ -341,7 +339,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                                 controller.currentViewportCenter = img.position + Offset(img.width / 2, img.height / 2);
                                               }
                                               
-                                              controller.broadcastImageBlockUpdate(page, img, myUserId);
+                                              controller.broadcastThrottledImageUpdate(page, img);
                                             },
                                             onPanEnd: (_) => controller.triggerAutoSave(page),
                                             child: const CircleAvatar(backgroundColor: Color(0xFF0F4C5C), child: Icon(Icons.open_with, size: 20, color: Colors.white)),
@@ -356,7 +354,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                                 img.width = (img.width + d.delta.dx).clamp(80.0, 900.0);
                                                 img.height = (img.height + d.delta.dy).clamp(80.0, 900.0);
                                               });
-                                              controller.broadcastImageBlockUpdate(page, img, myUserId);
+                                              controller.broadcastThrottledImageUpdate(page, img);
                                             },
                                             onPanEnd: (_) => controller.triggerAutoSave(page),
                                             child: Container(width: 30, height: 30, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle), child: const Icon(Icons.open_in_full, size: 14, color: Colors.white)),
@@ -396,7 +394,12 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   } : null,
                                   onPanStart: !isBlocked ? (details) {
                                     final localPos = details.localPosition;
+                                    
+                                    // 🚀 TRANSMISSÃO DE CURSOR (Ghost Cursor)
+                                    controller.broadcastPointer(localPos);
+
                                     if (controller.currentTool == ToolMode.draw) {
+                                      controller.setUserActivity('drawing'); // ✍️ Sinalizar desenho
                                       _liveStrokeId = const Uuid().v4(); // ID único para o traço em curso
                                       _lastBroadcastedPointIndex = 0;
                                       _lastBroadcastTime = DateTime.now();
@@ -425,7 +428,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         controller.selectionRectEnd = localPos;
                                         controller.selectedStrokeIds.clear();
                                         controller.selectedTextIds.clear();
-                                        controller.forceNotify();
+                                        controller.safeNotify();
                                       }
                                     } else if (controller.currentTool == ToolMode.eraser) {
                                       controller.eraseAtPosition(localPos, page);
@@ -433,6 +436,9 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   } : null,
                                   onPanUpdate: !isBlocked ? (details) {
                                     final localPos = details.localPosition;
+                                    
+                                    // 🚀 TRANSMISSÃO DE CURSOR (Ghost Cursor)
+                                    controller.broadcastPointer(localPos);
                                     
                                     // 🚀 FOCO DINÂMICO: Enquanto desenhamos, enviamos a ponta da caneta como foco.
                                     // O assistente usará isto para saber se deve mover a câmera.
@@ -448,22 +454,14 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
                                         // 🚀 THROTTLING OTIMIZADO
                                         final now = DateTime.now();
-                                        if (now.difference(_lastBroadcastTime).inMilliseconds > 20 && controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
+                                        if (now.difference(_lastBroadcastTime).inMilliseconds > 25 && controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
                                           final newPoints = newList.sublist(_lastBroadcastedPointIndex);
                                           if (newPoints.isNotEmpty) {
-                                            ref.read(realtimeServiceProvider).broadcastStroke(
-                                                notebookId: controller.liveNotebookSid!,
-                                                myUserId: myUserId,
-                                                strokeData: {
-                                                  'page_number': page.pageNumber,
-                                                  'strokes': [{
-                                                    'id': _liveStrokeId,
-                                                    'color': controller.selectedColorHex,
-                                                    'thickness': num.parse(controller.selectedThickness.toStringAsFixed(1)),
-                                                    'is_final': false,
-                                                    'points': newPoints.map(_pointToMap).toList(),
-                                                  }]
-                                                }
+                                            controller.sendStrokeUpdate(
+                                              pageNumber: page.pageNumber,
+                                              strokeId: _liveStrokeId!,
+                                              points: newPoints,
+                                              isFinal: false,
                                             );
                                             _lastBroadcastedPointIndex = newList.length;
                                             _lastBroadcastTime = now;
@@ -487,30 +485,29 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                       final allPoints = controller.activePointsNotifier.value;
                                       if (allPoints.isNotEmpty && _liveStrokeId != null) {
                                         final newStroke = Stroke(
-                                          id: _liveStrokeId,
+                                          id: _liveStrokeId!,
                                           color: controller.selectedColorHex,
                                           thickness: controller.selectedThickness,
                                           points: List.from(allPoints),
                                         );
 
-                                        page.strokes.add(newStroke);
-                                        controller.activePointsNotifier.value = [];
-                                        controller.forceNotify();
+                                        controller.addStroke(page, newStroke);
                                         
-                                        // 🚀 SERVER-AUTHORITATIVE: O salvamento agora envia para o Laravel
-                                        // que por sua vez emitirá o evento 'PageUpdated' para todos.
-                                        await controller.triggerAutoSave(page);
-
+                                        controller.activePointsNotifier.value = [];
+                                        controller.setUserActivity('idle');
                                         _liveStrokeId = null;
                                       }
                                     }
 else if (controller.currentTool == ToolMode.select) {
-                                      controller.broadcastSelectionUpdate(page);
+                                      // 🚀 TRANSMISSÃO FINAL DA POSIÇÃO APÓS MOVIMENTO
+                                      if (controller.isMovingStrokes) {
+                                        // O movimento live já foi transmitido, aqui garantimos o estado final e persistência
+                                        controller.triggerAutoSave(page);
+                                      }
                                       controller.selectionRectStart = null;
                                       controller.selectionRectEnd = null;
                                       controller.isMovingStrokes = false;
-                                      controller.forceNotify();
-                                      controller.triggerAutoSave(page);
+                                      controller.safeNotify();
                                     }
                                   } : null,
                                   child: RepaintBoundary(
@@ -551,6 +548,18 @@ else if (controller.currentTool == ToolMode.select) {
                                               painter: ActiveStrokePainter(currentPoints: points, currentColor: controller.selectedColorHex, currentThickness: controller.selectedThickness)
                                           ),
                                         ),
+
+                                        // 🚀 4. CURSORES REMOTOS (Ghost Cursors)
+                                        ValueListenableBuilder<Map<String, Offset>>(
+                                          valueListenable: controller.remotePointers,
+                                          builder: (context, pointers, _) => CustomPaint(
+                                            size: pSize,
+                                            painter: RemotePointersPainter(
+                                              pointers: pointers,
+                                              onlineUsers: controller.onlineUsers,
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -563,67 +572,91 @@ else if (controller.currentTool == ToolMode.select) {
                               final bool isEditing = tb == controller.activeTextBlock && controller.activeInlineTarget == InlineTarget.block;
                               final double exactLineMulti = (controller.liveLineType == 'grid' ? 25.0 : 28.0) / tb.fontSize;
                               final bool isTextSelected = controller.selectedTextIds.contains(tb.id);
+                              
+                              final String? editedBy = controller.remoteEditingBlocks[tb.id];
+                              final String? editorName = editedBy != null 
+                                  ? controller.onlineUsers.firstWhere((u) => u['id'].toString() == editedBy, orElse: () => {})['name'] 
+                                  : null;
 
                               return Positioned(
                                 left: tb.position.dx, top: tb.position.dy,
                                 width: (pSize.width - tb.position.dx - 20.0).clamp(60.0, pSize.width),
-                                child: GestureDetector(
-                                  onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' ? (d) {
-                                    tb.position += d.delta;
-                                    
-                                    // 🚀 FOCO DINÂMICO PARA TEXTO
-                                    if (controller.isBroadcastingViewport) {
-                                      controller.currentViewportCenter = tb.position;
-                                    }
-                                    
-                                    controller.forceNotify();
-                                    controller.broadcastTextBlockUpdate(page, tb, myUserId);
-                                  } : null,
-                                  onTap: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' ? () {
-                                    if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
-                                    controller.setTextEditing(InlineTarget.block, tb);
-                                    _textController.text = tb.text;
-                                    _textFocusNode.requestFocus();
-                                  } : null,
-                                  child: isEditing
-                                      ? TextField(
-                                    controller: _textController, focusNode: _textFocusNode, maxLines: null, autofocus: true,
-                                    style: GoogleFonts.inter(
-                                      fontSize: tb.fontSize, height: exactLineMulti,
-                                      color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
-                                      fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                      fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                      decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    GestureDetector(
+                                      onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (d) {
+                                        tb.position += d.delta;
+                                        
+                                        // 🚀 FOCO DINÂMICO PARA TEXTO
+                                        if (controller.isBroadcastingViewport) {
+                                          controller.currentViewportCenter = tb.position;
+                                        }
+                                        
+                                        controller.safeNotify();
+                                        controller.broadcastThrottledTextBlockUpdate(page, tb);
+                                      } : null,
+                                      onTap: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? () {
+                                        if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
+                                        controller.setTextEditing(InlineTarget.block, tb);
+                                        _textController.text = tb.text;
+                                        _textFocusNode.requestFocus();
+                                      } : null,
+                                      child: isEditing
+                                          ? TextField(
+                                        controller: _textController, focusNode: _textFocusNode, maxLines: null, autofocus: true,
+                                        style: GoogleFonts.inter(
+                                          fontSize: tb.fontSize, height: exactLineMulti,
+                                          color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                          fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                          fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                          decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                        ),
+                                        decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+                                        onChanged: (val) {
+                                          tb.text = val;
+                                          
+                                          // 🚀 FOCO DINÂMICO PARA TEXTO EM EDIÇÃO
+                                          if (controller.isBroadcastingViewport) {
+                                            controller.currentViewportCenter = tb.position;
+                                          }
+                                          
+                                          controller.safeNotify();
+                                          controller.broadcastTextBlockUpdate(page, tb, senderId: myUserId, debounced: true, isEditing: true); // Escrita é debounced
+                                        },
+                                      )
+                                          : Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          border: isTextSelected
+                                              ? Border.all(color: const Color(0xFF1976D2), width: 1.5)
+                                              : (editedBy != null 
+                                                  ? Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1)
+                                                  : (controller.currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.15)) : null)),
+                                          color: isTextSelected ? const Color(0x1F1976D2) : (editedBy != null ? Colors.orange.withValues(alpha: 0.05) : null),
+                                        ),
+                                        child: Text(tb.text, style: GoogleFonts.inter(
+                                          fontSize: tb.fontSize, height: exactLineMulti,
+                                          color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                          fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                          fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                          decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                        )),
+                                      ),
                                     ),
-                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                                    onChanged: (val) {
-                                      tb.text = val;
-                                      
-                                      // 🚀 FOCO DINÂMICO PARA TEXTO EM EDIÇÃO
-                                      if (controller.isBroadcastingViewport) {
-                                        controller.currentViewportCenter = tb.position;
-                                      }
-                                      
-                                      controller.forceNotify();
-                                      controller.broadcastTextBlockUpdate(page, tb, myUserId);
-                                    },
-                                  )
-                                      : Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      border: isTextSelected
-                                          ? Border.all(color: const Color(0xFF1976D2), width: 1.5)
-                                          : (controller.currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.15)) : null),
-                                      color: isTextSelected ? const Color(0x1F1976D2) : null,
-                                    ),
-                                    child: Text(tb.text, style: GoogleFonts.inter(
-                                      fontSize: tb.fontSize, height: exactLineMulti,
-                                      color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
-                                      fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                      fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                      decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
-                                    )),
-                                  ),
+                                    if (editorName != null)
+                                      Positioned(
+                                        top: -14, left: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(4)),
+                                          child: Text(
+                                            'A editar: $editorName',
+                                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               );
                             }),
@@ -681,24 +714,43 @@ else if (controller.currentTool == ToolMode.select) {
               ),
             ),
 
-          if (controller.isInVoiceCall)
+          if (controller.isLiveSessionActive)
             Positioned(
                 top: 16, left: 0, right: 0,
                 child: Center(
                     child: LiveVoiceCockpit(
                       onlineUsers: controller.onlineUsers,
                       userAudioLevels: controller.userAudioLevels,
-                      isMuted: controller.isMuted,
+                      userReactions: controller.userReactions, 
+                      followingUserId: controller.followingUserId,
+                      myUserId: myUserId, // 🚀 Adicionado
                       isSpeakerOn: controller.isSpeakerOn,
-                      isHandRaised: controller.isMyHandRaised,
+                      isRecording: controller.isRecording,
                       isLoading: controller.isConnectingVoice,
-                      onMuteToggle: () => _handleMuteToggle(controller),
+                      isBroadcasting: controller.isBroadcastingViewport,
                       onSpeakerToggle: controller.toggleSpeaker,
-                      onHandToggle: controller.toggleHandRaise,
+                      onMicTap: controller.handleLiveAudioAction,
+                      onBroadcastToggle: () {
+                        if (controller.isBroadcastingViewport) {
+                          controller.stopViewportBroadcasting();
+                        } else {
+                          controller.startViewportBroadcasting(myUserId);
+                        }
+                      },
+                      onReactionSend: (emoji) => controller.sendReaction(emoji),
+                      onUserTap: (uid) => controller.toggleFollowUser(uid, myUserId), 
                       onHangUp: () => controller.toggleVoiceCall(myUserId),
                     )
                 )
             ),
+          
+                    
+          // 🚀 CHAT COLABORATIVO FIXADO NO CANTO SUPERIOR ESQUERDO
+          const Positioned(
+            top: 130, 
+            left: 16,
+            child: CollaborationChatWidget(), 
+          ),
           
           // 🔭 INDICADORES DE ESTADO (FOLLOW/BROADCAST)
           if (controller.followingUserId != null)
@@ -723,10 +775,10 @@ else if (controller.currentTool == ToolMode.select) {
               ),
             ),
 
-          // 📡 AVISO DE UPLOAD REMOTO
+          // 📡 AVISO DE UPLOAD REMOTO (Movido para a direita para não bater no chat)
           if (controller.remoteUploadingUsers.isNotEmpty)
             Positioned(
-              top: 130, left: 20,
+              top: 130, right: 20,
               child: _buildStatusBadge(
                 icon: Icons.cloud_upload,
                 label: '${controller.remoteUploadingUsers.length} colega(s) a carregar imagens...',
@@ -767,12 +819,8 @@ else if (controller.currentTool == ToolMode.select) {
               child: _buildInviteBanner(controller),
             ),
 
-          // 🎙️ BANNER DE CONVITE DE VOZ
-          if (controller.incomingVoiceCall != null)
-            Positioned(
-              top: 100, left: 20, right: 20,
-              child: _buildVoiceInviteBanner(controller),
-            ),
+          if (controller.isGlobalSyncing)
+            _buildGlobalSyncOverlay(),
         ],
       ),
       floatingActionButton: hasPages || widget.notebook.role == 'viewer'
@@ -782,6 +830,41 @@ else if (controller.currentTool == ToolMode.select) {
         foregroundColor: Colors.white,
         onPressed: () => _showAddPageDialog(controller),
         child: const Icon(Icons.note_add),
+      ),
+    );
+  }
+
+  Widget _buildGlobalSyncOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.4),
+      child: Center(
+        child: Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          elevation: 12,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 40, height: 40,
+                  child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF0F4C5C)),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'A alinhar caderno...',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Estamos a garantir que todos os colegas\ntenham o mesmo conteúdo.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -899,9 +982,27 @@ else if (controller.currentTool == ToolMode.select) {
       backgroundColor: Colors.white,
       elevation: 1,
       iconTheme: const IconThemeData(color: Color(0xFF1A1A24)),
-      title: hasPages
-          ? _buildAppBarDropdown(controller)
-          : Text(widget.notebook.title, style: GoogleFonts.inter(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16)),
+      centerTitle: false, // 🚀 Garante que fica à esquerda
+      title: Builder(
+        builder: (context) => GestureDetector(
+          onTap: () => Scaffold.of(context).openEndDrawer(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  hasPages 
+                    ? '${widget.notebook.title} (${controller.currentPageIndex + 1}/${controller.pages.length})'
+                    : widget.notebook.title,
+                  style: GoogleFonts.inter(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (hasPages) const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
+            ],
+          ),
+        ),
+      ),
 
       // 🚀 AÇÕES MOVIDAS PARA O CENTRO DE COLABORAÇÃO
       actions: [
@@ -936,21 +1037,6 @@ else if (controller.currentTool == ToolMode.select) {
           },
         ),
 
-        // 🔭 BOTÃO DE TRANSMITIR CÂMARA (Visível apenas se estiver online)
-        if (controller.isCollaborationEnabled && controller.followingUserId == null)
-          IconButton(
-            icon: Icon(controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off),
-            color: controller.isBroadcastingViewport ? Colors.redAccent : const Color(0xFF0F4C5C),
-            tooltip: controller.isBroadcastingViewport ? 'Parar Transmissão' : 'Transmitir Visão',
-            onPressed: () {
-              if (controller.isBroadcastingViewport) {
-                controller.stopViewportBroadcasting();
-              } else {
-                controller.startViewportBroadcasting(myUserId);
-              }
-            },
-          ),
-
         // 👥 CONTADOR DE QUEM ESTÁ ONLINE
         if (controller.isCollaborationEnabled && controller.onlineUsers.isNotEmpty)
           Center(
@@ -964,107 +1050,117 @@ else if (controller.currentTool == ToolMode.select) {
               ),
             ),
           ),
+
+        // 🚀 BOTÃO PARA ABRIR DRAWER DE PÁGINAS
+        if (hasPages)
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.auto_stories_outlined),
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
+              tooltip: 'Miniaturas de Páginas',
+            ),
+          ),
       ],
     );
   }
-  Widget _buildAppBarDropdown(CanvasController controller) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    
-    // 🔍 Log para depurar o conflito de IDs
-    debugPrint('🔍 [Dropdown] Renderizando menu. myUserId (Server): $myUserId');
 
-    // 🛠️ Construção unificada para evitar erros de Assertion
-    final List<DropdownMenuItem<int>> dropdownItems = [];
-    final List<Widget> selectedWidgets = [];
-
-    // 1. Páginas existentes
-    for (int i = 0; i < controller.pages.length; i++) {
-      String label = '${widget.notebook.title} — Folha ${i + 1} de ${controller.pages.length}';
-      if (screenWidth < 400) {
-        label = 'Folha ${i + 1} de ${controller.pages.length}';
-      } else if (screenWidth < 600) {
-        label = '${widget.notebook.title} • F. ${i + 1}/${controller.pages.length}';
-      }
-
-      dropdownItems.add(DropdownMenuItem<int>(
-        value: i,
-        child: Text('Ir para Folha ${i + 1}', style: GoogleFonts.inter()),
-      ));
-
-      selectedWidgets.add(Container(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            color: const Color(0xFF1A1A24),
-            fontWeight: FontWeight.bold,
-            fontSize: screenWidth < 400 ? 15.0 : 17.0,
+  Widget _buildPageDrawer(CanvasController controller) {
+    return Drawer(
+      backgroundColor: const Color(0xFFFDFBF7),
+      child: Column(
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(color: Color(0xFF0F4C5C)),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.auto_stories, color: Colors.white, size: 32),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Páginas do Caderno',
+                    style: GoogleFonts.lora(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
           ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ));
-    }
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: controller.pages.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final page = controller.pages[index];
+                final isCurrent = controller.currentPageIndex == index;
 
-    // 2. Botão "Nova Folha"
-    if (widget.notebook.role != 'viewer') {
-      dropdownItems.add(DropdownMenuItem<int>(
-        value: controller.pages.length,
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.add, color: Color(0xFF0F4C5C), size: 20),
-            SizedBox(width: 8),
-            Flexible(child: Text('Nova Folha', overflow: TextOverflow.ellipsis)),
-          ],
-        ),
-      ));
-      selectedWidgets.add(const SizedBox.shrink());
-    }
-
-    // 3. Secção de Colaboradores Online (Simplificada para apenas indicador de quem te assiste)
-    if (controller.isCollaborationEnabled && (controller.onlineUsers.isNotEmpty || controller.whoIsWatchingMe.isNotEmpty)) {
-      dropdownItems.add(const DropdownMenuItem<int>(enabled: false, child: Divider()));
-      selectedWidgets.add(const SizedBox.shrink());
-
-      dropdownItems.add(const DropdownMenuItem<int>(
-        enabled: false,
-        child: Text('GESTÃO DE REDE:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-      ));
-      selectedWidgets.add(const SizedBox.shrink());
-
-      dropdownItems.add(DropdownMenuItem<int>(
-        value: -1,
-        onTap: () => _showCollaborationCenter(controller),
-        child: const Row(
-          children: [
-            Icon(Icons.hub_outlined, size: 18, color: Color(0xFF0F4C5C)),
-            SizedBox(width: 12),
-            Text('Abrir Centro de Colaboração', style: TextStyle(fontSize: 13)),
-          ],
-        ),
-      ));
-      selectedWidgets.add(const SizedBox.shrink());
-    }
-
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<int>(
-        isExpanded: true,
-        value: controller.currentPageIndex,
-        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF1A1A24)),
-        selectedItemBuilder: (_) => selectedWidgets,
-        items: dropdownItems,
-        onChanged: (newIndex) {
-          if (newIndex == null || newIndex < 0) return; // 🚀 Aceita apenas índices positivos (páginas)
-          if (newIndex == controller.pages.length) {
-            _showAddPageDialog(controller);
-          } else {
-            controller.pageController.animateToPage(
-              newIndex,
-              duration: const Duration(milliseconds: 350),
-              curve: Curves.easeInOut,
-            );
-          }
-        },
+                return InkWell(
+                  onTap: () {
+                    controller.jumpToPage(index);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isCurrent ? const Color(0xFF0F4C5C).withValues(alpha: 0.1) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isCurrent ? const Color(0xFF0F4C5C) : Colors.black12,
+                        width: isCurrent ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(color: const Color(0xFF0F4C5C).withValues(alpha: 0.1), shape: BoxShape.circle),
+                          child: Center(child: Text('${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F4C5C)))),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                page.title.isEmpty ? 'Sem Título' : page.title,
+                                style: TextStyle(
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                  color: isCurrent ? const Color(0xFF0F4C5C) : Colors.black87,
+                                ),
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                              ),
+                              Text('Folha ${index + 1}', style: const TextStyle(fontSize: 10, color: Colors.black45)),
+                            ],
+                          ),
+                        ),
+                        if (isCurrent) const Icon(Icons.play_circle_fill, color: Color(0xFF0F4C5C), size: 20),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Botão Adicionar no fim do Drawer
+          if (widget.notebook.role != 'viewer')
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F4C5C),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 45),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showAddPageDialog(controller);
+                },
+                icon: const Icon(Icons.add_circle_outline),
+                label: const Text('Nova Folha'),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1097,14 +1193,14 @@ else if (controller.currentTool == ToolMode.select) {
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 4,
           children: [
-            IconButton(icon: Icon(Icons.format_bold, color: tb.isBold ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isBold = !tb.isBold; controller.forceNotify(); }),
-            IconButton(icon: Icon(Icons.format_italic, color: tb.isItalic ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isItalic = !tb.isItalic; controller.forceNotify(); }),
-            IconButton(icon: Icon(Icons.format_underlined, color: tb.isUnderline ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isUnderline = !tb.isUnderline; controller.forceNotify(); }),
+            IconButton(icon: Icon(Icons.format_bold, color: tb.isBold ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isBold = !tb.isBold; controller.safeNotify(); }),
+            IconButton(icon: Icon(Icons.format_italic, color: tb.isItalic ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isItalic = !tb.isItalic; controller.safeNotify(); }),
+            IconButton(icon: Icon(Icons.format_underlined, color: tb.isUnderline ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isUnderline = !tb.isUnderline; controller.safeNotify(); }),
             Container(width: 1, height: 20, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
-            IconButton(icon: const Icon(Icons.text_decrease, color: Colors.black87), onPressed: () { tb.fontSize = (tb.fontSize - 2).clamp(10.0, 64.0); controller.forceNotify(); }),
+            IconButton(icon: const Icon(Icons.text_decrease, color: Colors.black87), onPressed: () { tb.fontSize = (tb.fontSize - 2).clamp(10.0, 64.0); controller.safeNotify(); }),
             Text('${tb.fontSize.toInt()}', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold)),
-            IconButton(icon: const Icon(Icons.text_increase, color: Colors.black87), onPressed: () { tb.fontSize = (tb.fontSize + 2).clamp(10.0, 64.0); controller.forceNotify(); }),
+            IconButton(icon: const Icon(Icons.text_increase, color: Colors.black87), onPressed: () { tb.fontSize = (tb.fontSize + 2).clamp(10.0, 64.0); controller.safeNotify(); }),
             Container(width: 1, height: 20, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
             ...['#1A1A24', '#E74C3C', '#27AE60', '#1976D2'].map((hex) {
@@ -1279,8 +1375,9 @@ else if (controller.currentTool == ToolMode.select) {
 
   Widget _buildPaperOption(CanvasController controller, String type, String label, IconData icon) {
     final bool isSelected = controller.liveLineType == type;
+    final currentPage = controller.pages[controller.currentPageIndex];
     return InkWell(
-      onTap: () { controller.setLineType(type); Navigator.pop(context); },
+      onTap: () { controller.setLineType(type, currentPage); Navigator.pop(context); },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

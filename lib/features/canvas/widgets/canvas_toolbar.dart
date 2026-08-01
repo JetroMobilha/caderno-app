@@ -45,7 +45,7 @@ class CanvasToolbar extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.center,
         children: [
           _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
-          if (!isSmallScreen || isEraserActive) _buildToolButton(Icons.backspace_outlined, ToolMode.eraser, 'Borracha'),
+          if (!isSmallScreen || isEraserActive) _buildToolButton(Icons.auto_fix_high, ToolMode.eraser, 'Borracha'),
           _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha'),
           _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
           if (!isSmallScreen || isSelectActive) _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar Tinta'),
@@ -58,8 +58,8 @@ class CanvasToolbar extends StatelessWidget {
             _buildToolButton(Icons.transform, ToolMode.imageEdit, 'Editar Imagem'),
 
           if (isSmallScreen) ...[
-            _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? () => controller.undo(currentPage) : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
-            _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? () => controller.redo(currentPage) : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
+            _buildCompactIconButton(Icons.undo, controller.canUndo ? () => controller.undo(currentPage) : null, 'Desfazer', controller.canUndo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
+            _buildCompactIconButton(Icons.redo, controller.canRedo ? () => controller.redo(currentPage) : null, 'Avançar', controller.canRedo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
           ],
 
           if (isSmallScreen)
@@ -80,7 +80,7 @@ class CanvasToolbar extends StatelessWidget {
               itemBuilder: (context) => [
                 const PopupMenuItem(value: 'insert_image', child: Row(children: [Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Inserir Imagem')])),
                 const PopupMenuItem(value: 'ai_assistant', child: Row(children: [Icon(Icons.psychology_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Assistente IA')])),
-                const PopupMenuItem(value: 'eraser', child: Row(children: [Icon(Icons.backspace_outlined, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Borracha')])),
+                const PopupMenuItem(value: 'eraser', child: Row(children: [Icon(Icons.auto_fix_high, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Borracha')])),
                 const PopupMenuItem(value: 'select', child: Row(children: [Icon(Icons.highlight_alt, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Selecionar Tinta')])),
                 const PopupMenuDivider(),
                 const PopupMenuItem(value: 'zoom_in', child: Row(children: [Icon(Icons.zoom_in, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Aproximar (+)')])),
@@ -97,8 +97,8 @@ class CanvasToolbar extends StatelessWidget {
             _buildCompactIconButton(Icons.zoom_out, () => controller.zoom(0.8, MediaQuery.of(context).size), 'Afastar', const Color(0xFF1A1A24)),
             _buildCompactIconButton(Icons.zoom_in, () => controller.zoom(1.2, MediaQuery.of(context).size), 'Aproximar', const Color(0xFF1A1A24)),
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            _buildCompactIconButton(Icons.undo, currentPage.strokes.isNotEmpty ? () => controller.undo(currentPage) : null, 'Desfazer', currentPage.strokes.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
-            _buildCompactIconButton(Icons.redo, currentPage.redoHistory.isNotEmpty ? () => controller.redo(currentPage) : null, 'Avançar', currentPage.redoHistory.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+            _buildCompactIconButton(Icons.undo, controller.canUndo ? () => controller.undo(currentPage) : null, 'Desfazer', controller.canUndo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+            _buildCompactIconButton(Icons.redo, controller.canRedo ? () => controller.redo(currentPage) : null, 'Avançar', controller.canRedo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
             _buildCompactIconButton(Icons.delete_forever, onDeletePageTap, 'Rasgar Folha', Colors.redAccent),
           ],
 

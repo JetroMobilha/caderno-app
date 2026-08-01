@@ -40,8 +40,14 @@ class SyncService {
       await pushNotebooks();
       await pullNotebooks();
 
-      await pushPages();
-      await pullPages();
+      // 🛡️ SEGURANÇA: Só puxar páginas se o push local tiver tido sucesso
+      // Isto evita apagar trabalho local não sincronizado.
+      final bool pushSuccess = await pushPages();
+      if (pushSuccess) {
+        await pullPages();
+      } else {
+        debugPrint('⚠️ [Sync General] Push de páginas falhou. Pull adiado para proteger dados locais.');
+      }
       
       debugPrint('🏆 [Sync General] Ciclo Concluído com Sucesso!');
     } catch (e) {
@@ -58,10 +64,21 @@ class SyncService {
       final unsynced = await (_db.select(_db.subjects)..where((t) => t.syncedWithCloud.equals(0))).get();
       if (unsynced.isEmpty) return;
 
-      final List<Map<String, dynamic>> payload = unsynced.map((s) => 
-        subjects_model.Subject(
+      final List<Map<String, dynamic>> payload = [];
+      
+      for (var s in unsynced) {
+        // 🛡️ Garante que temos um UUID antes de enviar
+        String effectiveUuid = s.clientId ?? uniqid();
+        if (s.clientId == null) {
+          await (_db.update(_db.subjects)..where((t) => t.id.equals(s.id))).write(
+            SubjectsCompanion(clientId: Value(effectiveUuid))
+          );
+        }
+
+        final subjectObj = subjects_model.Subject(
           id: s.id,
           serverId: s.serverId,
+          clientId: effectiveUuid,
           userId: s.userId,
           name: s.name,
           color: s.color,
@@ -69,23 +86,25 @@ class SyncService {
           isDeleted: s.isDeleted,
           syncedWithCloud: s.syncedWithCloud,
           updatedAt: s.updatedAt,
-        ).toJson()
-      ).toList();
+        );
+        payload.add(subjectObj.toJson());
+      }
 
       final response = await _apiService.post('/sync/push', {'subjects': payload});
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        await _db.batch((batch) {
-          for (var item in data['synced_subjects']) {
-            batch.update(_db.subjects, 
-              SubjectsCompanion(
-                serverId: Value(item['server_id']),
+        for (var item in data['synced_subjects'] ?? []) {
+          final String clientUuid = item['client_id'].toString();
+          final int serverId = item['server_id'];
+
+          await (_db.update(_db.subjects)
+                ..where((t) => t.clientId.equals(clientUuid)))
+              .write(SubjectsCompanion(
+                serverId: Value(serverId),
                 syncedWithCloud: const Value(1),
-              ),
-              where: (t) => t.id.equals(item['client_id']),
-            );
-          }
-        });
+              ));
+        }
       } else {
         throw Exception('Servidor retornou erro ${response.statusCode} no PUSH Subjects');
       }
@@ -119,12 +138,14 @@ class SyncService {
         if (userQuery.isEmpty) return false;
         final int localUserId = userQuery.first.id;
 
-        await _db.batch((batch) {
+        await _db.transaction(() async {
           for (var sub in serverSubjects) {
             final int sId = sub['id'] is int ? sub['id'] : int.parse(sub['id'].toString());
+            final String? cId = sub['client_id']?.toString();
             
             final companion = SubjectsCompanion.insert(
               serverId: Value(sId),
+              clientId: Value(cId ?? uniqid()),
               userId: localUserId,
               name: sub['name'] ?? '',
               color: sub['color'] ?? '#0F4C5C',
@@ -134,16 +155,30 @@ class SyncService {
               updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
             );
 
-            batch.insert(_db.subjects, companion, 
-              onConflict: DoUpdate((old) => SubjectsCompanion(
-                name: companion.name,
-                color: companion.color,
-                icon: companion.icon,
-                isDeleted: companion.isDeleted,
-                syncedWithCloud: companion.syncedWithCloud,
-                updatedAt: companion.updatedAt,
-              ), target: [_db.subjects.serverId])
-            );
+            // 🛡️ SEGURANÇA MÁXIMA: Busca manual para evitar erros de constraint ON CONFLICT
+            final existing = await (_db.select(_db.subjects)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
+            
+            if (existing != null) {
+              await (_db.update(_db.subjects)..where((t) => t.id.equals(existing.id))).write(
+                SubjectsCompanion(
+                  serverId: companion.serverId,
+                  name: companion.name,
+                  color: companion.color,
+                  icon: companion.icon,
+                  isDeleted: companion.isDeleted,
+                  syncedWithCloud: companion.syncedWithCloud,
+                  updatedAt: companion.updatedAt,
+                )
+              );
+            } else {
+              // Verificar se serverId já existe para evitar erro UNIQUE
+              final existingByServerId = await (_db.select(_db.subjects)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+              if (existingByServerId != null) {
+                await (_db.update(_db.subjects)..where((t) => t.id.equals(existingByServerId.id))).write(companion);
+              } else {
+                await _db.into(_db.subjects).insert(companion);
+              }
+            }
           }
         });
         return true;
@@ -166,6 +201,14 @@ class SyncService {
 
       final List<Map<String, dynamic>> payload = [];
       for (var row in unsynced) {
+        // 🛡️ Garante UUID para cadernos antigos
+        String effectiveUuid = row.clientId ?? uniqid();
+        if (row.clientId == null) {
+           await (_db.update(_db.notebooks)..where((t) => t.id.equals(row.id))).write(
+             NotebooksCompanion(clientId: Value(effectiveUuid))
+           );
+        }
+
         int? cloudSubjectId;
         if (row.subjectId != null) {
           final subject = await (_db.select(_db.subjects)..where((t) => t.id.equals(row.subjectId!))).getSingleOrNull();
@@ -175,6 +218,7 @@ class SyncService {
 
         final map = row.toJson();
         map['subject_id'] = cloudSubjectId;
+        map['client_id'] = effectiveUuid; // 🆔 UUID Real
         payload.add(map);
       }
 
@@ -183,14 +227,35 @@ class SyncService {
       final response = await _apiService.post('/sync/notebooks/push', {'notebooks': payload});
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        await _db.batch((batch) {
-          for (var item in data['synced_notebooks']) {
-            batch.update(_db.notebooks,
-              NotebooksCompanion(serverId: Value(item['server_id']), syncedWithCloud: const Value(1)),
-              where: (t) => t.id.equals(item['client_id']),
-            );
+        
+        for (var item in data['synced_notebooks'] ?? []) {
+          final String clientUuid = item['client_id'].toString();
+          final int serverId = item['server_id'];
+
+          try {
+            // 1. Localizar o caderno local pelo UUID
+            final localRow = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(clientUuid))).getSingleOrNull();
+            if (localRow == null) continue;
+
+            final int localAutoId = localRow.id;
+
+            // 🛡️ SEGURANÇA: Verificar se este server_id já está em uso por OUTRO registo local
+            final existing = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(serverId) & t.id.equals(localAutoId).not())).getSingleOrNull();
+            
+            if (existing != null) {
+              debugPrint('⚠️ [Sync] Detetada duplicação local para server_id $serverId. Mesclando...');
+              // Se já temos um registo local com este server_id, apagamos o registo que acabámos de sincronizar (o que não tem serverId ainda)
+              await (_db.delete(_db.notebooks)..where((t) => t.id.equals(localAutoId))).go();
+            } else {
+              // Atualização normal: associa o ID do servidor ao registo local
+              await (_db.update(_db.notebooks)..where((t) => t.id.equals(localAutoId))).write(
+                NotebooksCompanion(serverId: Value(serverId), syncedWithCloud: const Value(1))
+              );
+            }
+          } catch (e) {
+            debugPrint('🚨 Erro ao atualizar notebook $clientUuid: $e');
           }
-        });
+        }
       } else {
         throw Exception('Servidor retornou erro ${response.statusCode} no PUSH Notebooks');
       }
@@ -231,9 +296,10 @@ class SyncService {
         final allSubjects = await _db.select(_db.subjects).get();
         final Map<int, int> subjectIdMap = {for (var s in allSubjects) if (s.serverId != null) s.serverId!: s.id};
 
-        await _db.batch((batch) {
+        await _db.transaction(() async {
           for (var net in serverNotebooks) {
             final int sId = net['id'] is int ? net['id'] : int.parse(net['id'].toString());
+            final String? cId = net['client_id']?.toString();
             final int? serverSubId = net['subject_id'] != null 
                 ? (net['subject_id'] is int ? net['subject_id'] : int.parse(net['subject_id'].toString()))
                 : null;
@@ -242,6 +308,7 @@ class SyncService {
             
             final companion = NotebooksCompanion.insert(
               serverId: Value(sId),
+              clientId: Value(cId ?? uniqid()),
               subjectId: Value(localSubjectId),
               title: net['title'] ?? '',
               coverType: net['cover_type'] ?? 'color',
@@ -258,24 +325,38 @@ class SyncService {
               updatedAt: Value(DateTime.parse(net['updated_at'].toString()).millisecondsSinceEpoch),
             );
 
-            batch.insert(_db.notebooks, companion, 
-              onConflict: DoUpdate((old) => NotebooksCompanion(
-                subjectId: companion.subjectId,
-                title: companion.title,
-                coverType: companion.coverType,
-                color: companion.color,
-                coverImage: companion.coverImage,
-                lineType: companion.lineType,
-                paperSize: companion.paperSize,
-                isPublished: companion.isPublished,
-                price: companion.price,
-                description: companion.description,
-                authorName: companion.authorName,
-                isDeleted: companion.isDeleted,
-                syncedWithCloud: companion.syncedWithCloud,
-                updatedAt: companion.updatedAt,
-              ), target: [_db.notebooks.serverId])
-            );
+            // 🛡️ SEGURANÇA MÁXIMA: Busca manual para evitar erros de constraint ON CONFLICT
+            final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
+            
+            if (existing != null) {
+              await (_db.update(_db.notebooks)..where((t) => t.id.equals(existing.id))).write(
+                NotebooksCompanion(
+                  serverId: companion.serverId,
+                  subjectId: companion.subjectId,
+                  title: companion.title,
+                  coverType: companion.coverType,
+                  color: companion.color,
+                  coverImage: companion.coverImage,
+                  lineType: companion.lineType,
+                  paperSize: companion.paperSize,
+                  isPublished: companion.isPublished,
+                  price: companion.price,
+                  description: companion.description,
+                  authorName: companion.authorName,
+                  isDeleted: companion.isDeleted,
+                  syncedWithCloud: companion.syncedWithCloud,
+                  updatedAt: companion.updatedAt,
+                )
+              );
+            } else {
+              // Verificar se serverId já existe para evitar erro UNIQUE
+              final existingByServerId = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+              if (existingByServerId != null) {
+                await (_db.update(_db.notebooks)..where((t) => t.id.equals(existingByServerId.id))).write(companion);
+              } else {
+                await _db.into(_db.notebooks).insert(companion);
+              }
+            }
           }
         });
 
@@ -316,10 +397,10 @@ class SyncService {
   // =========================================================================
   // 4. PÁGINAS E CANVAS
   // =========================================================================
-  Future<void> pushPages() async {
+  Future<bool> pushPages() async {
     try {
       final unsyncedPages = await (_db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(0))).get();
-      if (unsyncedPages.isEmpty) return;
+      if (unsyncedPages.isEmpty) return true; // Nada para sincronizar é considerado sucesso
 
       final List<Map<String, dynamic>> payloadPages = [];
 
@@ -327,42 +408,65 @@ class SyncService {
         final notebook = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
         if (notebook == null || notebook.serverId == null) continue;
 
+        // Se a página foi deletada offline, enviamos o sinal de deleção
+        if (row.isDeleted == 1) {
+          payloadPages.add({
+            'notebook_id': notebook.serverId,
+            'page_number': row.pageNumber,
+            'client_id': row.id,
+            'server_id': row.serverId,
+            'is_deleted': 1,
+          });
+          continue;
+        }
+
         final allPages = await _canvasRepository.getPagesByNotebook(row.notebookId, null);
-        final fullPage = allPages.firstWhere((p) => p.id == row.id);
+        // Filtramos manualmente se necessário, mas getPagesByNotebook já filtra por isDeleted: 0
+        final fullPage = allPages.firstWhere((p) => p.id == row.id, orElse: () => pages_model.LocalPage(notebookId: row.notebookId, pageNumber: row.pageNumber, isLandscape: row.isLandscape == 1));
 
         final map = await fullPage.toJsonAsync();
         map['notebook_id'] = notebook.serverId;
         map['client_id'] = row.id;
         map['server_id'] = row.serverId;
+        map['is_deleted'] = 0;
         payloadPages.add(map);
       }
 
-      if (payloadPages.isEmpty) return;
+      if (payloadPages.isEmpty) return true;
 
       final response = await _apiService.post('/sync/pages/push', {'pages': payloadPages});
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         await _db.batch((batch) {
           for (var item in data['synced_pages'] ?? []) {
-            if (item['client_id'] != null && item['server_id'] != null) {
+            // 🛡️ SEGURANÇA: Garantir que IDs são tratados como tipos corretos
+            final dynamic rawClientId = item['client_id'];
+            final dynamic rawServerId = item['server_id'] ?? item['serverId'];
+
+            if (rawClientId != null && rawServerId != null) {
+              final int clientId = rawClientId is int ? rawClientId : int.parse(rawClientId.toString());
+              final int serverId = rawServerId is int ? rawServerId : int.parse(rawServerId.toString());
+
               batch.update(_db.pages,
                 PagesCompanion(
-                  serverId: Value(item['server_id']),
+                  serverId: Value(serverId),
                   pageNumber: Value(item['page_number']),
                   syncedWithCloud: const Value(1),
                   updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
                 ),
-                where: (t) => t.id.equals(item['client_id']),
+                where: (t) => t.id.equals(clientId),
               );
             }
           }
         });
+        return true;
       } else {
-        throw Exception('Servidor retornou erro ${response.statusCode} no PUSH Pages');
+        debugPrint('❌ Servidor retornou erro ${response.statusCode} no PUSH Pages');
+        return false;
       }
     } catch (e) {
       debugPrint('🚨 Erro PUSH Pages: $e');
-      rethrow;
+      return false;
     }
   }
 
@@ -389,6 +493,13 @@ class SyncService {
 
         for (var sPage in serverPages) {
           final int sId = sPage['id'] is int ? sPage['id'] : int.parse(sPage['id'].toString());
+          
+          // 🚀 TRATAMENTO DE DELEÇÃO REMOTA
+          if (sPage['deleted_at'] != null || sPage['is_deleted'] == 1) {
+            await (_db.delete(_db.pages)..where((t) => t.serverId.equals(sId))).go();
+            continue;
+          }
+
           final int sNotebookId = sPage['notebook_id'] is int ? sPage['notebook_id'] : int.parse(sPage['notebook_id'].toString());
 
           final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNotebookId))).getSingleOrNull();
@@ -401,8 +512,9 @@ class SyncService {
             notebookId: localNotebookId,
             pageNumber: sPage['page_number'],
             isLandscape: Value((sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0),
-            headerData: Value(sPage['header_data'] is String ? sPage['header_data'] : jsonEncode(sPage['header_data'] ?? '')),
-            footerData: Value(sPage['footer_data'] is String ? sPage['footer_data'] : jsonEncode(sPage['footer_data'] ?? '')),
+            // 🛡️ Normalização de metadados para evitar aninhamento de JSON
+            headerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['header_data']))),
+            footerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['footer_data']))),
             extractedText: Value(sPage['extracted_text']?.toString()),
             syncedWithCloud: const Value(1),
             updatedAt: Value(DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch),
@@ -440,6 +552,13 @@ class SyncService {
   }
 
   Future<void> _pullCanvasData(int localPageId, Map sPage) async {
+    // 🛡️ LIMPEZA DE CACHE LOCAL: Antes de baixar a nova "verdade" do servidor,
+    // limpamos o que temos para esta folha. Isto garante que elementos deletados 
+    // por outros enquanto estávamos offline sumam de facto.
+    await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(localPageId))).go();
+    await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(localPageId))).go();
+    await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(localPageId))).go();
+
     await _db.batch((batch) {
       List strokeList = _parseJsonList(sPage['stroke_data']);
       for (var st in strokeList) {
@@ -452,7 +571,7 @@ class SyncService {
             syncedWithCloud: const Value(1),
             updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
           ),
-          mode: InsertMode.insertOrReplace,
+          mode: InsertMode.insertOrReplace, // 🚀 Evita erro UNIQUE se o traço já existir via Realtime
         );
       }
 

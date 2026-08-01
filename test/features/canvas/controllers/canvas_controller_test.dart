@@ -3,8 +3,6 @@ import 'package:mockito/mockito.dart';
 import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
-import 'package:caderno_digital_app/core/network/webrtc_service.dart';
-import 'package:caderno_digital_app/core/services/ocr_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 
@@ -48,10 +46,6 @@ class MockRealtimeService extends Mock implements RealtimeService {
   Future<bool> broadcastHandEvent({required int notebookId, required String myUserId, required bool isRaised}) async => true;
 }
 
-class MockWebRTCService extends Mock implements WebRTCService {
-  @override
-  void leaveVoiceRoom() {}
-}
 
 class MockCanvasRepository extends Mock implements CanvasRepository {}
 
@@ -60,14 +54,12 @@ void main() {
   
   late CanvasController controller;
   late MockRealtimeService mockRealtime;
-  late MockWebRTCService mockWebRTC;
   late MockCanvasRepository mockRepo;
 
   setUp(() {
     mockRealtime = MockRealtimeService();
-    mockWebRTC = MockWebRTCService();
     mockRepo = MockCanvasRepository();
-    controller = CanvasController(mockRealtime, mockWebRTC, repository: mockRepo);
+    controller = CanvasController(mockRealtime, repository: mockRepo);
   });
 
   group('CanvasController Realtime Tests', () {

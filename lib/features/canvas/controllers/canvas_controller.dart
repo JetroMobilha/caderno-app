@@ -1,32 +1,32 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors, Matrix4;
 
 import 'package:drift/drift.dart' hide Column;
-import '../../../core/database/app_database.dart' as db;
-import '../../../core/network/realtime_service.dart';
-import '../../../core/network/sync_service.dart';
-import '../../../core/network/webrtc_service.dart';
-import '../../../core/services/ocr_service.dart';
-import '../models/image_block_model.dart';
-import '../models/local_page_model.dart';
-import '../models/stroke_model.dart';
-import '../models/text_block_model.dart';
-import '../repositories/canvas_repository.dart';
+import 'package:caderno_digital_app/core/database/app_database.dart' as db;
+import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/core/network/sync_service.dart';
+import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 
 enum ToolMode { draw, pan, select, text, eraser, insertImage, imageEdit }
 enum InlineTarget { none, block, title, footer }
 
 class CanvasController extends ChangeNotifier {
   final CanvasRepository _repository;
-  final HandwritingOCRService _ocrService;
   final RealtimeService _realtimeService;
-  final WebRTCService _webrtcService;
 
   bool _isDisposed = false; // 🛡️ Flag de segurança
 
@@ -40,6 +40,7 @@ class CanvasController extends ChangeNotifier {
   int currentPageIndex = 0;
   bool isLoading = true;
   bool isUploadingImage = false; // ☁️ Indicador de upload para a UI
+  bool isGlobalSyncing = false; // 🔒 Trava de interface para alinhamento coletivo
 
   int? liveNotebookSid;
   int currentNotebookId = 0;
@@ -57,6 +58,14 @@ class CanvasController extends ChangeNotifier {
 
   final Set<String> selectedStrokeIds = {};
   final Set<String> selectedTextIds = {};
+  final Set<String> selectedImageIds = {};
+
+  // 🚀 NOVO SISTEMA DE UNDO/REDO BASEADO EM AÇÕES
+  final List<CanvasAction> _undoStack = [];
+  final List<CanvasAction> _redoStack = [];
+
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
 
   Offset? selectionRectStart;
   Offset? selectionRectEnd;
@@ -65,7 +74,7 @@ class CanvasController extends ChangeNotifier {
 
   bool isRealtimeActive = false;
   bool isCollaborationEnabled = false; // 🌐 Decisão do utilizador de ficar online
-  bool isInVoiceCall = false;
+  bool isLiveSessionActive = false; // 🚀 Substitui isLiveSessionActive
   bool isConnectingVoice = false; // ⏳ Flag de carregamento
   bool isMuted = false;
   bool isSpeakerOn = true;
@@ -74,15 +83,16 @@ class CanvasController extends ChangeNotifier {
   Map<String, dynamic>? pendingInvite; // 🔔 Convite de sessão recebido
   Map<String, dynamic>? incomingVoiceCall; // 🎙️ Notificação de chamada iniciada
   bool isRemoteVoiceCallActive = false; // 🟢 Indica se já existe uma chamada na sala
-  final Set<String> usersInVoiceCall = {}; // 👥 IDs dos utilizadores com áudio ativo
+  final Set<String> usersInLiveSession = {}; // 👥 IDs dos utilizadores na sessão live
   
-  Map<String, double> userAudioLevels = {}; // 🎙️ Níveis de áudio por user
+  Map<String, double> userAudioLevels = {}; // 🎙️ Níveis de áudio por user (Simulado por player)
 
   List<Map<String, dynamic>> onlineUsers = [];
   String? followingUserId;
   final Set<String> whoIsWatchingMe = {}; // 👥 Utilizadores que me estão a seguir
   bool isBroadcastingViewport = false;
   Timer? _viewportBroadcastTimer;
+  Timer? _remoteImageSaveTimer; // 🚀 Novo: Para evitar lag no disco ao mover imagens remotas
   
   // 🔭 Dados para sincronização adaptativa e foco
   Offset? currentViewportCenter;
@@ -98,6 +108,49 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _textSubscription;
   StreamSubscription? _imageSubscription;
   StreamSubscription? _viewportSubscription;
+  StreamSubscription? _activitySubscription;
+  StreamSubscription? _pointerSubscription;
+  StreamSubscription? _chatSubscription; // 🚀 Novo
+  StreamSubscription? _audioMessageSubscription; // 🚀 Novo
+  StreamSubscription? _reactionSubscription; // 🚀 Novo
+  StreamSubscription? _collectiveSyncSubscription; // 🚀 Novo
+  VoidCallback? _statusListener; // 🚀 Novo
+
+  final ValueNotifier<Map<String, Offset>> remotePointers = ValueNotifier({});
+  final List<Map<String, dynamic>> chatMessages = []; // 💬 Mensagens de chat
+  int unreadChatCount = 0;
+  bool _isChatOpen = false;
+  bool get isChatOpen => _isChatOpen;
+  set isChatOpen(bool value) {
+    _isChatOpen = value;
+    if (value) {
+      unreadChatCount = 0;
+    }
+    safeNotify();
+  }
+
+  final StreamController<Map<String, dynamic>> _newMessageAlertController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get onNewMessageAlert => _newMessageAlertController.stream;
+
+  final List<Map<String, dynamic>> _pendingChatQueue = [];
+  AudioRecorder? _audioRecorderInstance;
+  AudioRecorder get _audioRecorder => _audioRecorderInstance ??= AudioRecorder();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? currentlyPlayingAudioUrl; // 🎧 Rastreio de áudio ativo
+  double audioPlaybackProgress = 0.0; // 🚀 Progresso real (0.0 a 1.0)
+  bool isRecording = false;
+  DateTime? _recordingStartTime;
+  Duration get recordingDuration => _recordingStartTime != null 
+      ? DateTime.now().difference(_recordingStartTime!) 
+      : Duration.zero;
+
+  final Map<String, String?> userReactions = {}; // 🎭 userId -> reaction (emoji)
+  final Map<String, Timer> _reactionTimers = {};
+  DateTime _lastPointerBroadcast = DateTime.now();
+  DateTime _lastMoveBroadcastTime = DateTime.now(); // 🚀 Para throttling de movimento
+
+  Timer? _typingDebounce; // ✍️ Timer para idle status
+  Timer? _textBroadcastDebounce; // ✍️ Debounce para envio de texto
   StreamSubscription? _followSubscription;
   StreamSubscription? _pageEventSubscription;
   StreamSubscription? _pageUpdatedSubscription;
@@ -120,22 +173,113 @@ class CanvasController extends ChangeNotifier {
   late TransformationController transformationController;
   final PageController pageController = PageController(initialPage: 0);
 
-  final Set<String> activeBroadcasters = {};
+  final Set<String> activeBroadcasters = {}; // 🚀 Restaurado
+  final Map<String, String> remoteEditingBlocks = {}; // ✍️ blockId -> userId (Soft Lock)
+  final Map<String, Timer> _editingTimers = {}; // Timers para limpar locks órfãos
   final Map<String, Timer> _broadcasterTimers = {};
   final Set<String> remoteUploadingUsers = {}; // 👥 Utilizadores a carregar ficheiros
-  Timer? _autoSyncPushTimer; // 🚀 Timer para o Dono enviar dados para a nuvem
   final Set<String> uploadingImageIds = {}; // 🖼️ IDs das imagens em upload de fundo
+  final Set<String> failedImageUploads = {}; // ❌ IDs das imagens que falharam o upload
+  Timer? _autoSyncPushTimer; // 🚀 Timer para o Dono enviar dados para a nuvem
+  final List<Map<String, dynamic>> _pendingStrokesQueue = []; // 🚀 Fila para resiliência
 
-  CanvasController(this._realtimeService, this._webrtcService, {CanvasRepository? repository, HandwritingOCRService? ocrService}) 
-      : _repository = repository ?? CanvasRepository(db.AppDatabase.instance),
-        _ocrService = ocrService ?? HandwritingOCRService() {
+  Future<void> sendStrokeUpdate({
+    required int pageNumber,
+    required String strokeId,
+    required List<Offset> points,
+    bool isFinal = false,
+  }) async {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+
+    final data = {
+      'page_number': pageNumber,
+      'strokes': [{
+        'id': strokeId,
+        'color': selectedColorHex,
+        'thickness': num.parse(selectedThickness.toStringAsFixed(1)),
+        'is_final': isFinal,
+        'points': points.map((pt) => {
+          'x': num.parse(pt.dx.toStringAsFixed(1)),
+          'y': num.parse(pt.dy.toStringAsFixed(1)),
+        }).toList(),
+      }]
+    };
+
+    try {
+      final success = await _realtimeService.broadcastStroke(
+        notebookId: liveNotebookSid!,
+        myUserId: myUserId,
+        strokeData: data,
+      );
+
+      if (!success) {
+        _pendingStrokesQueue.add(data);
+        debugPrint('⏳ [OfflineSync] Traço guardado na fila (Falha no envio)');
+      } else if (_pendingStrokesQueue.isNotEmpty) {
+        _flushPendingStrokes();
+      }
+    } catch (e) {
+      _pendingStrokesQueue.add(data);
+      debugPrint('⚠️ [OfflineSync] Erro de rede. Traço em fila: $e');
+    }
+  }
+
+  void _flushPendingStrokes() async {
+    if (_pendingStrokesQueue.isEmpty || !isRealtimeActive || liveNotebookSid == null) return;
+    
+    debugPrint('🚀 [OfflineSync] Despejando ${_pendingStrokesQueue.length} traços pendentes...');
+    final toSend = List<Map<String, dynamic>>.from(_pendingStrokesQueue);
+    _pendingStrokesQueue.clear();
+
+    for (var strokeData in toSend) {
+      await _realtimeService.broadcastStroke(
+        notebookId: liveNotebookSid!,
+        myUserId: myUserId,
+        strokeData: strokeData,
+      );
+    }
+  }
+
+  CanvasController(this._realtimeService, {CanvasRepository? repository}) 
+      : _repository = repository ?? CanvasRepository(db.AppDatabase.instance) {
     transformationController = TransformationController();
+    
+    _audioPlayer.onPlayerComplete.listen((_) {
+      debugPrint('🎧 [Audio] Reprodução concluída.');
+      userAudioLevels.clear();
+      audioPlaybackProgress = 0.0;
+      _playNextAudioInQueue();
+      safeNotify();
+    });
+
+    _audioPlayer.onPositionChanged.listen((pos) {
+      if (currentlyPlayingAudioUrl == null) return;
+      
+      _audioPlayer.getDuration().then((duration) {
+        if (duration != null && duration.inMilliseconds > 0) {
+          audioPlaybackProgress = (pos.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+        } else {
+          // Fallback: usar a duração da mensagem do chat se o player falhar em dar o total
+          final msg = chatMessages.firstWhere((m) => m['audio_url'] == currentlyPlayingAudioUrl, orElse: () => {});
+          final int msgDuration = (msg['duration'] as int? ?? 1) * 1000;
+          if (msgDuration > 0) {
+             audioPlaybackProgress = (pos.inMilliseconds / msgDuration).clamp(0.0, 1.0);
+          }
+        }
+        safeNotify();
+      });
+    });
+    
+    // 🎧 Inicializar volume para Windows/Desktop
+    _audioPlayer.setVolume(1.0);
   }
 
   @override
   void dispose() {
     _isDisposed = true;
     activePointsNotifier.dispose();
+    remoteLiveStrokes.dispose(); // 🚀
+    remotePointers.dispose(); // 🚀
     transformationController.dispose();
     pageController.dispose();
     _usersSubscription?.cancel();
@@ -148,14 +292,49 @@ class CanvasController extends ChangeNotifier {
     _pageUpdatedSubscription?.cancel();
     _handSubscription?.cancel();
     _uploadingSubscription?.cancel();
-    _inviteSubscription?.cancel(); // 🚀
-    _voiceCallSubscription?.cancel(); // 🚀
+    _inviteSubscription?.cancel();
+    _voiceCallSubscription?.cancel();
+    _voiceStateSubscription?.cancel();
+    _audioLevelSubscription?.cancel();
+    _activitySubscription?.cancel();
+    _pointerSubscription?.cancel();
+    _chatSubscription?.cancel(); // 🚀
+    _audioMessageSubscription?.cancel(); // 🚀
+    _reactionSubscription?.cancel(); // 🚀
+    _collectiveSyncSubscription?.cancel(); // 🚀
+    if (_statusListener != null) {
+      _realtimeService.statusNotifier.removeListener(_statusListener!);
+    }
+    
     _viewportBroadcastTimer?.cancel();
     _autoSyncPushTimer?.cancel();
+    _typingDebounce?.cancel(); // 🚀
+    _textBroadcastDebounce?.cancel(); // 🚀
+    _roomSyncDebouncer?.cancel(); // 🚀
+    
     for (var timer in _broadcasterTimers.values) { timer.cancel(); }
+    for (var timer in _editingTimers.values) { timer.cancel(); } // 🚀
+    
     _broadcasterTimers.clear();
-    if (liveNotebookSid != null) _realtimeService.leaveNotebookChannel(liveNotebookSid!);
-    if (isInVoiceCall) _webrtcService.leaveVoiceRoom();
+    _editingTimers.clear();
+    chatMessages.clear(); // 🚀 Limpar histórico volátil
+    unreadChatCount = 0;
+
+    // 🚀 FINAL PUSH: Tentar salvar a última versão antes de fechar
+    if (pages.isNotEmpty && isRealtimeActive && liveNotebookSid != null) {
+      _flushPendingStrokes(); // 📢 Enviar traços pendentes
+      final currentPage = pages[currentPageIndex];
+      _repository.savePageToCloud(currentPage, liveNotebookSid!, myUserId);
+    }
+
+    _audioPlayer.dispose();
+    _audioRecorderInstance?.dispose();
+    _audioRecorderInstance = null;
+    _newMessageAlertController.close();
+    if (liveNotebookSid != null && liveNotebookSid != 0) {
+      _realtimeService.leaveNotebookChannel(liveNotebookSid!);
+    }
+    if (isLiveSessionActive) isLiveSessionActive = false;
     SyncService.isCollaborationActive = false;
     super.dispose();
   }
@@ -175,8 +354,6 @@ class CanvasController extends ChangeNotifier {
       });
     }
     
-    // 🧠 INICIALIZAR OCR EM BACKGROUND
-    _ocrService.initializeModel();
     SyncService.isCollaborationActive = false;
 
     // 📡 ASSINAR METADADOS DO CADERNO (Reatividade para o Server ID)
@@ -258,9 +435,11 @@ class CanvasController extends ChangeNotifier {
     } else {
       debugPrint('📴 [Canvas] Entrando em modo offline (por opção)...');
       if (liveNotebookSid != null) _realtimeService.leaveNotebookChannel(liveNotebookSid!);
-      if (isInVoiceCall) {
-        _webrtcService.leaveVoiceRoom();
-        isInVoiceCall = false;
+      chatMessages.clear(); // 🚀 O chat morre quando a colaboração termina
+      unreadChatCount = 0;
+      if (isLiveSessionActive) {
+        isLiveSessionActive = false;
+        isLiveSessionActive = false;
       }
       isRealtimeActive = false;
       onlineUsers = [];
@@ -284,10 +463,17 @@ class CanvasController extends ChangeNotifier {
   }
 
   void setTextEditing(InlineTarget target, [TextBlock? block]) {
+    final oldBlock = activeTextBlock;
     activeInlineTarget = target;
     activeTextBlock = block;
     safeNotify();
-    if (block != null) broadcastTextBlockUpdate(pages[currentPageIndex], block);
+
+    if (block != null) {
+      broadcastTextBlockUpdate(pages[currentPageIndex], block, isEditing: true);
+    } else if (oldBlock != null) {
+      // 🔓 Libertar Soft Lock
+      broadcastTextBlockUpdate(pages[currentPageIndex], oldBlock, isEditing: false);
+    }
   }
 
   void _markUserBroadcasting(String userId) {
@@ -307,17 +493,30 @@ class CanvasController extends ChangeNotifier {
 
   Future<void> initRealtimeCollaboration() async {
     final realtime = _realtimeService;
+    
+    // 🛡️ SEGURANÇA CRÍTICA: Impedir colisão de IDs locais em canais globais
+    if (liveNotebookSid == null || liveNotebookSid == 0) {
+      debugPrint('🚨 [Canvas] Erro: Tentativa de colaboração sem ID de Servidor. Abortando.');
+      isCollaborationEnabled = false;
+      SyncService.isCollaborationActive = false;
+      safeNotify();
+      return;
+    }
+
     await realtime.initConnection();
-    final int channelId = (liveNotebookSid != null && liveNotebookSid != 0) ? liveNotebookSid! : currentNotebookId;
+    final int channelId = liveNotebookSid!;
 
     // 🚀 CORREÇÃO DE PRESENÇA: Configurar listeners ANTES de entrar na sala
     _usersSubscription?.cancel();
     _usersSubscription = realtime.onUsersUpdated.listen((usersList) {
+      if (_isDisposed) return;
+      
+      final int previousCount = onlineUsers.length;
       final List<String> currentOnlineIds = usersList.map((u) => u['id'].toString()).toList();
       
       // Limpar quem saiu da lista de seguidores
       whoIsWatchingMe.removeWhere((uid) => !currentOnlineIds.contains(uid));
-      usersInVoiceCall.removeWhere((uid) => !currentOnlineIds.contains(uid));
+      usersInLiveSession.removeWhere((uid) => !currentOnlineIds.contains(uid));
 
       onlineUsers = usersList.map((u) {
         final map = Map<String, dynamic>.from(u);
@@ -325,7 +524,7 @@ class CanvasController extends ChangeNotifier {
         
         // 🚀 SINCRONIZAÇÃO DE VOZ: Se o utilizador já diz que está em chamada, respeitamos
         if (map['isInCall'] == true) {
-          usersInVoiceCall.add(uid);
+          usersInLiveSession.add(uid);
         }
 
         int idAsInt = int.tryParse(uid) ?? 0;
@@ -335,27 +534,128 @@ class CanvasController extends ChangeNotifier {
           'name': map['name'] ?? 'Colega',
           'color': avatarColorsPool[idAsInt % avatarColorsPool.length],
           'isTalking': map['isTalking'] ?? false,
+          'activity': map['activity'] ?? 'idle', // 🚀 Novo: Rastreio de atividade
           'isHandRaised': map['isHandRaised'] ?? false,
-          'isInCall': usersInVoiceCall.contains(uid), // Reflete o estado real
+          'isInCall': usersInLiveSession.contains(uid), // Reflete o estado real
         };
       }).toList();
 
+      isRemoteVoiceCallActive = onlineUsers.any((u) => u['id'].toString() != myUserId && u['isInCall'] == true);
+
       // 🔭 SE JÁ HÁ ALGUÉM EM CHAMADA, MOSTRAR BANNER AUTOMATICAMENTE
-      if (usersInVoiceCall.any((uid) => uid != myUserId) && !isInVoiceCall && incomingVoiceCall == null) {
+      if (usersInLiveSession.any((uid) => uid != myUserId) && !isLiveSessionActive && incomingVoiceCall == null) {
         incomingVoiceCall = {'sender_name': 'A sala'};
         isRemoteVoiceCallActive = true;
       }
 
-      // 🎙️ NOVO: Se EU estou em chamada e alguém novo entrou, o WebRTCService precisa saber
-      if (isInVoiceCall) {
-        _webrtcService.handleNewUserJoined(currentOnlineIds);
+      // 🚀 ALINHAMENTO COLETIVO: Se alguém novo entrou, disparamos um sinal de sincronização global
+      if (onlineUsers.length > previousCount && previousCount > 0) {
+        debugPrint('🤝 [CollectiveSync] Novo colega detectado. Solicitando alinhamento global...');
+        _realtimeService.requestCollectiveSync(myUserId: myUserId);
       }
 
-      // 🚀 ROOM SYNC: Se entrei numa sala com mais gente, alinhamos os dados
-      if (onlineUsers.length > 1 && isRealtimeActive) {
+      // 🚀 ROOM SYNC: Ao entrar, sempre alinhamos os dados com a nuvem para não perder o que foi feito offline
+      if (isRealtimeActive) {
         _debounceRoomSync();
       }
 
+      safeNotify();
+    });
+
+    _collectiveSyncSubscription?.cancel();
+    _collectiveSyncSubscription = realtime.onCollectiveSyncRequested.listen((data) {
+      if (_isDisposed) return;
+      final String senderId = data['sender_id'].toString();
+      if (senderId != myUserId) {
+        debugPrint('🤝 [CollectiveSync] Alinhamento global solicitado por $senderId');
+        _performCollectiveSync();
+      }
+    });
+
+    _activitySubscription?.cancel();
+    _activitySubscription = realtime.onUserActivityReceived.listen((data) {
+      if (_isDisposed) return;
+      final String uid = data['sender_id'].toString();
+      final String activity = data['activity'].toString();
+      _realtimeService.updateUserActivityState(uid, activity);
+    });
+
+    _pointerSubscription?.cancel();
+    _pointerSubscription = realtime.onPointerMoveReceived.listen((data) {
+      if (_isDisposed) return;
+      final String uid = data['sender_id'].toString();
+      if (uid == myUserId) return;
+      
+      final pos = Offset((data['x'] as num).toDouble(), (data['y'] as num).toDouble());
+      final currentMap = Map<String, Offset>.from(remotePointers.value);
+      currentMap[uid] = pos;
+      remotePointers.value = currentMap;
+    });
+
+    _chatSubscription?.cancel();
+    _chatSubscription = realtime.onChatMessageReceived.listen((data) {
+      if (_isDisposed) return;
+      _addChatMessage(data);
+    });
+
+    _audioMessageSubscription?.cancel();
+    _audioMessageSubscription = realtime.onAudioMessageReceived.listen((data) {
+      if (_isDisposed) return;
+      _addChatMessage(data);
+
+      // 🎧 AUTO-PLAY EM SESSÃO LIVE
+      if (isLiveSessionActive && data['is_live'] == true && data['sender_id'] != myUserId) {
+        debugPrint('🎧 [LiveSession] Auto-play de áudio recebido de ${data['sender_id']}');
+        playAudioMessage(data['audio_url']);
+      }
+    });
+
+    // 🚀 SINCRONIZAÇÃO DE HISTÓRICO VOLÁTIL
+    realtime.onChatSyncRequestReceived.listen((data) {
+      if (_isDisposed) return;
+      final String requesterId = data['sender_id'].toString();
+      if (requesterId != myUserId && chatMessages.isNotEmpty) {
+        debugPrint('🤝 [ChatSync] Enviando histórico para $requesterId');
+        _realtimeService.sendChatSyncResponse(targetUserId: requesterId, history: chatMessages);
+      }
+    });
+
+    realtime.onChatSyncResponseReceived.listen((data) {
+      if (_isDisposed) return;
+      if (data['target_id'].toString() == myUserId) {
+        final List<dynamic> history = data['history'] ?? [];
+        debugPrint('🤝 [ChatSync] Recebido histórico de ${history.length} mensagens');
+        for (var msg in history) {
+          _addChatMessage(Map<String, dynamic>.from(msg));
+        }
+      }
+    });
+
+    if (_statusListener != null) {
+      realtime.statusNotifier.removeListener(_statusListener!);
+    }
+    _statusListener = () {
+      if (realtime.statusNotifier.value == RealtimeStatus.connected) {
+        _flushPendingChat();
+      }
+    };
+    realtime.statusNotifier.addListener(_statusListener!);
+
+    _reactionSubscription?.cancel();
+    _reactionSubscription = realtime.onReactionReceived.listen((data) {
+      if (_isDisposed) return;
+      final String uid = data['sender_id'].toString();
+      final String emoji = data['reaction'].toString();
+
+      debugPrint('🎭 [Reaction] Recebida de $uid: $emoji');
+
+      userReactions[uid] = emoji;
+      _reactionTimers[uid]?.cancel();
+      _reactionTimers[uid] = Timer(const Duration(seconds: 5), () {
+        debugPrint('🎭 [Reaction] Limpando reação de $uid');
+        userReactions[uid] = null;
+        safeNotify();
+      });
       safeNotify();
     });
 
@@ -396,9 +696,20 @@ class CanvasController extends ChangeNotifier {
 
           if (isDeleted) {
             targetPage.strokes.removeWhere((s) => s.id == strokeId);
+            
+            // Também removemos do preview se existir
+            final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
+            if (currentMap.containsKey(strokeId)) {
+              currentMap.remove(strokeId);
+              remoteLiveStrokes.value = currentMap;
+            }
+            
             safeNotify();
-            // 🚀 PERSISTÊNCIA COLETIVA: Todos salvam a remoção no SQLite local
-            _repository.savePage(targetPage, liveNotebookSid);
+            // 🚀 PERSISTÊNCIA COLETIVA: Todos salvam a remoção no SQLite local de forma cirúrgica
+            if (targetPage.id != null) {
+              _repository.deleteSingleStroke(targetPage.id!, strokeId);
+              _repository.triggerSyncRadar(targetPage.id!);
+            }
             continue;
           }
 
@@ -406,28 +717,32 @@ class CanvasController extends ChangeNotifier {
               .map((pt) => Offset((pt['x'] as num).toDouble(), (pt['y'] as num).toDouble()))
               .toList();
 
+          final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
+          final existingStroke = currentMap[strokeId];
+
           if (!isFinal) {
-            final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
-            if (currentMap.containsKey(strokeId)) {
-              currentMap[strokeId]!.points.addAll(incomingPoints);
+            if (existingStroke != null) {
+              existingStroke.points.addAll(incomingPoints);
             } else {
               // 🚀 ISOLAMENTO: Atribuímos o número da página ao traço live
               currentMap[strokeId] = Stroke(
                 id: strokeId, 
                 color: strokeMap['color'], 
                 thickness: (strokeMap['thickness'] as num).toDouble(), 
-                points: incomingPoints,
+                points: List<Offset>.from(incomingPoints), 
                 pageNumber: incomingPageNum,
               );
             }
             remoteLiveStrokes.value = currentMap;
           } else {
-            // 🚀 SALVAMENTO IMEDIATO: Adicionamos o traço final à página local
+            // 🚀 CORREÇÃO DO TRAÇO FANTASMA: 
+            // Substituímos os pontos pelo payload final completo em vez de concatenar.
+            // Isto evita duplicação de pontos que causa a linha reta indesejada.
             final newStroke = Stroke(
               id: strokeId, 
               color: strokeMap['color'], 
               thickness: (strokeMap['thickness'] as num).toDouble(), 
-              points: incomingPoints,
+              points: incomingPoints, // 🎯 Pontos finais puros
               pageNumber: incomingPageNum,
             );
 
@@ -435,14 +750,18 @@ class CanvasController extends ChangeNotifier {
             targetPage.strokes.add(newStroke);
             
             // Removemos o traço 'live' de preview
-            final currentMap = Map<String, Stroke>.from(remoteLiveStrokes.value);
             currentMap.remove(strokeId);
             remoteLiveStrokes.value = currentMap;
             
             safeNotify();
 
             // Todos salvam localmente para evitar perda de dados se saírem da app
-            _repository.savePage(targetPage, liveNotebookSid);
+            if (targetPage.id != null) {
+              _repository.saveSingleStroke(targetPage.id!, newStroke);
+              
+              // 🚀 MARCAR PÁGINA COMO DIRTY: Se o colega não salvar na nuvem, nós salvaremos eventualmente
+              _repository.triggerSyncRadar(targetPage.id!);
+            }
           }
         }
       } catch (e) { debugPrint('⚠️ Erro tinta remota: $e'); }
@@ -465,8 +784,23 @@ class CanvasController extends ChangeNotifier {
         final targetPage = pages[targetIdx];
         final blockData = data['block'];
         final String blockId = blockData['id'];
+
+        // 🔒 Gestão de Soft Lock
+        if (data['is_editing'] == true) {
+          remoteEditingBlocks[blockId] = senderId!;
+          _editingTimers[blockId]?.cancel();
+          _editingTimers[blockId] = Timer(const Duration(seconds: 5), () {
+            remoteEditingBlocks.remove(blockId);
+            safeNotify();
+          });
+        } else {
+          remoteEditingBlocks.remove(blockId);
+          _editingTimers[blockId]?.cancel();
+        }
+
         if (data['is_deleted'] == true) {
           targetPage.textBlocks.removeWhere((t) => t.id == blockId);
+          remoteEditingBlocks.remove(blockId);
         } else {
           final existingIndex = targetPage.textBlocks.indexWhere((t) => t.id == blockId);
           final newBlock = TextBlock.fromJson(blockData);
@@ -477,7 +811,6 @@ class CanvasController extends ChangeNotifier {
           }
         }
         safeNotify();
-        // 🚀 Nota: Agora o salvamento SQLite acontece localmente para todos.
         _repository.savePage(targetPage, liveNotebookSid);
       } catch (e) { debugPrint('⚠️ Erro texto remoto: $e'); }
     });
@@ -511,7 +844,13 @@ class CanvasController extends ChangeNotifier {
           }
         }
         safeNotify();
-        _repository.savePage(targetPage, liveNotebookSid);
+
+        // 🚀 OTIMIZAÇÃO: Adiar o save no SQLite para movimentos intensos
+        _remoteImageSaveTimer?.cancel();
+        _remoteImageSaveTimer = Timer(const Duration(seconds: 1), () {
+          _repository.savePage(targetPage, liveNotebookSid);
+          debugPrint('💾 [RemoteSync] Posição final da imagem persistida.');
+        });
       } catch (e) { debugPrint('⚠️ Erro imagem remota: $e'); }
     });
 
@@ -539,6 +878,13 @@ class CanvasController extends ChangeNotifier {
 
         // Atualizar dados da página com a versão "da verdade" do servidor
         targetPage.serverId = pageId;
+
+        if (data['header_data'] != null) {
+          targetPage.title = LocalPage.parseMeta(data['header_data']);
+        }
+        if (data['footer_data'] != null) {
+          targetPage.footer = LocalPage.parseMeta(data['footer_data']);
+        }
         
         if (data['stroke_data'] != null) {
           final List strokeList = (data['stroke_data'] is String) 
@@ -576,7 +922,7 @@ class CanvasController extends ChangeNotifier {
 
       if (followingUserId == null || senderId != followingUserId) return;
 
-      // 🔭 SINCRONIZAÇÃO DE PÁGINA
+      //  telescope SINCRONIZAÇÃO DE PÁGINA
       final int? incomingPageNum = data['page_number'];
       if (incomingPageNum != null && currentPageIndex + 1 != incomingPageNum) {
         final targetIdx = incomingPageNum - 1;
@@ -693,6 +1039,24 @@ class CanvasController extends ChangeNotifier {
               await _repository.deletePage(pageToDelete.id!);
             }
           }
+        } else if (action == 'metadata_update') {
+          final int pageNumber = data['page_number'];
+          final int index = pages.indexWhere((p) => p.pageNumber == pageNumber);
+          if (index != -1) {
+            final targetPage = pages[index];
+            if (data.containsKey('line_type')) {
+              liveLineType = data['line_type'];
+            }
+            if (data.containsKey('header_data')) {
+              targetPage.title = LocalPage.parseMeta(data['header_data']);
+            }
+            if (data.containsKey('footer_data')) {
+              targetPage.footer = LocalPage.parseMeta(data['footer_data']);
+            }
+            safeNotify();
+            // 🛡️ PERSISTÊNCIA UNIVERSAL: Todos salvam a alteração de metadados localmente
+            await _repository.savePage(targetPage, liveNotebookSid);
+          }
         }
       } catch (e) {
         debugPrint('⚠️ Erro ao processar evento de página remoto: $e');
@@ -750,7 +1114,7 @@ class CanvasController extends ChangeNotifier {
       if (data['sender_id'] == myUserId) return;
       
       // Se não estamos em chamada, mostramos o convite
-      if (!isInVoiceCall) {
+      if (!isLiveSessionActive) {
         incomingVoiceCall = data;
         isRemoteVoiceCallActive = true;
         safeNotify();
@@ -770,21 +1134,20 @@ class CanvasController extends ChangeNotifier {
       final bool inCall = data['is_in_call'] == true;
       
       // 🛡️ GUARDA: Só reagir se o estado MUDOU de facto
-      final bool alreadyIn = usersInVoiceCall.contains(uid);
+      final bool alreadyIn = usersInLiveSession.contains(uid);
       if (inCall == alreadyIn) return;
 
       if (inCall) {
-        usersInVoiceCall.add(uid);
+        usersInLiveSession.add(uid);
         isRemoteVoiceCallActive = true;
         // 🎙️ SE EU já estou na chamada, aviso o WebRTC que este utilizador entrou
-        if (isInVoiceCall) {
-          _webrtcService.onUserJoinedVoice(uid);
-        }
+        if (isLiveSessionActive) {
+              }
       } else {
-        usersInVoiceCall.remove(uid);
+        usersInLiveSession.remove(uid);
         userAudioLevels.remove(uid);
         // 🚀 LIMPEZA: Se não sobrar ninguém (ou só eu), desativamos a flag da sala
-        if (usersInVoiceCall.isEmpty || (usersInVoiceCall.length == 1 && usersInVoiceCall.contains(myUserId))) {
+        if (usersInLiveSession.isEmpty || (usersInLiveSession.length == 1 && usersInLiveSession.contains(myUserId))) {
           isRemoteVoiceCallActive = false;
         }
       }
@@ -796,39 +1159,328 @@ class CanvasController extends ChangeNotifier {
     
     // 🚀 FORÇAR ATUALIZAÇÃO INICIAL: Garante que a lista não fica vazia se o stream disparou durante o await
     onlineUsers = realtime.getConnectedUsers();
+    
+    // 🚀 PEDIR HISTÓRICO DE CHAT AOS MEMBROS ATIVOS
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!_isDisposed && isRealtimeActive) {
+        debugPrint('🤝 [ChatSync] Solicitando histórico de chat...');
+        _realtimeService.requestChatSync(myUserId: myUserId);
+      }
+    });
+
     safeNotify();
   }
 
   Timer? _roomSyncDebouncer;
   bool _hasSyncedInThisSession = false;
 
+  void _addChatMessage(Map<String, dynamic> data) {
+    final String? msgId = data['msg_id']?.toString();
+    
+    // 🛡️ DEDUPLICAÇÃO: Não adicionar se já existir
+    if (msgId != null && chatMessages.any((m) => m['msg_id'] == msgId)) {
+      return;
+    }
+
+    chatMessages.add(data);
+    if (chatMessages.length > 50) {
+      chatMessages.removeAt(0);
+    }
+    if (!_isChatOpen && data['sender_id'] != myUserId) {
+      unreadChatCount++;
+      _newMessageAlertController.add(data); // 🚀 Disparar alerta para o SnackBar
+    }
+    safeNotify();
+  }
+
+  Future<void> _performCollectiveSync() async {
+    if (isGlobalSyncing) return;
+    
+    isGlobalSyncing = true;
+    safeNotify();
+
+    try {
+      debugPrint('📡 [CollectiveSync] Iniciando ciclo de trava e alinhamento...');
+      
+      // 1. Push: Envia mudanças locais pendentes
+      await SyncService().pushPages();
+      
+      // 2. Pull: Recebe o estado atualizado do servidor
+      await SyncService().pullPages();
+      
+      // 3. Recarregar páginas locais
+      final freshPages = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
+      if (freshPages.isNotEmpty) {
+        pages = freshPages;
+      }
+      
+      debugPrint('✅ [CollectiveSync] Alinhamento concluído com sucesso.');
+    } catch (e) {
+      debugPrint('❌ [CollectiveSync] Falha no alinhamento: $e');
+    } finally {
+      isGlobalSyncing = false;
+      safeNotify();
+    }
+  }
+
   void _debounceRoomSync() {
     if (_hasSyncedInThisSession) return;
     
     _roomSyncDebouncer?.cancel();
-    _roomSyncDebouncer = Timer(const Duration(seconds: 2), () async {
-      debugPrint('📡 [RoomSync] Detetada colaboração ativa. Sincronizando conteúdo local com a nuvem...');
+    // 🚀 SINCRONIZAÇÃO ACELERADA: Reduzido de 2s para 500ms para entrada mais rápida
+    _roomSyncDebouncer = Timer(const Duration(milliseconds: 500), () async {
+      debugPrint('📡 [RoomSync] Iniciando alinhamento imersivo com a Cloud...');
       
-      // 1. Push: Envia o que tenho localmente para o Laravel (Laravel funde os dados)
-      await SyncService().pushPages();
-      
-      // 2. Pull: Recebe o conteúdo fundido de todos os utilizadores
-      await SyncService().pullPages();
-      
-      // 3. Recarregar e Notificar
-      pages = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
-      _hasSyncedInThisSession = true;
-      safeNotify();
-      debugPrint('🏆 [RoomSync] Caderno alinhado com sucesso!');
+      try {
+        // 1. Push: Garante que o servidor tem os meus dados locais ANTES de apagar o cache local no Pull
+        // 🛡️ CRÍTICO: Se o Push falhar, NÃO prosseguimos para o Pull para evitar perda de dados locais unsynced
+        final bool pushSuccess = await SyncService().pushPages();
+        
+        if (!pushSuccess) {
+          debugPrint('❌ [RoomSync] Falha no Push inicial. Abortando Pull para proteger dados locais.');
+          return;
+        }
+
+        debugPrint('✅ [RoomSync] Push concluído com sucesso. Iniciando Pull...');
+        
+        // 2. Pull: Traz tudo o que os colegas fizeram (mesmo ausentes)
+        await SyncService().pullPages();
+        
+        // 3. Recarregar a UI com a "verdade" vinda da nuvem
+        final remotePages = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
+        if (remotePages.isNotEmpty) {
+          pages = remotePages;
+          _hasSyncedInThisSession = true;
+          safeNotify();
+          debugPrint('🏆 [RoomSync] Caderno totalmente sincronizado e persistente!');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [RoomSync] Falha catastrófica no alinhamento inicial: $e');
+      }
     });
+  }
+
+  void sendChatMessage(String message) {
+    if (liveNotebookSid == null) return;
+    final msg = {
+      'type': 'text',
+      'sender_id': myUserId,
+      'message': message,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    
+    if (isRealtimeActive && _realtimeService.isConnected) {
+      _addChatMessage(msg);
+      _realtimeService.broadcastChatMessage(
+        notebookId: liveNotebookSid!,
+        myUserId: myUserId,
+        message: message,
+      );
+    } else {
+      _addChatMessage(msg);
+      _pendingChatQueue.add(msg);
+      debugPrint('⏳ [ChatOffline] Mensagem guardada na fila');
+    }
+  }
+
+  void _flushPendingChat() async {
+    if (_pendingChatQueue.isEmpty || !isRealtimeActive || liveNotebookSid == null || !_realtimeService.isConnected) return;
+    
+    debugPrint('🚀 [ChatOffline] Enviando ${_pendingChatQueue.length} mensagens pendentes...');
+    final toSend = List<Map<String, dynamic>>.from(_pendingChatQueue);
+    _pendingChatQueue.clear();
+
+    for (var msg in toSend) {
+      if (msg['type'] == 'text') {
+        await _realtimeService.broadcastChatMessage(
+          notebookId: liveNotebookSid!,
+          myUserId: myUserId,
+          message: msg['message'],
+        );
+      } else if (msg['type'] == 'audio') {
+        await _realtimeService.broadcastAudioMessage(
+          notebookId: liveNotebookSid!,
+          myUserId: myUserId,
+          audioUrl: msg['audio_url'],
+          duration: msg['duration'],
+        );
+      }
+    }
+  }
+
+  Future<void> startRecording() async {
+    try {
+      if (_isDisposed) return;
+      if (isRecording) return;
+      
+      debugPrint('🎙️ [Audio] A iniciar gravação para notebook SID: $liveNotebookSid');
+      
+      if (await _audioRecorder.hasPermission()) {
+        final dir = await getTemporaryDirectory();
+        final path = '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        
+        await _audioRecorder.start(const RecordConfig(), path: path);
+        isRecording = true;
+        _recordingStartTime = DateTime.now();
+        safeNotify();
+      }
+    } catch (e) {
+      debugPrint('❌ Erro ao iniciar gravação: $e');
+    }
+  }
+
+  Future<void> stopAndSendAudio() async {
+    try {
+      if (_isDisposed || !isRecording) return;
+
+      final path = await _audioRecorder.stop();
+      isRecording = false;
+      final duration = recordingDuration.inSeconds;
+      _recordingStartTime = null;
+      safeNotify();
+
+      if (path != null && liveNotebookSid != null && liveNotebookSid != 0) {
+        final file = File(path);
+        final bytes = await file.readAsBytes();
+        final filename = path.split('/').last;
+
+        // 🚀 CORREÇÃO: Usar liveNotebookSid (Server ID) em vez do local ID
+        debugPrint('☁️ [Audio] A enviar áudio para o servidor (Notebook SID: $liveNotebookSid)...');
+        final audioUrl = await _repository.uploadAudio(liveNotebookSid!, filename, bytes);
+        
+        if (audioUrl != null) {
+          final msg = {
+            'type': 'audio',
+            'sender_id': myUserId,
+            'audio_url': audioUrl,
+            'duration': duration,
+            'timestamp': DateTime.now().toIso8601String(),
+          };
+
+          if (isRealtimeActive && _realtimeService.isConnected) {
+            _addChatMessage(msg);
+            _realtimeService.broadcastAudioMessage(
+              notebookId: liveNotebookSid!,
+              myUserId: myUserId,
+              audioUrl: audioUrl,
+              duration: duration,
+              isLive: isLiveSessionActive, // 🚀 Marca como LIVE se a sessão estiver ativa
+            );
+          } else {
+            _addChatMessage(msg);
+            _pendingChatQueue.add(msg);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Erro ao parar/enviar áudio: $e');
+      isRecording = false;
+      safeNotify();
+    }
+  }
+
+  Future<void> playAudioMessage(String url, {String? senderId}) async {
+    // ⏸️ SE JÁ ESTIVER A TOCAR ESTE ÁUDIO, PAUSA TUDO
+    if (currentlyPlayingAudioUrl == url) {
+      currentlyPlayingAudioUrl = null;
+      if (senderId != null) userAudioLevels[senderId] = 0.0;
+      await _audioPlayer.pause();
+      safeNotify();
+      return;
+    }
+
+    // Limpar níveis anteriores
+    userAudioLevels.clear();
+    audioPlaybackProgress = 0.0; // 🚀 Reset imediato para a UI
+
+    currentlyPlayingAudioUrl = url;
+    
+    // Tentar encontrar o senderId se não for fornecido
+    final effectiveSenderId = senderId ?? chatMessages.firstWhere((m) => m['audio_url'] == url, orElse: () => {})['sender_id']?.toString();
+    
+    if (effectiveSenderId != null) {
+      userAudioLevels[effectiveSenderId] = 0.5; // Simular que está a falar
+    }
+
+    safeNotify();
+    try {
+      debugPrint('🎧 [Audio] Tentando reproduzir: $url (Sender: $effectiveSenderId)');
+      
+      // 🛑 Reset agressivo do Player
+      await _audioPlayer.stop();
+      await _audioPlayer.release(); // 🚀 Liberta recursos nativos (importante no Windows)
+      
+      await Future.delayed(const Duration(milliseconds: 200)); 
+
+      // 🚀 Configuração para Desktop/Windows
+      await _audioPlayer.setVolume(isSpeakerOn ? 1.0 : 0.0);
+      
+      // No audioplayers 6.1.0, o play aceita o Source diretamente
+      await _audioPlayer.play(UrlSource(url));
+      
+      debugPrint('✅ [Audio] Comando de reprodução disparado com sucesso.');
+    } catch (e) {
+      debugPrint('❌ [Audio] Erro ao reproduzir áudio: $e');
+      userAudioLevels.clear();
+      safeNotify();
+    }
+  }
+
+  void _playNextAudioInQueue() async {
+    // 🛡️ Se o utilizador limpou o ID (pausou), não avançamos
+    if (currentlyPlayingAudioUrl == null) return;
+    
+    // 🔍 Encontrar o índice da mensagem atual
+    int currentIndex = chatMessages.indexWhere((m) => m['audio_url'] == currentlyPlayingAudioUrl);
+    
+    // Limpar o estado atual antes de passar ao próximo
+    currentlyPlayingAudioUrl = null;
+    safeNotify();
+
+    if (currentIndex != -1 && currentIndex < chatMessages.length - 1) {
+      // 🚀 Procurar o próximo áudio nas mensagens seguintes
+      for (int i = currentIndex + 1; i < chatMessages.length; i++) {
+        final nextMsg = chatMessages[i];
+        if (nextMsg['type'] == 'audio') {
+          debugPrint('🎧 [Audio] Reprodução sequencial detectada. Próximo áudio em 800ms...');
+          
+          // Pequena pausa para o utilizador perceber a troca
+          await Future.delayed(const Duration(milliseconds: 800));
+          
+          if (!_isDisposed) {
+            await playAudioMessage(nextMsg['audio_url']);
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  void sendReaction(String emoji) {
+    if (!isRealtimeActive || liveNotebookSid == null) {
+      debugPrint('🚫 [Reaction] Bloqueado: Realtime=$isRealtimeActive, NotebookSid=$liveNotebookSid');
+      return;
+    }
+    
+    debugPrint('🎭 [Reaction] Enviando minha reação: $emoji (MyID: $myUserId)');
+    userReactions[myUserId] = emoji;
+    _reactionTimers[myUserId]?.cancel();
+    _reactionTimers[myUserId] = Timer(const Duration(seconds: 5), () {
+      userReactions[myUserId] = null;
+      safeNotify();
+    });
+
+    _realtimeService.broadcastReaction(
+      notebookId: liveNotebookSid!,
+      myUserId: myUserId,
+      reaction: emoji,
+    );
+    safeNotify();
   }
 
   Future<void> triggerAutoSave(LocalPage page) async {
     debugPrint('💾 [SQLite] A guardar folha ${page.pageNumber} localmente...');
     await _repository.savePage(page, liveNotebookSid);
-
-    // 🧠 DISPARAR OCR (Background)
-    _debounceOCR(page);
 
     // 🚀 SERVER-AUTHORITATIVE PUSH
     if (isRealtimeActive && liveNotebookSid != null && liveNotebookSid != 0) {
@@ -846,9 +1498,15 @@ class CanvasController extends ChangeNotifier {
   }
 
   void switchTool(ToolMode newMode) {
+    // 🚀 SELECÇÃO -> BORRACHA: APAGAR TUDO O QUE ESTÁ SELECIONADO
+    if (newMode == ToolMode.eraser && (selectedStrokeIds.isNotEmpty || selectedTextIds.isNotEmpty || selectedImageIds.isNotEmpty)) {
+      deleteSelection(pages[currentPageIndex]);
+      return; // Mantém a ferramenta atual ou muda? Geralmente muda para borracha após apagar
+    }
+
     currentTool = newMode;
-    if (newMode != ToolMode.select) {
-      selectedStrokeIds.clear(); selectedTextIds.clear();
+    if (newMode != ToolMode.select && newMode != ToolMode.eraser) {
+      selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear();
       selectionRectStart = null; selectionRectEnd = null;
       isMovingStrokes = false;
     }
@@ -866,8 +1524,40 @@ class CanvasController extends ChangeNotifier {
     safeNotify();
   }
 
-  void setLineType(String type) { liveLineType = type; safeNotify(); }
-  void setPageIndex(int index) { currentPageIndex = index; safeNotify(); }
+  void broadcastPageMetadataUpdate(LocalPage page) {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+    
+    _realtimeService.broadcastPageEvent(
+      notebookId: liveNotebookSid!,
+      myUserId: myUserId,
+      pageData: {
+        'action': 'metadata_update',
+        'notebook_sid': liveNotebookSid,
+        'page_number': page.pageNumber,
+        'line_type': liveLineType,
+        'header_data': {'title': page.title},
+        'footer_data': {'title': page.footer},
+      }
+    );
+  }
+
+  void setLineType(String type, LocalPage page) { 
+    liveLineType = type; 
+    safeNotify(); 
+    broadcastPageMetadataUpdate(page);
+    triggerAutoSave(page);
+  }
+  void setPageIndex(int index) { 
+    if (currentPageIndex == index) return;
+    currentPageIndex = index; 
+    safeNotify(); 
+  }
+
+  void jumpToPage(int index) {
+    if (index < 0 || index >= pages.length) return;
+    setPageIndex(index);
+    pageController.jumpToPage(index);
+  }
 
   Future<void> addNewPage(bool isLandscape) async {
     // 🛡️ ALGORITMO ROBUSTO: Pega o maior número existente e soma 1
@@ -909,7 +1599,11 @@ class CanvasController extends ChangeNotifier {
     
     Future.microtask(() { if (pageController.hasClients) pageController.jumpToPage(currentPageIndex); });
     
-    if (pageToDelete.id != null) await _repository.deletePage(pageToDelete.id!);
+    if (pageToDelete.id != null) {
+      await _repository.deletePage(pageToDelete.id!);
+      // 🚀 DISPARAR SYNC IMEDIATO PARA PROPAGAR DELEÇÃO
+      SyncService().pushPages();
+    }
     
     // 📢 Notificar colegas online
     if (isRealtimeActive && liveNotebookSid != null) {
@@ -927,33 +1621,16 @@ class CanvasController extends ChangeNotifier {
     if (pages.isNotEmpty) triggerAutoSave(pages[currentPageIndex]);
   }
 
-  final Map<int, Timer> _ocrDebouncers = {};
-
-  void _debounceOCR(LocalPage page) {
-    if (page.id == null) return;
-    _ocrDebouncers[page.id!]?.cancel();
-    _ocrDebouncers[page.id!] = Timer(const Duration(seconds: 3), () async {
-      debugPrint('🧠 [OCR] Iniciando reconhecimento de escrita para folha ${page.pageNumber}...');
-      final text = await _ocrService.recognizeHandwriting(page.strokes);
-      if (text.isNotEmpty && text != page.extractedText) {
-        page.extractedText = text;
-        await _repository.updatePageMetadata(page.id!, page.title, page.footer, extractedText: text);
-        debugPrint('✅ [OCR] Texto extraído e indexado!');
-      }
-    });
-  }
-
   void eraseAtPosition(Offset pos, LocalPage page) {
-    final List<String> deletedStrokeIds = [];
-    final List<String> deletedTextIds = [];
-
-    if (selectedStrokeIds.isNotEmpty || selectedTextIds.isNotEmpty) {
-      deletedStrokeIds.addAll(selectedStrokeIds); deletedTextIds.addAll(selectedTextIds);
-      page.strokes.removeWhere((s) => selectedStrokeIds.contains(s.id));
-      page.textBlocks.removeWhere((t) => selectedTextIds.contains(t.id));
-      selectedStrokeIds.clear(); selectedTextIds.clear();
+    if (selectedStrokeIds.isNotEmpty || selectedTextIds.isNotEmpty || selectedImageIds.isNotEmpty) {
+      deleteSelection(page);
+      return;
     } else {
       const double eraserRadius = 24.0;
+      final List<String> deletedStrokeIds = [];
+      final List<String> deletedTextIds = [];
+      final List<String> deletedImageIds = [];
+
       final List<Stroke> strokesToRemove = [];
       for (var stroke in page.strokes) {
         if (stroke.points.any((pt) => (pt - pos).distance < eraserRadius)) strokesToRemove.add(stroke);
@@ -972,39 +1649,144 @@ class CanvasController extends ChangeNotifier {
         deletedTextIds.addAll(textsToRemove.map((t) => t.id));
         page.textBlocks.removeWhere((t) => textsToRemove.contains(t));
       }
-    }
 
-    if (deletedStrokeIds.isNotEmpty || deletedTextIds.isNotEmpty) {
-      safeNotify(); triggerAutoSave(page);
-      if (isRealtimeActive && liveNotebookSid != null) {
-        for (var id in deletedStrokeIds) {
-          _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {
-            'page_number': page.pageNumber, 'strokes': [{'id': id, 'is_deleted': true}]
-          });
-        }
-        for (var id in deletedTextIds) {
-          _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, myUserId: myUserId, textData: {
-            'page_number': page.pageNumber, 'block': {'id': id}, 'is_deleted': true
-          });
+      final List<ImageBlock> imagesToRemove = [];
+      for (var img in page.imageBlocks) {
+        final Rect imgRect = Rect.fromLTWH(img.position.dx, img.position.dy, img.width, img.height);
+        if (imgRect.contains(pos)) imagesToRemove.add(img);
+      }
+      if (imagesToRemove.isNotEmpty) {
+        deletedImageIds.addAll(imagesToRemove.map((img) => img.id));
+        page.imageBlocks.removeWhere((img) => imagesToRemove.contains(img));
+      }
+
+      if (deletedStrokeIds.isNotEmpty || deletedTextIds.isNotEmpty || deletedImageIds.isNotEmpty) {
+        safeNotify(); triggerAutoSave(page);
+        if (isRealtimeActive && liveNotebookSid != null) {
+          for (var id in deletedStrokeIds) {
+            _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {
+              'page_number': page.pageNumber, 'strokes': [{'id': id, 'is_deleted': true}]
+            });
+          }
+          for (var id in deletedTextIds) {
+            _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, myUserId: myUserId, textData: {
+              'page_number': page.pageNumber, 'block': {'id': id}, 'is_deleted': true
+            });
+          }
+          for (var id in deletedImageIds) {
+            _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, myUserId: myUserId, imageData: {
+              'page_number': page.pageNumber, 'block': {'id': id}, 'is_deleted': true
+            });
+          }
         }
       }
     }
   }
 
+  void deleteSelection(LocalPage page) {
+    if (selectedStrokeIds.isEmpty && selectedTextIds.isEmpty && selectedImageIds.isEmpty) return;
+
+    final strokesToRemove = page.strokes.where((s) => selectedStrokeIds.contains(s.id)).toList();
+    final textsToRemove = page.textBlocks.where((t) => selectedTextIds.contains(t.id)).toList();
+    final imagesToRemove = page.imageBlocks.where((img) => selectedImageIds.contains(img.id)).toList();
+
+    if (strokesToRemove.isEmpty && textsToRemove.isEmpty && imagesToRemove.isEmpty) return;
+
+    final action = DeleteAction(
+      page: page,
+      strokes: strokesToRemove,
+      texts: textsToRemove,
+      images: imagesToRemove,
+    );
+
+    _executeAction(action);
+
+    selectedStrokeIds.clear();
+    selectedTextIds.clear();
+    selectedImageIds.clear();
+    safeNotify();
+  }
+
+  void addStroke(LocalPage page, Stroke stroke) {
+    final action = AddStrokeAction(page: page, stroke: stroke);
+    _executeAction(action);
+  }
+
+  void _executeAction(CanvasAction action) {
+    action.execute();
+    _undoStack.add(action);
+    _redoStack.clear();
+    if (_undoStack.length > 50) _undoStack.removeAt(0);
+    
+    // Sincronização e Save
+    triggerAutoSave(action.page);
+    _broadcastAction(action);
+  }
+
+  void _broadcastAction(CanvasAction action) {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+
+    if (action is DeleteAction) {
+      for (var s in action.strokes) {
+        _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {
+          'page_number': action.page.pageNumber, 'strokes': [{'id': s.id, 'is_deleted': true}]
+        });
+      }
+      for (var t in action.texts) {
+        _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, myUserId: myUserId, textData: {
+          'page_number': action.page.pageNumber, 'block': {'id': t.id}, 'is_deleted': true
+        });
+      }
+      for (var img in action.images) {
+        _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, myUserId: myUserId, imageData: {
+          'page_number': action.page.pageNumber, 'block': {'id': img.id}, 'is_deleted': true
+        });
+      }
+    } else if (action is AddStrokeAction) {
+       _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {
+          'page_number': action.page.pageNumber,
+          'strokes': [{
+            'id': action.stroke.id, 'color': action.stroke.color, 'thickness': action.stroke.thickness, 'is_final': true,
+            'points': action.stroke.points.map((pt) => {'x': pt.dx, 'y': pt.dy}).toList(),
+          }]
+        });
+    }
+  }
+
   void undo(LocalPage page) {
-    if (page.strokes.isNotEmpty) {
-      final removed = page.strokes.removeLast();
-      page.redoHistory.add(removed);
-      safeNotify(); triggerAutoSave(page);
+    if (_undoStack.isEmpty) return;
+    final action = _undoStack.removeLast();
+    action.undo();
+    _redoStack.add(action);
+    safeNotify();
+    triggerAutoSave(page);
+    
+    // Nota: A sincronização do Undo remota é complexa, idealmente enviamos o estado inverso
+    if (isRealtimeActive && liveNotebookSid != null) {
+      if (action is DeleteAction) {
+        // Restaurar via broadcast individual
+        for (var s in action.strokes) {
+          _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {
+            'page_number': page.pageNumber,
+            'strokes': [{
+              'id': s.id, 'color': s.color, 'thickness': s.thickness, 'is_final': true,
+              'points': s.points.map((pt) => {'x': pt.dx, 'y': pt.dy}).toList(),
+            }]
+          });
+        }
+        // ... (texto e imagem seriam similares)
+      }
     }
   }
 
   void redo(LocalPage page) {
-    if (page.redoHistory.isNotEmpty) {
-      final restored = page.redoHistory.removeLast();
-      page.strokes.add(restored);
-      safeNotify(); triggerAutoSave(page);
-    }
+    if (_redoStack.isEmpty) return;
+    final action = _redoStack.removeLast();
+    action.execute();
+    _undoStack.add(action);
+    safeNotify();
+    triggerAutoSave(page);
+    _broadcastAction(action);
   }
 
   Future<void> pickAndInsertImage(LocalPage page) async {
@@ -1033,12 +1815,14 @@ class CanvasController extends ChangeNotifier {
       // 🌐 UPLOAD EM BACKGROUND: Se estiver online, sobe para a nuvem sem travar a UI
       if (isRealtimeActive) {
         uploadingImageIds.add(localId);
+        failedImageUploads.remove(localId);
         _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: true);
         safeNotify();
 
         final Uint8List bytes = await pickedFile.readAsBytes();
         
-        _repository.uploadImage(currentNotebookId, pickedFile.name, bytes).then((remoteUrl) {
+        // 🚀 CORREÇÃO: Usar liveNotebookSid (Server ID) em vez do local ID
+        _repository.uploadImage(liveNotebookSid!, pickedFile.name, bytes).then((remoteUrl) {
           uploadingImageIds.remove(localId);
           _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: false);
           
@@ -1048,10 +1832,63 @@ class CanvasController extends ChangeNotifier {
             _repository.saveSingleImageBlock(page.id!, newImageBlock);
             broadcastImageBlockUpdate(page, newImageBlock, myUserId);
             debugPrint('✅ [ImageUpload] Background upload concluído: $remoteUrl');
+          } else {
+            failedImageUploads.add(localId);
+            debugPrint('❌ [ImageUpload] Falha no upload da imagem $localId');
           }
+          safeNotify();
+        }).catchError((e) {
+          uploadingImageIds.remove(localId);
+          failedImageUploads.add(localId);
+          _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: false);
           safeNotify();
         });
       }
+    }
+  }
+
+  Future<void> retryImageUpload(LocalPage page, ImageBlock img) async {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+    
+    final localId = img.id;
+    if (!failedImageUploads.contains(localId)) return;
+
+    uploadingImageIds.add(localId);
+    failedImageUploads.remove(localId);
+    _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: true);
+    safeNotify();
+
+    try {
+      final file = File(img.imagePath);
+      if (!await file.exists()) {
+        uploadingImageIds.remove(localId);
+        failedImageUploads.add(localId);
+        safeNotify();
+        return;
+      }
+
+      final bytes = await file.readAsBytes();
+      final filename = img.imagePath.split('/').last;
+
+      final remoteUrl = await _repository.uploadImage(liveNotebookSid!, filename, bytes);
+      
+      uploadingImageIds.remove(localId);
+      _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: false);
+
+      if (remoteUrl != null) {
+        img.imagePath = remoteUrl;
+        _repository.saveSingleImageBlock(page.id!, img);
+        broadcastImageBlockUpdate(page, img, myUserId);
+        debugPrint('✅ [ImageRetry] Upload concluído: $remoteUrl');
+      } else {
+        failedImageUploads.add(localId);
+      }
+      safeNotify();
+    } catch (e) {
+      uploadingImageIds.remove(localId);
+      failedImageUploads.add(localId);
+      _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: false);
+      safeNotify();
     }
   }
 
@@ -1069,9 +1906,13 @@ class CanvasController extends ChangeNotifier {
     selectionRectEnd = currentPos;
     if (selectionRectStart != null && selectionRectEnd != null) {
       final rect = Rect.fromPoints(selectionRectStart!, selectionRectEnd!);
-      selectedStrokeIds.clear(); selectedTextIds.clear();
+      selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear();
       for (var stroke in page.strokes) { if (stroke.points.any((pt) => rect.contains(pt))) selectedStrokeIds.add(stroke.id); }
       for (var tb in page.textBlocks) { if (rect.contains(tb.position)) selectedTextIds.add(tb.id); }
+      for (var img in page.imageBlocks) {
+        final imgRect = Rect.fromLTWH(img.position.dx, img.position.dy, img.width, img.height);
+        if (rect.overlaps(imgRect)) selectedImageIds.add(img.id);
+      }
     }
     safeNotify();
   }
@@ -1092,16 +1933,29 @@ class CanvasController extends ChangeNotifier {
         matches.first.position = matches.first.position + delta;
       }
     }
+    for (var id in selectedImageIds) {
+      final matches = page.imageBlocks.where((img) => img.id == id);
+      if (matches.isNotEmpty) {
+        matches.first.position = matches.first.position + delta;
+      }
+    }
     safeNotify();
+
+    // 🚀 TRANSMISSÃO AO VIVO DO MOVIMENTO (Throttled)
+    final now = DateTime.now();
+    if (now.difference(_lastMoveBroadcastTime).inMilliseconds > 50) {
+      _broadcastSelectionMovement(page);
+      _lastMoveBroadcastTime = now;
+    }
   }
 
-  void broadcastSelectionUpdate(LocalPage page) {
+  void _broadcastSelectionMovement(LocalPage page) {
     if (!isRealtimeActive || liveNotebookSid == null) return;
     for (var id in selectedStrokeIds) {
       final matches = page.strokes.where((s) => s.id == id);
       if (matches.isNotEmpty) {
         final stroke = matches.first;
-        _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, strokeData: {
+        _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {
           'page_number': page.pageNumber,
           'strokes': [{
             'id': stroke.id, 'color': stroke.color, 'thickness': stroke.thickness, 'is_final': true,
@@ -1114,18 +1968,57 @@ class CanvasController extends ChangeNotifier {
       final matches = page.textBlocks.where((t) => t.id == id);
       if (matches.isNotEmpty) broadcastTextBlockUpdate(page, matches.first);
     }
-  }
-
-  void broadcastTextBlockUpdate(LocalPage page, TextBlock block, [String? senderId]) {
-    if (isRealtimeActive && liveNotebookSid != null) {
-      final String id = senderId ?? myUserId;
-      _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
-        'sender_id': id,
-        'page_number': page.pageNumber,
-        'block': block.toJson(),
-      });
+    for (var id in selectedImageIds) {
+      final matches = page.imageBlocks.where((img) => img.id == id);
+      if (matches.isNotEmpty) broadcastImageBlockUpdate(page, matches.first);
     }
   }
+
+  void setUserActivity(String activity) {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+    _realtimeService.broadcastUserActivity(
+      notebookId: liveNotebookSid!,
+      myUserId: myUserId,
+      activity: activity,
+    );
+    // Atualizar localmente também para feedback instantâneo no Cockpit
+    _realtimeService.updateUserActivityState(myUserId, activity);
+  }
+
+  void onTyping() {
+    setUserActivity('typing');
+    _typingDebounce?.cancel();
+    _typingDebounce = Timer(const Duration(seconds: 2), () {
+      setUserActivity('idle');
+    });
+  }
+
+  void broadcastTextBlockUpdate(LocalPage page, TextBlock block, {String? senderId, bool debounced = false, bool isEditing = false}) {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+
+    if (isEditing) onTyping(); // ✍️ Sinalizar atividade ao escrever/mexer
+
+    if (debounced) {
+      _textBroadcastDebounce?.cancel();
+      _textBroadcastDebounce = Timer(const Duration(milliseconds: 150), () { // 🚀 Reduzido para 150ms
+        _sendTextBlockSignal(page, block, senderId: senderId, isEditing: isEditing);
+      });
+    } else {
+      _sendTextBlockSignal(page, block, senderId: senderId, isEditing: isEditing);
+    }
+  }
+
+  void _sendTextBlockSignal(LocalPage page, TextBlock block, {String? senderId, bool isEditing = false}) {
+    final String id = senderId ?? myUserId;
+    _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, textData: {
+      'sender_id': id,
+      'page_number': page.pageNumber,
+      'block': block.toJson(),
+      'is_editing': isEditing,
+    });
+  }
+
+  void forceNotify() => safeNotify(); // 🚀 Restaurado
 
   void broadcastImageBlockUpdate(LocalPage page, ImageBlock block, [String? senderId]) {
     if (isRealtimeActive && liveNotebookSid != null) {
@@ -1144,7 +2037,37 @@ class CanvasController extends ChangeNotifier {
     }
   }
 
-  void forceNotify() => safeNotify();
+  void broadcastThrottledImageUpdate(LocalPage page, ImageBlock block) {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+    final now = DateTime.now();
+    if (now.difference(_lastMoveBroadcastTime).inMilliseconds > 30) { // 🚀 Reduzido para 30ms
+      broadcastImageBlockUpdate(page, block);
+      _lastMoveBroadcastTime = now;
+    }
+  }
+
+  void broadcastThrottledTextBlockUpdate(LocalPage page, TextBlock block) {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+    final now = DateTime.now();
+    if (now.difference(_lastMoveBroadcastTime).inMilliseconds > 50) {
+      broadcastTextBlockUpdate(page, block, debounced: false);
+      _lastMoveBroadcastTime = now;
+    }
+  }
+
+  void broadcastPointer(Offset pos) {
+    if (!isRealtimeActive || liveNotebookSid == null) return;
+    
+    final now = DateTime.now();
+    if (now.difference(_lastPointerBroadcast).inMilliseconds > 100) {
+      _realtimeService.broadcastPointerMove(
+        notebookId: liveNotebookSid!,
+        myUserId: myUserId,
+        pos: pos,
+      );
+      _lastPointerBroadcast = now;
+    }
+  }
 
   void acceptInvite() {
     pendingInvite = null;
@@ -1169,13 +2092,12 @@ class CanvasController extends ChangeNotifier {
   Future<void> toggleVoiceCall(String myUserId) async {
     if (isConnectingVoice) return; // 🛡️ Evitar múltiplos cliques simultâneos
     
-    if (isInVoiceCall) { 
+    if (isLiveSessionActive) { 
       isConnectingVoice = true;
       safeNotify();
       
-      _webrtcService.leaveVoiceRoom(); 
-      isInVoiceCall = false; 
-      usersInVoiceCall.remove(myUserId);
+      isLiveSessionActive = false; 
+      usersInLiveSession.remove(myUserId);
       userAudioLevels.clear(); // 🧹 Limpeza total de áudio
       
       _realtimeService.broadcastVoiceStateUpdate(
@@ -1185,88 +2107,66 @@ class CanvasController extends ChangeNotifier {
       );
       
       isConnectingVoice = false;
+      safeNotify();
     }
     else {
       // 🛡️ GUARDA DE PRIVILÉGIOS
       final bool isModerator = currentUserRole == 'owner' || currentUserRole == 'editor';
       if (!isRemoteVoiceCallActive && !isModerator) {
-        debugPrint('🚫 [Canvas] Tentativa de iniciar voz bloqueada (Sem privilégios)');
+        debugPrint('🚫 [Canvas] Tentativa de iniciar live bloqueada (Sem privilégios)');
         return;
       }
 
       isConnectingVoice = true;
       safeNotify();
 
-      // 🎙️ 1. ATIVAR MICROFONE PRIMEIRO
-      final micOk = await _webrtcService.enableLocalAudio();
-      if (!micOk) {
-        debugPrint('❌ [Canvas] Falha ao ativar microfone. Abortando chamada.');
-        isConnectingVoice = false;
-        safeNotify();
-        return;
-      }
-      isMuted = false;
-      userAudioLevels[myUserId] = 0.01; // Sinalizar microfone ativo localmente
-
-      // 🎙️ 2. ENTRAR NA SALA E CONECTAR
-      final existingUserIds = onlineUsers.map((u) => u['id'].toString()).toList();
-      final success = await _webrtcService.joinVoiceRoom(liveNotebookSid ?? currentNotebookId, myUserId, existingUserIds);
+      // No Chat Imersivo, apenas entramos no estado de Sessão Live
+      isLiveSessionActive = true;
+      usersInLiveSession.add(myUserId);
       
-      if (success) {
-        isInVoiceCall = true;
-        usersInVoiceCall.add(myUserId);
-        
-        // Avisar colegas
-        _realtimeService.broadcastVoiceStateUpdate(
+      // Avisar colegas
+      _realtimeService.broadcastVoiceStateUpdate(
+        notebookId: liveNotebookSid ?? currentNotebookId, 
+        myUserId: myUserId, 
+        isInCall: true
+      );
+
+      if (!isRemoteVoiceCallActive) {
+        _realtimeService.broadcastVoiceCallStarted(
           notebookId: liveNotebookSid ?? currentNotebookId, 
           myUserId: myUserId, 
-          isInCall: true
+          senderName: "Um colega"
         );
-
-        if (!isRemoteVoiceCallActive) {
-          _realtimeService.broadcastVoiceCallStarted(
-            notebookId: liveNotebookSid ?? currentNotebookId, 
-            myUserId: myUserId, 
-            senderName: "Um colega"
-          );
-        }
-
-        // 🎙️ OUVIR NÍVEIS DE ÁUDIO REAIS
-        _audioLevelSubscription?.cancel();
-        _audioLevelSubscription = _webrtcService.onAudioLevel.listen((event) {
-          if (_isDisposed) return;
-          userAudioLevels[event.userId] = event.level;
-          safeNotify();
-        });
       }
+
       isConnectingVoice = false;
+      safeNotify();
     }
-    safeNotify();
   }
 
   Future<void> requestAudioConsent() async {
     if (isAudioConsentGiven) return;
     
-    // Este método será chamado pela UI quando o utilizador clicar no microfone pela primeira vez
-    final success = await _webrtcService.enableLocalAudio();
-    if (success) {
+    // Agora pedimos permissão através do gravador
+    if (await _audioRecorder.hasPermission()) {
       isAudioConsentGiven = true;
-      isMuted = false;
       safeNotify();
     }
   }
 
-  void toggleMute() async {
-    if (!isAudioConsentGiven) {
-      // Se ainda não ativou o microfone, fazemos o processo de consentimento
-      await requestAudioConsent();
-      return;
+  void handleLiveAudioAction() {
+    if (isRecording) {
+      stopAndSendAudio();
+    } else {
+      startRecording();
     }
-    isMuted = !isMuted; 
-    _webrtcService.toggleMute(); 
+  }
+
+  void toggleSpeaker() { 
+    isSpeakerOn = !isSpeakerOn; 
+    _audioPlayer.setVolume(isSpeakerOn ? 1.0 : 0.0);
     safeNotify(); 
   }
-  void toggleSpeaker() { isSpeakerOn = !isSpeakerOn; _webrtcService.toggleSpeaker(); safeNotify(); }
 
   void toggleHandRaise() {
     isMyHandRaised = !isMyHandRaised;
@@ -1284,6 +2184,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   void toggleFollowUser(String? userId, String myId) {
+    if (userId == myId) return; // 🛡️ Não podes assistir a ti próprio
     debugPrint('🔭 [CanvasController] Tentar seguir/parar utilizador: $userId');
     if (followingUserId == userId) {
       followingUserId = null;
@@ -1366,9 +2267,54 @@ class CanvasController extends ChangeNotifier {
   }
 }
 
+// 🚀 CLASSES AUXILIARES PARA O SISTEMA DE UNDO/REDO
+abstract class CanvasAction {
+  final LocalPage page;
+  CanvasAction(this.page);
+  void execute();
+  void undo();
+}
+
+class AddStrokeAction extends CanvasAction {
+  final Stroke stroke;
+  AddStrokeAction({required LocalPage page, required this.stroke}) : super(page);
+
+  @override
+  void execute() => page.strokes.add(stroke);
+
+  @override
+  void undo() => page.strokes.removeWhere((s) => s.id == stroke.id);
+}
+
+class DeleteAction extends CanvasAction {
+  final List<Stroke> strokes;
+  final List<TextBlock> texts;
+  final List<ImageBlock> images;
+
+  DeleteAction({
+    required LocalPage page,
+    required this.strokes,
+    required this.texts,
+    required this.images,
+  }) : super(page);
+
+  @override
+  void execute() {
+    for (var s in strokes) page.strokes.removeWhere((item) => item.id == s.id);
+    for (var t in texts) page.textBlocks.removeWhere((item) => item.id == t.id);
+    for (var img in images) page.imageBlocks.removeWhere((item) => item.id == img.id);
+  }
+
+  @override
+  void undo() {
+    page.strokes.addAll(strokes);
+    page.textBlocks.addAll(texts);
+    page.imageBlocks.addAll(images);
+  }
+}
+
 final canvasProvider = ChangeNotifierProvider.autoDispose<CanvasController>((ref) {
   final realtime = ref.read(realtimeServiceProvider);
-  final webrtc = ref.read(webrtcServiceProvider);
   final repository = ref.read(canvasRepositoryProvider);
-  return CanvasController(realtime, webrtc, repository: repository);
+  return CanvasController(realtime, repository: repository);
 });

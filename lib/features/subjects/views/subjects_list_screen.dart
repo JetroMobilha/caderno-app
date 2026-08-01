@@ -258,12 +258,16 @@ class SubjectsListScreen extends ConsumerWidget {
   Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('A terminar sessão...'), duration: Duration(seconds: 2)),
+      const SnackBar(
+        content: Text('A sincronizar dados e a terminar sessão...'), 
+        duration: Duration(seconds: 10), // Aumentado para cobrir o sync
+      ),
     );
 
     await ref.read(authProvider).logout();
 
     if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
     }
   }

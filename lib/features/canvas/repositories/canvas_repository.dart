@@ -25,7 +25,7 @@ class CanvasRepository {
   // =========================================================================
   Future<List<LocalPage>> getPagesByNotebook(int notebookId, int? notebookServerId) async {
     final pageRows = await (_db.select(_db.pages)
-          ..where((t) => t.notebookId.equals(notebookId))
+          ..where((t) => t.notebookId.equals(notebookId) & t.isDeleted.equals(0))
           ..orderBy([(t) => OrderingTerm(expression: t.pageNumber)]))
         .get();
 
@@ -63,8 +63,8 @@ class CanvasRepository {
         notebookId: pRow.notebookId,
         pageNumber: pRow.pageNumber,
         isLandscape: pRow.isLandscape == 1,
-        title: pRow.headerData ?? '',
-        footer: pRow.footerData ?? '',
+        title: LocalPage.parseMeta(pRow.headerData),
+        footer: LocalPage.parseMeta(pRow.footerData),
         extractedText: pRow.extractedText,
         syncedWithCloud: pRow.syncedWithCloud,
         strokes: strokes,
@@ -80,7 +80,7 @@ class CanvasRepository {
   // =========================================================================
   Stream<List<LocalPage>> watchPagesByNotebook(int notebookId) {
     return (_db.select(_db.pages)
-          ..where((t) => t.notebookId.equals(notebookId))
+          ..where((t) => t.notebookId.equals(notebookId) & t.isDeleted.equals(0))
           ..orderBy([(t) => OrderingTerm(expression: t.pageNumber)]))
         .watch()
         .asyncMap((pageRows) async {
@@ -117,8 +117,8 @@ class CanvasRepository {
           notebookId: pRow.notebookId,
           pageNumber: pRow.pageNumber,
           isLandscape: pRow.isLandscape == 1,
-          title: pRow.headerData ?? '',
-          footer: pRow.footerData ?? '',
+          title: LocalPage.parseMeta(pRow.headerData),
+          footer: LocalPage.parseMeta(pRow.footerData),
           syncedWithCloud: pRow.syncedWithCloud,
           strokes: strokes,
           textBlocks: texts,
@@ -142,8 +142,8 @@ class CanvasRepository {
                 notebookId: page.notebookId,
                 pageNumber: page.pageNumber,
                 isLandscape: Value(page.isLandscape ? 1 : 0),
-                headerData: Value(page.title),
-                footerData: Value(page.footer),
+                headerData: Value(LocalPage.encodeMeta(page.title)),
+                footerData: Value(LocalPage.encodeMeta(page.footer)),
                 extractedText: Value(page.extractedText),
                 syncedWithCloud: Value(page.syncedWithCloud),
               ),
@@ -153,8 +153,8 @@ class CanvasRepository {
         currentPageId = page.id!;
         await (_db.update(_db.pages)..where((t) => t.id.equals(currentPageId))).write(
           PagesCompanion(
-            headerData: Value(page.title),
-            footerData: Value(page.footer),
+            headerData: Value(LocalPage.encodeMeta(page.title)),
+            footerData: Value(LocalPage.encodeMeta(page.footer)),
             extractedText: Value(page.extractedText),
             syncedWithCloud: Value(page.syncedWithCloud),
             updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -272,13 +272,17 @@ class CanvasRepository {
   }
 
   // =========================================================================
-  // 🗑️ DESTRUIÇÃO DE PÁGINA (O Exterminador de Folhas)
+  // 🗑️ DESTRUIÇÃO DE PÁGINA (SOFT DELETE)
   // =========================================================================
   Future<void> deletePage(int pageId) async {
-    await (_db.delete(_db.pages)..where((t) => t.id.equals(pageId))).go();
-    await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId))).go();
-    await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId))).go();
-    await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).go();
+    // 🚀 SOFT DELETE: Marcamos como excluída para sincronizar com os colegas
+    await (_db.update(_db.pages)..where((t) => t.id.equals(pageId))).write(
+      PagesCompanion(
+        isDeleted: const Value(1),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
   }
 
   Future<void> triggerSyncRadar(int pageId) async {
@@ -311,14 +315,45 @@ class CanvasRepository {
   }
 
   // =========================================================================
-  // ☁️ UPLOAD DE IMAGEM PARA O SERVIDOR (Compatível com Web e Mobile)
+  // ☁️ UPLOAD DE ÁUDIO PARA O SERVIDOR
   // =========================================================================
-  Future<String?> uploadImage(int notebookId, String filename, Uint8List bytes) async {
+  Future<String?> uploadAudio(int notebookServerId, String filename, Uint8List bytes) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('sanctum_token');
       
-      final uri = Uri.parse('${ApiConfig.baseUrl}/notebooks/$notebookId/upload-image');
+      final uri = Uri.parse('${ApiConfig.baseUrl}/notebooks/$notebookServerId/upload-audio');
+      debugPrint('🛫 [Repository] A enviar áudio para: $uri');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $token'
+        ..headers['Accept'] = 'application/json'
+        ..files.add(http.MultipartFile.fromBytes('audio', bytes, filename: filename));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['url'];
+      } else {
+        debugPrint('❌ Erro no Upload de Áudio: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('🚨 Exceção no Upload de Áudio: $e');
+      return null;
+    }
+  }
+
+  // =========================================================================
+  // ☁️ UPLOAD DE IMAGEM PARA O SERVIDOR (Compatível com Web e Mobile)
+  // =========================================================================
+  Future<String?> uploadImage(int notebookServerId, String filename, Uint8List bytes) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? token = prefs.getString('sanctum_token');
+      
+      final uri = Uri.parse('${ApiConfig.baseUrl}/notebooks/$notebookServerId/upload-image');
       final request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $token'
         ..headers['Accept'] = 'application/json'

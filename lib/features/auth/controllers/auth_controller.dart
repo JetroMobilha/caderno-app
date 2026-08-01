@@ -5,14 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/sync_service.dart';
-import '../../../core/network/realtime_service.dart'; // 🚀 O MOTOR REVERB AQUI
-import '../../notebooks/controllers/notebooks_controller.dart';
-import '../models/user_model.dart';
-import '../repositories/auth_repository.dart';
-import '../../../core/network/api_service.dart';
-import '../../../core/database/app_database.dart' hide User;
-import '../../subjects/controllers/subjects_controller.dart'; // Para engatilhar o Refresh
+import 'package:caderno_digital_app/core/network/sync_service.dart';
+import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
+import 'package:caderno_digital_app/features/auth/models/user_model.dart';
+import 'package:caderno_digital_app/features/auth/repositories/auth_repository.dart';
+import 'package:caderno_digital_app/core/network/api_service.dart';
+import 'package:caderno_digital_app/core/database/app_database.dart' hide User;
+import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 
 class AuthController extends ChangeNotifier {
   final AuthRepository _authRepository;
@@ -265,6 +265,18 @@ class AuthController extends ChangeNotifier {
   // 🛑 LOGOUT
   // =========================================================================
   Future<void> logout() async {
+    _isLoading = true;
+    notifyListeners();
+
+    // 🚀 0. SINCRONIZAÇÃO FORÇADA DE SEGURANÇA
+    try {
+      debugPrint('🔄 [Auth] A iniciar sincronização final antes do logout...');
+      await SyncService().syncAll(forced: true);
+      debugPrint('✅ [Auth] Sincronização final concluída.');
+    } catch (e) {
+      debugPrint('🚨 [Auth] Erro na sincronização final (prosseguindo logout): $e');
+    }
+
     try {
       await _authRepository.logout();
     } catch (e) {
@@ -306,6 +318,7 @@ class AuthController extends ChangeNotifier {
     }
 
     // 🚀 5. NOTIFICAR REATIVIDADE (PROVIDERS VÃO REAGIR AO USER=NULL)
+    _isLoading = false;
     notifyListeners();
   }
 

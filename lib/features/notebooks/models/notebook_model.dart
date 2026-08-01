@@ -1,6 +1,9 @@
+import 'package:uuid/uuid.dart';
+
 class Notebook {
   int? id;
   int? serverId;
+  String clientId; // 🆔 Identidade única global
   int? subjectId; // 🛡️ Nullable para isolamento de chaves locais
   String title;
   String coverType;
@@ -23,6 +26,7 @@ class Notebook {
   Notebook({
     this.id,
     this.serverId,
+    String? clientId,
     this.subjectId,
     required this.title,
     required this.coverType,
@@ -38,12 +42,13 @@ class Notebook {
     this.isDeleted = 0,
     int? updatedAt,
     this.role = 'owner',
-  }) : updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+  }) : clientId = clientId ?? const Uuid().v4(),
+       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
-  // 🔄 O Método copyWith para mutações limpas de estado na RAM
   Notebook copyWith({
     int? id,
     int? serverId,
+    String? clientId,
     int? subjectId,
     String? title,
     String? coverType,
@@ -63,6 +68,7 @@ class Notebook {
     return Notebook(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
+      clientId: clientId ?? this.clientId,
       subjectId: subjectId ?? this.subjectId,
       title: title ?? this.title,
       coverType: coverType ?? this.coverType,
@@ -88,6 +94,7 @@ class Notebook {
     return {
       'id': id,
       'server_id': serverId,
+      'client_id': clientId,
       'subject_id': subjectId,
       'title': title,
       'cover_type': coverType,
@@ -108,14 +115,19 @@ class Notebook {
 
   // Receber do Laravel (JSON)
   factory Notebook.fromJson(Map<String, dynamic> json) {
+    // 🛡️ CORREÇÃO DE COMPATIBILIDADE: 'lines' vindo do servidor -> 'ruled' no Flutter
+    String lineType = json['line_type'] ?? 'ruled';
+    if (lineType == 'lines') lineType = 'ruled';
+
     return Notebook(
       serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
+      clientId: json['client_id'] ?? const Uuid().v4(),
       subjectId: json['subject_id'] is int ? json['subject_id'] : int.tryParse(json['subject_id']?.toString() ?? ''),
       title: json['title'] ?? '',
       coverType: json['cover_type'] ?? 'color',
       color: json['color'],
       coverImage: json['cover_image'],
-      lineType: json['line_type'] ?? 'ruled',
+      lineType: lineType,
       paperSize: json['paper_size'] ?? 'A4',
       isPublished: int.tryParse(json['is_published']?.toString() ?? '0') ?? 0,
       price: double.tryParse(json['price']?.toString() ?? '0.0') ?? 0.0,

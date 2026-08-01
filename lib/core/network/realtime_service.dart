@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui'; // 🚀 Adicionado para Offset
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; 
 import 'package:dart_pusher_channels/dart_pusher_channels.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import 'api_config.dart';
 
@@ -36,6 +39,14 @@ class RealtimeService {
   final _inviteStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _voiceCallStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _voiceStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _activityStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _pointerStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _chatStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _audioMessageStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _chatSyncRequestController = StreamController<Map<String, dynamic>>.broadcast();
+  final _chatSyncResponseController = StreamController<Map<String, dynamic>>.broadcast();
+  final _reactionStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _collectiveSyncRequestController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -50,6 +61,14 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onLiveInviteReceived => _inviteStreamController.stream;
   Stream<Map<String, dynamic>> get onVoiceCallStarted => _voiceCallStreamController.stream;
   Stream<Map<String, dynamic>> get onVoiceStateReceived => _voiceStateStreamController.stream;
+  Stream<Map<String, dynamic>> get onUserActivityReceived => _activityStreamController.stream;
+  Stream<Map<String, dynamic>> get onPointerMoveReceived => _pointerStreamController.stream;
+  Stream<Map<String, dynamic>> get onChatMessageReceived => _chatStreamController.stream;
+  Stream<Map<String, dynamic>> get onAudioMessageReceived => _audioMessageStreamController.stream;
+  Stream<Map<String, dynamic>> get onChatSyncRequestReceived => _chatSyncRequestController.stream;
+  Stream<Map<String, dynamic>> get onChatSyncResponseReceived => _chatSyncResponseController.stream;
+  Stream<Map<String, dynamic>> get onReactionReceived => _reactionStreamController.stream;
+  Stream<Map<String, dynamic>> get onCollectiveSyncRequested => _collectiveSyncRequestController.stream; // 🚀 Novo
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
@@ -141,17 +160,15 @@ class RealtimeService {
 
     if (statusNotifier.value != RealtimeStatus.connected) return;
 
-    // 🛡️ LIMPEZA RADICAL: Antes de criar novo canal, garantir que o anterior morreu
     if (_notebookChannel != null) {
       debugPrint('🧹 [Realtime] Limpando canal anterior antes de re-entrar...');
-      leaveNotebookChannel(0); // 0 é apenas placeholder aqui
+      leaveNotebookChannel(0);
     }
 
     final prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('sanctum_token');
     final channelName = 'presence-notebook.$notebookId';
     
-    // 🛡️ RESET BINDINGS
     _boundEvents.clear();
 
     final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPresenceChannel(
@@ -173,15 +190,12 @@ class RealtimeService {
         final hash = Map<String, dynamic>.from(data['presence']['hash']);
         hash.forEach((uid, info) {
           final infoMap = Map<String, dynamic>.from(info);
-          
-          // 🛡️ ACHATAR user_info se existir (Laravel/Reverb pattern)
           Map<String, dynamic> flattenedInfo = {};
           if (infoMap.containsKey('user_info')) {
             flattenedInfo = Map<String, dynamic>.from(infoMap['user_info']);
           } else {
             flattenedInfo = infoMap;
           }
-          
           flattenedInfo['id'] = uid.toString(); 
           _estudantesNaSala[uid.toString()] = flattenedInfo;
         });
@@ -193,18 +207,15 @@ class RealtimeService {
     _memberAddedSub = _notebookChannel!.whenMemberAdded().listen((event) {
       final data = _safeParse(event.data);
       final String? uid = event.userId ?? data['id']?.toString() ?? data['user_id']?.toString();
-      
       debugPrint('🟢 [Realtime] EVENTO MEMBER_ADDED DETECTADO: $uid | Data: ${event.data}');
       if (uid == null) return;
 
-      // 🛡️ ACHATAR user_info se existir
       Map<String, dynamic> userInfo = {};
       if (data.containsKey('user_info')) {
         userInfo = Map<String, dynamic>.from(data['user_info']);
       } else {
         userInfo = data;
       }
-      
       userInfo['id'] = uid; 
       _estudantesNaSala[uid] = userInfo;
       _broadcastUsersList();
@@ -236,6 +247,14 @@ class RealtimeService {
     _bindEvent('client-image-uploading', (event) => _uploadingStreamController.add(_safeParse(event.data)));
     _bindEvent('client-voice-call-started', (event) => _voiceCallStreamController.add(_safeParse(event.data)));
     _bindEvent('client-voice-state-update', (event) => _voiceStateStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-user-activity', (event) => _activityStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-pointer-move', (event) => _pointerStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-chat-message', (event) => _chatStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-audio-message', (event) => _audioMessageStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-chat-sync-request', (event) => _chatSyncRequestController.add(_safeParse(event.data)));
+    _bindEvent('client-chat-sync-response', (event) => _chatSyncResponseController.add(_safeParse(event.data)));
+    _bindEvent('client-reaction', (event) => _reactionStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-collective-sync', (event) => _collectiveSyncRequestController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
 
     _notebookChannel!.subscribe();
@@ -328,6 +347,80 @@ class RealtimeService {
     return true;
   }
 
+  Future<bool> broadcastUserActivity({required int notebookId, required String myUserId, required String activity}) async {
+    if (_notebookChannel == null) return false;
+    final data = {'sender_id': myUserId, 'activity': activity};
+    _notebookChannel!.trigger(eventName: 'client-user-activity', data: jsonEncode(data));
+    return true;
+  }
+
+  Future<bool> broadcastPointerMove({required int notebookId, required String myUserId, required Offset pos}) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'sender_id': myUserId, 
+      'x': double.parse(pos.dx.toStringAsFixed(1)), 
+      'y': double.parse(pos.dy.toStringAsFixed(1))
+    };
+    _notebookChannel!.trigger(eventName: 'client-pointer-move', data: jsonEncode(data));
+    return true;
+  }
+
+  Future<bool> broadcastChatMessage({required int notebookId, required String myUserId, required String message}) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'msg_id': const Uuid().v4(),
+      'type': 'text',
+      'sender_id': myUserId, 
+      'message': message, 
+      'timestamp': DateTime.now().toIso8601String()
+    };
+    _notebookChannel!.trigger(eventName: 'client-chat-message', data: jsonEncode(data));
+    return true;
+  }
+
+  Future<bool> broadcastAudioMessage({required int notebookId, required String myUserId, required String audioUrl, required int duration, bool isLive = false}) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'msg_id': const Uuid().v4(),
+      'type': 'audio',
+      'sender_id': myUserId, 
+      'audio_url': audioUrl, 
+      'duration': duration, 
+      'is_live': isLive,
+      'timestamp': DateTime.now().toIso8601String()
+    };
+    _notebookChannel!.trigger(eventName: 'client-audio-message', data: jsonEncode(data));
+    return true;
+  }
+
+  Future<void> requestChatSync({required String myUserId}) async {
+    if (_notebookChannel == null) return;
+    final data = {'sender_id': myUserId};
+    _notebookChannel!.trigger(eventName: 'client-chat-sync-request', data: jsonEncode(data));
+  }
+
+  Future<void> sendChatSyncResponse({required String targetUserId, required List<Map<String, dynamic>> history}) async {
+    if (_notebookChannel == null) return;
+    final data = {
+      'target_id': targetUserId,
+      'history': history,
+    };
+    _notebookChannel!.trigger(eventName: 'client-chat-sync-response', data: jsonEncode(data));
+  }
+
+  Future<void> requestCollectiveSync({required String myUserId}) async {
+    if (_notebookChannel == null) return;
+    final data = {'sender_id': myUserId};
+    _notebookChannel!.trigger(eventName: 'client-collective-sync', data: jsonEncode(data));
+  }
+
+  Future<bool> broadcastReaction({required int notebookId, required String myUserId, required String reaction}) async {
+    if (_notebookChannel == null) return false;
+    final data = {'sender_id': myUserId, 'reaction': reaction};
+    _notebookChannel!.trigger(eventName: 'client-reaction', data: jsonEncode(data));
+    return true;
+  }
+
   void _broadcastUsersList() {
     _usersStreamController.add(_estudantesNaSala.values.toList());
   }
@@ -380,7 +473,16 @@ class RealtimeService {
     if (_estudantesNaSala.containsKey(userId)) {
       if (_estudantesNaSala[userId]['isTalking'] != isTalking) {
         _estudantesNaSala[userId]['isTalking'] = isTalking;
-        _usersStreamController.add(_estudantesNaSala.values.toList());
+        _broadcastUsersList();
+      }
+    }
+  }
+
+  void updateUserActivityState(String userId, String activity) {
+    if (_estudantesNaSala.containsKey(userId)) {
+      if (_estudantesNaSala[userId]['activity'] != activity) {
+        _estudantesNaSala[userId]['activity'] = activity;
+        _broadcastUsersList();
       }
     }
   }
@@ -389,7 +491,7 @@ class RealtimeService {
     if (_estudantesNaSala.containsKey(userId)) {
       if (_estudantesNaSala[userId]['isHandRaised'] != isRaised) {
         _estudantesNaSala[userId]['isHandRaised'] = isRaised;
-        _usersStreamController.add(_estudantesNaSala.values.toList());
+        _broadcastUsersList();
       }
     }
   }

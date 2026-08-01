@@ -50,9 +50,9 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Esta aplicação precisa de acesso à câmara para o WebRTC e tirar fotos.</string>
+	<string>Esta aplicação precisa de acesso à câmara para tirar fotos.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Esta aplicação precisa de acesso ao microfone para chamadas de áudio no WebRTC.</string>
+	<string>Esta aplicação precisa de acesso ao microfone para mensagens de áudio.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Esta aplicação precisa de acesso à galeria para selecionar imagens.</string>
 	<key>UILaunchStoryboardName</key>

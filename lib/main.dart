@@ -19,8 +19,8 @@ void main() {
 
   // 🛡️ OFFLINE-FIRST: Por padrão, o google_fonts tenta baixar fontes.
   // Se quiser suporte offline total, baixe os .ttf, coloque em assets/ e registre no pubspec.yaml.
-  // Por agora, permitimos o download para evitar o erro de inicialização.
-  GoogleFonts.config.allowRuntimeFetching = true;
+  // Por agora, desativamos o fetching para evitar erros de rede em loop.
+  GoogleFonts.config.allowRuntimeFetching = false;
   
   runApp(
     const ProviderScope(

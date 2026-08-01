@@ -3,16 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/network/sync_provider.dart';
-import '../../canvas/widgets/share_notebook_sheet.dart';
-import '../../marketplace/widgets/publish_notebook_sheet.dart';
-import '../../shared/widgets/app_drawer.dart';
-import '../../subjects/controllers/subjects_controller.dart';
-import '../../canvas/views/canvas_screen.dart';
-import '../models/notebook_model.dart';
-import '../controllers/notebooks_controller.dart';
-import '../widgets/notebook_cover.dart'; // 🚀 Importa o teu componente visual fixo!
+import 'package:caderno_digital_app/core/theme/app_colors.dart';
+import 'package:caderno_digital_app/core/network/sync_provider.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet.dart';
+import 'package:caderno_digital_app/features/marketplace/widgets/publish_notebook_sheet.dart';
+import 'package:caderno_digital_app/features/shared/widgets/app_drawer.dart';
+import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
+import 'package:caderno_digital_app/features/canvas/views/canvas_screen.dart';
+import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
+import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
+import 'package:caderno_digital_app/features/notebooks/widgets/notebook_cover.dart';
 
 class NotebooksListScreen extends ConsumerStatefulWidget {
   const NotebooksListScreen({super.key});
@@ -309,7 +309,12 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
             children: [
               Icon(isEditing ? Icons.edit_note_rounded : Icons.library_add_rounded, color: themeColor),
               const SizedBox(width: 10),
-              Text(isEditing ? 'Editar Caderno' : 'Novo Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor)),
+              Flexible(
+                child: Text(isEditing ? 'Editar Caderno' : 'Novo Caderno', 
+                  style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           content: SingleChildScrollView(
@@ -396,16 +401,13 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                      newNotebook.id= await notifier.addNotebook(newNotebook, activeSubject.serverId);
                     if (contextDialog.mounted) {
                       Navigator.pop(contextDialog);
-                      if (context.mounted) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CanvasScreen(
-                              notebook:newNotebook
-                            ),
-                          ),
-                        );
-                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Caderno "${newNotebook.title}" criado com sucesso! 📓'),
+                          backgroundColor: themeColor,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
                     }
                   }
                 }

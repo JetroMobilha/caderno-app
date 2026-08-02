@@ -84,7 +84,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
             else
               _buildUserList(controller, context),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 32), // 🚀 Espaçamento maior antes das ações
 
               Row(
                 children: [
@@ -109,6 +109,8 @@ class CollaborationCenterSheet extends ConsumerWidget {
                   ),
                 ],
               ),
+
+            const SizedBox(height: 20), // 🚀 Margem entre linhas de botões
 
             // 🤝 BOTÃO DE PARTILHA (Integrado)
             if (notebook.role == 'owner')

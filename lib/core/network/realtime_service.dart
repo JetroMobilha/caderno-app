@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui'; // 🚀 Adicionado para Offset
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; 
 import 'package:dart_pusher_channels/dart_pusher_channels.dart';
@@ -46,7 +45,8 @@ class RealtimeService {
   final _chatSyncRequestController = StreamController<Map<String, dynamic>>.broadcast();
   final _chatSyncResponseController = StreamController<Map<String, dynamic>>.broadcast();
   final _reactionStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _collectiveSyncRequestController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _collectiveSyncRequestController = StreamController<Map<String, dynamic>>.broadcast();
+  final _globalActionStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -68,7 +68,8 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onChatSyncRequestReceived => _chatSyncRequestController.stream;
   Stream<Map<String, dynamic>> get onChatSyncResponseReceived => _chatSyncResponseController.stream;
   Stream<Map<String, dynamic>> get onReactionReceived => _reactionStreamController.stream;
-  Stream<Map<String, dynamic>> get onCollectiveSyncRequested => _collectiveSyncRequestController.stream; // 🚀 Novo
+  Stream<Map<String, dynamic>> get onCollectiveSyncRequested => _collectiveSyncRequestController.stream;
+  Stream<Map<String, dynamic>> get onGlobalActionReceived => _globalActionStreamController.stream; // 🚀 Novo
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
@@ -87,8 +88,6 @@ class RealtimeService {
       shouldSupplyMetadataQueries: true,
       metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
     );
-
-    debugPrint('📡 [Realtime] Iniciando ligação Reverb em ${ApiConfig.reverbHost}:${ApiConfig.reverbPort}');
 
     _pusher = PusherChannelsClient.websocket(
       options: options,
@@ -196,18 +195,18 @@ class RealtimeService {
           } else {
             flattenedInfo = infoMap;
           }
-          flattenedInfo['id'] = uid.toString(); 
-          _estudantesNaSala[uid.toString()] = flattenedInfo;
+          final String effectiveId = uid.toString();
+          flattenedInfo['id'] = effectiveId; 
+          _estudantesNaSala[effectiveId] = flattenedInfo;
         });
       }
       _broadcastUsersList();
-      debugPrint('👥 [Realtime] Lista inicial: ${_estudantesNaSala.keys.join(", ")}');
     });
 
     _memberAddedSub = _notebookChannel!.whenMemberAdded().listen((event) {
       final data = _safeParse(event.data);
-      final String? uid = event.userId ?? data['id']?.toString() ?? data['user_id']?.toString();
-      debugPrint('🟢 [Realtime] EVENTO MEMBER_ADDED DETECTADO: $uid | Data: ${event.data}');
+      final String? uid = event.userId?.toString() ?? data['id']?.toString() ?? data['user_id']?.toString();
+      debugPrint('🟢 [Realtime] EVENTO MEMBER_ADDED DETECTADO: $uid');
       if (uid == null) return;
 
       Map<String, dynamic> userInfo = {};
@@ -219,14 +218,33 @@ class RealtimeService {
       userInfo['id'] = uid; 
       _estudantesNaSala[uid] = userInfo;
       _broadcastUsersList();
-      debugPrint('👥 [Realtime] Utilizadores atuais: ${_estudantesNaSala.keys.join(", ")}');
     });
 
     _memberRemovedSub = _notebookChannel!.whenMemberRemoved().listen((event) {
-      final String? uid = event.userId;
-      debugPrint('🔴 [Realtime] EVENTO MEMBER_REMOVED DETECTADO: $uid');
+      String? uid = event.userId?.toString();
+      final dynamic rawData = event.data;
+      
+      debugPrint('🔴 [Realtime] EVENTO MEMBER_REMOVED DETECTADO: $uid | Data: $rawData');
+
+      // 🚀 RECUPERAÇÃO DE ID RESILIENTE
+      if (uid == null && rawData != null) {
+        if (rawData is Map) {
+          uid = rawData['user_id']?.toString() ?? rawData['id']?.toString();
+        } else if (rawData is String && rawData.isNotEmpty) {
+          if (rawData.startsWith('{')) {
+            final dataMap = _safeParse(rawData);
+            uid = dataMap['user_id']?.toString() ?? dataMap['id']?.toString();
+          } else {
+            uid = rawData;
+          }
+        } else if (rawData is int) {
+          uid = rawData.toString();
+        }
+      }
+      
       if (uid != null) {
         _estudantesNaSala.remove(uid);
+        _estudantesNaSala.removeWhere((key, value) => key == uid || value['id']?.toString() == uid);
         _broadcastUsersList();
       }
     });
@@ -239,9 +257,7 @@ class RealtimeService {
     _bindEvent('client-page-event', (event) => _pageEventStreamController.add(_safeParse(event.data)));
     _bindEvent('PageUpdated', (event) => _pageUpdatedStreamController.add(_safeParse(event.data)));
     _bindEvent('client-webrtc-signal', (event) {
-      final data = _safeParse(event.data);
-      debugPrint('📡 [Realtime] Sinal WebRTC bruto recebido: ${event.data}');
-      _webrtcStreamController.add(data);
+      _webrtcStreamController.add(_safeParse(event.data));
     });
     _bindEvent('client-hand-event', (event) => _handStreamController.add(_safeParse(event.data)));
     _bindEvent('client-image-uploading', (event) => _uploadingStreamController.add(_safeParse(event.data)));
@@ -254,7 +270,8 @@ class RealtimeService {
     _bindEvent('client-chat-sync-request', (event) => _chatSyncRequestController.add(_safeParse(event.data)));
     _bindEvent('client-chat-sync-response', (event) => _chatSyncResponseController.add(_safeParse(event.data)));
     _bindEvent('client-reaction', (event) => _reactionStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-collective-sync', (event) => _collectiveSyncRequestController.add(_safeParse(event.data))); // 🚀 Novo
+    _bindEvent('client-collective-sync', (event) => _collectiveSyncRequestController.add(_safeParse(event.data)));
+    _bindEvent('client-global-action', (event) => _globalActionStreamController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
 
     _notebookChannel!.subscribe();
@@ -412,6 +429,11 @@ class RealtimeService {
     if (_notebookChannel == null) return;
     final data = {'sender_id': myUserId};
     _notebookChannel!.trigger(eventName: 'client-collective-sync', data: jsonEncode(data));
+  }
+
+  Future<void> broadcastGlobalAction({required int notebookId, required Map<String, dynamic> actionData}) async {
+    if (_notebookChannel == null) return;
+    _notebookChannel!.trigger(eventName: 'client-global-action', data: jsonEncode(actionData));
   }
 
   Future<bool> broadcastReaction({required int notebookId, required String myUserId, required String reaction}) async {

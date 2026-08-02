@@ -98,4 +98,6 @@ class ImageBlock {
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
     );
   }
+
+  ImageBlock clone() => ImageBlock.fromJson(toJson());
 }

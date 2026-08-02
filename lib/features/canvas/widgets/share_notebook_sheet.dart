@@ -148,6 +148,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
               DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                       value: _selectedRole,
+                      padding: const EdgeInsets.symmetric(horizontal: 8), // 🚀 Espaçamento interno
                       items: const [
                         DropdownMenuItem(value: 'editor', child: Text('Editor', style: TextStyle(fontSize: 13))),
                         DropdownMenuItem(value: 'viewer', child: Text('Leitor', style: TextStyle(fontSize: 13))),
@@ -156,8 +157,17 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
                       onChanged: (v) => setState(() => _selectedRole = v!)
                   )
               ),
-              const SizedBox(width: 8),
-              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)), onPressed: _isLoading ? null : _sendInvite, child: _isLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Convidar', style: TextStyle(color: Colors.white))),
+              const SizedBox(width: 12), // 🚀 Maior separação
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F4C5C),
+                  padding: const EdgeInsets.symmetric(horizontal: 16), // 🚀 Botão mais largo
+                ), 
+                onPressed: _isLoading ? null : _sendInvite, 
+                child: _isLoading 
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                  : const Text('Convidar', style: TextStyle(color: Colors.white))
+              ),
             ]),
           ),
           const SizedBox(height: 20),

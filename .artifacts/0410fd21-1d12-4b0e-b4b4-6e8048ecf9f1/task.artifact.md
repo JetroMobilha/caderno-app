@@ -1,11 +1,16 @@
-# Tarefas: Fluidez e Imersão na Colaboração
+# Tarefas: Imersão Colaborativa e Refinamento UX
 
-- `[ ]` Melhorar Fluidez de Imagens
-    - `[ ]` Trocar `Positioned` por `AnimatedPositioned` em `CanvasScreen.dart`
-    - `[ ]` Implementar debounce de persistência no `CanvasController.dart` para movimentos remotos
-    - `[ ]` Reduzir throttling de movimento de imagem para 30ms
-- `[ ]` Refinar Sincronização de Desenho
-    - `[ ]` Garantir que o payload final do traço não cause "linhas fantasmas" (Verificação final)
+- `[ ]` Refinar Edição de Imagem
+    - `[ ]` Implementar "Bring to Front" (trazer para a frente) ao selecionar imagem no `CanvasController.dart`
+    - `[ ]` Adicionar botão de confirmação (✅) para salvar alterações e gravar no histórico
+- `[ ]` Histórico Colaborativo Total (Undo/Redo para todos)
+    - `[ ]` Sincronizar a adição de ações remotas na pilha de `_undoStack` de todos os utilizadores
+    - `[ ]` Broadcast de comandos `undo` e `redo` para execução síncrona em todos os dispositivos
+- `[ ]` Corrigir Inserção de Texto
+    - `[ ]` Ajustar `GestureDetector` e `IgnorePointer` em `CanvasScreen.dart` para permitir criação de blocos de texto
+- `[ ]` Otimização de Imagens em Grupo
+    - `[ ]` Melhorar a resiliência do carregamento de imagens remotas
 - `[ ]` Verificação e Testes
-    - `[ ]` Testar movimento de imagem entre dois dispositivos
-    - `[ ]` Verificar ausência de atrasos (lag) ao mover objetos
+    - `[ ]` Testar se a imagem selecionada fica à frente das outras
+    - `[ ]` Validar se o Utilizador B consegue desfazer uma ação do Utilizador A
+    - `[ ]` Verificar se a criação de texto voltou a funcionar

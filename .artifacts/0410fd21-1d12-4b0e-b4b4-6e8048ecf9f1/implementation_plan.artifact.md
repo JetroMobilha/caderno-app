@@ -1,37 +1,50 @@
-# Sincronização Imersiva: Fim das Linhas Fantasmas e Imagens Fluidas
+# Refinamento de UX de Imagem, Texto e Histórico Colaborativo
 
-O objetivo é eliminar artefatos visuais durante o desenho em tempo real e tornar a movimentação de imagens suave para todos os colaboradores.
+Este plano visa corrigir a persistência de formatação no Undo, restaurar a criação de texto, implementar uma edição de imagem por seleção individual e transformar o Histórico (Undo/Redo) num sistema verdadeiramente partilhado entre todos os colegas.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Correção de Desenho:** Descobri que as linhas retas no final do desenho ocorriam porque apenas o último "pedaço" do traço era enviado no sinal final. Vou alterar para que o traço completo seja enviado no momento em que levanta o dedo, garantindo que o desenho fique idêntico em todos os ecrãs.
+> **Histórico Colaborativo:** O sistema de Undo/Redo passará a ser global. Se o Utilizador A desenha e o Utilizador B clica em "Desfazer", o desenho do Utilizador A desaparecerá para todos. Todos partilham a mesma "pilha" de ações recentes.
 
 > [!TIP]
-> A movimentação de imagens passará a usar animações leves (interpolação) para que, quando um colega move um objeto, você o veja deslizar suavemente em vez de saltar.
+> **Edição de Imagem:** Já não verá botões em todas as imagens ao mesmo tempo. Agora, deve clicar na imagem que deseja editar para que os controlos apareçam. Haverá um botão "✅" para confirmar as alterações.
 
 ## Proposed Changes
 
-### [Component] Desenho (Canvas Ink)
+### [Component] Canvas Controller (Lógica de Histórico e Seleção)
 
-#### [MODIFY] [canvas_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/views/canvas_screen.dart)
-- **Broadcast Final:** Alterar `sendStrokeUpdate` no `onPanEnd` para enviar a lista **completa** de pontos (`allPoints`) em vez de apenas o último segmento. Isto garante que o dispositivo receptor tenha a versão final correta sem falhas de conexão entre pontos.
+#### [MODIFY] [canvas_controller.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/controllers/canvas_controller.dart)
+- **Estado de Edição:** Adicionar `String? selectedEditingImageId`.
+- **Deep Copy no Undo:** Alterar as classes `CanvasAction` para armazenar uma cópia (clone) do estado do objeto (ex: `Stroke`, `TextBlock`, `ImageBlock`) no momento da ação, garantindo que o Undo restaure a posição e tamanho corretos.
+- **Broadcast de Ações:** Criar um novo evento `client-action-sync` para enviar a estrutura da ação (ID, tipo, dados) para todos os colegas.
+- **Undo Global:** Implementar o broadcast do comando Undo. Quando recebido, todos os clientes executam o `undo()` na sua pilha local de forma sincronizada.
 
 ---
 
-### [Component] Imagens (Image Blocks)
-
-#### [MODIFY] [canvas_controller.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/controllers/canvas_controller.dart)
-- **Frequência de Atualização:** Reduzir o throttling de 50ms para 30ms para aproximar-se dos 30 FPS de atualização.
-- **Otimização de Performance:** Implementar um `Timer` para adiar a gravação no SQLite de movimentos remotos, evitando travagens (jank) durante a colaboração ativa.
+### [Component] Canvas Screen (UX e Criação)
 
 #### [MODIFY] [canvas_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/views/canvas_screen.dart)
-- **Movimento Fluido:** Trocar `Positioned` por `AnimatedPositioned` na renderização das imagens.
-- **Duração da Interpolação:** Configurar a animação para ~40ms para "preencher os vazios" entre os pacotes de dados recebidos, criando a ilusão de movimento contínuo.
+- **Criação de Texto:** Corrigir o `onTapUp` para garantir que o clique na camada superior de tinta consiga disparar a criação de um novo bloco de texto quando a ferramenta está ativa.
+- **Seleção de Imagem:** No loop de imagens, adicionar um `GestureDetector` que define o `selectedEditingImageId` ao clicar.
+- **Handles Condicionais:** Mostrar os botões de redimensionar e remover apenas se `img.id == controller.selectedEditingImageId`.
+- **Botão de Confirmação:** Adicionar um botão de "Check" flutuante sobre a imagem em edição para concluir a manipulação.
+
+---
+
+### [Component] Realtime Service
+
+#### [MODIFY] [realtime_service.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/network/realtime_service.dart)
+- Adicionar suporte para o evento `client-action-sync` e `client-global-undo-redo`.
 
 ## Verification Plan
 
 ### Manual Verification
-1.  **Linhas Fantasmas:** Desenhar círculos e formas complexas rapidamente e verificar se o traço final fecha corretamente sem linhas retas atravessadas no dispositivo do colega.
-2.  **Imagens:** Arrastar uma imagem num telemóvel e observar no outro telemóvel se o movimento é fluído (cinematográfico) ou se continua "aos saltos".
-3.  **Estabilidade:** Confirmar que múltiplas movimentações simultâneas não causam lentidão na aplicação.
+1.  **Undo de Formatação:** Mover uma imagem, redimensionar, apagar e fazer Undo. Verificar se ela volta com o tamanho e posição exatos de antes de ser apagada.
+2.  **Inserção de Texto:** Clicar com a ferramenta de texto e verificar se o teclado abre e o cursor aparece.
+3.  **Seleção de Imagem:** Inserir duas imagens. Verificar que os botões de edição só aparecem na que for clicada.
+4.  **Undo Partilhado:**
+    *   Dispositivo A desenha.
+    *   Dispositivo B clica em Undo.
+    *   O desenho deve sumir em ambos os ecrãs.
+5.  **Performance de Imagem:** Verificar se o carregamento em colaboração está mais estável (evitar múltiplas tentativas de download se já estiver em cache).

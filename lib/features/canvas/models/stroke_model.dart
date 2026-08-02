@@ -53,4 +53,6 @@ class Stroke {
 
   String toJsonString() => jsonEncode(toJson());
   factory Stroke.fromJsonString(String jsonStr) => Stroke.fromJson(jsonDecode(jsonStr));
+
+  Stroke clone() => Stroke.fromJson(toJson());
 }

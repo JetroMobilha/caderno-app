@@ -47,4 +47,6 @@ class TextBlock {
     textColorHex: json['text_color_hex']?.toString() ?? json['textColorHex']?.toString() ?? '#1A1A24',
     fontSize: (json['font_size'] as num?)?.toDouble() ?? (json['fontSize'] as num?)?.toDouble() ?? 18.0,
   );
+
+  TextBlock clone() => TextBlock.fromJson(toJson());
 }

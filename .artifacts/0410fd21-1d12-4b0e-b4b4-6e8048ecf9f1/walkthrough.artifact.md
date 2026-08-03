@@ -1,33 +1,26 @@
-# Walkthrough: Refinamento de UX, Edição de Imagem e Histórico Colaborativo
+# Walkthrough: Exportação e Cópia de Texto
 
-Nesta atualização, implementei melhorias significativas na interação com imagens e textos, além de transformar o sistema de Undo/Redo numa ferramenta verdadeiramente colaborativa e resiliente.
+Agora pode extrair facilmente o conteúdo textual do seu caderno para utilizar noutras aplicações. Implementei dois métodos de exportação: um para blocos individuais e outro para a página completa.
 
-## Mudanças Principais
+## Mudanças Implementadas
 
-### 1. Edição de Imagem por Seleção
-- **UX Melhorada:** Já não verá botões de redimensionamento em todas as imagens. Agora, deve clicar na imagem que deseja editar para a selecionar.
-- **Handles Condicionais:** Apenas a imagem selecionada mostra os botões de mover, redimensionar e remover.
-- **Botão de Confirmação (✅):** Adicionei um botão verde para salvar as alterações da imagem, garantindo que a nova posição e tamanho sejam registados no histórico.
+### 1. Cópia Rápida de Blocos
+- **Funcionalidade:** Pressionar longamente qualquer bloco de texto digital agora copia o seu conteúdo diretamente para a área de transferência.
+- **Feedback:** Um SnackBar azul aparece na parte inferior do ecrã para confirmar que a cópia foi realizada com sucesso.
 
-### 2. Histórico (Undo/Redo) Universal e Inteligente
-- **Cópia Profunda (Deep Copy):** O sistema de histórico agora guarda o estado exato dos objetos (posição, tamanho, pontos). Ao fazer Undo, a imagem volta exatamente à sua forma anterior, sem perder a formatação.
-- **Histórico Partilhado:** O Undo/Redo agora é global. Se um colega desenhar algo, qualquer outro utilizador na sala pode clicar em "Desfazer" e o traço desaparecerá para todos. Todos partilham a mesma pilha de ações recentes.
-- **Suporte Total:** Agora o Undo/Redo abrange a inserção de imagens, criação de textos e desenhos à mão.
+### 2. Exportação Completa de Página
+- **O que exporta:** Título da página, resultado do OCR (escrita à mão convertida) e todos os blocos de texto digital (ordenados de cima para baixo).
+- **Acesso (Mobile):** Clique no menu de três pontos (`more_vert`) na barra de ferramentas e selecione **"Exportar Todo o Texto"**.
+- **Acesso (Desktop):** Um novo ícone de cópia dupla foi adicionado diretamente à barra de ferramentas para exportação rápida.
 
-### 3. Correção da Inserção de Texto
-- **Sensibilidade de Toque:** Ajustei a camada superior do Canvas para permitir a criação de novos blocos de texto com um toque simples, corrigindo a falha onde o teclado não abria.
-
-### 4. Estabilidade na Sincronização de Imagens
-- **Otimização de Upload:** Melhorei a lógica de broadcast pós-upload para garantir que a imagem seja imediatamente reconhecida pelos colegas, facilitando o acompanhamento de movimentos iniciais.
+### 3. Melhoria na Organização dos Dados
+- O sistema organiza o texto exportado com cabeçalhos claros, separando o que foi escrito à mão (convertido por IA) das anotações digitais.
 
 ## Arquivos Modificados
-
-- [canvas_controller.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/controllers/canvas_controller.dart): Lógica de histórico colaborativo, clonagem de modelos e seleção de imagem.
-- [canvas_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/views/canvas_screen.dart): UI de edição de imagem por clique, correção do toque para texto e hierarquia visual.
-- [realtime_service.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/network/realtime_service.dart): Novos eventos para sincronização de histórico global.
+- [canvas_controller.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/controllers/canvas_controller.dart): Lógica de compilação de texto e integração com o Clipboard do sistema.
+- [canvas_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/views/canvas_screen.dart): Adição do gesto de `onLongPress` para cópia individual.
+- [canvas_toolbar.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/canvas_toolbar.dart): Inclusão das opções de exportação na interface.
 
 ## Como Testar
-1.  **Edição de Imagem:** Insira uma imagem. Note que não há botões. Clique na imagem. Os botões aparecem. Redimensione e clique no "Check" verde.
-2.  **Undo de Formatação:** Mova uma imagem, clique no "Check". Clique no botão Desfazer na barra de ferramentas. A imagem deve voltar à posição anterior.
-3.  **Undo Colaborativo:** Desenhe num dispositivo e clique em Undo no outro. O desenho deve sumir em ambos.
-4.  **Texto:** Selecione a ferramenta de texto e clique no papel. O cursor deve aparecer para escrever.
+1. **Bloco Individual:** Escreva algo com a ferramenta de texto. Saia do modo de edição e pressione longamente sobre o texto. Deve aparecer a confirmação de cópia.
+2. **Exportação Geral:** No menu de três pontos da barra inferior, escolha "Exportar Todo o Texto". Cole o resultado num chat ou bloco de notas externo para verificar a estrutura.

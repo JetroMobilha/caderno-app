@@ -413,7 +413,7 @@ class SyncService {
           payloadPages.add({
             'notebook_id': notebook.serverId,
             'page_number': row.pageNumber,
-            'client_id': row.id,
+            'client_id': row.clientId, // 🆔 Usar clientId global
             'server_id': row.serverId,
             'is_deleted': 1,
           });
@@ -421,13 +421,10 @@ class SyncService {
         }
 
         final allPages = await _canvasRepository.getPagesByNotebook(row.notebookId, null);
-        // Filtramos manualmente se necessário, mas getPagesByNotebook já filtra por isDeleted: 0
-        final fullPage = allPages.firstWhere((p) => p.id == row.id, orElse: () => pages_model.LocalPage(notebookId: row.notebookId, pageNumber: row.pageNumber, isLandscape: row.isLandscape == 1));
+        final fullPage = allPages.firstWhere((p) => p.clientId == row.clientId, orElse: () => pages_model.LocalPage(notebookId: row.notebookId, pageNumber: row.pageNumber, isLandscape: row.isLandscape == 1, clientId: row.clientId));
 
         final map = await fullPage.toJsonAsync();
         map['notebook_id'] = notebook.serverId;
-        map['client_id'] = row.id;
-        map['server_id'] = row.serverId;
         map['is_deleted'] = 0;
         payloadPages.add(map);
       }
@@ -439,12 +436,10 @@ class SyncService {
         final data = jsonDecode(response.body);
         await _db.batch((batch) {
           for (var item in data['synced_pages'] ?? []) {
-            // 🛡️ SEGURANÇA: Garantir que IDs são tratados como tipos corretos
-            final dynamic rawClientId = item['client_id'];
+            final String? clientId = item['client_id']?.toString();
             final dynamic rawServerId = item['server_id'] ?? item['serverId'];
 
-            if (rawClientId != null && rawServerId != null) {
-              final int clientId = rawClientId is int ? rawClientId : int.parse(rawClientId.toString());
+            if (clientId != null && rawServerId != null) {
               final int serverId = rawServerId is int ? rawServerId : int.parse(rawServerId.toString());
 
               batch.update(_db.pages,
@@ -454,13 +449,14 @@ class SyncService {
                   syncedWithCloud: const Value(1),
                   updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
                 ),
-                where: (t) => t.id.equals(clientId),
+                where: (t) => t.clientId.equals(clientId),
               );
             }
           }
         });
         return true;
-      } else {
+      }
+else {
         debugPrint('❌ Servidor retornou erro ${response.statusCode} no PUSH Pages');
         return false;
       }
@@ -493,26 +489,28 @@ class SyncService {
 
         for (var sPage in serverPages) {
           final int sId = sPage['id'] is int ? sPage['id'] : int.parse(sPage['id'].toString());
+          final String? cId = sPage['client_id']?.toString();
           
           // 🚀 TRATAMENTO DE DELEÇÃO REMOTA
           if (sPage['deleted_at'] != null || sPage['is_deleted'] == 1) {
-            await (_db.delete(_db.pages)..where((t) => t.serverId.equals(sId))).go();
+            if (cId != null) {
+              await (_db.delete(_db.pages)..where((t) => t.clientId.equals(cId))).go();
+            } else {
+              await (_db.delete(_db.pages)..where((t) => t.serverId.equals(sId))).go();
+            }
             continue;
           }
 
           final int sNotebookId = sPage['notebook_id'] is int ? sPage['notebook_id'] : int.parse(sPage['notebook_id'].toString());
-
           final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNotebookId))).getSingleOrNull();
           if (notebook == null) continue;
 
-          final localNotebookId = notebook.id;
-
           final pageCompanion = PagesCompanion.insert(
             serverId: Value(sId),
-            notebookId: localNotebookId,
+            clientId: Value(cId ?? uniqid()),
+            notebookId: notebook.id,
             pageNumber: sPage['page_number'],
             isLandscape: Value((sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0),
-            // 🛡️ Normalização de metadados para evitar aninhamento de JSON
             headerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['header_data']))),
             footerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['footer_data']))),
             extractedText: Value(sPage['extracted_text']?.toString()),
@@ -520,13 +518,15 @@ class SyncService {
             updatedAt: Value(DateTime.parse(sPage['updated_at'].toString()).millisecondsSinceEpoch),
           );
 
-          final existingPage = await (_db.select(_db.pages)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+          final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
           int localPageId;
           
           if (existingPage != null) {
             localPageId = existingPage.id;
             await (_db.update(_db.pages)..where((t) => t.id.equals(localPageId))).write(
               PagesCompanion(
+                serverId: pageCompanion.serverId,
+                pageNumber: pageCompanion.pageNumber,
                 headerData: pageCompanion.headerData,
                 footerData: pageCompanion.footerData,
                 isLandscape: pageCompanion.isLandscape,
@@ -552,62 +552,94 @@ class SyncService {
   }
 
   Future<void> _pullCanvasData(int localPageId, Map sPage) async {
-    // 🛡️ LIMPEZA DE CACHE LOCAL: Antes de baixar a nova "verdade" do servidor,
-    // limpamos o que temos para esta folha. Isto garante que elementos deletados 
-    // por outros enquanto estávamos offline sumam de facto.
-    await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(localPageId))).go();
-    await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(localPageId))).go();
-    await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(localPageId))).go();
+    // 🛡️ ALINHAMENTO INTELIGENTE: Em vez de apagar tudo, comparamos item a item
+    // utilizando a regra Last-Write-Wins (LWW) baseada no updatedAt.
+
+    // 1. Obter dados locais para comparação
+    final localStrokes = await (_db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(localPageId))).get();
+    final localTexts = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(localPageId))).get();
+    final localImages = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(localPageId))).get();
+
+    final Map<String, CanvasStroke> localStrokeMap = {for (var s in localStrokes) s.clientStrokeId: s};
+    final Map<String, CanvasTextBlock> localTextMap = {for (var t in localTexts) t.clientTextId: t};
+    final Map<String, CanvasImageBlock> localImageMap = {for (var i in localImages) i.clientImageId: i};
 
     await _db.batch((batch) {
+      // --- SINCRONIZAR TRAÇOS ---
       List strokeList = _parseJsonList(sPage['stroke_data']);
       for (var st in strokeList) {
-        batch.insert(_db.canvasStrokes, 
-          CanvasStrokesCompanion.insert(
-            clientStrokeId: st['id']?.toString() ?? uniqid(),
-            pageId: localPageId,
-            strokeData: jsonEncode(st),
-            isDeleted: const Value(0),
-            syncedWithCloud: const Value(1),
-            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-          ),
-          mode: InsertMode.insertOrReplace, // 🚀 Evita erro UNIQUE se o traço já existir via Realtime
-        );
+        final String id = st['id']?.toString() ?? uniqid();
+        final int serverTime = (st['updated_at'] as num?)?.toInt() ?? 0;
+        final bool serverDeleted = st['is_deleted'] == true || st['is_deleted'] == 1;
+
+        final local = localStrokeMap[id];
+        if (local == null || serverTime > local.updatedAt) {
+          batch.insert(_db.canvasStrokes, 
+            CanvasStrokesCompanion.insert(
+              clientStrokeId: id,
+              pageId: localPageId,
+              strokeData: jsonEncode(st),
+              isDeleted: Value(serverDeleted ? 1 : 0),
+              deletedInSession: Value(st['deleted_in_session'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1),
+              updatedAt: Value(serverTime > 0 ? serverTime : DateTime.now().millisecondsSinceEpoch),
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
       }
 
+      // --- SINCRONIZAR TEXTOS ---
       List textList = _parseJsonList(sPage['text_data']);
       for (var txt in textList) {
-        batch.insert(_db.canvasTextBlocks, 
-          CanvasTextBlocksCompanion.insert(
-            clientTextId: txt['id']?.toString() ?? uniqid(),
-            pageId: localPageId,
-            textData: jsonEncode(txt),
-            isDeleted: const Value(0),
-            syncedWithCloud: const Value(1),
-            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-          ),
-          mode: InsertMode.insertOrReplace,
-        );
+        final String id = txt['id']?.toString() ?? uniqid();
+        final int serverTime = (txt['updated_at'] as num?)?.toInt() ?? 0;
+        final bool serverDeleted = txt['is_deleted'] == true || txt['is_deleted'] == 1;
+
+        final local = localTextMap[id];
+        if (local == null || serverTime > local.updatedAt) {
+          batch.insert(_db.canvasTextBlocks, 
+            CanvasTextBlocksCompanion.insert(
+              clientTextId: id,
+              pageId: localPageId,
+              textData: jsonEncode(txt),
+              isDeleted: Value(serverDeleted ? 1 : 0),
+              deletedInSession: Value(txt['deleted_in_session'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1),
+              updatedAt: Value(serverTime > 0 ? serverTime : DateTime.now().millisecondsSinceEpoch),
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
       }
 
+      // --- SINCRONIZAR IMAGENS ---
       List imageList = _parseJsonList(sPage['image_data']);
       for (var img in imageList) {
-        batch.insert(_db.canvasImageBlocks,
-          CanvasImageBlocksCompanion.insert(
-            clientImageId: img['id']?.toString() ?? uniqid(),
-            pageId: localPageId,
-            imagePath: img['image_path']?.toString() ?? '',
-            posX: (img['dx'] as num?)?.toDouble() ?? 0.0,
-            posY: (img['dy'] as num?)?.toDouble() ?? 0.0,
-            width: (img['width'] as num?)?.toDouble() ?? 300.0,
-            height: (img['height'] as num?)?.toDouble() ?? 200.0,
-            rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0,
-            isDeleted: const Value(0),
-            syncedWithCloud: const Value(1),
-            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-          ),
-          mode: InsertMode.insertOrReplace,
-        );
+        final String id = img['id']?.toString() ?? uniqid();
+        final int serverTime = (img['updated_at'] as num?)?.toInt() ?? 0;
+        final bool serverDeleted = img['is_deleted'] == true || img['is_deleted'] == 1;
+
+        final local = localImageMap[id];
+        if (local == null || serverTime > local.updatedAt) {
+          batch.insert(_db.canvasImageBlocks,
+            CanvasImageBlocksCompanion.insert(
+              clientImageId: id,
+              pageId: localPageId,
+              imagePath: img['image_path']?.toString() ?? '',
+              posX: (img['dx'] as num?)?.toDouble() ?? 0.0,
+              posY: (img['dy'] as num?)?.toDouble() ?? 0.0,
+              width: (img['width'] as num?)?.toDouble() ?? 300.0,
+              height: (img['height'] as num?)?.toDouble() ?? 200.0,
+              rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0,
+              isDeleted: Value(serverDeleted ? 1 : 0),
+              deletedInSession: Value(img['deleted_in_session'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1),
+              updatedAt: Value(serverTime > 0 ? serverTime : DateTime.now().millisecondsSinceEpoch),
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
       }
     });
   }

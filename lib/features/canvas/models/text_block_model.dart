@@ -10,6 +10,9 @@ class TextBlock {
   bool isUnderline;
   String textColorHex;
   double fontSize;
+  bool isDeleted; // 🚀 Suporte a Soft Delete
+  bool deletedInSession; // 🚀 Novo: Contexto de deleção
+  int updatedAt; // 🚀 Novo: Timestamp Last-Write-Wins
 
   TextBlock({
     String? id,
@@ -20,7 +23,11 @@ class TextBlock {
     this.isUnderline = false,
     this.textColorHex = '#1A1A24',
     this.fontSize = 18.0,
-  }) : id = id ?? const Uuid().v4();
+    this.isDeleted = false,
+    this.deletedInSession = false,
+    int? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -32,6 +39,9 @@ class TextBlock {
     'is_underline': isUnderline,
     'text_color_hex': textColorHex,
     'font_size': fontSize,
+    'is_deleted': isDeleted,
+    'deleted_in_session': deletedInSession,
+    'updated_at': updatedAt,
   };
 
   factory TextBlock.fromJson(Map<String, dynamic> json) => TextBlock(
@@ -46,6 +56,9 @@ class TextBlock {
     isUnderline: json['is_underline'] ?? json['isUnderline'] ?? false,
     textColorHex: json['text_color_hex']?.toString() ?? json['textColorHex']?.toString() ?? '#1A1A24',
     fontSize: (json['font_size'] as num?)?.toDouble() ?? (json['fontSize'] as num?)?.toDouble() ?? 18.0,
+    isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
+    deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
+    updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
   );
 
   TextBlock clone() => TextBlock.fromJson(toJson());

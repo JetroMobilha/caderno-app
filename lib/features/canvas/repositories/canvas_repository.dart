@@ -37,15 +37,23 @@ class CanvasRepository {
       final strokeRows = await (_db.select(_db.canvasStrokes)
             ..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(0)))
           .get();
-      final strokes = strokeRows.map((s) => Stroke.fromJsonString(s.strokeData)).toList();
+      final strokes = strokeRows.map((s) => Stroke.fromJson({
+        ...jsonDecode(s.strokeData),
+        'updated_at': s.updatedAt,
+        'deleted_in_session': s.deletedInSession == 1,
+      })).toList();
 
       final textRows = await (_db.select(_db.canvasTextBlocks)
             ..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(0)))
           .get();
-      final texts = textRows.map((t) => TextBlock.fromJson(jsonDecode(t.textData))).toList();
+      final texts = textRows.map((t) => TextBlock.fromJson({
+        ...jsonDecode(t.textData),
+        'updated_at': t.updatedAt,
+        'deleted_in_session': t.deletedInSession == 1,
+      })).toList();
 
       final imgRows = await (_db.select(_db.canvasImageBlocks)
-            ..where((t) => t.pageId.equals(pageId)))
+            ..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(0)))
           .get();
       final images = imgRows.map((img) => ImageBlock.fromJson({
         'id': img.clientImageId,
@@ -55,11 +63,14 @@ class CanvasRepository {
         'width': img.width,
         'height': img.height,
         'rotation': img.rotation,
+        'updated_at': img.updatedAt,
+        'deleted_in_session': img.deletedInSession == 1,
       })).toList();
 
       pages.add(LocalPage(
         id: pRow.id,
         serverId: pRow.serverId,
+        clientId: pRow.clientId, // 🆔 Recuperar clientId do banco
         notebookId: pRow.notebookId,
         pageNumber: pRow.pageNumber,
         isLandscape: pRow.isLandscape == 1,
@@ -70,6 +81,7 @@ class CanvasRepository {
         strokes: strokes,
         textBlocks: texts,
         imageBlocks: images,
+        updatedAt: pRow.updatedAt,
       ));
     }
     return pages;
@@ -91,15 +103,23 @@ class CanvasRepository {
         final strokeRows = await (_db.select(_db.canvasStrokes)
               ..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(0)))
             .get();
-        final strokes = strokeRows.map((s) => Stroke.fromJsonString(s.strokeData)).toList();
+        final strokes = strokeRows.map((s) => Stroke.fromJson({
+          ...jsonDecode(s.strokeData),
+          'updated_at': s.updatedAt,
+          'deleted_in_session': s.deletedInSession == 1,
+        })).toList();
 
         final textRows = await (_db.select(_db.canvasTextBlocks)
               ..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(0)))
             .get();
-        final texts = textRows.map((t) => TextBlock.fromJson(jsonDecode(t.textData))).toList();
+        final texts = textRows.map((t) => TextBlock.fromJson({
+          ...jsonDecode(t.textData),
+          'updated_at': t.updatedAt,
+          'deleted_in_session': t.deletedInSession == 1,
+        })).toList();
 
         final imgRows = await (_db.select(_db.canvasImageBlocks)
-              ..where((t) => t.pageId.equals(pageId)))
+              ..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(0)))
             .get();
         final images = imgRows.map((img) => ImageBlock.fromJson({
           'id': img.clientImageId,
@@ -109,11 +129,14 @@ class CanvasRepository {
           'width': img.width,
           'height': img.height,
           'rotation': img.rotation,
+          'updated_at': img.updatedAt,
+          'deleted_in_session': img.deletedInSession == 1,
         })).toList();
 
         fullPages.add(LocalPage(
           id: pRow.id,
           serverId: pRow.serverId,
+          clientId: pRow.clientId, // 🆔 Recuperar clientId do banco
           notebookId: pRow.notebookId,
           pageNumber: pRow.pageNumber,
           isLandscape: pRow.isLandscape == 1,
@@ -123,6 +146,7 @@ class CanvasRepository {
           strokes: strokes,
           textBlocks: texts,
           imageBlocks: images,
+          updatedAt: pRow.updatedAt,
         ));
       }
       return fullPages;
@@ -141,11 +165,13 @@ class CanvasRepository {
               PagesCompanion.insert(
                 notebookId: page.notebookId,
                 pageNumber: page.pageNumber,
+                clientId: Value(page.clientId), // 🆔 Salvar clientId
                 isLandscape: Value(page.isLandscape ? 1 : 0),
                 headerData: Value(LocalPage.encodeMeta(page.title)),
                 footerData: Value(LocalPage.encodeMeta(page.footer)),
                 extractedText: Value(page.extractedText),
                 syncedWithCloud: Value(page.syncedWithCloud),
+                updatedAt: Value(page.updatedAt),
               ),
             );
         page.id = currentPageId;
@@ -157,7 +183,7 @@ class CanvasRepository {
             footerData: Value(LocalPage.encodeMeta(page.footer)),
             extractedText: Value(page.extractedText),
             syncedWithCloud: Value(page.syncedWithCloud),
-            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+            updatedAt: Value(page.updatedAt),
           ),
         );
       }
@@ -170,6 +196,8 @@ class CanvasRepository {
                 pageId: currentPageId,
                 strokeData: stroke.toJsonString(),
                 isDeleted: Value(stroke.isDeleted ? 1 : 0),
+                deletedInSession: Value(stroke.deletedInSession ? 1 : 0),
+                updatedAt: Value(stroke.updatedAt),
                 syncedWithCloud: const Value(0),
               ),
             );
@@ -182,7 +210,9 @@ class CanvasRepository {
                 clientTextId: tb.id,
                 pageId: currentPageId,
                 textData: jsonEncode(tb.toJson()),
-                isDeleted: const Value(0),
+                isDeleted: Value(tb.isDeleted ? 1 : 0),
+                deletedInSession: Value(tb.deletedInSession ? 1 : 0),
+                updatedAt: Value(tb.updatedAt),
                 syncedWithCloud: const Value(0),
               ),
             );
@@ -200,7 +230,9 @@ class CanvasRepository {
                 width: img.width,
                 height: img.height,
                 rotation: img.rotation,
-                isDeleted: const Value(0),
+                isDeleted: Value(img.isDeleted ? 1 : 0),
+                deletedInSession: Value(img.deletedInSession ? 1 : 0),
+                updatedAt: Value(img.updatedAt),
                 syncedWithCloud: const Value(0),
               ),
             );
@@ -209,7 +241,7 @@ class CanvasRepository {
   }
 
   Future<LocalPage?> createNewPage(int notebookId, int pageNumber, bool isLandscape, int? notebookServerId) async {
-    final newPage = LocalPage(notebookId: notebookId, pageNumber: pageNumber, isLandscape: isLandscape, title: 'Folha $pageNumber');
+    final newPage = LocalPage(notebookId: notebookId, pageNumber: pageNumber, isLandscape: isLandscape);
     await savePage(newPage, notebookServerId);
     return newPage;
   }

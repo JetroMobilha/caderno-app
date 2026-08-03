@@ -64,6 +64,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   
   // 🚀 ESTADOS TEMPORÁRIOS PARA UNDO DE MOVIMENTO/REDIMENSIONAMENTO
   ImageBlock? _originalImageState;
+  TextBlock? _originalTextState;
 
   @override
   void initState() {
@@ -94,8 +95,18 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
     final String cleanText = _textController.text.trim();
     if (controller.activeInlineTarget == InlineTarget.block && controller.activeTextBlock != null) {
-      controller.activeTextBlock!.text = cleanText;
-      if (cleanText.isEmpty) page.textBlocks.remove(controller.activeTextBlock);
+      if (cleanText.isEmpty) {
+        final blockId = controller.activeTextBlock!.id;
+        page.textBlocks.removeWhere((t) => t.id == blockId);
+        // 🚀 TRANSMITIR DELEÇÃO PARA COLEGAS
+        controller.broadcastTextBlockUpdate(page, controller.activeTextBlock!, isDeleted: true);
+      } else {
+        // Gravar alteração se o texto mudou
+        if (_originalTextState != null && _originalTextState!.text != cleanText) {
+          controller.recordTextUpdate(page, _originalTextState!, controller.activeTextBlock!.clone()..text = cleanText);
+        }
+        controller.activeTextBlock!.text = cleanText;
+      }
     } else if (controller.activeInlineTarget == InlineTarget.title) {
       page.title = cleanText;
       controller.broadcastPageMetadataUpdate(page); 
@@ -271,7 +282,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   curve: Curves.easeOutCubic,
                                   key: ValueKey('img_${img.id}'), left: img.position.dx, top: img.position.dy,
                                   child: GestureDetector(
-                                    onTap: isImageToolActive ? () {
+                                    onTapDown: isImageToolActive ? (_) {
                                       if (controller.selectedEditingImageId != img.id) {
                                         setState(() {
                                           controller.selectedEditingImageId = img.id;
@@ -303,7 +314,11 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                                         ? Image.network(
                                                             img.imagePath, 
                                                             fit: BoxFit.fill,
-                                                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.error_outline, color: Colors.red),
+                                                            loadingBuilder: (context, child, loadingProgress) {
+                                                              if (loadingProgress == null) return child;
+                                                              return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                                            },
+                                                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image_outlined, color: Colors.grey),
                                                           )
                                                         : Image.file(File(img.imagePath), fit: BoxFit.fill),
                                                   
@@ -320,59 +335,90 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                             ),
                                           ),
                                           
-                                          // 🚀 HANDLES DE EDIÇÃO (Apenas se selecionada)
-                                          if (isSelected && widget.notebook.role != 'viewer') ...[
-                                            Positioned(
-                                              left: (img.width / 2) - 22, top: (img.height / 2) - 22, width: 44, height: 44,
-                                              child: GestureDetector(
-                                                behavior: HitTestBehavior.opaque,
-                                                onPanUpdate: (d) {
-                                                  setState(() => img.position += d.delta);
-                                                  controller.broadcastThrottledImageUpdate(page, img);
-                                                },
-                                                child: const CircleAvatar(backgroundColor: Color(0xFF0F4C5C), child: Icon(Icons.open_with, size: 20, color: Colors.white)),
+                                        // 🚀 HANDLES DE EDIÇÃO (Apenas se selecionada)
+                                        if (isSelected && widget.notebook.role != 'viewer') ...[
+                                          // Handle Mover (Centro)
+                                          Positioned(
+                                            left: (img.width / 2) - 20, top: (img.height / 2) - 20, width: 40, height: 40,
+                                            child: GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onPanUpdate: (d) {
+                                                setState(() => img.position += d.delta);
+                                                controller.broadcastThrottledImageUpdate(page, img);
+                                              },
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF0F4C5C).withValues(alpha: 0.9), 
+                                                  shape: BoxShape.circle,
+                                                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6, offset: const Offset(0, 2))]
+                                                ), 
+                                                child: const Icon(Icons.open_with_rounded, size: 20, color: Colors.white)
                                               ),
                                             ),
-                                            Positioned(
-                                              left: img.width - 22, top: img.height - 22, width: 44, height: 44,
-                                              child: GestureDetector(
-                                                behavior: HitTestBehavior.opaque,
-                                                onPanUpdate: (d) {
-                                                  setState(() {
-                                                    img.width = (img.width + d.delta.dx).clamp(80.0, 900.0);
-                                                    img.height = (img.height + d.delta.dy).clamp(80.0, 900.0);
-                                                  });
-                                                  controller.broadcastThrottledImageUpdate(page, img);
-                                                },
-                                                child: Container(width: 30, height: 30, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle), child: const Icon(Icons.open_in_full, size: 14, color: Colors.white)),
+                                          ),
+                                          // Handle Redimensionar (Canto inferior direito)
+                                          Positioned(
+                                            left: img.width - 18, top: img.height - 18, width: 36, height: 36,
+                                            child: GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onPanUpdate: (d) {
+                                                setState(() {
+                                                  img.width = (img.width + d.delta.dx).clamp(60.0, 1000.0);
+                                                  img.height = (img.height + d.delta.dy).clamp(60.0, 1000.0);
+                                                });
+                                                controller.broadcastThrottledImageUpdate(page, img);
+                                              },
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white, 
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(color: const Color(0xFF0F4C5C), width: 2),
+                                                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2))]
+                                                ), 
+                                                child: const Icon(Icons.unfold_more_rounded, size: 18, color: Color(0xFF0F4C5C))
                                               ),
                                             ),
-                                            Positioned(
-                                              left: img.width - 25, top: -25, width: 50, height: 50,
-                                              child: GestureDetector(
-                                                behavior: HitTestBehavior.opaque,
-                                                onTap: () {
-                                                  controller.deleteImageBlock(page, img);
-                                                  controller.selectedEditingImageId = null;
-                                                },
-                                                child: Container(margin: const EdgeInsets.all(10), width: 30, height: 30, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle), child: const Icon(Icons.close, size: 18, color: Colors.white)),
+                                          ),
+                                          // Handle Remover (Canto superior direito)
+                                          Positioned(
+                                            right: -10, top: -10, width: 32, height: 32,
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                controller.clearImageSelection();
+                                                controller.deleteImageBlock(page, img);
+                                              },
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.redAccent.withValues(alpha: 0.9), 
+                                                  shape: BoxShape.circle,
+                                                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))]
+                                                ), 
+                                                child: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.white)
                                               ),
                                             ),
-                                            // 🚀 BOTÃO CONFIRMAR (Check)
-                                            Positioned(
-                                              left: -25, top: -25, width: 50, height: 50,
-                                              child: GestureDetector(
-                                                onTap: () {
-                                                  if (_originalImageState != null) {
-                                                    controller.recordImageUpdate(page, _originalImageState!, img.clone());
-                                                  }
-                                                  setState(() => controller.selectedEditingImageId = null);
-                                                  controller.triggerAutoSave(page);
-                                                },
-                                                child: Container(margin: const EdgeInsets.all(10), width: 30, height: 30, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle), child: const Icon(Icons.check, size: 18, color: Colors.white)),
+                                          ),
+                                          // Handle Confirmar (Canto superior esquerdo)
+                                          Positioned(
+                                            left: -10, top: -10, width: 32, height: 32,
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                if (_originalImageState != null) {
+                                                  controller.recordImageUpdate(page, _originalImageState!, img.clone());
+                                                }
+                                                controller.clearImageSelection();
+                                                controller.triggerAutoSave(page);
+                                              },
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.withValues(alpha: 0.9), 
+                                                  shape: BoxShape.circle,
+                                                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))]
+                                                ), 
+                                                child: const Icon(Icons.check_rounded, size: 18, color: Colors.white)
                                               ),
                                             ),
-                                          ]
+                                          ),
+                                        ]
                                         ],
                                       ),
                                     ),
@@ -383,7 +429,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
                             // 📝 Z-INDEX 3: CAMADA DE TEXTO
                             ...page.textBlocks.map((tb) {
-                              final bool isEditing = tb == controller.activeTextBlock && controller.activeInlineTarget == InlineTarget.block;
+                              final bool isEditing = controller.activeTextBlock?.id == tb.id && controller.activeInlineTarget == InlineTarget.block;
                               final double exactLineMulti = (controller.liveLineType == 'grid' ? 25.0 : 28.0) / tb.fontSize;
                               final bool isTextSelected = controller.selectedTextIds.contains(tb.id);
                               
@@ -401,6 +447,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                     clipBehavior: Clip.none,
                                     children: [
                                       GestureDetector(
+                                        behavior: HitTestBehavior.opaque, // 🚀 Captura em toda a área (mesmo transparente)
                                         onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (d) {
                                           tb.position += d.delta;
                                           if (controller.isBroadcastingViewport) {
@@ -409,33 +456,64 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                           controller.safeNotify();
                                           controller.broadcastThrottledTextBlockUpdate(page, tb);
                                         } : null,
-                                        onTap: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? () {
+                                        onTapDown: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (_) {
                                           if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
+                                          
+                                          // 🚀 GUARDAR ESTADO ORIGINAL PARA UNDO
+                                          _originalTextState = tb.clone();
+                                          
                                           controller.setTextEditing(InlineTarget.block, tb);
                                           _textController.text = tb.text;
-                                          _textFocusNode.requestFocus();
+                                          // 🚀 FOCO RESILIENTE COM DELAY PARA GARANTIR REBUILD
+                                          Future.delayed(const Duration(milliseconds: 50), () {
+                                            if (mounted) _textFocusNode.requestFocus();
+                                          });
                                         } : null,
+                                        onLongPress: () {
+                                          if (!isEditing) {
+                                            controller.copyToClipboard(tb.text, context);
+                                          }
+                                        },
                                         child: isEditing
-                                            ? TextField(
-                                          controller: _textController, focusNode: _textFocusNode, maxLines: null, autofocus: true,
-                                          style: GoogleFonts.inter(
-                                            fontSize: tb.fontSize, height: exactLineMulti,
-                                            color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
-                                            fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                            fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                            decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                            ? Container(
+                                          width: double.infinity, // 🚀 Expandir para área total do Positioned
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: const Color(0xFF0F4C5C).withValues(alpha: 0.2), width: 1),
+                                            color: Colors.white.withValues(alpha: 0.1),
                                           ),
-                                          decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                                          onChanged: (val) {
-                                            tb.text = val;
-                                            if (controller.isBroadcastingViewport) {
-                                              controller.currentViewportCenter = tb.position;
-                                            }
-                                            controller.safeNotify();
-                                            controller.broadcastTextBlockUpdate(page, tb, senderId: myUserId, debounced: true, isEditing: true); 
-                                          },
+                                          child: TextField(
+                                            key: ValueKey('edit_${tb.id}'),
+                                            controller: _textController,
+                                            focusNode: _textFocusNode,
+                                            maxLines: null,
+                                            autofocus: true,
+                                            cursorColor: const Color(0xFF0F4C5C),
+                                            keyboardType: TextInputType.multiline, // 🚀 Melhorar teclado
+                                            textInputAction: TextInputAction.newline,
+                                            style: GoogleFonts.inter(
+                                              fontSize: tb.fontSize,
+                                              height: exactLineMulti,
+                                              color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                              fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                              fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                              decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                            ),
+                                            decoration: const InputDecoration(
+                                              border: InputBorder.none,
+                                              isDense: true,
+                                              contentPadding: EdgeInsets.all(8), // 🚀 Aumentar área interna
+                                              hintText: 'Digitar...',
+                                              hintStyle: TextStyle(color: Colors.black12, fontSize: 14),
+                                            ),
+                                            onChanged: (val) {
+                                              tb.text = val;
+                                              controller.safeNotify();
+                                              controller.broadcastTextBlockUpdate(page, tb, senderId: myUserId, debounced: true, isEditing: true); 
+                                            },
+                                          ),
                                         )
                                             : Container(
+                                          width: double.infinity, // 🚀 Expandir para área total
                                           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
                                           decoration: BoxDecoration(
                                             border: isTextSelected
@@ -491,12 +569,16 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         textColorHex: controller.selectedColorHex
                                       );
                                       
+                                      _originalTextState = null; // Bloco novo, não tem estado anterior
+                                      
                                       controller.addTextBlock(page, newBlock); 
                                       controller.setTextEditing(InlineTarget.block, newBlock);
                                       _textController.text = '';
                                       
-                                      // Garantir que o foco é solicitado após o build
-                                      Future.microtask(() => _textFocusNode.requestFocus());
+                                      // 🚀 FOCO RESILIENTE PARA NOVO TEXTO
+                                      Future.delayed(const Duration(milliseconds: 50), () {
+                                        if (mounted) _textFocusNode.requestFocus();
+                                      });
                                     }
                                   } : null,
                                   onTapUp: controller.currentTool == ToolMode.eraser && widget.notebook.role != 'viewer' ? (details) {
@@ -806,7 +888,10 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             ),
 
           if (controller.isGlobalSyncing)
-            _buildGlobalSyncOverlay(),
+            Positioned(
+              top: 60, left: 0, right: 0,
+              child: Center(child: _buildGlobalSyncBadge()),
+            ),
         ],
       ),
       floatingActionButton: hasPages || widget.notebook.role == 'viewer'
@@ -820,37 +905,27 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     );
   }
 
-  Widget _buildGlobalSyncOverlay() {
+  Widget _buildGlobalSyncBadge() {
     return Container(
-      color: Colors.black.withValues(alpha: 0.4), 
-      child: Center(
-        child: Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          elevation: 12,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 40, height: 40,
-                  child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF0F4C5C)),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'A alinhar caderno...',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Estamos a garantir que todos os colegas\ntenham o mesmo conteúdo.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
-                ),
-              ],
-            ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F4C5C).withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 14, height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
           ),
-        ),
+          const SizedBox(width: 12),
+          Text(
+            'A alinhar caderno...',
+            style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
@@ -1161,7 +1236,9 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       );
     }
 
-    final tb = controller.activeTextBlock!;
+    final tb = controller.activeTextBlock;
+    if (tb == null) return const SizedBox.shrink();
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(color: const Color(0xFFFDFBF7), borderRadius: BorderRadius.circular(30), border: Border.all(color: const Color(0xFF0F4C5C).withValues(alpha: 0.3))),
@@ -1169,14 +1246,34 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 4,
           children: [
-            IconButton(icon: Icon(Icons.format_bold, color: tb.isBold ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isBold = !tb.isBold; controller.safeNotify(); }),
-            IconButton(icon: Icon(Icons.format_italic, color: tb.isItalic ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isItalic = !tb.isItalic; controller.safeNotify(); }),
-            IconButton(icon: Icon(Icons.format_underlined, color: tb.isUnderline ? const Color(0xFF0F4C5C) : Colors.black45), onPressed: () { tb.isUnderline = !tb.isUnderline; controller.safeNotify(); }),
+            IconButton(
+              focusNode: FocusNode(canRequestFocus: false), // 🚀 Impedir perda de foco
+              icon: Icon(Icons.format_bold, color: tb.isBold ? const Color(0xFF0F4C5C) : Colors.black45), 
+              onPressed: () => controller.toggleBold()
+            ),
+            IconButton(
+              focusNode: FocusNode(canRequestFocus: false),
+              icon: Icon(Icons.format_italic, color: tb.isItalic ? const Color(0xFF0F4C5C) : Colors.black45), 
+              onPressed: () => controller.toggleItalic()
+            ),
+            IconButton(
+              focusNode: FocusNode(canRequestFocus: false),
+              icon: Icon(Icons.format_underlined, color: tb.isUnderline ? const Color(0xFF0F4C5C) : Colors.black45), 
+              onPressed: () => controller.toggleUnderline()
+            ),
             Container(width: 1, height: 20, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
-            IconButton(icon: const Icon(Icons.text_decrease, color: Colors.black87), onPressed: () { tb.fontSize = (tb.fontSize - 2).clamp(10.0, 64.0); controller.safeNotify(); }),
+            IconButton(
+              focusNode: FocusNode(canRequestFocus: false),
+              icon: const Icon(Icons.text_decrease, color: Colors.black87), 
+              onPressed: () => controller.updateFontSize(-2)
+            ),
             Text('${tb.fontSize.toInt()}', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold)),
-            IconButton(icon: const Icon(Icons.text_increase, color: Colors.black87), onPressed: () { tb.fontSize = (tb.fontSize + 2).clamp(10.0, 64.0); controller.safeNotify(); }),
+            IconButton(
+              focusNode: FocusNode(canRequestFocus: false),
+              icon: const Icon(Icons.text_increase, color: Colors.black87), 
+              onPressed: () => controller.updateFontSize(2)
+            ),
             Container(width: 1, height: 20, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
             ...['#1A1A24', '#E74C3C', '#27AE60', '#1976D2'].map((hex) {
@@ -1191,11 +1288,13 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               );
             }),
             IconButton(
+              focusNode: FocusNode(canRequestFocus: false),
               icon: const Icon(Icons.palette_outlined, color: Color(0xFF0F4C5C)),
               onPressed: () => _showColorStudioDialog(controller, isForText: true),
             ),
             const SizedBox(width: 4),
             ElevatedButton(
+                focusNode: FocusNode(canRequestFocus: false), // 🚀 Impedir perda de foco no OK
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C), shape: const StadiumBorder()),
                 onPressed: () => _finishEditingInline(currentPage),
                 child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))

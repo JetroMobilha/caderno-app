@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 class Stroke {
-  final String id; // 🚀 Gerado localmente com UUID
-  final String color;
-  final double thickness;
-  final List<Offset> points;
-  final bool isDeleted; // Para suporte ao Undo/Redo e Borracha
-  final int? pageNumber; // 📄 Opcional: Para isolamento em colaboração
+  final String id; 
+  String color;
+  double thickness;
+  List<Offset> points;
+  bool isDeleted; 
+  bool deletedInSession; 
+  int updatedAt; 
+  final int? pageNumber; 
 
   Stroke({
     String? id,
@@ -16,8 +18,11 @@ class Stroke {
     required this.thickness,
     required this.points,
     this.isDeleted = false,
+    this.deletedInSession = false,
+    int? updatedAt,
     this.pageNumber,
-  }) : id = id ?? const Uuid().v4();
+  }) : id = id ?? const Uuid().v4(),
+       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   // =========================================================================
   // ☁️ COMUNICAÇÃO (JSON / Laravel / Drift)
@@ -28,6 +33,8 @@ class Stroke {
       'color': color,
       'thickness': thickness,
       'is_deleted': isDeleted,
+      'deleted_in_session': deletedInSession,
+      'updated_at': updatedAt,
       if (pageNumber != null) 'page_number': pageNumber,
       'points': points.map((p) => {
         'dx': double.parse(p.dx.toStringAsFixed(1)),
@@ -42,6 +49,8 @@ class Stroke {
       color: json['color']?.toString() ?? '#1A1A24',
       thickness: (json['thickness'] as num?)?.toDouble() ?? 3.0,
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
+      deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
+      updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
       pageNumber: json['page_number'] as int?,
       points: json['points'] != null
           ? (json['points'] as List)

@@ -14,6 +14,9 @@ class ImageBlock {
   double rotation;
   double baseScale = 1.0;
   double baseRotation = 0.0;
+  bool isDeleted; // 🚀 Suporte a Soft Delete
+  bool deletedInSession; // 🚀 Novo: Contexto de deleção
+  int updatedAt; // 🚀 Novo: Timestamp Last-Write-Wins
 
   ImageBlock({
     String? id,
@@ -22,7 +25,11 @@ class ImageBlock {
     this.width = 300.0,
     this.height = 200.0,
     this.rotation = 0.0,
-  }) : id = id ?? const Uuid().v4();
+    this.isDeleted = false,
+    this.deletedInSession = false,
+    int? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   // =========================================================================
   // ⚡ MAPA LEVE: Usado para Realtime (WebSocket) e Drift
@@ -36,6 +43,9 @@ class ImageBlock {
       'height': double.parse(height.toStringAsFixed(1)),
       'rotation': double.parse(rotation.toStringAsFixed(2)),
       'image_path': imagePath,
+      'is_deleted': isDeleted,
+      'deleted_in_session': deletedInSession,
+      'updated_at': updatedAt,
     };
   }
 
@@ -96,6 +106,9 @@ class ImageBlock {
       width: (json['width'] as num?)?.toDouble() ?? 300.0,
       height: (json['height'] as num?)?.toDouble() ?? 200.0,
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
+      isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
+      deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
+      updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
     );
   }
 

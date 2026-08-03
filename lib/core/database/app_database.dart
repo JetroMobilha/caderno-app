@@ -54,6 +54,7 @@ class Notebooks extends Table {
 class Pages extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
+  TextColumn get clientId => text().nullable().unique()(); // 🆔 Identidade única global
   IntColumn get notebookId => integer().references(Notebooks, #id, onDelete: KeyAction.cascade)();
   IntColumn get pageNumber => integer()();
   IntColumn get isLandscape => integer().withDefault(const Constant(0))();
@@ -71,6 +72,7 @@ class CanvasStrokes extends Table {
   IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
   TextColumn get strokeData => text()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get deletedInSession => integer().withDefault(const Constant(0))(); // 🚀 Novo
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
 
@@ -84,6 +86,7 @@ class CanvasTextBlocks extends Table {
   IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
   TextColumn get textData => text()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get deletedInSession => integer().withDefault(const Constant(0))(); // 🚀 Novo
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
 
@@ -102,6 +105,7 @@ class CanvasImageBlocks extends Table {
   RealColumn get height => real()();
   RealColumn get rotation => real()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get deletedInSession => integer().withDefault(const Constant(0))(); // 🚀 Novo
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
 
@@ -172,12 +176,22 @@ class AppDatabase extends _$AppDatabase {
           await m.alterTable(TableMigration(subjects));
           await m.alterTable(TableMigration(notebooks));
         }
+        if (from < 4) {
+          // 🚀 Migração v3 -> v4: Adicionar colunas deletedInSession
+          await m.addColumn(canvasStrokes, canvasStrokes.deletedInSession);
+          await m.addColumn(canvasTextBlocks, canvasTextBlocks.deletedInSession);
+          await m.addColumn(canvasImageBlocks, canvasImageBlocks.deletedInSession);
+        }
+        if (from < 5) {
+          // 🚀 Migração v4 -> v5: Adicionar clientId na tabela Pages
+          await m.addColumn(pages, pages.clientId);
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   // Função equivalente ao seu antigo clearAllData()
   Future<void> clearAllData() async {

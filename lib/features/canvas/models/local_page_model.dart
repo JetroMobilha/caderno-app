@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'image_block_model.dart';
 import 'stroke_model.dart';
 import 'text_block_model.dart';
@@ -6,6 +7,7 @@ import 'text_block_model.dart';
 class LocalPage {
   int? id;
   int? serverId;
+  final String clientId; // 🆔 Identidade única global
   final int notebookId;
   final int pageNumber;
   final bool isLandscape;
@@ -27,6 +29,7 @@ class LocalPage {
   LocalPage({
     this.id,
     this.serverId,
+    String? clientId,
     required this.notebookId,
     required this.pageNumber,
     required this.isLandscape,
@@ -38,7 +41,8 @@ class LocalPage {
     List<ImageBlock>? imageBlocks,
     this.syncedWithCloud = 0,
     int? updatedAt,
-  })  : strokes = strokes ?? <Stroke>[],
+  })  : clientId = clientId ?? const Uuid().v4(),
+        strokes = strokes ?? <Stroke>[],
         textBlocks = textBlocks ?? <TextBlock>[],
         imageBlocks = imageBlocks ?? <ImageBlock>[],
         redoHistory = [], // Inicializa a lista vazia
@@ -55,7 +59,7 @@ class LocalPage {
 
     return {
       if (serverId != null) 'id': serverId,
-      'client_id': id,
+      'client_id': clientId, // 🆔 Usar clientId global
       'notebook_id': notebookId,
       'page_number': pageNumber,
       'is_landscape': isLandscape,
@@ -65,6 +69,7 @@ class LocalPage {
       'stroke_data': strokes.map((s) => s.toJson()).toList(),
       'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': asyncImages,
+      'updated_at': updatedAt,
     };
   }
 
@@ -106,8 +111,8 @@ class LocalPage {
     final List<dynamic> imageList = json['image_data'] ?? [];
 
     return LocalPage(
-      id: json['client_id'] != null ? int.tryParse(json['client_id'].toString()) : null,
       serverId: json['id'] != null ? int.tryParse(json['id'].toString()) : null,
+      clientId: json['client_id']?.toString(), // 🆔 Recuperar clientId
       notebookId: int.tryParse(json['notebook_id']?.toString() ?? '0') ?? 0,
       pageNumber: int.tryParse(json['page_number']?.toString() ?? '0') ?? 0,
       isLandscape: json['is_landscape'] == true || json['is_landscape'] == 1,
@@ -118,6 +123,7 @@ class LocalPage {
       textBlocks: textList.map((t) => TextBlock.fromJson(t)).toList(),
       imageBlocks: imageList.map((img) => ImageBlock.fromJson(img)).toList(),
       syncedWithCloud: 1,
+      updatedAt: (json['updated_at'] as num?)?.toInt(),
     );
   }
 }

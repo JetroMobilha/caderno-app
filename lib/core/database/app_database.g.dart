@@ -2076,6 +2076,18 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
   static const VerificationMeta _notebookIdMeta = const VerificationMeta(
     'notebookId',
   );
@@ -2186,6 +2198,7 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
   List<GeneratedColumn> get $columns => [
     id,
     serverId,
+    clientId,
     notebookId,
     pageNumber,
     isLandscape,
@@ -2215,6 +2228,12 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
       context.handle(
         _serverIdMeta,
         serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
       );
     }
     if (data.containsKey('notebook_id')) {
@@ -2301,6 +2320,10 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         DriftSqlType.int,
         data['${effectivePrefix}server_id'],
       ),
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      ),
       notebookId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}notebook_id'],
@@ -2349,6 +2372,7 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
 class Page extends DataClass implements Insertable<Page> {
   final int id;
   final int? serverId;
+  final String? clientId;
   final int notebookId;
   final int pageNumber;
   final int isLandscape;
@@ -2361,6 +2385,7 @@ class Page extends DataClass implements Insertable<Page> {
   const Page({
     required this.id,
     this.serverId,
+    this.clientId,
     required this.notebookId,
     required this.pageNumber,
     required this.isLandscape,
@@ -2377,6 +2402,9 @@ class Page extends DataClass implements Insertable<Page> {
     map['id'] = Variable<int>(id);
     if (!nullToAbsent || serverId != null) {
       map['server_id'] = Variable<int>(serverId);
+    }
+    if (!nullToAbsent || clientId != null) {
+      map['client_id'] = Variable<String>(clientId);
     }
     map['notebook_id'] = Variable<int>(notebookId);
     map['page_number'] = Variable<int>(pageNumber);
@@ -2402,6 +2430,9 @@ class Page extends DataClass implements Insertable<Page> {
       serverId: serverId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverId),
+      clientId: clientId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientId),
       notebookId: Value(notebookId),
       pageNumber: Value(pageNumber),
       isLandscape: Value(isLandscape),
@@ -2428,6 +2459,7 @@ class Page extends DataClass implements Insertable<Page> {
     return Page(
       id: serializer.fromJson<int>(json['id']),
       serverId: serializer.fromJson<int?>(json['serverId']),
+      clientId: serializer.fromJson<String?>(json['clientId']),
       notebookId: serializer.fromJson<int>(json['notebookId']),
       pageNumber: serializer.fromJson<int>(json['pageNumber']),
       isLandscape: serializer.fromJson<int>(json['isLandscape']),
@@ -2445,6 +2477,7 @@ class Page extends DataClass implements Insertable<Page> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'serverId': serializer.toJson<int?>(serverId),
+      'clientId': serializer.toJson<String?>(clientId),
       'notebookId': serializer.toJson<int>(notebookId),
       'pageNumber': serializer.toJson<int>(pageNumber),
       'isLandscape': serializer.toJson<int>(isLandscape),
@@ -2460,6 +2493,7 @@ class Page extends DataClass implements Insertable<Page> {
   Page copyWith({
     int? id,
     Value<int?> serverId = const Value.absent(),
+    Value<String?> clientId = const Value.absent(),
     int? notebookId,
     int? pageNumber,
     int? isLandscape,
@@ -2472,6 +2506,7 @@ class Page extends DataClass implements Insertable<Page> {
   }) => Page(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
+    clientId: clientId.present ? clientId.value : this.clientId,
     notebookId: notebookId ?? this.notebookId,
     pageNumber: pageNumber ?? this.pageNumber,
     isLandscape: isLandscape ?? this.isLandscape,
@@ -2488,6 +2523,7 @@ class Page extends DataClass implements Insertable<Page> {
     return Page(
       id: data.id.present ? data.id.value : this.id,
       serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
       notebookId: data.notebookId.present
           ? data.notebookId.value
           : this.notebookId,
@@ -2519,6 +2555,7 @@ class Page extends DataClass implements Insertable<Page> {
     return (StringBuffer('Page(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
           ..write('notebookId: $notebookId, ')
           ..write('pageNumber: $pageNumber, ')
           ..write('isLandscape: $isLandscape, ')
@@ -2536,6 +2573,7 @@ class Page extends DataClass implements Insertable<Page> {
   int get hashCode => Object.hash(
     id,
     serverId,
+    clientId,
     notebookId,
     pageNumber,
     isLandscape,
@@ -2552,6 +2590,7 @@ class Page extends DataClass implements Insertable<Page> {
       (other is Page &&
           other.id == this.id &&
           other.serverId == this.serverId &&
+          other.clientId == this.clientId &&
           other.notebookId == this.notebookId &&
           other.pageNumber == this.pageNumber &&
           other.isLandscape == this.isLandscape &&
@@ -2566,6 +2605,7 @@ class Page extends DataClass implements Insertable<Page> {
 class PagesCompanion extends UpdateCompanion<Page> {
   final Value<int> id;
   final Value<int?> serverId;
+  final Value<String?> clientId;
   final Value<int> notebookId;
   final Value<int> pageNumber;
   final Value<int> isLandscape;
@@ -2578,6 +2618,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
   const PagesCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
     this.notebookId = const Value.absent(),
     this.pageNumber = const Value.absent(),
     this.isLandscape = const Value.absent(),
@@ -2591,6 +2632,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
   PagesCompanion.insert({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
     required int notebookId,
     required int pageNumber,
     this.isLandscape = const Value.absent(),
@@ -2605,6 +2647,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
   static Insertable<Page> custom({
     Expression<int>? id,
     Expression<int>? serverId,
+    Expression<String>? clientId,
     Expression<int>? notebookId,
     Expression<int>? pageNumber,
     Expression<int>? isLandscape,
@@ -2618,6 +2661,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (serverId != null) 'server_id': serverId,
+      if (clientId != null) 'client_id': clientId,
       if (notebookId != null) 'notebook_id': notebookId,
       if (pageNumber != null) 'page_number': pageNumber,
       if (isLandscape != null) 'is_landscape': isLandscape,
@@ -2633,6 +2677,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
   PagesCompanion copyWith({
     Value<int>? id,
     Value<int?>? serverId,
+    Value<String?>? clientId,
     Value<int>? notebookId,
     Value<int>? pageNumber,
     Value<int>? isLandscape,
@@ -2646,6 +2691,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     return PagesCompanion(
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
+      clientId: clientId ?? this.clientId,
       notebookId: notebookId ?? this.notebookId,
       pageNumber: pageNumber ?? this.pageNumber,
       isLandscape: isLandscape ?? this.isLandscape,
@@ -2666,6 +2712,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     }
     if (serverId.present) {
       map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
     }
     if (notebookId.present) {
       map['notebook_id'] = Variable<int>(notebookId.value);
@@ -2702,6 +2751,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     return (StringBuffer('PagesCompanion(')
           ..write('id: $id, ')
           ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
           ..write('notebookId: $notebookId, ')
           ..write('pageNumber: $pageNumber, ')
           ..write('isLandscape: $isLandscape, ')
@@ -2779,6 +2829,18 @@ class $CanvasStrokesTable extends CanvasStrokes
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _deletedInSessionMeta = const VerificationMeta(
+    'deletedInSession',
+  );
+  @override
+  late final GeneratedColumn<int> deletedInSession = GeneratedColumn<int>(
+    'deleted_in_session',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
     'syncedWithCloud',
   );
@@ -2810,6 +2872,7 @@ class $CanvasStrokesTable extends CanvasStrokes
     pageId,
     strokeData,
     isDeleted,
+    deletedInSession,
     syncedWithCloud,
     updatedAt,
   ];
@@ -2864,6 +2927,15 @@ class $CanvasStrokesTable extends CanvasStrokes
         isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
       );
     }
+    if (data.containsKey('deleted_in_session')) {
+      context.handle(
+        _deletedInSessionMeta,
+        deletedInSession.isAcceptableOrUnknown(
+          data['deleted_in_session']!,
+          _deletedInSessionMeta,
+        ),
+      );
+    }
     if (data.containsKey('synced_with_cloud')) {
       context.handle(
         _syncedWithCloudMeta,
@@ -2908,6 +2980,10 @@ class $CanvasStrokesTable extends CanvasStrokes
         DriftSqlType.int,
         data['${effectivePrefix}is_deleted'],
       )!,
+      deletedInSession: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_in_session'],
+      )!,
       syncedWithCloud: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
@@ -2931,6 +3007,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
   final int pageId;
   final String strokeData;
   final int isDeleted;
+  final int deletedInSession;
   final int syncedWithCloud;
   final int updatedAt;
   const CanvasStroke({
@@ -2939,6 +3016,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     required this.pageId,
     required this.strokeData,
     required this.isDeleted,
+    required this.deletedInSession,
     required this.syncedWithCloud,
     required this.updatedAt,
   });
@@ -2952,6 +3030,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     map['page_id'] = Variable<int>(pageId);
     map['stroke_data'] = Variable<String>(strokeData);
     map['is_deleted'] = Variable<int>(isDeleted);
+    map['deleted_in_session'] = Variable<int>(deletedInSession);
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -2966,6 +3045,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       pageId: Value(pageId),
       strokeData: Value(strokeData),
       isDeleted: Value(isDeleted),
+      deletedInSession: Value(deletedInSession),
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
     );
@@ -2982,6 +3062,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       pageId: serializer.fromJson<int>(json['pageId']),
       strokeData: serializer.fromJson<String>(json['strokeData']),
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      deletedInSession: serializer.fromJson<int>(json['deletedInSession']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -2995,6 +3076,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       'pageId': serializer.toJson<int>(pageId),
       'strokeData': serializer.toJson<String>(strokeData),
       'isDeleted': serializer.toJson<int>(isDeleted),
+      'deletedInSession': serializer.toJson<int>(deletedInSession),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -3006,6 +3088,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     int? pageId,
     String? strokeData,
     int? isDeleted,
+    int? deletedInSession,
     int? syncedWithCloud,
     int? updatedAt,
   }) => CanvasStroke(
@@ -3014,6 +3097,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     pageId: pageId ?? this.pageId,
     strokeData: strokeData ?? this.strokeData,
     isDeleted: isDeleted ?? this.isDeleted,
+    deletedInSession: deletedInSession ?? this.deletedInSession,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -3028,6 +3112,9 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           ? data.strokeData.value
           : this.strokeData,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      deletedInSession: data.deletedInSession.present
+          ? data.deletedInSession.value
+          : this.deletedInSession,
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
@@ -3043,6 +3130,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           ..write('pageId: $pageId, ')
           ..write('strokeData: $strokeData, ')
           ..write('isDeleted: $isDeleted, ')
+          ..write('deletedInSession: $deletedInSession, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -3056,6 +3144,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     pageId,
     strokeData,
     isDeleted,
+    deletedInSession,
     syncedWithCloud,
     updatedAt,
   );
@@ -3068,6 +3157,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           other.pageId == this.pageId &&
           other.strokeData == this.strokeData &&
           other.isDeleted == this.isDeleted &&
+          other.deletedInSession == this.deletedInSession &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt);
 }
@@ -3078,6 +3168,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
   final Value<int> pageId;
   final Value<String> strokeData;
   final Value<int> isDeleted;
+  final Value<int> deletedInSession;
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -3087,6 +3178,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     this.pageId = const Value.absent(),
     this.strokeData = const Value.absent(),
     this.isDeleted = const Value.absent(),
+    this.deletedInSession = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3097,6 +3189,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     required int pageId,
     required String strokeData,
     this.isDeleted = const Value.absent(),
+    this.deletedInSession = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3109,6 +3202,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Expression<int>? pageId,
     Expression<String>? strokeData,
     Expression<int>? isDeleted,
+    Expression<int>? deletedInSession,
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -3119,6 +3213,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       if (pageId != null) 'page_id': pageId,
       if (strokeData != null) 'stroke_data': strokeData,
       if (isDeleted != null) 'is_deleted': isDeleted,
+      if (deletedInSession != null) 'deleted_in_session': deletedInSession,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3131,6 +3226,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Value<int>? pageId,
     Value<String>? strokeData,
     Value<int>? isDeleted,
+    Value<int>? deletedInSession,
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -3141,6 +3237,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       pageId: pageId ?? this.pageId,
       strokeData: strokeData ?? this.strokeData,
       isDeleted: isDeleted ?? this.isDeleted,
+      deletedInSession: deletedInSession ?? this.deletedInSession,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -3165,6 +3262,9 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     if (isDeleted.present) {
       map['is_deleted'] = Variable<int>(isDeleted.value);
     }
+    if (deletedInSession.present) {
+      map['deleted_in_session'] = Variable<int>(deletedInSession.value);
+    }
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
@@ -3185,6 +3285,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
           ..write('pageId: $pageId, ')
           ..write('strokeData: $strokeData, ')
           ..write('isDeleted: $isDeleted, ')
+          ..write('deletedInSession: $deletedInSession, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -3256,6 +3357,18 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _deletedInSessionMeta = const VerificationMeta(
+    'deletedInSession',
+  );
+  @override
+  late final GeneratedColumn<int> deletedInSession = GeneratedColumn<int>(
+    'deleted_in_session',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
     'syncedWithCloud',
   );
@@ -3287,6 +3400,7 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     pageId,
     textData,
     isDeleted,
+    deletedInSession,
     syncedWithCloud,
     updatedAt,
   ];
@@ -3341,6 +3455,15 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
       );
     }
+    if (data.containsKey('deleted_in_session')) {
+      context.handle(
+        _deletedInSessionMeta,
+        deletedInSession.isAcceptableOrUnknown(
+          data['deleted_in_session']!,
+          _deletedInSessionMeta,
+        ),
+      );
+    }
     if (data.containsKey('synced_with_cloud')) {
       context.handle(
         _syncedWithCloudMeta,
@@ -3385,6 +3508,10 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         DriftSqlType.int,
         data['${effectivePrefix}is_deleted'],
       )!,
+      deletedInSession: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_in_session'],
+      )!,
       syncedWithCloud: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
@@ -3408,6 +3535,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
   final int pageId;
   final String textData;
   final int isDeleted;
+  final int deletedInSession;
   final int syncedWithCloud;
   final int updatedAt;
   const CanvasTextBlock({
@@ -3416,6 +3544,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     required this.pageId,
     required this.textData,
     required this.isDeleted,
+    required this.deletedInSession,
     required this.syncedWithCloud,
     required this.updatedAt,
   });
@@ -3429,6 +3558,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     map['page_id'] = Variable<int>(pageId);
     map['text_data'] = Variable<String>(textData);
     map['is_deleted'] = Variable<int>(isDeleted);
+    map['deleted_in_session'] = Variable<int>(deletedInSession);
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -3443,6 +3573,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       pageId: Value(pageId),
       textData: Value(textData),
       isDeleted: Value(isDeleted),
+      deletedInSession: Value(deletedInSession),
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
     );
@@ -3459,6 +3590,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       pageId: serializer.fromJson<int>(json['pageId']),
       textData: serializer.fromJson<String>(json['textData']),
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      deletedInSession: serializer.fromJson<int>(json['deletedInSession']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -3472,6 +3604,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       'pageId': serializer.toJson<int>(pageId),
       'textData': serializer.toJson<String>(textData),
       'isDeleted': serializer.toJson<int>(isDeleted),
+      'deletedInSession': serializer.toJson<int>(deletedInSession),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -3483,6 +3616,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     int? pageId,
     String? textData,
     int? isDeleted,
+    int? deletedInSession,
     int? syncedWithCloud,
     int? updatedAt,
   }) => CanvasTextBlock(
@@ -3491,6 +3625,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     pageId: pageId ?? this.pageId,
     textData: textData ?? this.textData,
     isDeleted: isDeleted ?? this.isDeleted,
+    deletedInSession: deletedInSession ?? this.deletedInSession,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -3503,6 +3638,9 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       pageId: data.pageId.present ? data.pageId.value : this.pageId,
       textData: data.textData.present ? data.textData.value : this.textData,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      deletedInSession: data.deletedInSession.present
+          ? data.deletedInSession.value
+          : this.deletedInSession,
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
@@ -3518,6 +3656,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           ..write('pageId: $pageId, ')
           ..write('textData: $textData, ')
           ..write('isDeleted: $isDeleted, ')
+          ..write('deletedInSession: $deletedInSession, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -3531,6 +3670,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     pageId,
     textData,
     isDeleted,
+    deletedInSession,
     syncedWithCloud,
     updatedAt,
   );
@@ -3543,6 +3683,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           other.pageId == this.pageId &&
           other.textData == this.textData &&
           other.isDeleted == this.isDeleted &&
+          other.deletedInSession == this.deletedInSession &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt);
 }
@@ -3553,6 +3694,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
   final Value<int> pageId;
   final Value<String> textData;
   final Value<int> isDeleted;
+  final Value<int> deletedInSession;
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -3562,6 +3704,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.pageId = const Value.absent(),
     this.textData = const Value.absent(),
     this.isDeleted = const Value.absent(),
+    this.deletedInSession = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3572,6 +3715,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     required int pageId,
     required String textData,
     this.isDeleted = const Value.absent(),
+    this.deletedInSession = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3584,6 +3728,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Expression<int>? pageId,
     Expression<String>? textData,
     Expression<int>? isDeleted,
+    Expression<int>? deletedInSession,
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -3594,6 +3739,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       if (pageId != null) 'page_id': pageId,
       if (textData != null) 'text_data': textData,
       if (isDeleted != null) 'is_deleted': isDeleted,
+      if (deletedInSession != null) 'deleted_in_session': deletedInSession,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3606,6 +3752,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Value<int>? pageId,
     Value<String>? textData,
     Value<int>? isDeleted,
+    Value<int>? deletedInSession,
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -3616,6 +3763,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       pageId: pageId ?? this.pageId,
       textData: textData ?? this.textData,
       isDeleted: isDeleted ?? this.isDeleted,
+      deletedInSession: deletedInSession ?? this.deletedInSession,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -3640,6 +3788,9 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     if (isDeleted.present) {
       map['is_deleted'] = Variable<int>(isDeleted.value);
     }
+    if (deletedInSession.present) {
+      map['deleted_in_session'] = Variable<int>(deletedInSession.value);
+    }
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
@@ -3660,6 +3811,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
           ..write('pageId: $pageId, ')
           ..write('textData: $textData, ')
           ..write('isDeleted: $isDeleted, ')
+          ..write('deletedInSession: $deletedInSession, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -3778,6 +3930,18 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _deletedInSessionMeta = const VerificationMeta(
+    'deletedInSession',
+  );
+  @override
+  late final GeneratedColumn<int> deletedInSession = GeneratedColumn<int>(
+    'deleted_in_session',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
     'syncedWithCloud',
   );
@@ -3814,6 +3978,7 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     height,
     rotation,
     isDeleted,
+    deletedInSession,
     syncedWithCloud,
     updatedAt,
   ];
@@ -3908,6 +4073,15 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
       );
     }
+    if (data.containsKey('deleted_in_session')) {
+      context.handle(
+        _deletedInSessionMeta,
+        deletedInSession.isAcceptableOrUnknown(
+          data['deleted_in_session']!,
+          _deletedInSessionMeta,
+        ),
+      );
+    }
     if (data.containsKey('synced_with_cloud')) {
       context.handle(
         _syncedWithCloudMeta,
@@ -3972,6 +4146,10 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         DriftSqlType.int,
         data['${effectivePrefix}is_deleted'],
       )!,
+      deletedInSession: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_in_session'],
+      )!,
       syncedWithCloud: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
@@ -4001,6 +4179,7 @@ class CanvasImageBlock extends DataClass
   final double height;
   final double rotation;
   final int isDeleted;
+  final int deletedInSession;
   final int syncedWithCloud;
   final int updatedAt;
   const CanvasImageBlock({
@@ -4014,6 +4193,7 @@ class CanvasImageBlock extends DataClass
     required this.height,
     required this.rotation,
     required this.isDeleted,
+    required this.deletedInSession,
     required this.syncedWithCloud,
     required this.updatedAt,
   });
@@ -4032,6 +4212,7 @@ class CanvasImageBlock extends DataClass
     map['height'] = Variable<double>(height);
     map['rotation'] = Variable<double>(rotation);
     map['is_deleted'] = Variable<int>(isDeleted);
+    map['deleted_in_session'] = Variable<int>(deletedInSession);
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -4051,6 +4232,7 @@ class CanvasImageBlock extends DataClass
       height: Value(height),
       rotation: Value(rotation),
       isDeleted: Value(isDeleted),
+      deletedInSession: Value(deletedInSession),
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
     );
@@ -4072,6 +4254,7 @@ class CanvasImageBlock extends DataClass
       height: serializer.fromJson<double>(json['height']),
       rotation: serializer.fromJson<double>(json['rotation']),
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      deletedInSession: serializer.fromJson<int>(json['deletedInSession']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -4090,6 +4273,7 @@ class CanvasImageBlock extends DataClass
       'height': serializer.toJson<double>(height),
       'rotation': serializer.toJson<double>(rotation),
       'isDeleted': serializer.toJson<int>(isDeleted),
+      'deletedInSession': serializer.toJson<int>(deletedInSession),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -4106,6 +4290,7 @@ class CanvasImageBlock extends DataClass
     double? height,
     double? rotation,
     int? isDeleted,
+    int? deletedInSession,
     int? syncedWithCloud,
     int? updatedAt,
   }) => CanvasImageBlock(
@@ -4119,6 +4304,7 @@ class CanvasImageBlock extends DataClass
     height: height ?? this.height,
     rotation: rotation ?? this.rotation,
     isDeleted: isDeleted ?? this.isDeleted,
+    deletedInSession: deletedInSession ?? this.deletedInSession,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -4136,6 +4322,9 @@ class CanvasImageBlock extends DataClass
       height: data.height.present ? data.height.value : this.height,
       rotation: data.rotation.present ? data.rotation.value : this.rotation,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      deletedInSession: data.deletedInSession.present
+          ? data.deletedInSession.value
+          : this.deletedInSession,
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
@@ -4156,6 +4345,7 @@ class CanvasImageBlock extends DataClass
           ..write('height: $height, ')
           ..write('rotation: $rotation, ')
           ..write('isDeleted: $isDeleted, ')
+          ..write('deletedInSession: $deletedInSession, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -4174,6 +4364,7 @@ class CanvasImageBlock extends DataClass
     height,
     rotation,
     isDeleted,
+    deletedInSession,
     syncedWithCloud,
     updatedAt,
   );
@@ -4191,6 +4382,7 @@ class CanvasImageBlock extends DataClass
           other.height == this.height &&
           other.rotation == this.rotation &&
           other.isDeleted == this.isDeleted &&
+          other.deletedInSession == this.deletedInSession &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt);
 }
@@ -4206,6 +4398,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
   final Value<double> height;
   final Value<double> rotation;
   final Value<int> isDeleted;
+  final Value<int> deletedInSession;
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -4220,6 +4413,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.height = const Value.absent(),
     this.rotation = const Value.absent(),
     this.isDeleted = const Value.absent(),
+    this.deletedInSession = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4235,6 +4429,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     required double height,
     required double rotation,
     this.isDeleted = const Value.absent(),
+    this.deletedInSession = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4257,6 +4452,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Expression<double>? height,
     Expression<double>? rotation,
     Expression<int>? isDeleted,
+    Expression<int>? deletedInSession,
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -4272,6 +4468,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       if (height != null) 'height': height,
       if (rotation != null) 'rotation': rotation,
       if (isDeleted != null) 'is_deleted': isDeleted,
+      if (deletedInSession != null) 'deleted_in_session': deletedInSession,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -4289,6 +4486,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Value<double>? height,
     Value<double>? rotation,
     Value<int>? isDeleted,
+    Value<int>? deletedInSession,
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -4304,6 +4502,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       height: height ?? this.height,
       rotation: rotation ?? this.rotation,
       isDeleted: isDeleted ?? this.isDeleted,
+      deletedInSession: deletedInSession ?? this.deletedInSession,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -4343,6 +4542,9 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     if (isDeleted.present) {
       map['is_deleted'] = Variable<int>(isDeleted.value);
     }
+    if (deletedInSession.present) {
+      map['deleted_in_session'] = Variable<int>(deletedInSession.value);
+    }
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
@@ -4368,6 +4570,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
           ..write('height: $height, ')
           ..write('rotation: $rotation, ')
           ..write('isDeleted: $isDeleted, ')
+          ..write('deletedInSession: $deletedInSession, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -7408,6 +7611,7 @@ typedef $$PagesTableCreateCompanionBuilder =
     PagesCompanion Function({
       Value<int> id,
       Value<int?> serverId,
+      Value<String?> clientId,
       required int notebookId,
       required int pageNumber,
       Value<int> isLandscape,
@@ -7422,6 +7626,7 @@ typedef $$PagesTableUpdateCompanionBuilder =
     PagesCompanion Function({
       Value<int> id,
       Value<int?> serverId,
+      Value<String?> clientId,
       Value<int> notebookId,
       Value<int> pageNumber,
       Value<int> isLandscape,
@@ -7529,6 +7734,11 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
 
   ColumnFilters<int> get serverId => $composableBuilder(
     column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7690,6 +7900,11 @@ class $$PagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get pageNumber => $composableBuilder(
     column: $table.pageNumber,
     builder: (column) => ColumnOrderings(column),
@@ -7768,6 +7983,9 @@ class $$PagesTableAnnotationComposer
 
   GeneratedColumn<int> get serverId =>
       $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
 
   GeneratedColumn<int> get pageNumber => $composableBuilder(
     column: $table.pageNumber,
@@ -7940,6 +8158,7 @@ class $$PagesTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
                 Value<int> notebookId = const Value.absent(),
                 Value<int> pageNumber = const Value.absent(),
                 Value<int> isLandscape = const Value.absent(),
@@ -7952,6 +8171,7 @@ class $$PagesTableTableManager
               }) => PagesCompanion(
                 id: id,
                 serverId: serverId,
+                clientId: clientId,
                 notebookId: notebookId,
                 pageNumber: pageNumber,
                 isLandscape: isLandscape,
@@ -7966,6 +8186,7 @@ class $$PagesTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
                 required int notebookId,
                 required int pageNumber,
                 Value<int> isLandscape = const Value.absent(),
@@ -7978,6 +8199,7 @@ class $$PagesTableTableManager
               }) => PagesCompanion.insert(
                 id: id,
                 serverId: serverId,
+                clientId: clientId,
                 notebookId: notebookId,
                 pageNumber: pageNumber,
                 isLandscape: isLandscape,
@@ -8139,6 +8361,7 @@ typedef $$CanvasStrokesTableCreateCompanionBuilder =
       required int pageId,
       required String strokeData,
       Value<int> isDeleted,
+      Value<int> deletedInSession,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -8150,6 +8373,7 @@ typedef $$CanvasStrokesTableUpdateCompanionBuilder =
       Value<int> pageId,
       Value<String> strokeData,
       Value<int> isDeleted,
+      Value<int> deletedInSession,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -8207,6 +8431,11 @@ class $$CanvasStrokesTableFilterComposer
 
   ColumnFilters<int> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8273,6 +8502,11 @@ class $$CanvasStrokesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
     builder: (column) => ColumnOrderings(column),
@@ -8331,6 +8565,11 @@ class $$CanvasStrokesTableAnnotationComposer
 
   GeneratedColumn<int> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
@@ -8397,6 +8636,7 @@ class $$CanvasStrokesTableTableManager
                 Value<int> pageId = const Value.absent(),
                 Value<String> strokeData = const Value.absent(),
                 Value<int> isDeleted = const Value.absent(),
+                Value<int> deletedInSession = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8406,6 +8646,7 @@ class $$CanvasStrokesTableTableManager
                 pageId: pageId,
                 strokeData: strokeData,
                 isDeleted: isDeleted,
+                deletedInSession: deletedInSession,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -8417,6 +8658,7 @@ class $$CanvasStrokesTableTableManager
                 required int pageId,
                 required String strokeData,
                 Value<int> isDeleted = const Value.absent(),
+                Value<int> deletedInSession = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8426,6 +8668,7 @@ class $$CanvasStrokesTableTableManager
                 pageId: pageId,
                 strokeData: strokeData,
                 isDeleted: isDeleted,
+                deletedInSession: deletedInSession,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -8504,6 +8747,7 @@ typedef $$CanvasTextBlocksTableCreateCompanionBuilder =
       required int pageId,
       required String textData,
       Value<int> isDeleted,
+      Value<int> deletedInSession,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -8515,6 +8759,7 @@ typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
       Value<int> pageId,
       Value<String> textData,
       Value<int> isDeleted,
+      Value<int> deletedInSession,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -8573,6 +8818,11 @@ class $$CanvasTextBlocksTableFilterComposer
 
   ColumnFilters<int> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8639,6 +8889,11 @@ class $$CanvasTextBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
     builder: (column) => ColumnOrderings(column),
@@ -8695,6 +8950,11 @@ class $$CanvasTextBlocksTableAnnotationComposer
 
   GeneratedColumn<int> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
@@ -8763,6 +9023,7 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> pageId = const Value.absent(),
                 Value<String> textData = const Value.absent(),
                 Value<int> isDeleted = const Value.absent(),
+                Value<int> deletedInSession = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8772,6 +9033,7 @@ class $$CanvasTextBlocksTableTableManager
                 pageId: pageId,
                 textData: textData,
                 isDeleted: isDeleted,
+                deletedInSession: deletedInSession,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -8783,6 +9045,7 @@ class $$CanvasTextBlocksTableTableManager
                 required int pageId,
                 required String textData,
                 Value<int> isDeleted = const Value.absent(),
+                Value<int> deletedInSession = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8792,6 +9055,7 @@ class $$CanvasTextBlocksTableTableManager
                 pageId: pageId,
                 textData: textData,
                 isDeleted: isDeleted,
+                deletedInSession: deletedInSession,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -8877,6 +9141,7 @@ typedef $$CanvasImageBlocksTableCreateCompanionBuilder =
       required double height,
       required double rotation,
       Value<int> isDeleted,
+      Value<int> deletedInSession,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -8893,6 +9158,7 @@ typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
       Value<double> height,
       Value<double> rotation,
       Value<int> isDeleted,
+      Value<int> deletedInSession,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -8980,6 +9246,11 @@ class $$CanvasImageBlocksTableFilterComposer
 
   ColumnFilters<int> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9071,6 +9342,11 @@ class $$CanvasImageBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
     builder: (column) => ColumnOrderings(column),
@@ -9142,6 +9418,11 @@ class $$CanvasImageBlocksTableAnnotationComposer
 
   GeneratedColumn<int> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get deletedInSession => $composableBuilder(
+    column: $table.deletedInSession,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
@@ -9218,6 +9499,7 @@ class $$CanvasImageBlocksTableTableManager
                 Value<double> height = const Value.absent(),
                 Value<double> rotation = const Value.absent(),
                 Value<int> isDeleted = const Value.absent(),
+                Value<int> deletedInSession = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -9232,6 +9514,7 @@ class $$CanvasImageBlocksTableTableManager
                 height: height,
                 rotation: rotation,
                 isDeleted: isDeleted,
+                deletedInSession: deletedInSession,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -9248,6 +9531,7 @@ class $$CanvasImageBlocksTableTableManager
                 required double height,
                 required double rotation,
                 Value<int> isDeleted = const Value.absent(),
+                Value<int> deletedInSession = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -9262,6 +9546,7 @@ class $$CanvasImageBlocksTableTableManager
                 height: height,
                 rotation: rotation,
                 isDeleted: isDeleted,
+                deletedInSession: deletedInSession,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 rowid: rowid,

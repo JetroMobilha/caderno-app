@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart'; // 🚀 Para Clipboard
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -50,6 +51,11 @@ class CanvasController extends ChangeNotifier {
   String myUserId = ""; 
 
   String? selectedEditingImageId; // 🚀 Novo: Rastreio de imagem selecionada para edição
+  
+  void clearImageSelection() {
+    selectedEditingImageId = null;
+    safeNotify();
+  }
   
   ToolMode currentTool = ToolMode.draw;
   InlineTarget activeInlineTarget = InlineTarget.none;
@@ -333,6 +339,8 @@ class CanvasController extends ChangeNotifier {
     super.dispose();
   }
 
+  bool _isCreatingFirstPage = false; // 🚀 Impedir criação dupla
+
   Future<void> initNotebook(int notebookId, int? notebookSid, String lineType, String paperSize, String role, [String? userId]) async {
     isLoading = true;
     currentNotebookId = notebookId;
@@ -358,14 +366,48 @@ class CanvasController extends ChangeNotifier {
 
     _dbPagesSubscription?.cancel();
     _dbPagesSubscription = _repository.watchPagesByNotebook(notebookId).listen((fullPages) async {
-      if (fullPages.isEmpty && isLoading) {
-        final firstPage = await _repository.createNewPage(notebookId, 1, false, liveNotebookSid);
-        if (firstPage != null) {
-          _resetZoomForPage(firstPage, paperSize);
-          pages = [firstPage];
+      if (fullPages.isEmpty && isLoading && !_isCreatingFirstPage) {
+        _isCreatingFirstPage = true;
+        
+        // 🛡️ Verificar se o servidor já tem páginas antes de criar a local
+        await Future.delayed(const Duration(milliseconds: 800)); // Pequena pausa para o sync chegar
+        
+        final freshCheck = await _repository.getPagesByNotebook(notebookId, liveNotebookSid);
+        if (freshCheck.isEmpty) {
+          final firstPage = await _repository.createNewPage(notebookId, 1, false, liveNotebookSid);
+          if (firstPage != null) {
+            _resetZoomForPage(firstPage, paperSize);
+            pages = [firstPage];
+          }
         }
+        _isCreatingFirstPage = false;
       } else {
         pages = fullPages;
+        
+        // 🚀 RE-VINCULAR REFERÊNCIAS ATIVAS APÓS ATUALIZAÇÃO DO BANCO (Resiliente)
+        if (activeTextBlock != null && activeInlineTarget == InlineTarget.block) {
+          try {
+            // Tentar encontrar na página atual primeiro
+            final currentPage = pages.length > currentPageIndex ? pages[currentPageIndex] : null;
+            if (currentPage != null) {
+              activeTextBlock = currentPage.textBlocks.firstWhere((t) => t.id == activeTextBlock!.id);
+            } else {
+              // Fallback: procurar em todas as páginas se o index mudou
+              for (var p in pages) {
+                final found = p.textBlocks.where((t) => t.id == activeTextBlock!.id);
+                if (found.isNotEmpty) {
+                  activeTextBlock = found.first;
+                  break;
+                }
+              }
+            }
+          } catch (_) {
+            // Bloco realmente sumiu (deletado por outro colega, por exemplo)
+            activeInlineTarget = InlineTarget.none;
+            activeTextBlock = null;
+          }
+        }
+        
         if (isLoading && pages.isNotEmpty) {
           _resetZoomForPage(pages.first, paperSize);
         }
@@ -426,11 +468,66 @@ class CanvasController extends ChangeNotifier {
 
   void setThickness(double thickness) { selectedThickness = thickness; safeNotify(); }
   void setColor(String hex) { selectedColorHex = hex; safeNotify(); }
+  
   void setTextColor(String hex) {
     if (activeTextBlock != null) {
+      final oldBlock = activeTextBlock!.clone();
       activeTextBlock!.textColorHex = hex;
+      recordTextUpdate(pages[currentPageIndex], oldBlock, activeTextBlock!.clone());
       safeNotify();
-      broadcastTextBlockUpdate(pages[currentPageIndex], activeTextBlock!);
+    }
+  }
+
+  void toggleBold() {
+    if (activeTextBlock != null) {
+      final oldBlock = activeTextBlock!.clone();
+      activeTextBlock!.isBold = !activeTextBlock!.isBold;
+      recordTextUpdate(pages[currentPageIndex], oldBlock, activeTextBlock!.clone());
+      safeNotify();
+    }
+  }
+
+  void toggleItalic() {
+    if (activeTextBlock != null) {
+      final oldBlock = activeTextBlock!.clone();
+      activeTextBlock!.isItalic = !activeTextBlock!.isItalic;
+      recordTextUpdate(pages[currentPageIndex], oldBlock, activeTextBlock!.clone());
+      safeNotify();
+    }
+  }
+
+  void toggleUnderline() {
+    if (activeTextBlock != null) {
+      final oldBlock = activeTextBlock!.clone();
+      activeTextBlock!.isUnderline = !activeTextBlock!.isUnderline;
+      recordTextUpdate(pages[currentPageIndex], oldBlock, activeTextBlock!.clone());
+      safeNotify();
+    }
+  }
+
+  void updateFontSize(double delta) {
+    if (activeTextBlock != null) {
+      final oldBlock = activeTextBlock!.clone();
+      activeTextBlock!.fontSize = (activeTextBlock!.fontSize + delta).clamp(10.0, 72.0);
+      recordTextUpdate(pages[currentPageIndex], oldBlock, activeTextBlock!.clone());
+      safeNotify();
+    }
+  }
+
+  void recordTextUpdate(LocalPage page, TextBlock oldState, TextBlock newState) {
+    newState.updatedAt = DateTime.now().millisecondsSinceEpoch; // 🚀 Atualizar tempo
+    final action = UpdateTextAction(
+      pageNumber: page.pageNumber,
+      textId: newState.id,
+      oldState: oldState,
+      newState: newState,
+    );
+    _executeAction(action);
+    
+    // 🚀 REFRESH REFERENCE: Garante que o controller trabalha na nova instância do bloco
+    final updatedBlock = page.textBlocks.firstWhere((t) => t.id == newState.id, orElse: () => newState);
+    if (activeTextBlock?.id == newState.id) {
+      activeTextBlock = updatedBlock;
     }
   }
 
@@ -511,10 +608,18 @@ class CanvasController extends ChangeNotifier {
       }
 
       if (onlineUsers.length > previousCount && previousCount > 0) {
+        // 🚀 UM NOVO COLEGA ENTROU: Disparar alinhamento de segurança
+        _debounceRoomSync();
         _realtimeService.requestCollectiveSync(myUserId: myUserId);
+      } else if (onlineUsers.length < previousCount) {
+        // 🚪 ALGUÉM SAIU: Garantir que o nosso estado está na nuvem
+        _repository.savePageToCloud(pages[currentPageIndex], liveNotebookSid!, myUserId);
       }
 
-      if (isRealtimeActive) _debounceRoomSync();
+      if (isRealtimeActive && previousCount == 0 && onlineUsers.isNotEmpty) {
+        // 🏁 ENTRADA INICIAL: Sync total
+        _debounceRoomSync();
+      }
 
       safeNotify();
     });
@@ -733,7 +838,8 @@ class CanvasController extends ChangeNotifier {
           final existingIndex = targetPage.textBlocks.indexWhere((t) => t.id == blockId);
           final newBlock = TextBlock.fromJson(blockData);
           if (existingIndex != -1) {
-            targetPage.textBlocks[existingIndex] = newBlock;
+            targetPage.textBlocks.removeAt(existingIndex);
+            targetPage.textBlocks.add(newBlock);
           } else {
             targetPage.textBlocks.add(newBlock);
           }
@@ -763,7 +869,8 @@ class CanvasController extends ChangeNotifier {
           final existingIndex = targetPage.imageBlocks.indexWhere((img) => img.id == blockId);
           final newBlock = ImageBlock.fromJson(blockData);
           if (existingIndex != -1) {
-            targetPage.imageBlocks[existingIndex] = newBlock;
+            targetPage.imageBlocks.removeAt(existingIndex);
+            targetPage.imageBlocks.add(newBlock);
           } else {
             targetPage.imageBlocks.add(newBlock);
           }
@@ -974,7 +1081,11 @@ class CanvasController extends ChangeNotifier {
     isGlobalSyncing = true;
     safeNotify();
     try {
-      await SyncService().pushPages();
+      // 🚀 VIEWERS NÃO ENVIAM DADOS OFFLINE, APENAS RECEBEM
+      if (currentUserRole != 'viewer') {
+        await SyncService().pushPages();
+      }
+      
       await SyncService().pullPages();
       final freshPages = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
       if (freshPages.isNotEmpty) pages = freshPages;
@@ -989,16 +1100,28 @@ class CanvasController extends ChangeNotifier {
     if (_hasSyncedInThisSession) return;
     _roomSyncDebouncer?.cancel();
     _roomSyncDebouncer = Timer(const Duration(milliseconds: 500), () async {
+      isGlobalSyncing = true; // 🚀 Mostrar badge durante debounce sync
+      safeNotify();
       try {
-        if (!await SyncService().pushPages()) return;
-        await SyncService().pullPages();
-        final remotePages = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
-        if (remotePages.isNotEmpty) {
-          pages = remotePages;
-          _hasSyncedInThisSession = true;
-          safeNotify();
+        // 🚀 SE FOR VIEWER, PULA O PUSH E SÓ FAZ PULL
+        bool syncSuccess = true;
+        if (currentUserRole != 'viewer') {
+          syncSuccess = await SyncService().pushPages();
         }
-      } catch (e) {}
+        
+        if (syncSuccess) {
+          await SyncService().pullPages();
+          final remotePages = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
+          if (remotePages.isNotEmpty) {
+            pages = remotePages;
+            _hasSyncedInThisSession = true;
+          }
+        }
+      } catch (e) {
+      } finally {
+        isGlobalSyncing = false;
+        safeNotify();
+      }
     });
   }
 
@@ -1136,6 +1259,10 @@ class CanvasController extends ChangeNotifier {
       return; 
     }
     currentTool = newMode;
+    
+    // 🚀 LIMPAR SELEÇÃO AO TROCAR DE FERRAMENTA
+    selectedEditingImageId = null;
+    
     if (newMode != ToolMode.select && newMode != ToolMode.eraser) {
       selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear();
       selectionRectStart = null; selectionRectEnd = null;
@@ -1211,30 +1338,23 @@ class CanvasController extends ChangeNotifier {
     if (selectedStrokeIds.isNotEmpty || selectedTextIds.isNotEmpty || selectedImageIds.isNotEmpty) {
       deleteSelection(page);
     } else {
-      final List<String> delS = [], delT = [], delI = [];
       final List<Stroke> sToRemove = page.strokes.where((s) => s.points.any((pt) => (pt - pos).distance < 24.0)).toList();
-      if (sToRemove.isNotEmpty) {
-        delS.addAll(sToRemove.map((s) => s.id));
-        page.strokes.removeWhere((s) => sToRemove.contains(s));
-      }
       final List<TextBlock> tToRemove = page.textBlocks.where((tb) => Rect.fromLTWH(tb.position.dx, tb.position.dy, 150, tb.fontSize * 1.5).contains(pos) || (tb.position - pos).distance < 24.0).toList();
-      if (tToRemove.isNotEmpty) {
-        delT.addAll(tToRemove.map((t) => t.id));
-        page.textBlocks.removeWhere((t) => tToRemove.contains(t));
-      }
       final List<ImageBlock> iToRemove = page.imageBlocks.where((img) => Rect.fromLTWH(img.position.dx, img.position.dy, img.width, img.height).contains(pos)).toList();
-      if (iToRemove.isNotEmpty) {
-        delI.addAll(iToRemove.map((img) => img.id));
-        page.imageBlocks.removeWhere((img) => iToRemove.contains(img));
-      }
 
-      if (delS.isNotEmpty || delT.isNotEmpty || delI.isNotEmpty) {
-        safeNotify(); triggerAutoSave(page);
-        if (isRealtimeActive && liveNotebookSid != null) {
-          for (var id in delS) _realtimeService.broadcastStroke(notebookId: liveNotebookSid!, myUserId: myUserId, strokeData: {'page_number': page.pageNumber, 'strokes': [{'id': id, 'is_deleted': true}]});
-          for (var id in delT) _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, myUserId: myUserId, textData: {'page_number': page.pageNumber, 'block': {'id': id}, 'is_deleted': true});
-          for (var id in delI) _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, myUserId: myUserId, imageData: {'page_number': page.pageNumber, 'block': {'id': id}, 'is_deleted': true});
-        }
+      if (sToRemove.isNotEmpty || tToRemove.isNotEmpty || iToRemove.isNotEmpty) {
+        // 🚀 MARCAR COMO DELETADO NO CONTEXTO ATUAL
+        final bool inSession = isRealtimeActive && liveNotebookSid != null;
+        for (var s in sToRemove) { s.isDeleted = true; s.deletedInSession = inSession; s.updatedAt = DateTime.now().millisecondsSinceEpoch; }
+        for (var t in tToRemove) { t.isDeleted = true; t.deletedInSession = inSession; t.updatedAt = DateTime.now().millisecondsSinceEpoch; }
+        for (var img in iToRemove) { img.isDeleted = true; img.deletedInSession = inSession; img.updatedAt = DateTime.now().millisecondsSinceEpoch; }
+
+        _executeAction(DeleteAction(
+          pageNumber: page.pageNumber,
+          strokes: sToRemove,
+          texts: tToRemove,
+          images: iToRemove,
+        ));
       }
     }
   }
@@ -1245,6 +1365,12 @@ class CanvasController extends ChangeNotifier {
     final textsToRemove = page.textBlocks.where((t) => selectedTextIds.contains(t.id)).toList();
     final imagesToRemove = page.imageBlocks.where((img) => selectedImageIds.contains(img.id)).toList();
     if (strokesToRemove.isEmpty && textsToRemove.isEmpty && imagesToRemove.isEmpty) return;
+
+    final bool inSession = isRealtimeActive && liveNotebookSid != null;
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    for (var s in strokesToRemove) { s.isDeleted = true; s.deletedInSession = inSession; s.updatedAt = now; }
+    for (var t in textsToRemove) { t.isDeleted = true; t.deletedInSession = inSession; t.updatedAt = now; }
+    for (var img in imagesToRemove) { img.isDeleted = true; img.deletedInSession = inSession; img.updatedAt = now; }
 
     _executeAction(DeleteAction(pageNumber: page.pageNumber, strokes: strokesToRemove, texts: textsToRemove, images: imagesToRemove));
     selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear();
@@ -1262,14 +1388,20 @@ class CanvasController extends ChangeNotifier {
       safeNotify();
       triggerAutoSave(page);
       
-      // 📢 Sincronizar ordem com outros
-      broadcastImageBlockUpdate(page, img);
+      // 📢 Sincronizar ordem com outros via broadcast manual (Z-Index)
+      if (isRealtimeActive && liveNotebookSid != null) {
+        _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, myUserId: myUserId, imageData: {
+          'page_number': page.pageNumber,
+          'block': img.toJson(),
+        });
+      }
     }
   }
 
   void recordImageUpdate(LocalPage page, ImageBlock oldState, ImageBlock newState) {
     // Só gravar se houve mudança real
     if (oldState.position != newState.position || oldState.width != newState.width || oldState.height != newState.height) {
+      newState.updatedAt = DateTime.now().millisecondsSinceEpoch; // 🚀 Atualizar tempo
       _executeAction(UpdateImageAction(
         pageNumber: page.pageNumber,
         imageId: newState.id,
@@ -1292,10 +1424,21 @@ class CanvasController extends ChangeNotifier {
     final targetPage = _getTargetPage(action.pageNumber);
     if (targetPage == null) return;
 
+    // 🚀 VIEWERS NÃO EXECUTAM AÇÕES PERSISTENTES LOCAIS (OFFLINE)
+    if (currentUserRole == 'viewer' && !isRemote) {
+      debugPrint('🚫 [Canvas] Viewer impedido de gravar ação persistente.');
+      return;
+    }
+
     action.execute(targetPage);
     
-    // 🚀 EVITAR DUPLICADOS NA PILHA (Se já for uma ação vinda de fora)
-    if (!isRemote) {
+    // 🚀 ADICIONAR À PILHA (Sempre, para que todos possam desfazer tudo)
+    if (isRemote) {
+      // Se for remota, precisamos garantir que o histórico tenha a mesma ordem
+      _undoStack.add(action);
+      _redoStack.clear();
+      if (_undoStack.length > 50) _undoStack.removeAt(0);
+    } else {
       _undoStack.add(action);
       _redoStack.clear();
       if (_undoStack.length > 50) _undoStack.removeAt(0);
@@ -1364,6 +1507,12 @@ class CanvasController extends ChangeNotifier {
       _realtimeService.broadcastImageBlock(notebookId: liveNotebookSid!, myUserId: myUserId, imageData: {
         'page_number': action.pageNumber,
         'block': action.newState.toJson(),
+      });
+    } else if (action is UpdateTextAction) {
+      _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, myUserId: myUserId, textData: {
+        'page_number': action.pageNumber,
+        'block': action.newState.toJson(),
+        'is_editing': true,
       });
     }
   }
@@ -1488,6 +1637,11 @@ class CanvasController extends ChangeNotifier {
   }
 
   Future<void> deleteImageBlock(LocalPage page, ImageBlock img) async {
+    final bool inSession = isRealtimeActive && liveNotebookSid != null;
+    img.isDeleted = true;
+    img.deletedInSession = inSession;
+    img.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    
     _executeAction(DeleteAction(pageNumber: page.pageNumber, strokes: [], texts: [], images: [img]));
     safeNotify();
   }
@@ -1553,18 +1707,28 @@ class CanvasController extends ChangeNotifier {
     _typingDebounce = Timer(const Duration(seconds: 2), () => setUserActivity('idle'));
   }
 
-  void broadcastTextBlockUpdate(LocalPage page, TextBlock block, {String? senderId, bool debounced = false, bool isEditing = false}) {
+  void broadcastTextBlockUpdate(LocalPage page, TextBlock block, {String? senderId, bool debounced = false, bool isEditing = false, bool isDeleted = false}) {
     if (!isRealtimeActive || liveNotebookSid == null) return;
     if (isEditing) onTyping();
     if (debounced) {
       _textBroadcastDebounce?.cancel();
-      _textBroadcastDebounce = Timer(const Duration(milliseconds: 150), () => _sendTextBlockSignal(page, block, senderId: senderId, isEditing: isEditing));
+      _textBroadcastDebounce = Timer(const Duration(milliseconds: 150), () => _sendTextBlockSignal(page, block, senderId: senderId, isEditing: isEditing, isDeleted: isDeleted));
     } else {
-      _sendTextBlockSignal(page, block, senderId: senderId, isEditing: isEditing);
+      _sendTextBlockSignal(page, block, senderId: senderId, isEditing: isEditing, isDeleted: isDeleted);
     }
   }
 
-  void _sendTextBlockSignal(LocalPage page, TextBlock block, {String? senderId, bool isEditing = false}) => _realtimeService.broadcastTextBlock(notebookId: liveNotebookSid!, textData: {'sender_id': senderId ?? myUserId, 'page_number': page.pageNumber, 'block': block.toJson(), 'is_editing': isEditing});
+  void _sendTextBlockSignal(LocalPage page, TextBlock block, {String? senderId, bool isEditing = false, bool isDeleted = false}) => 
+      _realtimeService.broadcastTextBlock(
+        notebookId: liveNotebookSid!, 
+        textData: {
+          'sender_id': senderId ?? myUserId, 
+          'page_number': page.pageNumber, 
+          'block': block.toJson(), 
+          'is_editing': isEditing,
+          'is_deleted': isDeleted,
+        }
+      );
 
   void forceNotify() => safeNotify();
 
@@ -1668,6 +1832,70 @@ class CanvasController extends ChangeNotifier {
   }
 
   void stopViewportBroadcasting() { isBroadcastingViewport = false; _viewportBroadcastTimer?.cancel(); _viewportBroadcastTimer = null; safeNotify(); }
+
+  // =========================================================================
+  // 📋 EXPORTAÇÃO E CLIPBOARD
+  // =========================================================================
+  
+  void copyToClipboard(String text, BuildContext context) {
+    if (text.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: text)).then((_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Texto copiado para a área de transferência!'),
+            backgroundColor: Color(0xFF0F4C5C),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    });
+  }
+
+  void exportPageText(LocalPage page, BuildContext context) {
+    StringBuffer fullText = StringBuffer();
+    
+    // 1. Título da página
+    if (page.title.isNotEmpty) {
+      fullText.writeln('Título: ${page.title}');
+      fullText.writeln('=' * 20);
+    }
+    
+    // 2. Texto Extraído (OCR)
+    if (page.extractedText != null && page.extractedText!.trim().isNotEmpty) {
+      fullText.writeln('Texto Escrito à Mão:');
+      fullText.writeln(page.extractedText);
+      fullText.writeln('-' * 10);
+    }
+    
+    // 3. Blocos de Texto Digital
+    if (page.textBlocks.isNotEmpty) {
+      fullText.writeln('Anotações Digitais:');
+      // Ordenar por posição Y para manter a ordem de leitura
+      final sortedBlocks = List<TextBlock>.from(page.textBlocks)
+        ..sort((a, b) => a.position.dy.compareTo(b.position.dy));
+        
+      for (var block in sortedBlocks) {
+        if (block.text.trim().isNotEmpty) {
+          fullText.writeln(block.text);
+        }
+      }
+    }
+    
+    final result = fullText.toString().trim();
+    if (result.isNotEmpty) {
+      copyToClipboard(result, context);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não há texto nesta folha para exportar.'),
+            backgroundColor: Colors.orangeAccent,
+          ),
+        );
+      }
+    }
+  }
 }
 
 abstract class CanvasAction {
@@ -1700,6 +1928,13 @@ abstract class CanvasAction {
         imageId: data['imageId'],
         oldState: ImageBlock.fromJson(data['oldState']),
         newState: ImageBlock.fromJson(data['newState']),
+      );
+    } else if (type == 'updateText') {
+      return UpdateTextAction(
+        pageNumber: pageNum,
+        textId: data['textId'],
+        oldState: TextBlock.fromJson(data['oldState']),
+        newState: TextBlock.fromJson(data['newState']),
       );
     }
     return null;
@@ -1756,7 +1991,7 @@ class AddTextAction extends CanvasAction {
 
   @override void execute(LocalPage page) {
     if (!page.textBlocks.any((t) => t.id == block.id)) {
-      page.textBlocks.add(block.clone());
+      page.textBlocks.add(block);
     }
   }
   @override void undo(LocalPage page) => page.textBlocks.removeWhere((t) => t.id == block.id);
@@ -1771,7 +2006,7 @@ class AddImageAction extends CanvasAction {
 
   @override void execute(LocalPage page) {
     if (!page.imageBlocks.any((img) => img.id == block.id)) {
-      page.imageBlocks.add(block.clone());
+      page.imageBlocks.add(block);
     }
   }
   @override void undo(LocalPage page) => page.imageBlocks.removeWhere((img) => img.id == block.id);
@@ -1800,6 +2035,32 @@ class UpdateImageAction extends CanvasAction {
   @override void undo(LocalPage page) {
     final idx = page.imageBlocks.indexWhere((img) => img.id == imageId);
     if (idx != -1) page.imageBlocks[idx] = oldState.clone();
+  }
+}
+
+class UpdateTextAction extends CanvasAction {
+  final String textId;
+  final TextBlock oldState;
+  final TextBlock newState;
+
+  UpdateTextAction({required int pageNumber, required this.textId, required this.oldState, required this.newState}) : super(pageNumber);
+
+  @override String get type => 'updateText';
+  @override Map<String, dynamic> toMap() => {
+    'pageNumber': pageNumber,
+    'textId': textId,
+    'oldState': oldState.toJson(),
+    'newState': newState.toJson(),
+  };
+
+  @override void execute(LocalPage page) {
+    final idx = page.textBlocks.indexWhere((t) => t.id == textId);
+    if (idx != -1) page.textBlocks[idx] = newState.clone();
+  }
+
+  @override void undo(LocalPage page) {
+    final idx = page.textBlocks.indexWhere((t) => t.id == textId);
+    if (idx != -1) page.textBlocks[idx] = oldState.clone();
   }
 }
 

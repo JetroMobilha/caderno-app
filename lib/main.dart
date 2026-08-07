@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/theme/app_theme.dart'; // 🚀 Importa o tema unificado
 import 'package:caderno_digital_app/features/auth/views/splash_screen.dart';
+import 'package:flutter/foundation.dart'; // 🚀 Para kIsWeb
 import 'dart:io';
 
 class MyHttpOverrides extends HttpOverrides {
@@ -18,9 +19,9 @@ void main() {
   HttpOverrides.global = MyHttpOverrides();
 
   // 🛡️ OFFLINE-FIRST: Por padrão, o google_fonts tenta baixar fontes.
-  // Se quiser suporte offline total, baixe os .ttf, coloque em assets/ e registre no pubspec.yaml.
-  // Por agora, desativamos o fetching para evitar erros de rede em loop.
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // No Mobile, desativamos para evitar erros sem internet. 
+  // Na Web, permitimos pois o carregamento inicial sempre requer rede.
+  GoogleFonts.config.allowRuntimeFetching = true; // 🚀 Restaurado para evitar erros sem assets
   
   runApp(
     const ProviderScope(

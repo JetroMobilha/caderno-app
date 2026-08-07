@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../handwriting/views/handwriting_training_screen.dart';
 import '../../../core/network/api_service.dart';
 import '../controllers/auth_controller.dart';
 
@@ -246,6 +247,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               Expanded(child: Text(authController.authErrorMessage!, style: GoogleFonts.inter(fontSize: 13, color: Colors.red[800], fontWeight: FontWeight.w600))),
                             ],
                           ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    Text('Personalização Académica', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45)),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.black.withOpacity(0.08)),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const HandwritingTrainingScreen()),
+                            );
+                          },
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle),
+                            child: Icon(Icons.gesture_rounded, color: themeColor, size: 20),
+                          ),
+                          title: Text('Treinar Caligrafia Pessoal', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF2C3E50))),
+                          subtitle: Text('Digitaliza a tua letra para síntese de texto', style: GoogleFonts.inter(fontSize: 11, color: Colors.black45)),
+                          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.black26),
                         ),
                       ),
                     ),

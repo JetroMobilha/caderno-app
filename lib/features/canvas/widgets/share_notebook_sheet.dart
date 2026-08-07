@@ -105,7 +105,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
         children: [
           // Cabeçalho Visual
           Row(children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF0F4C5C).withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.people_alt_outlined, color: Color(0xFF0F4C5C))),
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF0F4C5C).withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.people_alt_outlined, color: Color(0xFF0F4C5C))),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Partilhar Caderno', style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.bold)), Text(widget.notebook.title, style: GoogleFonts.inter(fontSize: 12, color: Colors.black54))])),
             IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
@@ -181,7 +181,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
               : Container(
             constraints: const BoxConstraints(maxHeight: 180),
             child: ListView.separated(
-              shrinkWrap: true, itemCount: _collaborators.length, separatorBuilder: (_, __) => const Divider(height: 1),
+              shrinkWrap: true, itemCount: _collaborators.length, separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final user = _collaborators[index];
                 final isOwner = user['role'] == 'owner';
@@ -200,7 +200,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (!isOwner) ...[
-                          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: Text(roleDisplay, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue[800]))),
+                          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(roleDisplay, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue[800]))),
                           IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20), onPressed: () => _removeUser(index, user['email']!)),
                         ]
                       ]

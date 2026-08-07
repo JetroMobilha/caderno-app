@@ -1,0 +1,10 @@
+- [x] Refatorar App (Flutter)
+    - [x] Atualizar `SyncService.dart`:
+        - [x] Adicionar filtro `notebookId` em `pushPages`.
+    - [x] Atualizar `CanvasController.dart`:
+        - [x] Implementar ciclo de 3 passos em `_performCollectiveSync` (Push -> Wait -> Pull).
+        - [x] Garantir que o Push seja feito apenas por quem tem permissão.
+- [x] Validar Servidor (Laravel)
+    - [x] Garantir que `mergeJsonItems` em `Page.php` seja puramente aditivo para novos UUIDs (Já validado na estrutura anterior).
+- [x] Verificação
+    - [x] Testar fusão de 3 usuários simultâneos com dados diferentes.

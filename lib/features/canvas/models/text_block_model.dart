@@ -13,6 +13,10 @@ class TextBlock {
   bool isDeleted; // 🚀 Suporte a Soft Delete
   bool deletedInSession; // 🚀 Novo: Contexto de deleção
   int updatedAt; // 🚀 Novo: Timestamp Last-Write-Wins
+  int version; // 🔄 UI Only
+  bool isChecklist; // 📝 Modo lista de tarefas
+  List<int> checkedLineIndices; // ✅ Índices das linhas marcadas
+  final String? creatorId; // 🚀 Dono do texto
 
   TextBlock({
     String? id,
@@ -25,8 +29,13 @@ class TextBlock {
     this.fontSize = 18.0,
     this.isDeleted = false,
     this.deletedInSession = false,
+    this.isChecklist = false,
+    List<int>? checkedLineIndices,
     int? updatedAt,
+    this.version = 1,
+    this.creatorId,
   }) : id = id ?? const Uuid().v4(),
+       checkedLineIndices = checkedLineIndices ?? [],
        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toJson() => {
@@ -42,6 +51,9 @@ class TextBlock {
     'is_deleted': isDeleted,
     'deleted_in_session': deletedInSession,
     'updated_at': updatedAt,
+    'is_checklist': isChecklist,
+    'checked_line_indices': checkedLineIndices,
+    'creator_id': creatorId,
   };
 
   factory TextBlock.fromJson(Map<String, dynamic> json) => TextBlock(
@@ -58,7 +70,11 @@ class TextBlock {
     fontSize: (json['font_size'] as num?)?.toDouble() ?? (json['fontSize'] as num?)?.toDouble() ?? 18.0,
     isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
     deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
+    isChecklist: json['is_checklist'] == true || json['is_checklist'] == 1,
+    checkedLineIndices: (json['checked_line_indices'] as List<dynamic>?)?.map((e) => e as int).toList(),
     updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+    version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
+    creatorId: json['creator_id']?.toString(),
   );
 
   TextBlock clone() => TextBlock.fromJson(toJson());

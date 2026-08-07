@@ -21,6 +21,7 @@ class RealtimeService {
   StreamSubscription? _subSucceededSub;
   StreamSubscription? _memberAddedSub;
   StreamSubscription? _memberRemovedSub;
+  StreamSubscription? _lifecycleSubscription; // 🚀 Única subscrição de ciclo de vida
   final Map<String, dynamic> _estudantesNaSala = {};
 
   final ValueNotifier<RealtimeStatus> statusNotifier = ValueNotifier(RealtimeStatus.disconnected);
@@ -46,6 +47,10 @@ class RealtimeService {
   final _chatSyncResponseController = StreamController<Map<String, dynamic>>.broadcast();
   final _reactionStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _collectiveSyncRequestController = StreamController<Map<String, dynamic>>.broadcast();
+  final _fullStateRequestController = StreamController<Map<String, dynamic>>.broadcast();
+  final _fullStateReceivedController = StreamController<Map<String, dynamic>>.broadcast();
+  final _pageFingerprintStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _cloudSyncSignalStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
   final _globalActionStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
@@ -69,6 +74,10 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onChatSyncResponseReceived => _chatSyncResponseController.stream;
   Stream<Map<String, dynamic>> get onReactionReceived => _reactionStreamController.stream;
   Stream<Map<String, dynamic>> get onCollectiveSyncRequested => _collectiveSyncRequestController.stream;
+  Stream<Map<String, dynamic>> get onFullStateRequested => _fullStateRequestController.stream;
+  Stream<Map<String, dynamic>> get onFullStateReceived => _fullStateReceivedController.stream;
+  Stream<Map<String, dynamic>> get onPageFingerprintReceived => _pageFingerprintStreamController.stream;
+  Stream<Map<String, dynamic>> get onCloudSyncSignalReceived => _cloudSyncSignalStreamController.stream; // 🚀 Novo
   Stream<Map<String, dynamic>> get onGlobalActionReceived => _globalActionStreamController.stream; // 🚀 Novo
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
@@ -81,7 +90,7 @@ class RealtimeService {
     statusNotifier.value = RealtimeStatus.connecting;
 
     final options = PusherChannelsOptions.fromHost(
-      scheme: 'ws',
+      scheme: 'wss',
       host: ApiConfig.reverbHost,
       key: ApiConfig.reverbKey,
       port: ApiConfig.reverbPort,
@@ -99,10 +108,12 @@ class RealtimeService {
       },
     );
 
-    _pusher!.lifecycleStream.listen((state) async {
+    _lifecycleSubscription?.cancel();
+    _lifecycleSubscription = _pusher!.lifecycleStream.listen((state) async {
       debugPrint('📡 [Realtime] Estado do Socket: $state');
       if (state == PusherChannelsClientLifeCycleState.establishedConnection) {
         statusNotifier.value = RealtimeStatus.connected;
+        debugPrint('✅ [Realtime] Conexão estabelecida com sucesso.');
         final prefs = await SharedPreferences.getInstance();
         final currentUserIdStr = prefs.getString('user_id');
         if (currentUserIdStr != null) _rebindGlobalListeners(int.parse(currentUserIdStr));
@@ -110,11 +121,14 @@ class RealtimeService {
         statusNotifier.value = RealtimeStatus.connecting;
       } else if (state == PusherChannelsClientLifeCycleState.disconnected) {
         statusNotifier.value = RealtimeStatus.disconnected;
+        debugPrint('🔌 [Realtime] Socket desconectado.');
       } else if (state == PusherChannelsClientLifeCycleState.reconnecting) {
         statusNotifier.value = RealtimeStatus.connecting;
+        debugPrint('🔄 [Realtime] Tentando reconectar...');
       } else if (state == PusherChannelsClientLifeCycleState.connectionError || 
                  state == PusherChannelsClientLifeCycleState.gotPusherError) {
         statusNotifier.value = RealtimeStatus.error;
+        debugPrint('❌ [Realtime] Erro crítico de conexão.');
       }
     });
 
@@ -152,16 +166,20 @@ class RealtimeService {
     if (statusNotifier.value != RealtimeStatus.connected) await initConnection();
     
     int attempts = 0;
-    while (statusNotifier.value != RealtimeStatus.connected && attempts < 20) {
-      await Future.delayed(const Duration(milliseconds: 500));
+    while (statusNotifier.value != RealtimeStatus.connected && attempts < 10) {
+      debugPrint('⏳ [Realtime] Aguardando conexão para entrar no canal (tentativa ${attempts + 1})...');
+      await Future.delayed(const Duration(milliseconds: 1000));
       attempts++;
     }
 
-    if (statusNotifier.value != RealtimeStatus.connected) return;
+    if (statusNotifier.value != RealtimeStatus.connected) {
+      debugPrint('❌ [Realtime] Não foi possível conectar ao Reverb após $attempts tentativas.');
+      return;
+    }
 
     if (_notebookChannel != null) {
-      debugPrint('🧹 [Realtime] Limpando canal anterior antes de re-entrar...');
-      leaveNotebookChannel(0);
+      debugPrint('🧹 [Realtime] Saindo do canal anterior: ${_notebookChannel!.name}');
+      _notebookChannel!.unsubscribe();
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -197,6 +215,12 @@ class RealtimeService {
           }
           final String effectiveId = uid.toString();
           flattenedInfo['id'] = effectiveId; 
+          
+          // 🚀 PERSISTÊNCIA DE ESTADO: Recuperar estados de voz se existirem
+          if (flattenedInfo['isInCall'] == null && flattenedInfo['is_in_call'] != null) {
+            flattenedInfo['isInCall'] = flattenedInfo['is_in_call'] == true;
+          }
+          
           _estudantesNaSala[effectiveId] = flattenedInfo;
         });
       }
@@ -216,6 +240,12 @@ class RealtimeService {
         userInfo = data;
       }
       userInfo['id'] = uid; 
+      
+      // 🚀 NORMALIZAÇÃO DE CAMPOS
+      if (userInfo['isInCall'] == null && userInfo['is_in_call'] != null) {
+        userInfo['isInCall'] = userInfo['is_in_call'] == true;
+      }
+
       _estudantesNaSala[uid] = userInfo;
       _broadcastUsersList();
     });
@@ -271,6 +301,10 @@ class RealtimeService {
     _bindEvent('client-chat-sync-response', (event) => _chatSyncResponseController.add(_safeParse(event.data)));
     _bindEvent('client-reaction', (event) => _reactionStreamController.add(_safeParse(event.data)));
     _bindEvent('client-collective-sync', (event) => _collectiveSyncRequestController.add(_safeParse(event.data)));
+    _bindEvent('client-full-state-request', (event) => _fullStateRequestController.add(_safeParse(event.data)));
+    _bindEvent('client-full-state-deliver', (event) => _fullStateReceivedController.add(_safeParse(event.data)));
+    _bindEvent('client-page-fingerprint', (event) => _pageFingerprintStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-cloud-sync-signal', (event) => _cloudSyncSignalStreamController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-global-action', (event) => _globalActionStreamController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
 
@@ -357,9 +391,20 @@ class RealtimeService {
     return true;
   }
 
-  Future<bool> broadcastVoiceStateUpdate({required int notebookId, required String myUserId, required bool isInCall}) async {
+  Future<bool> broadcastVoiceStateUpdate({
+    required int notebookId, 
+    required String myUserId, 
+    required bool isInCall,
+    bool isTalking = false,
+    double audioLevel = 0.0,
+  }) async {
     if (_notebookChannel == null) return false;
-    final data = {'sender_id': myUserId, 'is_in_call': isInCall};
+    final data = {
+      'sender_id': myUserId, 
+      'is_in_call': isInCall,
+      'is_talking': isTalking,
+      'audio_level': audioLevel,
+    };
     _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
     return true;
   }
@@ -371,12 +416,13 @@ class RealtimeService {
     return true;
   }
 
-  Future<bool> broadcastPointerMove({required int notebookId, required String myUserId, required Offset pos}) async {
+  Future<bool> broadcastPointerMove({required int notebookId, required String myUserId, required Offset pos, int? pageNumber}) async {
     if (_notebookChannel == null) return false;
     final data = {
       'sender_id': myUserId, 
       'x': double.parse(pos.dx.toStringAsFixed(1)), 
-      'y': double.parse(pos.dy.toStringAsFixed(1))
+      'y': double.parse(pos.dy.toStringAsFixed(1)),
+      'page_number': pageNumber,
     };
     _notebookChannel!.trigger(eventName: 'client-pointer-move', data: jsonEncode(data));
     return true;
@@ -395,15 +441,26 @@ class RealtimeService {
     return true;
   }
 
-  Future<bool> broadcastAudioMessage({required int notebookId, required String myUserId, required String audioUrl, required int duration, bool isLive = false}) async {
+  Future<bool> broadcastAudioMessage({
+    required int notebookId, 
+    required String myUserId, 
+    required String audioUrl, 
+    required int duration, 
+    bool isLive = false,
+    String? streamMsgId,
+    int? segmentIndex,
+    bool? isFinal,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {
-      'msg_id': const Uuid().v4(),
-      'type': 'audio',
+      'msg_id': streamMsgId ?? const Uuid().v4(),
+      'type': isLive ? 'audio_stream' : 'audio',
       'sender_id': myUserId, 
       'audio_url': audioUrl, 
       'duration': duration, 
       'is_live': isLive,
+      'index': segmentIndex,
+      'is_final': isFinal,
       'timestamp': DateTime.now().toIso8601String()
     };
     _notebookChannel!.trigger(eventName: 'client-audio-message', data: jsonEncode(data));
@@ -429,6 +486,45 @@ class RealtimeService {
     if (_notebookChannel == null) return;
     final data = {'sender_id': myUserId};
     _notebookChannel!.trigger(eventName: 'client-collective-sync', data: jsonEncode(data));
+  }
+
+  Future<void> requestFullState({required int notebookId, required String targetUserId, required int pageNumber}) async {
+    if (_notebookChannel == null) return;
+    final data = {
+      'sender_id': targetUserId, // Quem está a pedir
+      'target_id': targetUserId, // Resiliência
+      'page_number': pageNumber,
+    };
+    _notebookChannel!.trigger(eventName: 'client-full-state-request', data: jsonEncode(data));
+  }
+
+  Future<void> deliverFullState({required int notebookId, required String targetUserId, required Map<String, dynamic> pageData}) async {
+    if (_notebookChannel == null) return;
+    final data = {
+      'target_id': targetUserId,
+      'page_data': pageData,
+    };
+    _notebookChannel!.trigger(eventName: 'client-full-state-deliver', data: jsonEncode(data));
+  }
+
+  Future<void> broadcastPageFingerprint({required int notebookId, required String myUserId, required int pageNumber, required String fingerprint, int? updatedAt}) async {
+    if (_notebookChannel == null) return;
+    final data = {
+      'sender_id': myUserId,
+      'page_number': pageNumber,
+      'fingerprint': fingerprint,
+      'updated_at': updatedAt, // 🚀 Para eleição de fonte
+    };
+    _notebookChannel!.trigger(eventName: 'client-page-fingerprint', data: jsonEncode(data));
+  }
+
+  Future<void> broadcastCloudSyncSignal({required int notebookId, required String myUserId, required int pageNumber}) async {
+    if (_notebookChannel == null) return;
+    final data = {
+      'sender_id': myUserId,
+      'page_number': pageNumber,
+    };
+    _notebookChannel!.trigger(eventName: 'client-cloud-sync-signal', data: jsonEncode(data));
   }
 
   Future<void> broadcastGlobalAction({required int notebookId, required Map<String, dynamic> actionData}) async {

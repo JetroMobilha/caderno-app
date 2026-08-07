@@ -40,11 +40,17 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
     // 🚀 AUTO-SCROLL quando chegam novas mensagens
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    final double availableHeight = screenHeight - bottomInset;
+    final chatHeight = (availableHeight - (bottomInset > 0 ? 80 : 160)).clamp(200.0, 420.0);
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
       width: controller.isChatOpen ? 300 : 56,
-      height: controller.isChatOpen ? 450 : 56,
+      height: controller.isChatOpen ? chatHeight : 56,
       decoration: BoxDecoration(
         color: controller.isChatOpen ? Colors.white : const Color(0xFF0F4C5C),
         borderRadius: BorderRadius.circular(controller.isChatOpen ? 16 : 28),
@@ -59,7 +65,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
       child: ClipRRect(
         borderRadius: BorderRadius.circular(controller.isChatOpen ? 16 : 28),
         child: controller.isChatOpen 
-            ? _buildFullChatWrapper(controller) 
+            ? _buildFullChatWrapper(controller, chatHeight) 
             : _buildChatIcon(controller),
       ),
     );
@@ -67,12 +73,12 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
 
   // 🚀 WRAPPER PARA EVITAR OVERFLOW: Garante que o chat "pensa" que tem o tamanho final
   // mesmo durante a animação de crescimento do container pai.
-  Widget _buildFullChatWrapper(CanvasController controller) {
+  Widget _buildFullChatWrapper(CanvasController controller, double height) {
     return OverflowBox(
       minWidth: 300, maxWidth: 300,
-      minHeight: 450, maxHeight: 450,
+      minHeight: height, maxHeight: height,
       alignment: Alignment.topLeft,
-      child: _buildFullChat(controller),
+      child: _buildFullChat(controller, height),
     );
   }
 
@@ -120,7 +126,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
     );
   }
 
-  Widget _buildFullChat(CanvasController controller) {
+  Widget _buildFullChat(CanvasController controller, double height) {
     return Column(
       children: [
         // Header
@@ -207,6 +213,12 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                             url: msg['audio_url'],
                             duration: msg['duration'],
                             isMe: isMe,
+                          )
+                        else if (type == 'audio_stream')
+                          _StreamingAudioPlayerWidget(
+                            streamId: msg['msg_id'],
+                            initialDuration: msg['duration'],
+                            isMe: isMe,
                           ),
                       ],
                     ),
@@ -233,7 +245,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                   color: const Color(0xFF0F4C5C).withValues(alpha: 0.1),
                   shape: const CircleBorder(),
                   child: IconButton(
-                    onPressed: () => controller.startRecording(),
+                    onPressed: () => controller.startRecording(isLive: false),
                     icon: const Icon(Icons.mic_rounded, color: Color(0xFF0F4C5C), size: 20),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -270,6 +282,106 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
     if (_msgController.text.trim().isEmpty) return;
     controller.sendChatMessage(_msgController.text.trim());
     _msgController.clear();
+  }
+}
+
+class _StreamingAudioPlayerWidget extends ConsumerWidget {
+  final String streamId;
+  final int initialDuration;
+  final bool isMe;
+  const _StreamingAudioPlayerWidget({required this.streamId, required this.initialDuration, required this.isMe});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.watch(canvasProvider);
+    final bool isPlaying = controller.isStreamPlaying(streamId);
+    final bool isFinal = controller.isStreamFinalized(streamId);
+    final int segmentCount = controller.getStreamSegmentCount(streamId);
+    
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        if (!isFinal)
+          Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _BlinkingDot(),
+                const SizedBox(width: 4),
+                Text(
+                  'EM DIRECTO',
+                  style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.redAccent),
+                ),
+              ],
+            ),
+          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () => controller.playAudioStream(streamId),
+              icon: Icon(
+                isPlaying ? Icons.stop_circle_rounded : Icons.play_circle_filled_rounded, 
+                color: isMe ? Colors.white : const Color(0xFF0F4C5C),
+                size: 32,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isFinal ? 'Voz gravada' : 'A explicar...',
+                  style: GoogleFonts.inter(
+                    fontSize: 10, 
+                    fontWeight: FontWeight.bold,
+                    color: isMe ? Colors.white70 : Colors.black54
+                  ),
+                ),
+                Text(
+                  '${initialDuration}s • $segmentCount partes',
+                  style: GoogleFonts.inter(
+                    fontSize: 10, 
+                    color: isMe ? Colors.white60 : Colors.black38
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BlinkingDot extends StatefulWidget {
+  const _BlinkingDot();
+  @override
+  State<_BlinkingDot> createState() => _BlinkingDotState();
+}
+
+class _BlinkingDotState extends State<_BlinkingDot> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
+  }
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(opacity: _controller, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)));
   }
 }
 
@@ -368,17 +480,29 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
                 icon: Icon(
                   isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded, 
                   color: widget.isMe ? Colors.white : const Color(0xFF0F4C5C),
-                  size: 28,
+                  size: 32,
                 ),
               ),
-            const SizedBox(width: 6),
-            Text(
-              '${widget.duration}s',
-              style: GoogleFonts.inter(
-                fontSize: 11, 
-                fontWeight: FontWeight.bold,
-                color: widget.isMe ? Colors.white70 : Colors.black54
-              ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Mensagem de voz',
+                  style: GoogleFonts.inter(
+                    fontSize: 10, 
+                    fontWeight: FontWeight.bold,
+                    color: widget.isMe ? Colors.white70 : Colors.black54
+                  ),
+                ),
+                Text(
+                  '${widget.duration}s',
+                  style: GoogleFonts.inter(
+                    fontSize: 10, 
+                    color: widget.isMe ? Colors.white60 : Colors.black38
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -386,14 +510,14 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: SizedBox(
-              width: 100,
+              width: 120,
               child: LinearProgressIndicator(
                 value: progress,
                 backgroundColor: widget.isMe ? Colors.white24 : Colors.black12,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   widget.isMe ? Colors.white : const Color(0xFF2ECC71),
                 ),
-                minHeight: 3,
+                minHeight: 2,
               ),
             ),
           ),

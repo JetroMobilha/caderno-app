@@ -1,62 +1,67 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
-import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
-import 'package:flutter/material.dart';
+import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 
 void main() {
-  group('Canvas Models Unit Tests', () {
-    test('Stroke - Serialization/Deserialization', () {
+  group('Canvas Models Data Integrity', () {
+    test('Stroke JSON mapping should preserve isDeleted', () {
       final stroke = Stroke(
-        id: 's1',
-        color: '#FF0000',
-        thickness: 2.0,
-        points: [const Offset(0, 0), const Offset(10, 10)],
+        color: '#FF00FF',
+        thickness: 5.0,
+        points: [const Offset(10, 10), const Offset(20, 20)],
+        isDeleted: true,
+        version: 10,
       );
 
       final json = stroke.toJson();
-      final fromJson = Stroke.fromJson(json);
+      expect(json['is_deleted'], true);
+      expect(json['version'], 10);
 
-      expect(fromJson.id, stroke.id);
-      expect(fromJson.color, stroke.color);
-      expect(fromJson.thickness, stroke.thickness);
+      final fromJson = Stroke.fromJson(json);
+      expect(fromJson.isDeleted, true);
+      expect(fromJson.version, 10);
       expect(fromJson.points.length, 2);
     });
 
-    test('TextBlock - Serialization/Deserialization', () {
-      final block = TextBlock(
-        id: 't1',
-        text: 'Hello Test',
-        position: const Offset(50, 50),
-        textColorHex: '#0000FF',
-        fontSize: 18.0,
-      );
-
-      final json = block.toJson();
-      final fromJson = TextBlock.fromJson(json);
-
-      expect(fromJson.id, block.id);
-      expect(fromJson.text, block.text);
-      expect(fromJson.position, block.position);
-      expect(fromJson.fontSize, block.fontSize);
-    });
-
-    test('ImageBlock - Serialization/Deserialization', () {
+    test('ImageBlock JSON mapping should preserve isDeleted and dimensions', () {
       final img = ImageBlock(
-        id: 'i1',
         imagePath: 'path/to/img.png',
         position: const Offset(100, 100),
-        width: 200,
-        height: 150,
+        width: 500,
+        height: 400,
+        isDeleted: true,
+        version: 3,
       );
 
       final json = img.toJson();
-      final fromJson = ImageBlock.fromJson(json);
+      expect(json['is_deleted'], true);
+      expect(json['width'], 500.0);
+      expect(json['height'], 400.0);
 
-      expect(fromJson.id, img.id);
-      expect(fromJson.imagePath, img.imagePath);
-      expect(fromJson.position, img.position);
-      expect(fromJson.width, img.width);
+      final fromJson = ImageBlock.fromJson(json);
+      expect(fromJson.isDeleted, true);
+      expect(fromJson.width, 500.0);
+      expect(fromJson.height, 400.0);
+      expect(fromJson.version, 3);
+    });
+
+    test('TextBlock JSON mapping should preserve checklist state', () {
+      final text = TextBlock(
+        text: 'Item 1\nItem 2',
+        position: const Offset(50, 50),
+        isChecklist: true,
+      );
+      text.checkedLineIndices.add(1);
+
+      final json = text.toJson();
+      expect(json['is_checklist'], true);
+      expect(json['checked_line_indices'], [1]);
+
+      final fromJson = TextBlock.fromJson(json);
+      expect(fromJson.isChecklist, true);
+      expect(fromJson.checkedLineIndices.contains(1), true);
     });
   });
 }

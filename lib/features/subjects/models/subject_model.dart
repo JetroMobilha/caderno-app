@@ -11,6 +11,7 @@ class Subject {
   final int syncedWithCloud;
   final int isDeleted;
   final int updatedAt;
+  int version; // 🔄 UI Only
 
   Subject({
     this.id,
@@ -23,6 +24,7 @@ class Subject {
     this.syncedWithCloud = 0,
     this.isDeleted = 0,
     this.updatedAt = 0,
+    this.version = 1,
   }) : clientId = clientId ?? const Uuid().v4();
 
   Subject copyWith({
@@ -36,6 +38,7 @@ class Subject {
     int? syncedWithCloud,
     int? isDeleted,
     int? updatedAt,
+    int? version,
   }) {
     return Subject(
       id: id ?? this.id,
@@ -48,6 +51,7 @@ class Subject {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
     );
   }
 
@@ -62,6 +66,8 @@ class Subject {
       icon: json['icon'],
       isDeleted: json['deleted_at'] != null ? 1 : 0,
       syncedWithCloud: 1,
+      updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
+      version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     );
   }
 
@@ -77,6 +83,7 @@ class Subject {
       'synced_with_cloud': syncedWithCloud,
       'is_deleted': isDeleted,
       'updated_at': updatedAt,
+      'version': 1,
     };
   }
 }

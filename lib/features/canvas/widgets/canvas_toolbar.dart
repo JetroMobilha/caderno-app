@@ -27,8 +27,6 @@ class CanvasToolbar extends StatelessWidget {
     final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     final bool hasImages = currentPage.imageBlocks.isNotEmpty;
-    final bool isEraserActive = controller.currentTool == ToolMode.eraser;
-    final bool isSelectActive = controller.currentTool == ToolMode.select;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -37,7 +35,7 @@ class CanvasToolbar extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 15, offset: const Offset(0, 8)),
         ],
       ),
       child: Wrap(
@@ -45,12 +43,13 @@ class CanvasToolbar extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.center,
         children: [
           _buildToolButton(Icons.brush, ToolMode.draw, 'Caneta'),
-          if (!isSmallScreen || isEraserActive) _buildToolButton(Icons.auto_fix_high, ToolMode.eraser, 'Borracha'),
-          _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha'),
+          _buildToolButton(Icons.auto_fix_high, ToolMode.eraser, 'Borracha'),
           _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
-          if (!isSmallScreen || isSelectActive) _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar Tinta'),
+          _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar Tinta'),
+          if (!isSmallScreen) _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha'),
           
-          _buildCompactIconButton(Icons.psychology_outlined, onAiAssistantTap, 'Assistente IA', const Color(0xFF0F4C5C)),
+          if (!isSmallScreen)
+            _buildCompactIconButton(Icons.psychology_outlined, onAiAssistantTap, 'Assistente IA', const Color(0xFF0F4C5C)),
 
           if (!isSmallScreen)
             _buildCompactIconButton(Icons.add_photo_alternate_outlined, () => controller.pickAndInsertImage(currentPage), 'Adicionar Imagem', const Color(0xFF1A1A24)),
@@ -58,8 +57,8 @@ class CanvasToolbar extends StatelessWidget {
             _buildToolButton(Icons.transform, ToolMode.imageEdit, 'Editar Imagem'),
 
           if (isSmallScreen) ...[
-            _buildCompactIconButton(Icons.undo, controller.canUndo ? () => controller.undo(currentPage) : null, 'Desfazer', controller.canUndo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
-            _buildCompactIconButton(Icons.redo, controller.canRedo ? () => controller.redo(currentPage) : null, 'Avançar', controller.canRedo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
+            _buildCompactIconButton(Icons.undo, controller.canUndo ? () => controller.undo(currentPage) : null, 'Desfazer', controller.canUndo ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.3)),
+            _buildCompactIconButton(Icons.redo, controller.canRedo ? () => controller.redo(currentPage) : null, 'Avançar', controller.canRedo ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.3)),
           ],
 
           if (isSmallScreen)
@@ -69,7 +68,6 @@ class CanvasToolbar extends StatelessWidget {
               color: const Color(0xFFFDFBF7),
               onSelected: (val) {
                 if (val == 'insert_image') controller.pickAndInsertImage(currentPage);
-                if (val == 'eraser') controller.switchTool(ToolMode.eraser);
                 if (val == 'select') controller.switchTool(ToolMode.select);
                 if (val == 'ai_assistant') onAiAssistantTap();
                 if (val == 'zoom_in') controller.zoom(1.2, MediaQuery.of(context).size);
@@ -82,9 +80,6 @@ class CanvasToolbar extends StatelessWidget {
                 const PopupMenuItem(value: 'insert_image', child: Row(children: [Icon(Icons.add_photo_alternate_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Inserir Imagem')])),
                 const PopupMenuItem(value: 'ai_assistant', child: Row(children: [Icon(Icons.psychology_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Assistente IA')])),
                 const PopupMenuItem(value: 'export_text', child: Row(children: [Icon(Icons.copy_all_outlined, color: Color(0xFF0F4C5C)), SizedBox(width: 12), Text('Exportar Todo o Texto')])),
-                const PopupMenuDivider(),
-                const PopupMenuItem(value: 'eraser', child: Row(children: [Icon(Icons.auto_fix_high, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Borracha')])),
-                const PopupMenuItem(value: 'select', child: Row(children: [Icon(Icons.highlight_alt, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Selecionar Tinta')])),
                 const PopupMenuDivider(),
                 const PopupMenuItem(value: 'zoom_in', child: Row(children: [Icon(Icons.zoom_in, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Aproximar (+)')])),
                 const PopupMenuItem(value: 'zoom_out', child: Row(children: [Icon(Icons.zoom_out, color: Color(0xFF1A1A24)), SizedBox(width: 12), Text('Afastar (-)')])),
@@ -102,8 +97,8 @@ class CanvasToolbar extends StatelessWidget {
             _buildCompactIconButton(Icons.zoom_out, () => controller.zoom(0.8, MediaQuery.of(context).size), 'Afastar', const Color(0xFF1A1A24)),
             _buildCompactIconButton(Icons.zoom_in, () => controller.zoom(1.2, MediaQuery.of(context).size), 'Aproximar', const Color(0xFF1A1A24)),
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            _buildCompactIconButton(Icons.undo, controller.canUndo ? () => controller.undo(currentPage) : null, 'Desfazer', controller.canUndo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
-            _buildCompactIconButton(Icons.redo, controller.canRedo ? () => controller.redo(currentPage) : null, 'Avançar', controller.canRedo ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+            _buildCompactIconButton(Icons.undo, controller.canUndo ? () => controller.undo(currentPage) : null, 'Desfazer', controller.canUndo ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.5)),
+            _buildCompactIconButton(Icons.redo, controller.canRedo ? () => controller.redo(currentPage) : null, 'Avançar', controller.canRedo ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.5)),
             _buildCompactIconButton(Icons.delete_forever, onDeletePageTap, 'Rasgar Folha', Colors.redAccent),
           ],
 
@@ -121,7 +116,7 @@ class CanvasToolbar extends StatelessWidget {
   Widget _buildToolButton(IconData icon, ToolMode mode, String tooltip) {
     final bool isActive = controller.currentTool == mode;
     return Container(
-      decoration: BoxDecoration(color: isActive ? const Color(0xFF0F4C5C).withOpacity(0.15) : Colors.transparent, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: isActive ? const Color(0xFF0F4C5C).withValues(alpha: 0.15) : Colors.transparent, shape: BoxShape.circle),
       child: IconButton(iconSize: 20, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, icon: Icon(icon, color: isActive ? const Color(0xFF0F4C5C) : const Color(0xFF1A1A24)), onPressed: () => controller.switchTool(mode), tooltip: tooltip),
     );
   }

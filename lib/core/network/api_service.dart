@@ -87,7 +87,8 @@ class ApiService {
   }
 
   Future<http.Response> get(String endpoint, {bool requireAuth = true}) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final bool isAbsolute = endpoint.startsWith('http://') || endpoint.startsWith('https://');
+    final url = isAbsolute ? Uri.parse(endpoint) : Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
 
     debugPrint('🛫 GET $url');
@@ -98,6 +99,11 @@ class ApiService {
 
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
+  }
+
+  /// Método utilitário para buscar uma URL completa (útil para paginação)
+  Future<http.Response> fetchUrl(String url, {bool requireAuth = true}) async {
+    return get(url, requireAuth: requireAuth);
   }
 
   Future<http.Response> put(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {

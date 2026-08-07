@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/stroke_model.dart';
 
@@ -38,14 +39,20 @@ Path buildSmoothPath(List<Offset> points) {
 class StaticNotebookPainter extends CustomPainter {
   final List<Stroke> strokes;
   final String lineType;
+  final double lineSpacing; 
   final Set<String> selectedStrokeIds;
   final Rect? selectionRect;
+  final int pageVersion; 
+  final Set<String> remoteMovingStrokeIds; // 🚀
 
   StaticNotebookPainter({
     required this.strokes,
     required this.lineType,
+    required this.lineSpacing,
     required this.selectedStrokeIds,
     required this.selectionRect,
+    required this.pageVersion,
+    this.remoteMovingStrokeIds = const {}, // 🚀
   });
 
   @override
@@ -54,15 +61,31 @@ class StaticNotebookPainter extends CustomPainter {
 
     if (lineType == 'ruled') {
       canvas.drawLine(const Offset(60, 0), Offset(60, size.height), Paint()..color = Colors.redAccent.withValues(alpha: 0.4)..strokeWidth = 1.5);
-      for (double y = 90; y < size.height - 60; y += 28) {
+      for (double y = 90; y < size.height - 60; y += lineSpacing) {
         canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
       }
     } else if (lineType == 'grid') {
-      for (double y = 90; y < size.height - 60; y += 25) canvas.drawLine(Offset(marginCalculate(size), y), Offset(size.width - 20, y), bgPaint);
-      for (double x = 20; x < size.width - 20; x += 25) canvas.drawLine(Offset(x, 90), Offset(x, size.height - 60), bgPaint);
+      for (double y = 90; y < size.height - 60; y += lineSpacing) canvas.drawLine(Offset(marginCalculate(size), y), Offset(size.width - 20, y), bgPaint);
+      for (double x = 20; x < size.width - 20; x += lineSpacing) canvas.drawLine(Offset(x, 90), Offset(x, size.height - 60), bgPaint);
+    } else if (lineType == 'dots') {
+      for (double y = 90; y < size.height - 60; y += lineSpacing) {
+        for (double x = 20; x < size.width - 20; x += lineSpacing) {
+          canvas.drawCircle(Offset(x, y), 1.2, bgPaint);
+        }
+      }
+    } else if (lineType == 'oblique') {
+      canvas.drawLine(const Offset(60, 0), Offset(60, size.height), Paint()..color = Colors.redAccent.withValues(alpha: 0.4)..strokeWidth = 1.5);
+      for (double y = 90; y < size.height - 60; y += lineSpacing) {
+        canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
+      }
+      final slantPaint = Paint()..color = const Color(0xFF1B365D).withValues(alpha: 0.08)..strokeWidth = 1.0;
+      for (double x = -400; x < size.width; x += lineSpacing * 1.6) {
+        canvas.drawLine(Offset(x, 0), Offset(x + size.height * 0.35, size.height), slantPaint);
+      }
     }
 
     for (final stroke in strokes) {
+      if (stroke.isDeleted || remoteMovingStrokeIds.contains(stroke.id)) continue; // 🚀 Ocultar se estiver em movimento
       final bool isSelected = selectedStrokeIds.contains(stroke.id);
       final paint = Paint()
         ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
@@ -95,7 +118,15 @@ class StaticNotebookPainter extends CustomPainter {
   double marginCalculate(Size size) => 20.0;
 
   @override
-  bool shouldRepaint(StaticNotebookPainter oldDelegate) => true;
+  bool shouldRepaint(StaticNotebookPainter oldDelegate) {
+    return oldDelegate.pageVersion != pageVersion || 
+           oldDelegate.lineType != lineType ||
+           oldDelegate.lineSpacing != lineSpacing ||
+           oldDelegate.selectionRect != selectionRect ||
+           !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) || // 🚀
+           !setEquals(oldDelegate.selectedStrokeIds, selectedStrokeIds) ||
+           !listEquals(oldDelegate.strokes, strokes);
+  }
 }
 
 class ActiveStrokePainter extends CustomPainter {
@@ -118,45 +149,67 @@ class ActiveStrokePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ActiveStrokePainter oldDelegate) => true;
+  bool shouldRepaint(ActiveStrokePainter oldDelegate) {
+    return oldDelegate.currentColor != currentColor ||
+           oldDelegate.currentThickness != currentThickness ||
+           !listEquals(oldDelegate.currentPoints, currentPoints);
+  }
 }
 
 class RemoteLiveStrokesPainter extends CustomPainter {
   final Map<String, Stroke> liveStrokes;
+  final int targetPageNumber; // 🚀 Vincular desenho à página
 
-  RemoteLiveStrokesPainter({required this.liveStrokes});
+  RemoteLiveStrokesPainter({required this.liveStrokes, required this.targetPageNumber});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (liveStrokes.isEmpty) return;
     for (final stroke in liveStrokes.values) {
-      if (stroke.points.isEmpty) continue;
+      if (stroke.isDeleted || stroke.points.isEmpty) continue;
+      // 🛡️ Segurança: Só desenhar se pertencer a esta página
+      if (stroke.pageNumber != null && stroke.pageNumber != targetPageNumber) continue;
+
       final paint = Paint()
         ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
         ..strokeWidth = stroke.thickness
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
+
+      canvas.save();
+      if (stroke.liveOffset != Offset.zero) {
+        canvas.translate(stroke.liveOffset.dx, stroke.liveOffset.dy);
+      }
       canvas.drawPath(buildSmoothPath(stroke.points), paint);
+      canvas.restore();
     }
   }
 
   @override
-  bool shouldRepaint(RemoteLiveStrokesPainter oldDelegate) => true;
+  bool shouldRepaint(RemoteLiveStrokesPainter oldDelegate) {
+    return oldDelegate.targetPageNumber != targetPageNumber ||
+           !mapEquals(oldDelegate.liveStrokes, liveStrokes);
+  }
 }
 
 // 🚀 PINTOR PARA CURSORES REMOTOS (GHOST CURSORS)
 class RemotePointersPainter extends CustomPainter {
-  final Map<String, Offset> pointers;
+  final Map<String, dynamic> pointers;
   final List<Map<String, dynamic>> onlineUsers;
+  final int targetPageNumber; // 🚀 Filtrar por página
 
-  RemotePointersPainter({required this.pointers, required this.onlineUsers});
+  RemotePointersPainter({required this.pointers, required this.onlineUsers, required this.targetPageNumber});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..style = PaintingStyle.fill;
 
-    pointers.forEach((uid, pos) {
+    pointers.forEach((uid, data) {
+      final int? pageNum = data['page_number'];
+      if (pageNum != null && pageNum != targetPageNumber) return;
+
+      final Offset pos = data['pos'];
       final user = onlineUsers.firstWhere((u) => u['id'].toString() == uid, orElse: () => <String, dynamic>{});
       if (user.isEmpty) return;
       
@@ -171,9 +224,11 @@ class RemotePointersPainter extends CustomPainter {
         ..close();
       canvas.drawPath(path, paint);
 
+      final String label = user['name'] ?? 'Colega';
+
       final textPainter = TextPainter(
         text: TextSpan(
-          text: user['name'],
+          text: label,
           style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
         ),
         textDirection: TextDirection.ltr,
@@ -187,5 +242,9 @@ class RemotePointersPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(RemotePointersPainter oldDelegate) => true;
+  bool shouldRepaint(RemotePointersPainter oldDelegate) {
+    return oldDelegate.targetPageNumber != targetPageNumber ||
+           !mapEquals(oldDelegate.pointers, pointers) ||
+           !listEquals(oldDelegate.onlineUsers, onlineUsers);
+  }
 }

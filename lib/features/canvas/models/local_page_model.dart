@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:uuid/uuid.dart';
 import 'image_block_model.dart';
 import 'stroke_model.dart';
@@ -25,6 +26,7 @@ class LocalPage {
 
   int syncedWithCloud;
   int updatedAt;
+  int version; // 🔄 Versão local para trigger de UI
 
   LocalPage({
     this.id,
@@ -41,16 +43,64 @@ class LocalPage {
     List<ImageBlock>? imageBlocks,
     this.syncedWithCloud = 0,
     int? updatedAt,
+    this.version = 1,
   })  : clientId = clientId ?? const Uuid().v4(),
-        strokes = strokes ?? <Stroke>[],
-        textBlocks = textBlocks ?? <TextBlock>[],
-        imageBlocks = imageBlocks ?? <ImageBlock>[],
-        redoHistory = [], // Inicializa a lista vazia
-        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+       strokes = strokes ?? <Stroke>[],
+       textBlocks = textBlocks ?? <TextBlock>[],
+       imageBlocks = imageBlocks ?? <ImageBlock>[],
+       redoHistory = [], // Inicializa a lista vazia
+       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+
+  // 🆔 Gera um "Fingerprint" da página para detectar divergências em tempo real
+  String generateFingerprint() {
+    final List<String> components = [];
+
+    // 1. Coletar IDs e timestamps de strokes não deletados
+    final activeStrokes = strokes.where((s) => !s.isDeleted).toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    for (var s in activeStrokes) {
+      components.add('s:${s.id}:${s.updatedAt}');
+    }
+
+    // 2. Coletar IDs e timestamps de textos não deletados
+    final activeTexts = textBlocks.where((t) => !t.isDeleted).toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    for (var t in activeTexts) {
+      components.add('t:${t.id}:${t.updatedAt}');
+    }
+
+    // 3. Coletar IDs e timestamps de imagens não deletadas
+    final activeImages = imageBlocks.where((i) => !i.isDeleted).toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    for (var i in activeImages) {
+      components.add('i:${i.id}:${i.updatedAt}');
+    }
+
+    // Retorna uma string que representa o estado atual (ordenado para consistência)
+    return components.join('|');
+  }
 
   // =========================================================================
   // ☁️ COMUNICAÇÃO (JSON / Laravel / Drift)
   // =========================================================================
+  Map<String, dynamic> toJson() {
+    return {
+      if (serverId != null) 'id': serverId,
+      'client_id': clientId,
+      'notebook_id': notebookId,
+      'page_number': pageNumber,
+      'is_landscape': isLandscape,
+      'header_data': {'title': title},
+      'footer_data': {'title': footer},
+      'extracted_text': extractedText,
+      'stroke_data': strokes.map((s) => s.toJson()).toList(),
+      'text_data': textBlocks.map((t) => t.toJson()).toList(),
+      'image_data': imageBlocks.map((img) => img.toJson()).toList(),
+      'updated_at': updatedAt,
+      'version': 1, // Mantido fixo para compatibilidade com servidor
+    };
+  }
+
   Future<Map<String, dynamic>> toJsonAsync() async {
     final List<Map<String, dynamic>> asyncImages = [];
     for (var img in imageBlocks) {
@@ -70,6 +120,7 @@ class LocalPage {
       'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': asyncImages,
       'updated_at': updatedAt,
+      'version': 1, // Fixo para o backend
     };
   }
 
@@ -124,6 +175,7 @@ class LocalPage {
       imageBlocks: imageList.map((img) => ImageBlock.fromJson(img)).toList(),
       syncedWithCloud: 1,
       updatedAt: (json['updated_at'] as num?)?.toInt(),
+      version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     );
   }
 }

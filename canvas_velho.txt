@@ -1,1 +1,0 @@
-com a possiblidade do chat acredito que não vamos precisar da webrtc acho melhor termos um chat imercivo que simula uma chamada controlada e tambem ajuda na ordem em ves de uma chamada de confução visto que ja temos a folha compartilha o que achas dessa visão

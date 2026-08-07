@@ -11,6 +11,8 @@ class Notebook {
   String? coverImage;
   String lineType;
   String paperSize;
+  double? lineSpacing; // 📏 Espaçamento dinâmico entre linhas/grelha
+  int version; // 🔄 Versão lógica para UI/Compatibilidade
 
   // 🌟 Novas propriedades EdTech/Marketplace
   final int isPublished;
@@ -34,6 +36,7 @@ class Notebook {
     this.coverImage,
     required this.lineType,
     required this.paperSize,
+    this.lineSpacing,
     this.isPublished = 0,
     this.price = 0.00,
     this.description,
@@ -41,6 +44,7 @@ class Notebook {
     this.syncedWithCloud = 0,
     this.isDeleted = 0,
     int? updatedAt,
+    this.version = 1,
     this.role = 'owner',
   }) : clientId = clientId ?? const Uuid().v4(),
        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
@@ -56,6 +60,7 @@ class Notebook {
     String? coverImage,
     String? lineType,
     String? paperSize,
+    double? lineSpacing,
     int? isPublished,
     double? price,
     String? description,
@@ -63,6 +68,7 @@ class Notebook {
     int? syncedWithCloud,
     int? isDeleted,
     int? updatedAt,
+    int? version,
     String? role,
   }) {
     return Notebook(
@@ -76,6 +82,7 @@ class Notebook {
       coverImage: coverImage ?? this.coverImage,
       lineType: lineType ?? this.lineType,
       paperSize: paperSize ?? this.paperSize,
+      lineSpacing: lineSpacing ?? this.lineSpacing,
       isPublished: isPublished ?? this.isPublished,
       price: price ?? this.price,
       description: description ?? this.description,
@@ -83,6 +90,7 @@ class Notebook {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
       role: role ?? this.role,
     );
   }
@@ -102,6 +110,7 @@ class Notebook {
       'cover_image': coverImage,
       'line_type': lineType,
       'paper_size': paperSize,
+      'line_spacing': lineSpacing,
       'is_published': isPublished,
       'price': price,
       'description': description,
@@ -109,6 +118,7 @@ class Notebook {
       'synced_with_cloud': syncedWithCloud,
       'is_deleted': isDeleted,
       'updated_at': updatedAt,
+      'version': 1,
       'role': role,
     };
   }
@@ -129,12 +139,14 @@ class Notebook {
       coverImage: json['cover_image'],
       lineType: lineType,
       paperSize: json['paper_size'] ?? 'A4',
+      lineSpacing: json['line_spacing'] != null ? double.tryParse(json['line_spacing'].toString()) : null,
       isPublished: int.tryParse(json['is_published']?.toString() ?? '0') ?? 0,
       price: double.tryParse(json['price']?.toString() ?? '0.0') ?? 0.0,
       description: json['description'],
       authorName: json['author_name'],
       syncedWithCloud: 1,
       isDeleted: json['deleted_at'] != null ? 1 : 0,
+      updatedAt: (json['updated_at'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
       role: json['role'] ?? 'owner',
     );
   }

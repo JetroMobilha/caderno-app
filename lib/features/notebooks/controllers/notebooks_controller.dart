@@ -123,7 +123,7 @@ class NotebooksController extends Notifier<NotebooksState> {
     }
 
     _subscription = _sharedRepository
-        .watchSharedNotebooks(currentUser.id!, serverUserId: currentUser.serverId)
+        .watchSharedNotebooks(currentUser.id!)
         .listen((list) {
       _lastData = list;
       _hasStreamEmitted = true;
@@ -136,6 +136,11 @@ class NotebooksController extends Notifier<NotebooksState> {
   Future<int> addNotebook(Notebook notebook, int? subjectServerId) async {
     final int generatedId = await _repository.insertNotebook(notebook);
     return generatedId;
+  }
+
+  /// 🚀 Insere um caderno vindo do Marketplace (já com serverId)
+  Future<void> insertExternalNotebook(Notebook notebook) async {
+    await _repository.insertNotebook(notebook);
   }
 
   Future<void> updateNotebook(Notebook notebook) async {

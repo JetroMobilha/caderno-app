@@ -17,6 +17,8 @@ class ImageBlock {
   bool isDeleted; // 🚀 Suporte a Soft Delete
   bool deletedInSession; // 🚀 Novo: Contexto de deleção
   int updatedAt; // 🚀 Novo: Timestamp Last-Write-Wins
+  int version; // 🔄 UI Only
+  final String? creatorId; // 🚀 Dono da imagem
 
   ImageBlock({
     String? id,
@@ -28,6 +30,8 @@ class ImageBlock {
     this.isDeleted = false,
     this.deletedInSession = false,
     int? updatedAt,
+    this.version = 1,
+    this.creatorId,
   }) : id = id ?? const Uuid().v4(),
        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
@@ -46,6 +50,7 @@ class ImageBlock {
       'is_deleted': isDeleted,
       'deleted_in_session': deletedInSession,
       'updated_at': updatedAt,
+      'creator_id': creatorId,
     };
   }
 
@@ -109,6 +114,8 @@ class ImageBlock {
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
       deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
       updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
+      creatorId: json['creator_id']?.toString(),
     );
   }
 

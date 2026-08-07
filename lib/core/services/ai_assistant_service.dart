@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import '../network/api_service.dart';
 
 class AIAssistantService {
-  final ApiService _apiService = ApiService();
+  final ApiService _apiService;
+
+  AIAssistantService({ApiService? apiService}) : _apiService = apiService ?? ApiService();
 
   /// 🔎 PESQUISA SEMÂNTICA: Pergunta à IA sobre o conteúdo dos cadernos
   Future<List<AIQueryResult>> searchInNotebooks(String query, {int? notebookId}) async {

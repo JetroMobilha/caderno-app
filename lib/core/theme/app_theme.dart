@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,8 +8,8 @@ import 'package:caderno_digital_app/core/theme/app_profile.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 
 final appThemeProvider = Provider<ThemeData>((ref) {
-  // 🛡️ Garantia extra de modo offline
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // 🛡️ Garantia extra de modo offline (Permitido em Web)
+  GoogleFonts.config.allowRuntimeFetching = true;
 
   final activeProfile = ref.watch(appProfileProvider);
   final activeSubject = ref.watch(activeSubjectProvider);

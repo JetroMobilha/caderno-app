@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +12,7 @@ import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/features/auth/controllers/auth_controller.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
-import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart'; // 🚀 Adicionado
+import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart'; 
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
@@ -35,13 +36,15 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   final FocusNode _textFocusNode = FocusNode();
   final TextEditingController _textController = TextEditingController();
 
+  // 🚀 RASTREIO DE MULTI-TOQUE PARA NAVEGAÇÃO AUTOMÁTICA
+  final Set<int> _activePointers = {};
+
   final Map<String, Size> _paperSizes = {
     'A5': const Size(420, 595), 'A4': const Size(595, 842),
     'A3': const Size(842, 1191), 'A2': const Size(1191, 1684),
     'A1': const Size(1684, 2384), 'A0': const Size(2384, 3370),
   };
 
-  // 🎨 PALETA DE 24 CORES
   final Map<String, Color> _colorPalette = {
     'Preto': const Color(0xFF1A1A24), 'Cinzento Escuro': const Color(0xFF455A64),
     'Cinzento Claro': const Color(0xFF90A4AE), 'Branco': const Color(0xFFFFFFFF),
@@ -62,7 +65,6 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   int _lastBroadcastedPointIndex = 0;
   String myUserId ="";
   
-  // 🚀 ESTADOS TEMPORÁRIOS PARA UNDO DE MOVIMENTO/REDIMENSIONAMENTO
   ImageBlock? _originalImageState;
   TextBlock? _originalTextState;
 
@@ -78,7 +80,29 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         widget.notebook.id ?? 0, widget.notebook.serverId,
         widget.notebook.lineType, widget.notebook.paperSize, 
         widget.notebook.role, uid,
+        lineSpacing: widget.notebook.lineSpacing,
       );
+
+      // 🚀 Listener para Alertas de Permissão
+      controller.onPermissionAlert.listen((message) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.lock_person, color: Colors.white, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: Colors.redAccent.withValues(alpha: 0.9),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      });
     });
   }
 
@@ -98,10 +122,8 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       if (cleanText.isEmpty) {
         final blockId = controller.activeTextBlock!.id;
         page.textBlocks.removeWhere((t) => t.id == blockId);
-        // 🚀 TRANSMITIR DELEÇÃO PARA COLEGAS
         controller.broadcastTextBlockUpdate(page, controller.activeTextBlock!, isDeleted: true);
       } else {
-        // Gravar alteração se o texto mudou
         if (_originalTextState != null && _originalTextState!.text != cleanText) {
           controller.recordTextUpdate(page, _originalTextState!, controller.activeTextBlock!.clone()..text = cleanText);
         }
@@ -134,7 +156,6 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       ),
     );
   }
-
 
   void _showCollaborationCenter(CanvasController controller) {
     showModalBottomSheet(
@@ -193,541 +214,496 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
     final bool hasPages = controller.pages.isNotEmpty;
     final LocalPage? currentPage = hasPages ? controller.pages[controller.currentPageIndex] : null;
-    final Size baseSize = _paperSizes[widget.notebook.paperSize ?? 'A4'] ?? const Size(595, 842);
+    final Size baseSize = _paperSizes[widget.notebook.paperSize] ?? const Size(595, 842);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFD6D6D6),
-      appBar: _buildAppBar(controller, hasPages),
-      endDrawer: hasPages ? _buildPageDrawer(controller) : null, 
-      body: !hasPages
-          ? _buildEmptyState()
-          : Stack(
-        children: [
-          PageView.builder(
-            controller: controller.pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: controller.pages.length,
-            onPageChanged: (index) => controller.setPageIndex(index),
-            itemBuilder: (context, index) {
-              final page = controller.pages[index];
-              final Size pSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
+    return Listener(
+      onPointerDown: (e) {
+        setState(() => _activePointers.add(e.pointer));
+        controller.updatePointerCount(_activePointers.length);
+      },
+      onPointerUp: (e) {
+        setState(() => _activePointers.remove(e.pointer));
+        controller.updatePointerCount(_activePointers.length);
+      },
+      onPointerCancel: (e) {
+        setState(() => _activePointers.remove(e.pointer));
+        controller.updatePointerCount(_activePointers.length);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFD6D6D6),
+        appBar: controller.isFocusMode ? null : _buildAppBar(controller, hasPages),
+        endDrawer: hasPages ? _buildPageDrawer(controller) : null, 
+        body: !hasPages
+            ? _buildEmptyState()
+            : Stack(
+          children: [
+            PageView.builder(
+              controller: controller.pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: controller.pages.length,
+              onPageChanged: (index) => controller.setPageIndex(index),
+              itemBuilder: (context, index) {
+                final page = controller.pages[index];
+                final Size pSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
 
-              final bool isFollowing = controller.followingUserId != null;
-              final bool isBlocked = (controller.currentTool == ToolMode.pan || widget.notebook.role == 'viewer') && !isFollowing;
-              final bool canTapCanvas = controller.currentTool == ToolMode.text || controller.currentTool == ToolMode.eraser;
+                final bool isFollowing = controller.followingUserId != null;
+                final bool isBlocked = (controller.currentTool == ToolMode.pan || widget.notebook.role == 'viewer') && !isFollowing;
+                final bool canTapCanvas = controller.currentTool == ToolMode.text || 
+                                        controller.currentTool == ToolMode.eraser ||
+                                        controller.currentTool == ToolMode.draw;
 
-              return InteractiveViewer.builder(
-                scaleEnabled: controller.currentTool == ToolMode.pan && !isFollowing,
-                panEnabled: controller.currentTool == ToolMode.pan && !isFollowing,
-                maxScale: 6.0, minScale: 0.1,
-                transformationController: controller.transformationController,
-                boundaryMargin: const EdgeInsets.all(3000),
-                onInteractionUpdate: (details) {
-                  if (controller.isBroadcastingViewport) {
-                    final Matrix4 matrix = controller.transformationController.value;
-                    final double screenWidth = MediaQuery.of(context).size.width;
-                    final double screenHeight = MediaQuery.of(context).size.height;
-                    
-                    try {
-                      final Matrix4 inverse = Matrix4.inverted(matrix);
-                      final vm.Vector3 centerVector = inverse.transform3(vm.Vector3(screenWidth / 2, screenHeight / 2, 0));
-                      controller.currentViewportCenter = Offset(centerVector.x, centerVector.y);
-                    } catch (e) {
-                      controller.currentViewportCenter = details.focalPoint;
+                return InteractiveViewer.builder(
+                  scaleEnabled: (controller.currentTool == ToolMode.pan || _activePointers.length >= 2) && !isFollowing,
+                  panEnabled: (controller.currentTool == ToolMode.pan || _activePointers.length >= 2) && !isFollowing,
+                  maxScale: 6.0, 
+                  minScale: 0.1,
+                  transformationController: controller.transformationController,
+                  boundaryMargin: const EdgeInsets.all(3000),
+                  onInteractionUpdate: (details) {
+                    if (controller.isBroadcastingViewport) {
+                      final Matrix4 matrix = controller.transformationController.value;
+                      final double screenWidth = MediaQuery.of(context).size.width;
+                      final double screenHeight = MediaQuery.of(context).size.height;
+                      
+                      try {
+                        final Matrix4 inverse = Matrix4.inverted(matrix);
+                        final vm.Vector3 centerVector = inverse.transform3(vm.Vector3(screenWidth / 2, screenHeight / 2, 0));
+                        controller.currentViewportCenter = Offset(centerVector.x, centerVector.y);
+                      } catch (e) {
+                        controller.currentViewportCenter = details.focalPoint;
+                      }
                     }
-                  }
-                },
-                builder: (context, viewport) {
-                  controller.currentVisibleWidth = (viewport.point1.x - viewport.point0.x).abs();
-                  controller.lastScreenSize = MediaQuery.of(context).size;
+                  },
+                  builder: (context, viewport) {
+                    controller.currentVisibleWidth = (viewport.point1.x - viewport.point0.x).abs();
+                    controller.lastScreenSize = MediaQuery.of(context).size;
 
-                  return Center(
-                    child: Container(
-                      width: pSize.width, height: pSize.height,
-                      decoration: const BoxDecoration(color: Color(0xFFFDFBF7)),
-                      child: ClipRect(
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-
-                            // 📜 Z-INDEX 1: LINHAS DE PAUTA DO PAPEL
-                            RepaintBoundary(
-                              child: CustomPaint(
-                                size: pSize,
-                                painter: StaticNotebookPainter(
-                                    strokes: const [], lineType: controller.liveLineType,
-                                    selectedStrokeIds: const {}, selectionRect: null
+                    return Center(
+                      child: Container(
+                        width: pSize.width, height: pSize.height,
+                        decoration: const BoxDecoration(color: Color(0xFFFDFBF7)),
+                        child: ClipRect(
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              // 📜 Z-INDEX 1: LINHAS DE PAUTA DO PAPEL
+                              RepaintBoundary(
+                                child: CustomPaint(
+                                  size: pSize,
+                                  painter: StaticNotebookPainter(
+                                      strokes: const [], lineType: controller.liveLineType,
+                                      lineSpacing: controller.liveLineSpacing,
+                                      selectedStrokeIds: const {}, selectionRect: null,
+                                      pageVersion: page.version,
+                                      remoteMovingStrokeIds: controller.remoteMovingStrokeIds, // 🚀
+                                  ),
                                 ),
                               ),
-                            ),
 
-                            // 🖼️ Z-INDEX 2: IMAGENS
-                            ...(() {
-                              final List<ImageBlock> sortedImages = List.from(page.imageBlocks);
-                              if (controller.selectedEditingImageId != null) {
-                                final selectedIdx = sortedImages.indexWhere((img) => img.id == controller.selectedEditingImageId);
-                                if (selectedIdx != -1) {
-                                  final selectedImg = sortedImages.removeAt(selectedIdx);
-                                  sortedImages.add(selectedImg);
+                              // 🖼️ Z-INDEX 2: IMAGENS
+                              ...(() {
+                                final List<ImageBlock> sortedImages = page.imageBlocks.where((img) {
+                                  if (img.isDeleted) {
+                                    // debugPrint('👻 [Canvas] Imagem Oculta (Soft-Deleted): ${img.id}');
+                                    return false;
+                                  }
+                                  return true;
+                                }).toList();
+                                
+                                if (controller.selectedEditingImageId != null) {
+                                  final selectedIdx = sortedImages.indexWhere((img) => img.id == controller.selectedEditingImageId);
+                                  if (selectedIdx != -1) {
+                                    final selectedImg = sortedImages.removeAt(selectedIdx);
+                                    sortedImages.add(selectedImg);
+                                  }
                                 }
-                              }
-                              return sortedImages.map((img) {
-                                final bool isSelected = img.id == controller.selectedEditingImageId;
-                                final bool isImageToolActive = controller.currentTool == ToolMode.imageEdit;
-                                final bool isUploading = controller.uploadingImageIds.contains(img.id);
-                                final bool hasFailed = controller.failedImageUploads.contains(img.id);
+                                return sortedImages.map((img) {
+                                  final bool isSelected = img.id == controller.selectedEditingImageId;
+                                  final bool isImageToolActive = controller.currentTool == ToolMode.imageEdit;
+                                  final bool isUploading = controller.uploadingImageIds.contains(img.id);
+                                  final bool hasFailed = controller.failedImageUploads.contains(img.id);
 
-                                return AnimatedPositioned( 
-                                  duration: const Duration(milliseconds: 60),
-                                  curve: Curves.easeOutCubic,
-                                  key: ValueKey('img_${img.id}'), left: img.position.dx, top: img.position.dy,
-                                  child: GestureDetector(
-                                    onTapDown: isImageToolActive ? (_) {
-                                      if (controller.selectedEditingImageId != img.id) {
-                                        setState(() {
-                                          controller.selectedEditingImageId = img.id;
-                                          _originalImageState = img.clone();
-                                        });
-                                        controller.bringImageToFront(page, img.id);
-                                        controller.safeNotify();
-                                      }
-                                    } : null,
-                                    child: SizedBox(
-                                      width: img.width + 44, height: img.height + 44,
-                                      child: Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          Positioned(
-                                            left: 0, top: 0, width: img.width, height: img.height,
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                border: isSelected
-                                                  ? Border.all(color: const Color(0xFF0F4C5C), width: 3.0) 
-                                                  : (isUploading || hasFailed ? Border.all(color: Colors.grey.withValues(alpha: 0.5), width: 1.5) : null),
-                                                color: isSelected ? const Color(0x1F0F4C5C) : null,
+                                  const double padding = 60.0;
+                                  return AnimatedPositioned( 
+                                    duration: const Duration(milliseconds: 60),
+                                    curve: Curves.easeOutCubic,
+                                    key: ValueKey('img_${img.id}'), 
+                                    left: img.position.dx - padding, 
+                                    top: img.position.dy - padding,
+                                    child: Transform.rotate(
+                                      angle: img.rotation,
+                                      child: SizedBox(
+                                        width: img.width + (padding * 2),
+                                        height: img.height + (padding * 2),
+                                        child: Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            Positioned(
+                                              left: padding,
+                                              top: padding,
+                                              width: img.width,
+                                              height: img.height,
+                                              child: GestureDetector(
+                                                onTapDown: isImageToolActive ? (_) {
+                                                  if (controller.selectedEditingImageId != img.id) {
+                                                    setState(() {
+                                                      controller.selectedEditingImageId = img.id;
+                                                      _originalImageState = img.clone();
+                                                    });
+                                                    controller.bringImageToFront(page, img.id);
+                                                    controller.safeNotify();
+                                                  }
+                                                } : null,
+                                                onPanUpdate: isImageToolActive && isSelected && widget.notebook.role != 'viewer' ? (d) {
+                                                    final double cosA = math.cos(img.rotation);
+                                                    final double sinA = math.sin(img.rotation);
+                                                    final Offset rotatedDelta = Offset(
+                                                      d.delta.dx * cosA - d.delta.dy * sinA,
+                                                      d.delta.dx * sinA + d.delta.dy * cosA,
+                                                    );
+                                                    setState(() => img.position += rotatedDelta);
+                                                    controller.broadcastThrottledImageUpdate(page, img);
+                                                } : null,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: isSelected
+                                                      ? Border.all(color: const Color(0xFF0F4C5C), width: 3.0) 
+                                                      : (isUploading || hasFailed ? Border.all(color: Colors.grey.withValues(alpha: 0.5), width: 1.5) : null),
+                                                    color: isSelected ? const Color(0x1F0F4C5C) : null,
+                                                  ),
+                                                  child: Stack(
+                                                    fit: StackFit.expand,
+                                                    children: [
+                                                      if (!isUploading || img.imagePath.startsWith('http'))
+                                                        kIsWeb || img.imagePath.startsWith('http')
+                                                            ? Image.network(
+                                                                img.imagePath, 
+                                                                fit: BoxFit.fill,
+                                                                loadingBuilder: (context, child, loadingProgress) {
+                                                                  if (loadingProgress == null) return child;
+                                                                  return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                                                },
+                                                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image_outlined, color: Colors.grey),
+                                                              )
+                                                            : Image.file(File(img.imagePath), fit: BoxFit.fill),
+                                                      
+                                                      if (isUploading)
+                                                        Container(
+                                                          color: Colors.black.withValues(alpha: 0.3),
+                                                          child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)),
+                                                        ),
+                                                      
+                                                      if (hasFailed)
+                                                        const Center(child: Icon(Icons.cloud_off, color: Colors.redAccent, size: 32)),
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
-                                              child: Stack(
-                                                fit: StackFit.expand,
+                                            ),
+                                            
+                                          if (isSelected && widget.notebook.role != 'viewer') ...[
+                                            Positioned(
+                                              left: padding + img.width - 18, top: padding + img.height - 18, width: 36, height: 36,
+                                              child: GestureDetector(
+                                                behavior: HitTestBehavior.opaque,
+                                                onPanUpdate: (d) {
+                                                  setState(() {
+                                                    img.width = (img.width + d.delta.dx).clamp(60.0, 1000.0);
+                                                    img.height = (img.height + d.delta.dy).clamp(60.0, 1000.0);
+                                                  });
+                                                  controller.broadcastThrottledImageUpdate(page, img);
+                                                },
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white, 
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(color: const Color(0xFF0F4C5C), width: 2),
+                                                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2))]
+                                                  ), 
+                                                  child: const Icon(Icons.unfold_more_rounded, size: 18, color: Color(0xFF0F4C5C))
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              left: padding + (img.width / 2) - 16, top: padding - 55, width: 32,
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  if (!isUploading || img.imagePath.startsWith('http'))
-                                                    kIsWeb || img.imagePath.startsWith('http')
-                                                        ? Image.network(
-                                                            img.imagePath, 
-                                                            fit: BoxFit.fill,
-                                                            loadingBuilder: (context, child, loadingProgress) {
-                                                              if (loadingProgress == null) return child;
-                                                              return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                                                            },
-                                                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image_outlined, color: Colors.grey),
-                                                          )
-                                                        : Image.file(File(img.imagePath), fit: BoxFit.fill),
-                                                  
-                                                  if (isUploading)
-                                                    Container(
-                                                      color: Colors.black.withValues(alpha: 0.3),
-                                                      child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)),
+                                                  GestureDetector(
+                                                    behavior: HitTestBehavior.opaque,
+                                                    onPanUpdate: (d) {
+                                                      final double radius = (img.height / 2) + 55;
+                                                      setState(() {
+                                                        img.rotation += d.delta.dx / radius;
+                                                      });
+                                                      controller.broadcastThrottledImageUpdate(page, img);
+                                                    },
+                                                    child: Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white, 
+                                                        shape: BoxShape.circle,
+                                                        border: Border.all(color: const Color(0xFF0F4C5C), width: 2),
+                                                        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2))]
+                                                      ), 
+                                                      child: const Icon(Icons.rotate_right_rounded, size: 18, color: Color(0xFF0F4C5C))
                                                     ),
-                                                  
-                                                  if (hasFailed)
-                                                    const Center(child: Icon(Icons.cloud_off, color: Colors.redAccent, size: 32)),
+                                                  ),
+                                                  Container(width: 2, height: 23, color: const Color(0xFF0F4C5C).withValues(alpha: 0.5)),
                                                 ],
                                               ),
                                             ),
-                                          ),
-                                          
-                                        // 🚀 HANDLES DE EDIÇÃO (Apenas se selecionada)
-                                        if (isSelected && widget.notebook.role != 'viewer') ...[
-                                          // Handle Mover (Centro)
-                                          Positioned(
-                                            left: (img.width / 2) - 20, top: (img.height / 2) - 20, width: 40, height: 40,
-                                            child: GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onPanUpdate: (d) {
-                                                setState(() => img.position += d.delta);
-                                                controller.broadcastThrottledImageUpdate(page, img);
-                                              },
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF0F4C5C).withValues(alpha: 0.9), 
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6, offset: const Offset(0, 2))]
-                                                ), 
-                                                child: const Icon(Icons.open_with_rounded, size: 20, color: Colors.white)
+                                            Positioned(
+                                              left: padding + img.width - 22, top: padding - 10, width: 32, height: 32,
+                                              child: GestureDetector(
+                                                onTap: () {
+                                                  controller.clearImageSelection();
+                                                  controller.deleteImageBlock(page, img);
+                                                },
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.redAccent.withValues(alpha: 0.9), 
+                                                    shape: BoxShape.circle,
+                                                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))]
+                                                  ), 
+                                                  child: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.white)
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          // Handle Redimensionar (Canto inferior direito)
-                                          Positioned(
-                                            left: img.width - 18, top: img.height - 18, width: 36, height: 36,
-                                            child: GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onPanUpdate: (d) {
-                                                setState(() {
-                                                  img.width = (img.width + d.delta.dx).clamp(60.0, 1000.0);
-                                                  img.height = (img.height + d.delta.dy).clamp(60.0, 1000.0);
-                                                });
-                                                controller.broadcastThrottledImageUpdate(page, img);
-                                              },
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white, 
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(color: const Color(0xFF0F4C5C), width: 2),
-                                                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2))]
-                                                ), 
-                                                child: const Icon(Icons.unfold_more_rounded, size: 18, color: Color(0xFF0F4C5C))
+                                            Positioned(
+                                              left: padding - 10, top: padding - 10, width: 32, height: 32,
+                                              child: GestureDetector(
+                                                onTap: () {
+                                                  if (_originalImageState != null) {
+                                                    controller.recordImageUpdate(page, _originalImageState!, img.clone());
+                                                  }
+                                                  controller.clearImageSelection();
+                                                  controller.triggerAutoSave(page);
+                                                },
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.green.withValues(alpha: 0.9), 
+                                                    shape: BoxShape.circle,
+                                                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))]
+                                                  ), 
+                                                  child: const Icon(Icons.check_rounded, size: 18, color: Colors.white)
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          // Handle Remover (Canto superior direito)
-                                          Positioned(
-                                            right: -10, top: -10, width: 32, height: 32,
-                                            child: GestureDetector(
-                                              onTap: () {
-                                                controller.clearImageSelection();
-                                                controller.deleteImageBlock(page, img);
-                                              },
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: Colors.redAccent.withValues(alpha: 0.9), 
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))]
-                                                ), 
-                                                child: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.white)
-                                              ),
-                                            ),
-                                          ),
-                                          // Handle Confirmar (Canto superior esquerdo)
-                                          Positioned(
-                                            left: -10, top: -10, width: 32, height: 32,
-                                            child: GestureDetector(
-                                              onTap: () {
-                                                if (_originalImageState != null) {
-                                                  controller.recordImageUpdate(page, _originalImageState!, img.clone());
-                                                }
-                                                controller.clearImageSelection();
-                                                controller.triggerAutoSave(page);
-                                              },
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: Colors.green.withValues(alpha: 0.9), 
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))]
-                                                ), 
-                                                child: const Icon(Icons.check_rounded, size: 18, color: Colors.white)
-                                              ),
-                                            ),
-                                          ),
-                                        ]
+                                          ]
                                         ],
                                       ),
                                     ),
                                   ),
                                 );
-                              });
-                            })(),
+                                }).toList();
+                              })(),
 
-                            // 📝 Z-INDEX 3: CAMADA DE TEXTO
-                            ...page.textBlocks.map((tb) {
-                              final bool isEditing = controller.activeTextBlock?.id == tb.id && controller.activeInlineTarget == InlineTarget.block;
-                              final double exactLineMulti = (controller.liveLineType == 'grid' ? 25.0 : 28.0) / tb.fontSize;
-                              final bool isTextSelected = controller.selectedTextIds.contains(tb.id);
-                              
-                              final String? editedBy = controller.remoteEditingBlocks[tb.id];
-                              final String? editorName = editedBy != null 
-                                  ? controller.onlineUsers.firstWhere((u) => u['id'].toString() == editedBy, orElse: () => {})['name'] 
-                                  : null;
-
-                              return Positioned(
-                                left: tb.position.dx, top: tb.position.dy,
-                                width: (pSize.width - tb.position.dx - 20.0).clamp(60.0, pSize.width),
+                              // 🖌️ Z-INDEX 3: TINTA E GESTOS
+                              Positioned.fill(
                                 child: IgnorePointer(
-                                  ignoring: controller.currentTool == ToolMode.imageEdit && !isEditing, // 🚀 Permitir toque em imagens
-                                  child: Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      GestureDetector(
-                                        behavior: HitTestBehavior.opaque, // 🚀 Captura em toda a área (mesmo transparente)
-                                        onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (d) {
-                                          tb.position += d.delta;
-                                          if (controller.isBroadcastingViewport) {
-                                            controller.currentViewportCenter = tb.position;
-                                          }
-                                          controller.safeNotify();
-                                          controller.broadcastThrottledTextBlockUpdate(page, tb);
-                                        } : null,
-                                        onTapDown: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (_) {
-                                          if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
-                                          
-                                          // 🚀 GUARDAR ESTADO ORIGINAL PARA UNDO
-                                          _originalTextState = tb.clone();
-                                          
-                                          controller.setTextEditing(InlineTarget.block, tb);
-                                          _textController.text = tb.text;
-                                          // 🚀 FOCO RESILIENTE COM DELAY PARA GARANTIR REBUILD
+                                  ignoring: controller.currentTool == ToolMode.pan || 
+                                            controller.currentTool == ToolMode.imageEdit ||
+                                            (controller.currentTool == ToolMode.text && controller.activeInlineTarget == InlineTarget.block),
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTapDown: canTapCanvas && widget.notebook.role != 'viewer' ? (details) {
+                                      if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
+                                      
+                                      // 🚀 TENTAR marcar checklist primeiro (em qualquer modo)
+                                      if (controller.tryToggleChecklistAt(details.localPosition, page)) {
+                                        return; // Interrompe se foi um toque num checkbox
+                                      }
+
+                                      if (controller.currentTool == ToolMode.text) {
+                                        // 🚀 Tentar selecionar texto existente primeiro
+                                        controller.selectTextBlockAt(details.localPosition, page);
+                                        
+                                        if (controller.selectedTextIds.isEmpty) {
+                                          final newBlock = TextBlock(
+                                            text: '', 
+                                            position: details.localPosition, 
+                                            textColorHex: controller.selectedColorHex
+                                          );
+                                          _originalTextState = null;
+                                          controller.addTextBlock(page, newBlock); 
+                                          controller.selectedTextIds.add(newBlock.id); // 🚀 Selecionar o novo bloco
+                                          controller.setTextEditing(InlineTarget.block, newBlock);
+                                          _textController.text = '';
                                           Future.delayed(const Duration(milliseconds: 50), () {
                                             if (mounted) _textFocusNode.requestFocus();
                                           });
-                                        } : null,
-                                        onLongPress: () {
-                                          if (!isEditing) {
-                                            controller.copyToClipboard(tb.text, context);
-                                          }
-                                        },
-                                        child: isEditing
-                                            ? Container(
-                                          width: double.infinity, // 🚀 Expandir para área total do Positioned
-                                          decoration: BoxDecoration(
-                                            border: Border.all(color: const Color(0xFF0F4C5C).withValues(alpha: 0.2), width: 1),
-                                            color: Colors.white.withValues(alpha: 0.1),
-                                          ),
-                                          child: TextField(
-                                            key: ValueKey('edit_${tb.id}'),
-                                            controller: _textController,
-                                            focusNode: _textFocusNode,
-                                            maxLines: null,
-                                            autofocus: true,
-                                            cursorColor: const Color(0xFF0F4C5C),
-                                            keyboardType: TextInputType.multiline, // 🚀 Melhorar teclado
-                                            textInputAction: TextInputAction.newline,
-                                            style: GoogleFonts.inter(
-                                              fontSize: tb.fontSize,
-                                              height: exactLineMulti,
-                                              color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
-                                              fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                              fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                              decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
-                                            ),
-                                            decoration: const InputDecoration(
-                                              border: InputBorder.none,
-                                              isDense: true,
-                                              contentPadding: EdgeInsets.all(8), // 🚀 Aumentar área interna
-                                              hintText: 'Digitar...',
-                                              hintStyle: TextStyle(color: Colors.black12, fontSize: 14),
-                                            ),
-                                            onChanged: (val) {
-                                              tb.text = val;
-                                              controller.safeNotify();
-                                              controller.broadcastTextBlockUpdate(page, tb, senderId: myUserId, debounced: true, isEditing: true); 
-                                            },
-                                          ),
-                                        )
-                                            : Container(
-                                          width: double.infinity, // 🚀 Expandir para área total
-                                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            border: isTextSelected
-                                                ? Border.all(color: const Color(0xFF1976D2), width: 1.5)
-                                                : (editedBy != null 
-                                                    ? Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1)
-                                                    : (controller.currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.15)) : null)),
-                                            color: isTextSelected ? const Color(0x1F1976D2) : (editedBy != null ? Colors.orange.withValues(alpha: 0.05) : null),
-                                          ),
-                                          child: Text(tb.text, style: GoogleFonts.inter(
-                                            fontSize: tb.fontSize, height: exactLineMulti,
-                                            color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
-                                            fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
-                                            fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
-                                            decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
-                                          )),
-                                        ),
-                                      ),
-                                      if (editorName != null)
-                                        Positioned(
-                                          top: -14, left: 0,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                            decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(4)),
-                                            child: Text(
-                                              'A editar: $editorName',
-                                              style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-
-                            // 🖌️ Z-INDEX 4: TINTA E GESTOS (🚀 NO TOPO DE TUDO)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                ignoring: controller.currentTool == ToolMode.pan || 
-                                          controller.currentTool == ToolMode.imageEdit ||
-                                          (controller.currentTool == ToolMode.text && controller.activeInlineTarget == InlineTarget.block),
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTapDown: canTapCanvas && widget.notebook.role != 'viewer' ? (details) {
-                                    if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
-                                    
-                                    if (controller.currentTool == ToolMode.text) {
-                                      // 🚀 CRIAÇÃO DE TEXTO INSTANTÂNEA
-                                      final newBlock = TextBlock(
-                                        text: '', 
-                                        position: details.localPosition, 
-                                        textColorHex: controller.selectedColorHex
-                                      );
-                                      
-                                      _originalTextState = null; // Bloco novo, não tem estado anterior
-                                      
-                                      controller.addTextBlock(page, newBlock); 
-                                      controller.setTextEditing(InlineTarget.block, newBlock);
-                                      _textController.text = '';
-                                      
-                                      // 🚀 FOCO RESILIENTE PARA NOVO TEXTO
-                                      Future.delayed(const Duration(milliseconds: 50), () {
-                                        if (mounted) _textFocusNode.requestFocus();
-                                      });
-                                    }
-                                  } : null,
-                                  onTapUp: controller.currentTool == ToolMode.eraser && widget.notebook.role != 'viewer' ? (details) {
-                                    controller.eraseAtPosition(details.localPosition, page);
-                                  } : null,
-                                  onPanStart: !isBlocked ? (details) {
-                                    final localPos = details.localPosition;
-                                    controller.broadcastPointer(localPos);
-
-                                    if (controller.currentTool == ToolMode.draw) {
-                                      controller.setUserActivity('drawing'); 
-                                      _liveStrokeId = const Uuid().v4(); 
-                                      _lastBroadcastedPointIndex = 0;
-                                      _lastBroadcastTime = DateTime.now();
-                                      controller.activePointsNotifier.value = [localPos];
-                                    }else if (controller.currentTool == ToolMode.select) {
-                                      bool hitSelected = false;
-                                      for (var id in controller.selectedStrokeIds) {
-                                        final matches = page.strokes.where((s) => s.id == id);
-                                        if (matches.isNotEmpty && matches.first.points.any((pt) => (pt - localPos).distance < 25.0)) {
-                                          hitSelected = true; break;
                                         }
+                                      } else if (controller.currentTool == ToolMode.draw) {
+                                        // 🚀 Selecionar texto se for apenas um toque rápido (hit-test)
+                                        controller.selectTextBlockAt(details.localPosition, page);
                                       }
-                                      for (var id in controller.selectedTextIds) {
-                                        final matches = page.textBlocks.where((t) => t.id == id);
-                                        if (matches.isNotEmpty && (matches.first.position - localPos).distance < 50.0) {
-                                          hitSelected = true; break;
-                                        }
-                                      }
+                                    } : null,
+                                    onTapUp: controller.currentTool == ToolMode.eraser && widget.notebook.role != 'viewer' ? (details) {
+                                      controller.eraseAtPosition(details.localPosition, page);
+                                    } : null,
+                                    onPanStart: !isBlocked ? (details) {
+                                      final localPos = details.localPosition;
+                                      controller.broadcastPointer(localPos);
 
-                                      if (hitSelected) {
-                                        controller.isMovingStrokes = true;
-                                        controller.lastPanOffset = localPos;
-                                      } else {
-                                        controller.isMovingStrokes = false;
-                                        controller.selectionRectStart = localPos;
-                                        controller.selectionRectEnd = localPos;
-                                        controller.selectedStrokeIds.clear();
+                                      if (controller.currentTool == ToolMode.draw) {
+                                        // 🚀 Limpar seleções ao começar a desenhar para não confundir
                                         controller.selectedTextIds.clear();
-                                        controller.safeNotify();
-                                      }
-                                    } else if (controller.currentTool == ToolMode.eraser) {
-                                      controller.eraseAtPosition(localPos, page);
-                                    }
-                                  } : null,
-                                  onPanUpdate: !isBlocked ? (details) {
-                                    final localPos = details.localPosition;
-                                    controller.broadcastPointer(localPos);
-                                    if (controller.isBroadcastingViewport) {
-                                      controller.currentViewportCenter = localPos;
-                                    }
-
-                                    if (controller.currentTool == ToolMode.draw) {
-                                      final list = controller.activePointsNotifier.value;
-                                      if (list.isEmpty || (localPos - list.last).distance > 1.5) {
-                                        final newList = List<Offset>.from(list)..add(localPos);
-                                        controller.activePointsNotifier.value = newList;
-
-                                        final now = DateTime.now();
-                                        if (now.difference(_lastBroadcastTime).inMilliseconds > 25 && controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
-                                          final newPoints = newList.sublist(_lastBroadcastedPointIndex);
-                                          if (newPoints.isNotEmpty) {
-                                            controller.sendStrokeUpdate(
-                                              pageNumber: page.pageNumber,
-                                              strokeId: _liveStrokeId!,
-                                              points: newPoints,
-                                              isFinal: false,
-                                            );
-                                            _lastBroadcastedPointIndex = newList.length;
-                                            _lastBroadcastTime = now;
+                                        controller.selectedStrokeIds.clear();
+                                        controller.selectedImageIds.clear();
+                                        
+                                        controller.activeDrawingPageNumber = page.pageNumber; // 🚀 Vincular desenho à página
+                                        controller.setUserActivity('drawing'); 
+                                        _liveStrokeId = const Uuid().v4(); 
+                                        _lastBroadcastedPointIndex = 0;
+                                        _lastBroadcastTime = DateTime.now();
+                                        controller.activePointsNotifier.value = [localPos];
+                                      }else if (controller.currentTool == ToolMode.select) {
+                                        bool hitSelected = false;
+                                        for (var id in controller.selectedStrokeIds) {
+                                          final matches = page.strokes.where((s) => s.id == id);
+                                          if (matches.isNotEmpty && matches.first.points.any((pt) => (pt - localPos).distance < 25.0)) {
+                                            hitSelected = true; break;
                                           }
                                         }
+                                        for (var id in controller.selectedTextIds) {
+                                          final matches = page.textBlocks.where((t) => t.id == id);
+                                          if (matches.isNotEmpty && (matches.first.position - localPos).distance < 50.0) {
+                                            hitSelected = true; break;
+                                          }
+                                        }
+
+                                        if (hitSelected) {
+                                          controller.isMovingStrokes = true;
+                                          controller.lastPanOffset = localPos;
+                                        } else {
+                                          controller.isMovingStrokes = false;
+                                          controller.selectionRectStart = localPos;
+                                          controller.selectionRectEnd = localPos;
+                                          controller.selectedStrokeIds.clear();
+                                          controller.selectedTextIds.clear();
+                                          controller.safeNotify();
+                                        }
+                                      } else if (controller.currentTool == ToolMode.eraser) {
+                                        controller.eraseAtPosition(localPos, page);
                                       }
-                                    } else if (controller.currentTool == ToolMode.select) {
-                                      if (controller.isMovingStrokes && controller.lastPanOffset != null) {
-                                        final delta = localPos - controller.lastPanOffset!;
-                                        controller.moveSelectedStrokes(page, delta);
-                                        controller.lastPanOffset = localPos;
-                                      } else if (controller.selectionRectStart != null) {
-                                        controller.updateSelectionRect(page, localPos);
+                                    } : null,
+                                    onPanUpdate: !isBlocked ? (details) {
+                                      final localPos = details.localPosition;
+                                      controller.broadcastPointer(localPos);
+                                      if (controller.isBroadcastingViewport) {
+                                        controller.currentViewportCenter = localPos;
                                       }
-                                    } else if (controller.currentTool == ToolMode.eraser) {
-                                      controller.eraseAtPosition(localPos, page);
-                                    }
-                                  } : null,
-                                  onPanEnd: !isBlocked ? (details) async {
-                                    if (controller.currentTool == ToolMode.draw) {
-                                      final allPoints = controller.activePointsNotifier.value;
-                                      if (allPoints.isNotEmpty && _liveStrokeId != null) {
-                                        final newStroke = Stroke(
-                                          id: _liveStrokeId!,
-                                          color: controller.selectedColorHex,
-                                          thickness: controller.selectedThickness,
-                                          points: List.from(allPoints),
-                                        );
-                                        controller.addStroke(page, newStroke);
-                                        controller.activePointsNotifier.value = [];
-                                        controller.setUserActivity('idle');
-                                        _liveStrokeId = null;
+
+                                      if (controller.currentTool == ToolMode.draw) {
+                                        final list = controller.activePointsNotifier.value;
+                                        if (list.isEmpty || (localPos - list.last).distance > 1.5) {
+                                          final newList = List<Offset>.from(list)..add(localPos);
+                                          controller.activePointsNotifier.value = newList;
+
+                                          final now = DateTime.now();
+                                          if (now.difference(_lastBroadcastTime).inMilliseconds > 25 && controller.isRealtimeActive && controller.liveNotebookSid != null && myUserId.isNotEmpty) {
+                                            final newPoints = newList.sublist(_lastBroadcastedPointIndex);
+                                            if (newPoints.isNotEmpty) {
+                                              controller.sendStrokeUpdate(
+                                                pageClientId: page.clientId,
+                                                pageNumber: page.pageNumber,
+                                                strokeId: _liveStrokeId!,
+                                                points: newPoints,
+                                                isFinal: false,
+                                              );
+                                              _lastBroadcastedPointIndex = newList.length;
+                                              _lastBroadcastTime = now;
+                                            }
+                                          }
+                                        }
+                                      } else if (controller.currentTool == ToolMode.select) {
+                                        if (controller.isMovingStrokes && controller.lastPanOffset != null) {
+                                          final delta = localPos - controller.lastPanOffset!;
+                                          controller.moveSelectedStrokes(page, delta);
+                                          controller.lastPanOffset = localPos;
+                                        } else if (controller.selectionRectStart != null) {
+                                          controller.updateSelectionRect(page, localPos);
+                                        }
+                                      } else if (controller.currentTool == ToolMode.eraser) {
+                                        controller.eraseAtPosition(localPos, page);
                                       }
-                                    }
-                                    else if (controller.currentTool == ToolMode.select) {
-                                      if (controller.isMovingStrokes) {
-                                        controller.triggerAutoSave(page);
+                                    } : null,
+                                    onPanEnd: !isBlocked ? (details) async {
+                                      if (controller.currentTool == ToolMode.draw) {
+                                        final allPoints = controller.activePointsNotifier.value;
+                                        if (allPoints.isNotEmpty && _liveStrokeId != null) {
+                                          final newStroke = Stroke(
+                                            id: _liveStrokeId!,
+                                            color: controller.selectedColorHex,
+                                            thickness: controller.selectedThickness,
+                                            points: List.from(allPoints),
+                                          );
+                                          controller.addStroke(page, newStroke);
+                                          controller.activePointsNotifier.value = [];
+                                          controller.activeDrawingPageNumber = null; // 🚀 Desenho finalizado
+                                          controller.setUserActivity('idle');
+                                          _liveStrokeId = null;
+                                        }
                                       }
-                                      controller.selectionRectStart = null;
-                                      controller.selectionRectEnd = null;
-                                      controller.isMovingStrokes = false;
-                                      controller.safeNotify();
-                                    }
-                                  } : null,
-                                  child: RepaintBoundary(
+                                      else if (controller.currentTool == ToolMode.select) {
+                                        controller.finalizeSelectionMovement(page);
+                                      }
+                                    } : null,
                                     child: Stack(
                                       fit: StackFit.expand,
                                       children: [
-                                        CustomPaint(
-                                          size: pSize,
-                                          painter: StaticNotebookPainter(
-                                            strokes: page.strokes, lineType: 'blank',
-                                            selectedStrokeIds: controller.selectedStrokeIds,
-                                            selectionRect: controller.selectionRectStart != null && controller.selectionRectEnd != null
-                                                ? Rect.fromPoints(controller.selectionRectStart!, controller.selectionRectEnd!) : null,
+                                        // 🎨 Camada Estática: Só redesenha quando muda o estado global da página
+                                        RepaintBoundary(
+                                          child: CustomPaint(
+                                            size: pSize,
+                                            painter: StaticNotebookPainter(
+                                              strokes: page.strokes, 
+                                              lineType: 'blank',
+                                              lineSpacing: controller.liveLineSpacing,
+                                              selectedStrokeIds: controller.selectedStrokeIds,
+                                              pageVersion: page.version, 
+                                              remoteMovingStrokeIds: controller.remoteMovingStrokeIds, // 🚀
+                                              selectionRect: controller.selectionRectStart != null && controller.selectionRectEnd != null
+                                                  ? Rect.fromPoints(controller.selectionRectStart!, controller.selectionRectEnd!) : null,
+                                            ),
                                           ),
                                         ),
+                                        
+                                        // 📡 Traços Remotos: Camada independente
                                         ValueListenableBuilder<Map<String, Stroke>>(
                                           valueListenable: controller.remoteLiveStrokes,
-                                          builder: (context, remoteMap, _) {
-                                            final filteredMap = Map<String, Stroke>.from(remoteMap)
-                                              ..removeWhere((id, s) => s.pageNumber != null && s.pageNumber != page.pageNumber);
+                                          builder: (context, remoteMap, _) => RepaintBoundary(
+                                            child: CustomPaint(
+                                              size: pSize,
+                                              painter: RemoteLiveStrokesPainter(liveStrokes: remoteMap, targetPageNumber: page.pageNumber)
+                                            ),
+                                          ),
+                                        ),
+
+                                        // ✍️ Traço Ativo: Alta frequência (Sem RepaintBoundary para evitar overhead de rasterização)
+                                        ValueListenableBuilder<List<Offset>>(
+                                          valueListenable: controller.activePointsNotifier,
+                                          builder: (context, points, _) {
+                                            if (controller.activeDrawingPageNumber != page.pageNumber) return const SizedBox.shrink();
+                                            
                                             return CustomPaint(
                                               size: pSize,
-                                              painter: RemoteLiveStrokesPainter(liveStrokes: filteredMap)
+                                              painter: ActiveStrokePainter(currentPoints: points, currentColor: controller.selectedColorHex, currentThickness: controller.selectedThickness)
                                             );
                                           },
                                         ),
-                                        ValueListenableBuilder<List<Offset>>(
-                                          valueListenable: controller.activePointsNotifier,
-                                          builder: (context, points, _) => CustomPaint(
-                                              size: pSize,
-                                              painter: ActiveStrokePainter(currentPoints: points, currentColor: controller.selectedColorHex, currentThickness: controller.selectedThickness)
-                                          ),
-                                        ),
-                                        ValueListenableBuilder<Map<String, Offset>>(
+
+                                        // 🖱️ Cursores: Camada independente
+                                        ValueListenableBuilder<Map<String, dynamic>>(
                                           valueListenable: controller.remotePointers,
-                                          builder: (context, pointers, _) => CustomPaint(
-                                            size: pSize,
-                                            painter: RemotePointersPainter(
-                                              pointers: pointers,
-                                              onlineUsers: controller.onlineUsers,
+                                          builder: (context, pointers, _) => RepaintBoundary(
+                                            child: CustomPaint(
+                                              size: pSize,
+                                              painter: RemotePointersPainter(
+                                                pointers: pointers,
+                                                onlineUsers: controller.onlineUsers,
+                                                targetPageNumber: page.pageNumber,
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -736,171 +712,379 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   ),
                                 ),
                               ),
-                            ),
 
-                            // 🏷️ Z-INDEX 5: CABEÇALHOS META
-                            Positioned(
-                              top: 30, left: 40, right: 40,
-                              child: Center(
-                                child: controller.activeInlineTarget == InlineTarget.title
-                                    ? TextField(
-                                  controller: _textController, focusNode: _textFocusNode, autofocus: true, textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold),
-                                  decoration: const InputDecoration(border: InputBorder.none, hintText: 'Título da Folha...', isDense: true),
-                                  onSubmitted: (_) => _finishEditingInline(page),
-                                )
-                                    : GestureDetector(
-                                  onTap: controller.currentTool == ToolMode.text && widget.notebook.role != 'viewer' ? () {
-                                    if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
-                                    controller.setTextEditing(InlineTarget.title);
-                                    _textController.text = page.title;
-                                    _textFocusNode.requestFocus();
-                                  } : null,
-                                  child: Text(page.title.isEmpty ? (controller.currentTool == ToolMode.text && widget.notebook.role != 'viewer' ? '[ Escrever Título ]' : '') : page.title, style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold, color: page.title.isEmpty ? Colors.black26 : const Color(0xFF1A1A24))),
+                              // 📝 Z-INDEX 4: CAMADA DE TEXTO (No Topo para Interatividade)
+                              ...page.textBlocks.where((t) {
+                                // if (t.isDeleted) debugPrint('👻 [Canvas] Texto Oculto: ${t.id}');
+                                return !t.isDeleted;
+                              }).map((tb) {
+                                final bool isEditing = controller.activeTextBlock?.id == tb.id && controller.activeInlineTarget == InlineTarget.block;
+                                final double exactLineMulti = controller.liveLineSpacing / tb.fontSize;
+                                final bool isTextSelected = controller.selectedTextIds.contains(tb.id);
+                                
+                                final String? editedBy = controller.remoteEditingBlocks[tb.id];
+                                final String? editorName = editedBy != null 
+                                    ? controller.onlineUsers.firstWhere((u) => u['id'].toString() == editedBy, orElse: () => {})['name'] 
+                                    : null;
+
+                                const double hitboxPadding = 15.0;
+                                return Positioned(
+                                  left: tb.position.dx - hitboxPadding, 
+                                  top: tb.position.dy - hitboxPadding,
+                                  width: (pSize.width - tb.position.dx - 20.0).clamp(60.0, pSize.width) + (hitboxPadding * 2),
+                                  child: IgnorePointer(
+                                    ignoring: controller.currentTool != ToolMode.text && !isEditing, 
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        GestureDetector(
+                                          behavior: HitTestBehavior.opaque, 
+                                          onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (d) {
+                                            tb.position += d.delta;
+                                            if (controller.isBroadcastingViewport) {
+                                              controller.currentViewportCenter = tb.position;
+                                            }
+                                            controller.safeNotify();
+                                            controller.broadcastThrottledTextBlockUpdate(page, tb);
+                                          } : null,
+                                          onTapDown: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (_) {
+                                            if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
+                                            
+                                            // 🚀 SELECIONAR antes de editar
+                                            if (!controller.selectedTextIds.contains(tb.id)) {
+                                              setState(() {
+                                                controller.selectedTextIds.clear();
+                                                controller.selectedStrokeIds.clear();
+                                                controller.selectedImageIds.clear();
+                                                controller.selectedTextIds.add(tb.id);
+                                              });
+                                              return; // Primeiro seleciona, segundo clique edita
+                                            }
+
+                                            _originalTextState = tb.clone();
+                                            controller.setTextEditing(InlineTarget.block, tb);
+                                            _textController.text = tb.text;
+                                            Future.delayed(const Duration(milliseconds: 50), () {
+                                              if (mounted) _textFocusNode.requestFocus();
+                                            });
+                                          } : null,
+                                          onLongPress: () {
+                                            if (!isEditing) {
+                                              controller.copyToClipboard(tb.text, context);
+                                            }
+                                          },
+                                          child: isEditing
+                                              ? Container(
+                                            margin: const EdgeInsets.all(hitboxPadding),
+                                            width: double.infinity, 
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: const Color(0xFF0F4C5C).withValues(alpha: 0.2), width: 1),
+                                              color: Colors.white.withValues(alpha: 0.1),
+                                            ),
+                                            child: TextField(
+                                              key: ValueKey('edit_${tb.id}'),
+                                              controller: _textController,
+                                              focusNode: _textFocusNode,
+                                              maxLines: null,
+                                              autofocus: true,
+                                              cursorColor: const Color(0xFF0F4C5C),
+                                              keyboardType: TextInputType.multiline, 
+                                              textInputAction: TextInputAction.newline,
+                                              style: GoogleFonts.inter(
+                                                fontSize: tb.fontSize,
+                                                height: exactLineMulti,
+                                                color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                                fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                                fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                                decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                              ),
+                                              decoration: InputDecoration(
+                                                border: InputBorder.none,
+                                                isDense: true,
+                                                contentPadding: EdgeInsets.only(left: tb.isChecklist ? 22 : 0), 
+                                                hintText: 'Digitar...',
+                                                hintStyle: const TextStyle(color: Colors.black12, fontSize: 14),
+                                              ),
+                                              onChanged: (val) {
+                                                tb.text = val;
+                                                controller.safeNotify();
+                                                controller.broadcastTextBlockUpdate(page, tb, senderId: myUserId, debounced: true, isEditing: true); 
+                                              },
+                                            ),
+                                          )
+                                              : Container(
+                                            width: double.infinity, 
+                                            padding: const EdgeInsets.all(hitboxPadding),
+                                            decoration: BoxDecoration(
+                                              border: isTextSelected
+                                                  ? Border.all(color: const Color(0xFF1976D2), width: 1.5)
+                                                  : (editedBy != null 
+                                                      ? Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1)
+                                                      : (controller.currentTool == ToolMode.text ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.15)) : null)),
+                                              color: isTextSelected 
+                                                  ? const Color(0x1F1976D2) 
+                                                  : (editedBy != null 
+                                                      ? Colors.orange.withValues(alpha: 0.05) 
+                                                      : Colors.transparent), // 🚀 Garante que a área transparente capte toques
+                                            ),
+                                            child: tb.isChecklist 
+                                              ? Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: tb.text.split('\n').asMap().entries.map((entry) {
+                                                    final int idx = entry.key;
+                                                    final String line = entry.value;
+                                                    final bool isChecked = tb.checkedLineIndices.contains(idx);
+                                                    return Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                                      children: [
+                                                        GestureDetector(
+                                                          onTap: widget.notebook.role != 'viewer' ? () => controller.toggleLineChecked(tb, idx) : null,
+                                                          child: Padding(
+                                                            padding: const EdgeInsets.only(right: 6, bottom: 2),
+                                                            child: Icon(
+                                                              isChecked ? Icons.check_box : Icons.check_box_outline_blank,
+                                                              size: tb.fontSize * 1.1,
+                                                              color: isChecked ? const Color(0xFF0F4C5C) : Colors.black26,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        Expanded(
+                                                          child: Text(line, style: GoogleFonts.inter(
+                                                            fontSize: tb.fontSize, height: exactLineMulti,
+                                                            color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))).withValues(alpha: isChecked ? 0.4 : 1.0),
+                                                            fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                                            fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                                            decoration: isChecked ? TextDecoration.lineThrough : (tb.isUnderline ? TextDecoration.underline : TextDecoration.none),
+                                                          )),
+                                                        ),
+                                                      ],
+                                                    );
+                                                  }).toList(),
+                                                )
+                                              : Text(tb.text, style: GoogleFonts.inter(
+                                                  fontSize: tb.fontSize, height: exactLineMulti,
+                                                  color: Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF'))),
+                                                  fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal,
+                                                  fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal,
+                                                  decoration: tb.isUnderline ? TextDecoration.underline : TextDecoration.none,
+                                                )),
+                                          ),
+                                        ),
+                                        if (editorName != null)
+                                          Positioned(
+                                            top: -14, left: 0,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                              decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(4)),
+                                              child: Text(
+                                                'A editar: $editorName',
+                                                style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+
+                              // 🏷️ Z-INDEX 5: CABEÇALHOS META
+                              Positioned(
+                                top: 30, left: 40, right: 40,
+                                child: Center(
+                                  child: controller.activeInlineTarget == InlineTarget.title
+                                      ? TextField(
+                                    controller: _textController, focusNode: _textFocusNode, autofocus: true, textAlign: TextAlign.center,
+                                    style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold),
+                                    decoration: const InputDecoration(border: InputBorder.none, hintText: 'Título da Folha...', isDense: true),
+                                    onSubmitted: (_) => _finishEditingInline(page),
+                                  )
+                                      : GestureDetector(
+                                    onTap: controller.currentTool == ToolMode.text && widget.notebook.role != 'viewer' ? () {
+                                      if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
+                                      controller.setTextEditing(InlineTarget.title);
+                                      _textController.text = page.title;
+                                      _textFocusNode.requestFocus();
+                                    } : null,
+                                    child: Text(page.title.isEmpty ? (controller.currentTool == ToolMode.text && widget.notebook.role != 'viewer' ? '[ Escrever Título ]' : '') : page.title, style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold, color: page.title.isEmpty ? Colors.black26 : const Color(0xFF1A1A24))),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+                    );
+                  },
+                );
+              },
+            ),
 
-          if (widget.notebook.role != 'viewer')
-            Positioned(
-              bottom: 20, left: 0, right: 0,
-              child: Center(
-                  child: controller.activeInlineTarget != InlineTarget.none
-                      ? _buildInlineEditingToolbar(controller, currentPage!)
-                      : CanvasToolbar(
-                    controller: controller,
-                    currentPage: currentPage!,
-                    onColorTap: () => _showColorStudioDialog(controller, isForText: false),
-                    onThicknessTap: () => _showThicknessStudioDialog(controller),
-                    onChangePaperTap: () => _showPaperStyleStudioDialog(controller),
-                    onDeletePageTap: () => _confirmDeletePage(controller, controller.pages[controller.currentPageIndex], controller.currentPageIndex),
-                    onAiAssistantTap: () => _showAiAssistantSheet(controller, currentPage),
+            if (widget.notebook.role != 'viewer' && !controller.isFocusMode)
+              Positioned(
+                bottom: 20, left: 0, right: 0,
+                child: Center(
+                    child: controller.activeInlineTarget != InlineTarget.none
+                        ? _buildInlineEditingToolbar(controller, currentPage!)
+                        : CanvasToolbar(
+                      controller: controller,
+                      currentPage: currentPage!,
+                      onColorTap: () => _showColorStudioDialog(controller, isForText: false),
+                      onThicknessTap: () => _showThicknessStudioDialog(controller),
+                      onChangePaperTap: () => _showPaperStyleStudioDialog(controller),
+                      onDeletePageTap: () => _confirmDeletePage(controller, controller.pages[controller.currentPageIndex], controller.currentPageIndex),
+                      onAiAssistantTap: () => _showAiAssistantSheet(controller, currentPage),
+                    )
+                ),
+              ),
+
+            if (controller.isFocusMode)
+              Positioned(
+                bottom: 30, right: 20,
+                child: FloatingActionButton.small(
+                  backgroundColor: const Color(0xFF0F4C5C),
+                  onPressed: () => controller.toggleFocusMode(),
+                  child: const Icon(Icons.fullscreen_exit, color: Colors.white),
+                ),
+              ),
+
+            if (controller.isLiveSessionActive && !controller.isFocusMode)
+              Positioned(
+                  top: 16, left: 0, right: 0,
+                  child: Center(
+                      child: LiveVoiceCockpit(
+                        onlineUsers: controller.onlineUsers,
+                        userAudioLevels: controller.userAudioLevels,
+                        userReactions: controller.userReactions, 
+                        followingUserId: controller.followingUserId,
+                        myUserId: myUserId, 
+                        isSpeakerOn: controller.isSpeakerOn,
+                        isRecording: controller.isRecording,
+                        isLoading: controller.isConnectingVoice,
+                        isBroadcasting: controller.isBroadcastingViewport,
+                        isHandRaised: controller.isMyHandRaised, // 🚀
+                        onSpeakerToggle: controller.toggleSpeaker,
+                        onMicTap: controller.handleLiveAudioAction,
+                        onHandToggle: controller.toggleHandRaise, // 🚀
+                        onBroadcastToggle: () {
+                          if (controller.isBroadcastingViewport) {
+                            controller.stopViewportBroadcasting();
+                          } else {
+                            controller.startViewportBroadcasting(myUserId);
+                          }
+                        },
+                        onReactionSend: (emoji) => controller.sendReaction(emoji),
+                        onUserTap: (uid) => controller.toggleFollowUser(uid, myUserId), 
+                        onHangUp: () => controller.toggleVoiceCall(myUserId),
+                      )
                   )
               ),
-            ),
-
-          if (controller.isLiveSessionActive)
-            Positioned(
-                top: 16, left: 0, right: 0,
-                child: Center(
-                    child: LiveVoiceCockpit(
-                      onlineUsers: controller.onlineUsers,
-                      userAudioLevels: controller.userAudioLevels,
-                      userReactions: controller.userReactions, 
-                      followingUserId: controller.followingUserId,
-                      myUserId: myUserId, 
-                      isSpeakerOn: controller.isSpeakerOn,
-                      isRecording: controller.isRecording,
-                      isLoading: controller.isConnectingVoice,
-                      isBroadcasting: controller.isBroadcastingViewport,
-                      onSpeakerToggle: controller.toggleSpeaker,
-                      onMicTap: controller.handleLiveAudioAction,
-                      onBroadcastToggle: () {
-                        if (controller.isBroadcastingViewport) {
-                          controller.stopViewportBroadcasting();
-                        } else {
-                          controller.startViewportBroadcasting(myUserId);
-                        }
-                      },
-                      onReactionSend: (emoji) => controller.sendReaction(emoji),
-                      onUserTap: (uid) => controller.toggleFollowUser(uid, myUserId), 
-                      onHangUp: () => controller.toggleVoiceCall(myUserId),
-                    )
-                )
-            ),
-          
-          const Positioned(
-            top: 130, 
-            left: 16,
-            child: CollaborationChatWidget(), 
-          ),
-          
-          if (controller.followingUserId != null)
-            Positioned(
-              top: 80, left: 20,
-              child: _buildStatusBadge(
-                icon: Icons.visibility,
-                label: 'A assistir colega...',
-                color: Colors.green,
-                onClose: () => controller.toggleFollowUser(null, myUserId),
+            
+            if (!controller.isFocusMode) ...[
+              Positioned(
+                bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 4 : 120, 
+                right: 16,
+                child: const CollaborationChatWidget(), 
               ),
-            ),
+              
+              if (controller.followingUserId != null)
+                Positioned(
+                  top: 80, left: 20,
+                  child: _buildStatusBadge(
+                    icon: Icons.visibility,
+                    label: 'A assistir colega...',
+                    color: Colors.green,
+                    onClose: () => controller.toggleFollowUser(null, myUserId),
+                  ),
+                ),
 
-          if (controller.isBroadcastingViewport)
-            Positioned(
-              top: 80, right: 20,
-              child: _buildStatusBadge(
-                icon: Icons.sensors,
-                label: 'A transmitir a minha visão',
-                color: Colors.redAccent,
-                onClose: () => controller.stopViewportBroadcasting(),
-              ),
-            ),
+              if (controller.isBroadcastingViewport)
+                Positioned(
+                  top: 80, right: 20,
+                  child: _buildStatusBadge(
+                    icon: Icons.sensors,
+                    label: 'A transmitir a minha visão',
+                    color: Colors.redAccent,
+                    onClose: () => controller.stopViewportBroadcasting(),
+                  ),
+                ),
 
-          if (controller.remoteUploadingUsers.isNotEmpty)
-            Positioned(
-              top: 130, right: 20,
-              child: _buildStatusBadge(
-                icon: Icons.cloud_upload,
-                label: '${controller.remoteUploadingUsers.length} colega(s) a carregar imagens...',
-                color: Colors.blueGrey,
-                onClose: () {},
-              ),
-            ),
+              if (controller.remoteUploadingUsers.isNotEmpty)
+                Positioned(
+                  top: 130, right: 20,
+                  child: _buildStatusBadge(
+                    icon: Icons.cloud_upload,
+                    label: '${controller.remoteUploadingUsers.length} colega(s) a carregar imagens...',
+                    color: Colors.blueGrey,
+                    onClose: () {},
+                  ),
+                ),
+            ],
 
-          if (controller.isUploadingImage)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.3),
-                child: Center(
-                  child: Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(color: Color(0xFF0F4C5C)),
-                          const SizedBox(height: 16),
-                          Text('A enviar imagem...', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-                          Text('Isto poupa largura de banda para todos.', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54)),
-                        ],
+            if (controller.isUploadingImage)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  child: Center(
+                    child: Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(color: Color(0xFF0F4C5C)),
+                            const SizedBox(height: 16),
+                            Text('A enviar imagem...', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                            Text('Isto poupa largura de banda para todos.', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-          if (controller.pendingInvite != null)
-            Positioned(
-              top: 100, left: 20, right: 20,
-              child: _buildInviteBanner(controller),
-            ),
+            // 🔔 NOTIFICAÇÕES DE LIVE (DESENHO E VOZ)
+            if (!controller.isFocusMode)
+              Positioned(
+                top: 100, left: 20, right: 20,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (controller.pendingInvite != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _buildInviteBanner(controller),
+                      ),
+                    
+                    // 🚀 BANNER PERSISTENTE: Se não temos invite mas houver gente em voz
+                    if (controller.incomingVoiceCall != null)
+                      _buildVoiceInviteBanner(controller, controller.incomingVoiceCall!)
+                    else if (controller.isAnyUserInVoice && !controller.isLiveSessionActive)
+                      _buildVoiceInviteBanner(controller, controller.firstActiveVoiceUser!),
 
-          if (controller.isGlobalSyncing)
-            Positioned(
-              top: 60, left: 0, right: 0,
-              child: Center(child: _buildGlobalSyncBadge()),
-            ),
-        ],
-      ),
-      floatingActionButton: hasPages || widget.notebook.role == 'viewer'
-          ? null
-          : FloatingActionButton(
-        backgroundColor: const Color(0xFF0F4C5C),
-        foregroundColor: Colors.white,
-        onPressed: () => _showAddPageDialog(controller),
-        child: const Icon(Icons.note_add),
+                    if (controller.pendingInvite == null && !controller.isCollaborationEnabled)
+                       const SizedBox.shrink(), // Placeholder para manter estabilidade
+                  ],
+                ),
+              ),
+
+            if (controller.isGlobalSyncing && !controller.isFocusMode)
+              Positioned(
+                top: 60, left: 0, right: 0,
+                child: Center(child: _buildGlobalSyncBadge()),
+              ),
+          ],
+        ),
+        floatingActionButton: (hasPages || widget.notebook.role == 'viewer' || controller.isFocusMode)
+            ? null
+            : FloatingActionButton(
+          backgroundColor: const Color(0xFF0F4C5C),
+          foregroundColor: Colors.white,
+          onPressed: () => _showAddPageDialog(controller),
+          child: const Icon(Icons.note_add),
+        ),
       ),
     );
   }
@@ -985,11 +1169,17 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             ),
             TextButton(
               onPressed: () => controller.dismissInvite(),
-              child: const Text('Ignorar', style: TextStyle(color: Colors.white60)),
+              child: const Text('Negar', style: TextStyle(color: Colors.white60)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black),
-              onPressed: () => controller.acceptInvite(),
+              onPressed: () {
+                if (controller.isCollaborationEnabled) {
+                  controller.acceptInvite();
+                } else {
+                  controller.toggleCollaboration(true, suppressBroadcast: true).then((_) => controller.acceptInvite());
+                }
+              },
               child: const Text('Entrar', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
@@ -998,8 +1188,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     );
   }
 
-  Widget _buildVoiceInviteBanner(CanvasController controller) {
-    final call = controller.incomingVoiceCall!;
+  Widget _buildVoiceInviteBanner(CanvasController controller, Map<String, dynamic> data) {
     return Card(
       elevation: 10,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1016,17 +1205,27 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Conversa de Voz!', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text('${call['sender_name'] ?? 'Um colega'} iniciou a chamada.', style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                  Text('${data['sender_name'] ?? data['name'] ?? 'Um colega'} está em Live.', style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
                 ],
               ),
             ),
             TextButton(
-              onPressed: () => controller.dismissVoiceCall(),
-              child: const Text('Ignorar', style: TextStyle(color: Colors.white70)),
+              onPressed: () => controller.dismissVoiceCall(userId: data['id']?.toString()),
+              child: const Text('Negar', style: TextStyle(color: Colors.white70)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF27AE60)),
-              onPressed: () => controller.acceptVoiceCall(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white, 
+                foregroundColor: const Color(0xFF27AE60),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              onPressed: () {
+                if (controller.isCollaborationEnabled) {
+                  controller.acceptVoiceCall();
+                } else {
+                  controller.toggleCollaboration(true, suppressBroadcast: true).then((_) => controller.acceptVoiceCall());
+                }
+              },
               child: const Text('Aceitar', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
@@ -1112,6 +1311,12 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               tooltip: 'Miniaturas de Páginas',
             ),
           ),
+
+        IconButton(
+          icon: Icon(controller.isFocusMode ? Icons.fullscreen_exit : Icons.fullscreen),
+          onPressed: () => controller.toggleFocusMode(),
+          tooltip: controller.isFocusMode ? 'Sair do Modo Foco' : 'Modo Foco (Imersivo)',
+        ),
       ],
     );
   }
@@ -1141,7 +1346,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: controller.pages.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final page = controller.pages[index];
                 final isCurrent = controller.currentPageIndex == index;
@@ -1247,7 +1452,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
           spacing: 4,
           children: [
             IconButton(
-              focusNode: FocusNode(canRequestFocus: false), // 🚀 Impedir perda de foco
+              focusNode: FocusNode(canRequestFocus: false), 
               icon: Icon(Icons.format_bold, color: tb.isBold ? const Color(0xFF0F4C5C) : Colors.black45), 
               onPressed: () => controller.toggleBold()
             ),
@@ -1260,6 +1465,11 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               focusNode: FocusNode(canRequestFocus: false),
               icon: Icon(Icons.format_underlined, color: tb.isUnderline ? const Color(0xFF0F4C5C) : Colors.black45), 
               onPressed: () => controller.toggleUnderline()
+            ),
+            IconButton(
+              focusNode: FocusNode(canRequestFocus: false),
+              icon: Icon(Icons.checklist_rtl, color: tb.isChecklist ? const Color(0xFF0F4C5C) : Colors.black45), 
+              onPressed: () => controller.toggleChecklist()
             ),
             Container(width: 1, height: 20, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
@@ -1294,7 +1504,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             ),
             const SizedBox(width: 4),
             ElevatedButton(
-                focusNode: FocusNode(canRequestFocus: false), // 🚀 Impedir perda de foco no OK
+                focusNode: FocusNode(canRequestFocus: false), 
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C), shape: const StadiumBorder()),
                 onPressed: () => _finishEditingInline(currentPage),
                 child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
@@ -1305,7 +1515,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.insert_page_break_outlined, size: 80, color: Colors.black.withOpacity(0.1)), const SizedBox(height: 16), Text('Este caderno está vazio.\nClique no botão flutuante para criar a primeira folha.', textAlign: TextAlign.center, style: GoogleFonts.inter(color: Colors.black45, fontSize: 16))]));
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.insert_page_break_outlined, size: 80, color: Colors.black.withValues(alpha: 0.1)), const SizedBox(height: 16), Text('Este caderno está vazio.\nClique no botão flutuante para criar a primeira folha.', textAlign: TextAlign.center, style: GoogleFonts.inter(color: Colors.black45, fontSize: 16))]));
   }
 
   void _showAddPageDialog(CanvasController controller) {
@@ -1320,8 +1530,20 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Orientação do Papel:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54)),
             const SizedBox(height: 8),
-            RadioListTile<bool>(title: const Text('Retrato (Vertical)'), value: false, groupValue: isLand, activeColor: const Color(0xFF0F4C5C), onChanged: (v) => setModalState(() => isLand = v!)),
-            RadioListTile<bool>(title: const Text('Paisagem (Horizontal)'), value: true, groupValue: isLand, activeColor: const Color(0xFF0F4C5C), onChanged: (v) => setModalState(() => isLand = v!)),
+            RadioListTile<bool>(
+              title: const Text('Retrato (Vertical)'),
+              value: false,
+              groupValue: isLand,
+              activeColor: const Color(0xFF0F4C5C),
+              onChanged: (v) => setModalState(() => isLand = v!),
+            ),
+            RadioListTile<bool>(
+              title: const Text('Paisagem (Horizontal)'),
+              value: true,
+              groupValue: isLand,
+              activeColor: const Color(0xFF0F4C5C),
+              onChanged: (v) => setModalState(() => isLand = v!),
+            ),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.black54))),
@@ -1433,13 +1655,34 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFFFDFBF7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Pauta do Papel', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildPaperOption(controller, 'ruled', 'Pautado (28px)', Icons.view_headline), const SizedBox(height: 8),
-            _buildPaperOption(controller, 'grid', 'Quadriculado (25px)', Icons.grid_4x4), const SizedBox(height: 8),
-            _buildPaperOption(controller, 'blank', 'Liso / Em Branco', Icons.check_box_outline_blank),
-          ],
+        content: StatefulBuilder(
+          builder: (context, setModalState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildPaperOption(controller, 'ruled', 'Pautado (28px)', Icons.view_headline), const SizedBox(height: 8),
+                _buildPaperOption(controller, 'grid', 'Quadriculado (25px)', Icons.grid_4x4), const SizedBox(height: 8),
+                _buildPaperOption(controller, 'dots', 'Pontilhado (Dots)', Icons.more_horiz), const SizedBox(height: 8),
+                _buildPaperOption(controller, 'oblique', 'Oblíquo (Caligrafia)', Icons.text_rotation_angleup), const SizedBox(height: 16),
+
+                Text('Espaçamento: ${controller.liveLineSpacing.toInt()}px', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+                Slider(
+                  value: controller.liveLineSpacing.clamp(10.0, 100.0),
+                  min: 10, max: 100,
+                  divisions: 90,
+                  activeColor: const Color(0xFF0F4C5C),
+                  onChanged: controller.liveLineType == 'blank' ? null : (val) {
+                    setModalState(() {
+                      controller.liveLineSpacing = val;
+                    });
+                    controller.setLineSpacing(val, controller.pages[controller.currentPageIndex]);
+                  },
+                ),
+                const SizedBox(height: 8),
+                _buildPaperOption(controller, 'blank', 'Liso / Em Branco', Icons.check_box_outline_blank),
+              ],
+            );
+          },
         ),
       ),
     );

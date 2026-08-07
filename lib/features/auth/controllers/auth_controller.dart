@@ -107,8 +107,8 @@ class AuthController extends ChangeNotifier {
           _connectToPrivateRadar(_currentUser!.id!);
         }
 
-        debugPrint('🔄 [Auth] A iniciar sincronização total pós-login...');
-        await SyncService().syncAll();
+        debugPrint('🔄 [Auth] A iniciar sincronização de metadados pós-login...');
+        await SyncService().syncAll(metadataOnly: true);
 
         _isLoading = false;
         notifyListeners();
@@ -158,7 +158,8 @@ class AuthController extends ChangeNotifier {
           _connectToPrivateRadar(_currentUser!.id!);
         }
 
-        await SyncService().syncAll();
+        debugPrint('🔄 [Auth] A iniciar sincronização de metadados pós-registo...');
+        await SyncService().syncAll(metadataOnly: true);
 
         _isLoading = false;
         notifyListeners();
@@ -271,7 +272,7 @@ class AuthController extends ChangeNotifier {
     // 🚀 0. SINCRONIZAÇÃO FORÇADA DE SEGURANÇA
     try {
       debugPrint('🔄 [Auth] A iniciar sincronização final antes do logout...');
-      await SyncService().syncAll(forced: true);
+      await SyncService().syncAll(forced: true, metadataOnly: false);
       debugPrint('✅ [Auth] Sincronização final concluída.');
     } catch (e) {
       debugPrint('🚨 [Auth] Erro na sincronização final (prosseguindo logout): $e');

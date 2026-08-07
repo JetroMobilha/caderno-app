@@ -1,3 +1,4 @@
+// VERSION 2026-08-06-V1 (UI COLLABORATION SHIELD)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,6 +7,10 @@ import 'package:caderno_digital_app/features/canvas/controllers/canvas_controlle
 import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 
+// -------------------------------------------------------------------------
+// 🛡️ [ZONA PROTEGIDA] CENTRO DE COLABORAÇÃO UI 🛡️
+// ESTE COMPONENTE GERE A INTERFACE CRÍTICA DE LIGAÇÃO E SESSÕES LIVE.
+// -------------------------------------------------------------------------
 class CollaborationCenterSheet extends ConsumerWidget {
   final Notebook notebook;
 
@@ -16,7 +21,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     final controller = ref.watch(canvasProvider);
     final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
 
-    return DraggableScrollableSheet( // 🚀 Torna o sheet expansível se houver muitos colegas
+    return DraggableScrollableSheet( 
       initialChildSize: 0.7,
       minChildSize: 0.4,
       maxChildSize: 0.95,
@@ -27,51 +32,45 @@ class CollaborationCenterSheet extends ConsumerWidget {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
-        child: ListView( // 🚀 Usa ListView com o controller do sheet
+        child: ListView( 
           controller: scrollController,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const SizedBox(width: 48), 
+                    Expanded(
+                      child: Text(
                         'Centro de Colaboração 🛰️',
-                        style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
-                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
                       ),
-                      const SizedBox(height: 4),
-                      _buildRoleBadge(controller.currentUserRole),
-                    ],
-                  ),
+                    ),
+                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                  ],
                 ),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                const SizedBox(height: 8),
+                if (controller.isCollaborationEnabled)
+                  ValueListenableBuilder<RealtimeStatus>(
+                    valueListenable: realtimeStatus,
+                    builder: (context, status, _) => Center(child: _buildStatusIndicator(status)),
+                  ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
-            // 🎙️ CONVITE DE VOZ ATIVO (Se existir)
             if (controller.incomingVoiceCall != null) ...[
               _buildInternalVoiceInvite(controller),
               const SizedBox(height: 16),
             ],
 
-            // 🌐 MODO ONLINE TOGGLE
             _buildOnlineToggle(controller),
             const SizedBox(height: 16),
 
-            // 🛰️ STATUS DA LIGAÇÃO
-            if (controller.isCollaborationEnabled)
-              ValueListenableBuilder<RealtimeStatus>(
-                valueListenable: realtimeStatus,
-                builder: (context, status, _) => _buildStatusIndicator(status),
-              ),
-
             const Divider(height: 32),
 
-            // 👥 QUEM ESTÁ NA SALA
             Text(
               'Colegas na Sala:',
               style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
@@ -84,35 +83,46 @@ class CollaborationCenterSheet extends ConsumerWidget {
             else
               _buildUserList(controller, context),
 
-            const SizedBox(height: 32), // 🚀 Espaçamento maior antes das ações
+            const SizedBox(height: 32), 
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildVoiceButton(controller, context),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildActionButton(
-                      icon: controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off,
-                      label: controller.isBroadcastingViewport ? 'Parar Visão' : 'Transmitir Visão',
-                      color: controller.isBroadcastingViewport ? Colors.redAccent : const Color(0xFF0F4C5C),
-                      onTap: () {
-                        if (controller.isBroadcastingViewport) {
-                          controller.stopViewportBroadcasting();
-                        } else {
-                          controller.startViewportBroadcasting(controller.myUserId);
-                        }
-                        Navigator.pop(context);
-                      },
+            ValueListenableBuilder<RealtimeStatus>(
+              valueListenable: realtimeStatus,
+              builder: (context, status, _) {
+                if (!controller.isCollaborationEnabled || status != RealtimeStatus.connected) {
+                  return const SizedBox.shrink();
+                }
+
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildVoiceButton(controller, context),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildActionButton(
+                            icon: controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off,
+                            label: controller.isBroadcastingViewport ? 'Parar Visão' : 'Transmitir Visão',
+                            color: controller.isBroadcastingViewport ? Colors.redAccent : const Color(0xFF0F4C5C),
+                            onTap: () {
+                              if (controller.isBroadcastingViewport) {
+                                controller.stopViewportBroadcasting();
+                              } else {
+                                controller.startViewportBroadcasting(controller.myUserId);
+                              }
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 20),
+                  ],
+                );
+              },
+            ),
 
-            const SizedBox(height: 20), // 🚀 Margem entre linhas de botões
-
-            // 🤝 BOTÃO DE PARTILHA (Integrado)
             if (notebook.role == 'owner')
               SizedBox(
                 width: double.infinity,
@@ -138,11 +148,15 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // 🛡️ MÉTODOS DE CONSTRUÇÃO DE INTERFACE PROTEGIDOS 🛡️
+  // -------------------------------------------------------------------------
+
   Widget _buildOnlineToggle(CanvasController controller) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: controller.isCollaborationEnabled ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        color: controller.isCollaborationEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -172,7 +186,8 @@ class CollaborationCenterSheet extends ConsumerWidget {
           ),
           Switch(
             value: controller.isCollaborationEnabled,
-            activeColor: Colors.green,
+            activeThumbColor: Colors.green,
+            activeTrackColor: Colors.green.withValues(alpha: 0.5),
             onChanged: (val) => controller.toggleCollaboration(val),
           ),
         ],
@@ -184,25 +199,23 @@ class CollaborationCenterSheet extends ConsumerWidget {
     String text = 'Desconectado';
     Color color = Colors.grey;
     if (status == RealtimeStatus.connected) {
-      text = 'Ligação Estável via Reverb';
+      text = 'Ligação estável';
       color = Colors.green;
     } else if (status == RealtimeStatus.connecting) {
-      text = 'A estabelecer ligação...';
+      text = 'A ligar...';
       color = Colors.orange;
     } else if (status == RealtimeStatus.error) {
-      text = 'Falha na rede (A tentar reconectar)';
+      text = 'Erro de rede';
       color = Colors.red;
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, left: 4),
-      child: Row(
-        children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          const SizedBox(width: 8),
-          Text(text, style: GoogleFonts.inter(fontSize: 12, color: color, fontWeight: FontWeight.w500)),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(text, style: GoogleFonts.inter(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 
@@ -224,9 +237,9 @@ class CollaborationCenterSheet extends ConsumerWidget {
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isFollowing ? Colors.blue.withOpacity(0.05) : Colors.grey.withOpacity(0.05),
+            color: isFollowing ? Colors.blue.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isFollowing ? Colors.blue.withOpacity(0.3) : Colors.transparent),
+            border: Border.all(color: isFollowing ? Colors.blue.withValues(alpha: 0.3) : Colors.transparent),
           ),
           child: Row(
             children: [
@@ -234,7 +247,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 children: [
                   CircleAvatar(
                     radius: 20,
-                    backgroundColor: u['color'] as Color,
+                    backgroundColor: (u['color'] as Color?) ?? Colors.blueGrey,
                     child: Text(u['name'][0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                   if (isTalking)
@@ -258,7 +271,13 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(u['name'], style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Row(
+                      children: [
+                        Flexible(child: Text(u['name'], style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14))),
+                        const SizedBox(width: 8),
+                        _buildRoleBadge(u['role'] ?? 'student', isSmall: true), 
+                      ],
+                    ),
                     Text(isFollowing ? 'A assistir visão...' : 'Online agora', 
                          style: GoogleFonts.inter(fontSize: 11, color: isFollowing ? Colors.blue : Colors.black45)),
                   ],
@@ -290,7 +309,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(color: Colors.grey.withOpacity(0.05), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
       child: Center(
         child: Text(message, textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 12, color: Colors.black38, fontStyle: FontStyle.italic)),
       ),
@@ -314,25 +333,39 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildRoleBadge(String role) {
+  Widget _buildRoleBadge(String role, {bool isSmall = false}) {
     Color color = Colors.grey;
     String label = 'Visitante';
 
-    if (role == 'owner') { color = Colors.orange; label = 'Dono do Caderno'; }
+    if (role == 'owner') { color = Colors.orange; label = 'Dono'; }
     else if (role == 'editor') { color = Colors.blue; label = 'Editor'; }
     else if (role == 'student') { color = Colors.teal; label = 'Aluno'; }
     else if (role == 'viewer') { color = Colors.blueGrey; label = 'Leitor'; }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.5), width: 1)),
-      child: Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+      padding: EdgeInsets.symmetric(horizontal: isSmall ? 6 : 10, vertical: isSmall ? 1 : 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15), 
+        borderRadius: BorderRadius.circular(20), 
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.5)
+      ),
+      child: Text(
+        label, 
+        style: GoogleFonts.inter(
+          fontSize: isSmall ? 9 : 11, 
+          fontWeight: FontWeight.bold, 
+          color: color
+        )
+      ),
     );
   }
 
+  // -------------------------------------------------------------------------
+  // 🛡️ GESTÃO DE CONVITES E ACÇÕES DE VOZ 🛡️
+  // -------------------------------------------------------------------------
+
   Widget _buildVoiceButton(CanvasController controller, BuildContext context) {
     final bool isModerator = controller.currentUserRole == 'owner' || controller.currentUserRole == 'editor';
-    final bool canStart = isModerator || controller.isRemoteVoiceCallActive;
 
     String label = 'Iniciar Estudo Live';
     IconData icon = Icons.podcasts;

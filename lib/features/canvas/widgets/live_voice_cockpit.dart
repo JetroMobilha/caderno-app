@@ -13,8 +13,10 @@ class LiveVoiceCockpit extends StatelessWidget {
   final VoidCallback onMicTap; // 🎙️ Novo
   final Function(String) onReactionSend; 
   final Function(String) onUserTap; // 🚀 Novo: Seguir utilizador
-  final bool isBroadcasting; // 🚀 Novo
-  final VoidCallback onBroadcastToggle; // 🚀 Novo
+  final bool isBroadcasting; 
+  final VoidCallback onBroadcastToggle; 
+  final bool isHandRaised; // 🚀
+  final VoidCallback onHandToggle; // 🚀
   final VoidCallback onHangUp;
 
   const LiveVoiceCockpit({
@@ -23,16 +25,18 @@ class LiveVoiceCockpit extends StatelessWidget {
     required this.userAudioLevels,
     required this.userReactions,
     this.followingUserId,
-    required this.myUserId, // 🚀
+    required this.myUserId, 
     required this.isSpeakerOn,
-    this.isRecording = false, // 🎙️
+    this.isRecording = false, 
     this.isLoading = false,
     required this.onSpeakerToggle,
-    required this.onMicTap, // 🎙️
+    required this.onMicTap, 
     required this.onReactionSend, 
     required this.onUserTap, 
-    this.isBroadcasting = false, // 🚀
-    required this.onBroadcastToggle, // 🚀
+    this.isBroadcasting = false, 
+    required this.onBroadcastToggle, 
+    required this.isHandRaised, // 🚀
+    required this.onHandToggle, // 🚀
     required this.onHangUp,
   });
 
@@ -102,7 +106,7 @@ class LiveVoiceCockpit extends StatelessWidget {
                     const BoxShadow(color: Colors.blue, blurRadius: 8, spreadRadius: 1)
                   ] : (activity != 'idle' ? [
                     BoxShadow(
-                      color: activity == 'drawing' ? Colors.orangeAccent.withOpacity(0.3) : Colors.blueAccent.withOpacity(0.3),
+                      color: activity == 'drawing' ? Colors.orangeAccent.withValues(alpha: 0.3) : Colors.blueAccent.withValues(alpha: 0.3),
                       blurRadius: 8,
                       spreadRadius: 1
                     )
@@ -200,6 +204,14 @@ class LiveVoiceCockpit extends StatelessWidget {
           ),
           const SizedBox(width: 4),
 
+          // ✋ Mão Levantada
+          _buildVoiceButton(
+            icon: Icons.pan_tool,
+            color: isHandRaised ? Colors.orangeAccent : Colors.white12,
+            onTap: onHandToggle,
+          ),
+          const SizedBox(width: 4),
+
           // 🎭 Reações Rápidas
           _buildReactionPicker(context),
           const SizedBox(width: 4),
@@ -228,7 +240,7 @@ class LiveVoiceCockpit extends StatelessWidget {
           color: color, 
           shape: BoxShape.circle,
           boxShadow: isRecording ? [
-            BoxShadow(color: Colors.redAccent.withOpacity(0.5), blurRadius: 10, spreadRadius: 2)
+            BoxShadow(color: Colors.redAccent.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 2)
           ] : null,
         ),
         child: Icon(icon, size: 14, color: Colors.white),

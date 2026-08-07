@@ -1,23 +1,31 @@
 {
-    "name": "caderno_digital_app",
-    "short_name": "caderno_digital_app",
-    "start_url": ".",
+    "name": "Caderno Digital",
+    "short_name": "Caderno",
+    "start_url": "./",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FDFBF7",
+    "theme_color": "#0F4C5C",
+    "description": "O teu caderno inteligente para notas, desenhos e colaboração em tempo real.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "id": "caderno-digital-app",
+    "scope": "./",
+    "categories": [
+        "education",
+        "productivity"
+    ],
     "icons": [
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-512.png",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-maskable-192.png",

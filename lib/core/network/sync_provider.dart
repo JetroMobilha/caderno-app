@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/controllers/auth_controller.dart';
@@ -7,20 +8,43 @@ import 'sync_service.dart';
 class SyncNotifier extends StateNotifier<SyncState> {
   final Ref ref;
   Timer? _syncTimer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   final SyncService _syncService = SyncService();
 
   SyncNotifier(this.ref) : super(SyncState.idle) {
-    // Iniciar o loop de sincronização automática
+    // 1. Iniciar o loop de sincronização periódica (Failsafe)
     _startAutoSync();
+    
+    // 2. Ouvir mudanças de rede para sincronização inteligente (Quando ficar online)
+    _listenToConnectivity();
+
+    // 3. 🚀 CÓPIA FURTIVA: Tentar sincronizar imediatamente ao abrir a App
+    Future.microtask(() => performSync());
   }
 
   void _startAutoSync() {
     _syncTimer?.cancel();
-    // Tenta sincronizar a cada 5 minutos
+    // Tenta sincronizar a cada 5 minutos como redundância
     _syncTimer = Timer.periodic(const Duration(minutes: 5), (timer) async {
       final auth = ref.read(authProvider);
       if (auth.isAuthenticated) {
         await performSync();
+      }
+    });
+  }
+
+  void _listenToConnectivity() {
+    _connectivitySubscription?.cancel();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) async {
+      // Se voltamos a ter qualquer tipo de ligação, tentamos o sync
+      final bool isConnected = results.any((r) => r != ConnectivityResult.none);
+      
+      if (isConnected) {
+        final auth = ref.read(authProvider);
+        if (auth.isAuthenticated) {
+          debugPrint('🌐 [Sync] Ligação detectada. Disparando sincronização automática...');
+          await performSync();
+        }
       }
     });
   }
@@ -50,6 +74,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:flutter/foundation.dart'; 
@@ -15,6 +16,7 @@ import 'package:vector_math/vector_math_64.dart' hide Colors, Matrix4;
 import 'package:caderno_digital_app/core/database/app_database.dart' as db hide Notebook, Subject, User, Page;
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/core/network/sync_service.dart';
+import 'package:caderno_digital_app/core/network/api_service.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
@@ -26,30 +28,37 @@ import 'package:caderno_digital_app/features/canvas/repositories/canvas_reposito
 
 enum ToolMode { draw, pan, select, text, eraser, insertImage, imageEdit }
 enum InlineTarget { none, block, title, footer }
+// 🚀 LiveRoomType removido em favor de flags de política de sessão
 
 class CanvasController extends ChangeNotifier {
   final CanvasRepository _repository;
   final RealtimeService _realtimeService;
+  final ApiService _apiService = ApiService();
 
   CanvasController(this._realtimeService, {CanvasRepository? repository}) 
       : _repository = repository ?? CanvasRepository(db.AppDatabase.instance) {
     transformationController = TransformationController();
     _audioPlayer.onPlayerComplete.listen((_) {
       audioPlaybackProgress = 0.0;
+      _currentAudioDuration = null;
       safeNotify();
     });
     _audioPlayer.onPositionChanged.listen((pos) {
       if (currentlyPlayingAudioUrl == null) return;
-      _audioPlayer.getDuration().then((dur) {
-        if (dur != null && dur.inMilliseconds > 0) {
-          audioPlaybackProgress = (pos.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0);
-        } else {
-          final m = chatMessages.firstWhere((m) => m['audio_url'] == currentlyPlayingAudioUrl, orElse: () => {});
-          final int d = (m['duration'] as int? ?? 1) * 1000;
-          if (d > 0) audioPlaybackProgress = (pos.inMilliseconds / d).clamp(0.0, 1.0);
-        }
+      
+      if (_currentAudioDuration != null && _currentAudioDuration!.inMilliseconds > 0) {
+        audioPlaybackProgress = (pos.inMilliseconds / _currentAudioDuration!.inMilliseconds).clamp(0.0, 1.0);
         safeNotify();
-      });
+      } else {
+        // Tentar obter a duração se ainda não tivermos ou se mudou
+        _audioPlayer.getDuration().then((dur) {
+          if (dur != null && dur.inMilliseconds > 0) {
+            _currentAudioDuration = dur;
+            audioPlaybackProgress = (pos.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0);
+            safeNotify();
+          }
+        });
+      }
     });
     _audioPlayer.setVolume(1.0);
   }
@@ -91,6 +100,9 @@ class CanvasController extends ChangeNotifier {
   final StreamController<String> _permissionAlertController = StreamController.broadcast();
   Stream<String> get onPermissionAlert => _permissionAlertController.stream;
 
+  final StreamController<Map<String, dynamic>> _sessionMetaStreamController = StreamController.broadcast(); // 🚀
+  Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream;
+
   final List<Map<String, dynamic>> _pendingChatQueue = [];
 
   // 🛡️ [ZONA PROTEGIDA] MOTOR DE ÁUDIO E STREAMING 🛡️
@@ -99,6 +111,30 @@ class CanvasController extends ChangeNotifier {
   AudioRecorder get _audioRecorder => _audioRecorderInstance ??= AudioRecorder();
   String? currentlyPlayingAudioUrl; 
   double audioPlaybackProgress = 0.0; 
+  double playbackSpeed = 1.0; 
+  Duration? _currentAudioDuration; // 🚀 Cache de duração
+
+  void setPlaybackSpeed(double speed) {
+    playbackSpeed = speed;
+    _audioPlayer.setPlaybackRate(speed);
+    safeNotify();
+  }
+
+  Future<void> seekAudio(double percent) async {
+    final dur = await _audioPlayer.getDuration();
+    if (dur != null) {
+      final target = dur * percent;
+      await _audioPlayer.seek(target);
+    }
+  }
+
+  Future<void> skipAudio(int seconds) async {
+    final pos = await _audioPlayer.getCurrentPosition();
+    if (pos != null) {
+      final target = pos + Duration(seconds: seconds);
+      await _audioPlayer.seek(target);
+    }
+  }
   bool isRecording = false;
   bool _isRecordingLive = false; 
   DateTime? _recordingStartTime;
@@ -116,13 +152,22 @@ class CanvasController extends ChangeNotifier {
   bool isLoading = true;
   bool isUploadingImage = false; 
   bool isGlobalSyncing = false; 
+  bool isAiSummarizing = false; // 🚀
+  bool isLessonRecording = false; // 🚀
 
   int? liveNotebookSid;
   int currentNotebookId = 0;
   String currentPaperSize = 'A4';
+  
+  // 🚀 POLÍTICAS DE SESSÃO (SUBSTITUEM LIVE_ROOM_TYPE)
+  bool isSessionLocked = false; // Bloqueia escrita para não-donos
+  bool isAuthorColorEnabled = false; // Identifica quem escreve por cor
+  
   late String liveLineType;
   late double liveLineSpacing; 
   String currentUserRole = 'viewer';
+  String currentTemplateType = 'study'; // 🚀 study, technical, formal
+  Set<String>? visibleAuthorIds; // 🚀 Nulo significa "Todos"
   String myUserId = ""; 
 
   String? selectedEditingImageId; 
@@ -154,6 +199,39 @@ class CanvasController extends ChangeNotifier {
   bool isFocusMode = false; 
 
   void toggleFocusMode() { isFocusMode = !isFocusMode; safeNotify(); }
+
+  void toggleAuthorVisibility(String authorId) {
+    visibleAuthorIds ??= onlineUsers.map((u) => u['id'].toString()).toSet();
+    if (visibleAuthorIds!.contains(authorId)) {
+      visibleAuthorIds!.remove(authorId);
+    } else {
+      visibleAuthorIds!.add(authorId);
+    }
+    safeNotify();
+  }
+
+  void togglePageFreeze(LocalPage page) {
+    if (currentUserRole != 'owner') {
+      _permissionAlertController.add('Apenas o proprietário pode (des)congelar páginas.');
+      return;
+    }
+    page.isFrozen = !page.isFrozen;
+    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    safeNotify();
+    triggerAutoSave(page);
+    if (isRealtimeActive && liveNotebookSid != null) {
+      _realtimeService.broadcastPageEvent(notebookId: liveNotebookSid!, myUserId: myUserId, pageData: {
+        'action': 'metadata_update', 
+        'page_number': page.pageNumber,
+        'is_frozen': page.isFrozen
+      });
+    }
+  }
+
+  void resetAuthorVisibility() {
+    visibleAuthorIds = null;
+    safeNotify();
+  }
 
   // Timers and Debouncers
   Timer? _metadataBroadcastThrottle;
@@ -214,6 +292,7 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _audioLevelSubscription; 
   StreamSubscription? _dbPagesSubscription;
   StreamSubscription? _dbNotebookSubscription;
+  StreamSubscription? _sessionMetaSubscription; // 🚀
   VoidCallback? _statusListener;
 
   final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier({});
@@ -241,6 +320,7 @@ class CanvasController extends ChangeNotifier {
     _audioPlayer.dispose(); _audioRecorderInstance?.dispose(); 
     _newMessageAlertController.close();
     _permissionAlertController.close();
+    _sessionMetaStreamController.close(); // 🚀
     if (liveNotebookSid != null && liveNotebookSid != 0) _realtimeService.leaveNotebookChannel(liveNotebookSid!);
     SyncService.isCollaborationActive = false; super.dispose();
   }
@@ -249,24 +329,202 @@ class CanvasController extends ChangeNotifier {
   // Lifecycle & Core Methods
   // -------------------------------------------------------------------------
   void _resetZoomForPage(LocalPage page, String paperSize) { 
-    final double scale = (paperSize == 'A0' || paperSize == 'A1') ? 0.25 : 1.4; 
+    double scale = 1.4;
+    if (paperSize == 'A0') scale = 0.25;
+    else if (paperSize == 'A1') scale = 0.35;
+    else if (paperSize == 'A2') scale = 0.5;
+    else if (paperSize == 'A3') scale = 0.8;
+    else if (paperSize == 'A5') scale = 1.8;
+
     transformationController.value = Matrix4.diagonal3Values(scale, scale, 1.0); 
   }
 
-  Future<void> initNotebook(int notebookId, int? notebookSid, String lineType, String paperSize, String role, String? userId, {double? lineSpacing}) async {
+  List<db.LessonRecording> lessonRecordings = []; // 🚀
+
+  Future<void> _loadLessonRecordings() async {
+    final d = db.AppDatabase.instance;
+    final rows = await (d.select(d.lessonRecordings)..where((t) => t.notebookId.equals(currentNotebookId))).get();
+    lessonRecordings = rows;
+    safeNotify();
+  }
+
+  Future<void> startLessonRecording() async {
+    if (isLessonRecording) return;
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        isLessonRecording = true;
+        _recordingStartTime = DateTime.now();
+        _activeStreamMessageId = const Uuid().v4();
+        
+        String? path;
+        if (!kIsWeb) {
+          final dir = await getTemporaryDirectory();
+          // 🚀 Padronizado para .m4a em todas as plataformas desktop/mobile
+          path = '${dir.path}/lesson_${_activeStreamMessageId}.m4a';
+        }
+        
+        await _audioRecorder.start(_getRecordConfig(), path: path ?? '');
+        
+        safeNotify();
+      }
+    } catch (e) {
+      isLessonRecording = false;
+      safeNotify();
+    }
+  }
+
+  Future<void> stopLessonRecording(String title) async {
+    if (!isLessonRecording) return;
+    try {
+      final String? tempPath = await _audioRecorder.stop();
+      final duration = recordingDuration.inSeconds;
+      final clientId = _activeStreamMessageId!;
+      isLessonRecording = false;
+      _recordingStartTime = null;
+      safeNotify();
+
+      if (tempPath != null) {
+        // 🚀 OFFLINE-FIRST: Mover de temp para diretório permanente
+        final appDir = await getApplicationDocumentsDirectory();
+        final recordingsDir = Directory('${appDir.path}/recordings');
+        if (!await recordingsDir.exists()) await recordingsDir.create(recursive: true);
+        
+        // 🚀 Padronizado para .m4a em todas as plataformas desktop/mobile
+        final permanentPath = '${recordingsDir.path}/lesson_$clientId.m4a';
+        await File(tempPath).copy(permanentPath);
+
+        // Salvar localmente no Drift imediatamente (Referência Local)
+        final d = db.AppDatabase.instance;
+        await d.into(d.lessonRecordings).insert(db.LessonRecordingsCompanion.insert(
+          notebookId: currentNotebookId,
+          clientId: drift.Value(clientId),
+          title: title,
+          audioUrl: permanentPath, 
+          durationSeconds: drift.Value(duration),
+          updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+        ));
+        _loadLessonRecordings();
+
+        // 🚀 TENTAR UPLOAD (Se houver conexão e liveNotebookSid)
+        if (liveNotebookSid != null && liveNotebookSid != 0) {
+          final bytes = await File(permanentPath).readAsBytes();
+          final remoteUrl = await _repository.uploadLessonAudio(
+            liveNotebookSid!, 
+            'lesson_$clientId.m4a', 
+            bytes,
+            title: title,
+            duration: duration,
+            clientId: clientId
+          );
+
+          if (remoteUrl != null) {
+            // Atualizar para URL remota e marcar como sincronizado na nuvem
+            await (d.update(d.lessonRecordings)..where((t) => t.clientId.equals(clientId))).write(
+              db.LessonRecordingsCompanion(
+                audioUrl: drift.Value(remoteUrl),
+                syncedWithCloud: const drift.Value(1),
+              )
+            );
+            _loadLessonRecordings();
+          }
+        }
+      }
+    } catch (e) {
+      isLessonRecording = false;
+      safeNotify();
+    }
+  }
+
+  Future<void> generateAiSummary(LocalPage page) async {
+    if (page.extractedText == null || page.extractedText!.trim().isEmpty) {
+      _permissionAlertController.add('Ainda não há texto reconhecido nesta folha para resumir.');
+      return;
+    }
+
+    if (isAiSummarizing) return;
+    isAiSummarizing = true;
+    safeNotify();
+
+    try {
+      final response = await _apiService.post('/ai/summarize', {
+        'page_id': page.serverId ?? page.id, // O backend espera o ID real
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final summary = data['summary'];
+        
+        // Criar um novo bloco de texto com o resumo
+        final summaryBlock = TextBlock(
+          id: const Uuid().v4(),
+          text: "📌 RESUMO IA:\n\n$summary",
+          position: const Offset(50, 100),
+          fontSize: 14,
+          isBold: false,
+          textColorHex: '#0F4C5C',
+        );
+        
+        addTextBlock(page, summaryBlock);
+        _permissionAlertController.add('Resumo gerado e adicionado à folha! ✨');
+      } else {
+        _permissionAlertController.add('Falha ao gerar resumo. Tente novamente mais tarde.');
+      }
+    } catch (e) {
+      _permissionAlertController.add('Erro na comunicação com a IA.');
+    } finally {
+      isAiSummarizing = false;
+      safeNotify();
+    }
+  }
+
+  Future<void> initNotebook(int notebookId, int? notebookSid, String lineType, String paperSize, String role, String? userId, {double? lineSpacing, String? templateType, String? collaborationMode}) async {
     isLoading = true; currentNotebookId = notebookId; liveNotebookSid = notebookSid; liveLineType = lineType; currentPaperSize = paperSize; liveLineSpacing = lineSpacing ?? ((lineType == 'grid' || lineType == 'dots') ? 25.0 : 28.0); currentUserRole = role; 
+    currentTemplateType = templateType ?? 'study';
+    
+    // 🚀 INICIALIZAR POLÍTICAS A PARTIR DA PERSISTÊNCIA (Ex: "locked,colors")
+    if (collaborationMode != null) {
+      isSessionLocked = collaborationMode.contains('locked');
+      isAuthorColorEnabled = collaborationMode.contains('colors');
+    } else {
+      isSessionLocked = false;
+      isAuthorColorEnabled = false;
+    }
+
     SyncService.activeNotebookId = notebookId; // 🚀 Notificar SyncService qual o caderno ativo
-    if (userId != null) { myUserId = userId; _realtimeService.listenToUserAccount(int.parse(userId), () {}); }
+
+    // 🚀 OFFLINE-FIRST: Removida ativação automática de colaboração.
+    // O utilizador deve agora clicar explicitamente para entrar em modo live.
+    
+    _loadLessonRecordings(); // 🚀 Carregar gravações ao abrir
+    _initNotebookSubscriptions(notebookId, userId, paperSize);
+  }
+
+  void _initNotebookSubscriptions(int notebookId, String? userId, String paperSize) {
+    if (userId != null) { 
+      myUserId = userId; 
+      _realtimeService.listenToUserAccount(int.parse(userId), () {
+        _performCollectiveSync(); // 🚀 Reagir a pedido de sync global
+      }); 
+    }
     SyncService.isCollaborationActive = false; _dbNotebookSubscription?.cancel();
     final d = db.AppDatabase.instance;
-    _dbNotebookSubscription = (d.select(d.notebooks)..where((t) => t.id.equals(notebookId))).watchSingleOrNull().listen((row) { if (!_isDisposed && row != null && row.serverId != null && liveNotebookSid == null) { liveNotebookSid = row.serverId; safeNotify(); } });
+    _dbNotebookSubscription = (d.select(d.notebooks)..where((t) => t.id.equals(notebookId))).watchSingleOrNull().listen((row) { 
+      if (!_isDisposed && row != null && row.serverId != null && liveNotebookSid == null) { 
+        liveNotebookSid = row.serverId; 
+        safeNotify(); 
+      } 
+    });
+    
     _dbPagesSubscription?.cancel();
     _dbPagesSubscription = _repository.watchPagesByNotebook(notebookId).listen((fps) async {
+      // 🚀 FILTRAR PÁGINAS DELETADAS (Soft-delete reativo)
+      final List<LocalPage> activePages = fps.where((p) => !p.isDeleted).toList();
+
       // 🚀 AUTO-CORREÇÃO DE PÁGINAS DUPLICADAS OU SEM NÚMERO
-      if (fps.isNotEmpty) {
+      if (activePages.isNotEmpty) {
         bool hasConflict = false;
         final Set<int> seenNumbers = {};
-        for (var p in fps) {
+        for (var p in activePages) {
           if (seenNumbers.contains(p.pageNumber) || p.pageNumber <= 0) { 
             hasConflict = true; 
             break; 
@@ -279,23 +537,19 @@ class CanvasController extends ChangeNotifier {
           if (currentUserRole == 'owner' || currentUserRole == 'editor') {
             debugPrint('🔧 [Canvas] Disparando re-indexação no DB...');
             _repository.reindexPages(notebookId);
-          } else {
-            debugPrint('⏩ [Canvas] Aguardando re-indexação pelo proprietário...');
           }
-          return; // O watch vai disparar novamente após a correção
+          return; 
         }
       }
 
       // 🚀 LÓGICA DE MERGE (ANTI-FLICKER)
       if (pages.isEmpty || isLoading) {
-        pages = fps;
+        pages = activePages;
       } else {
-        // Atualização cirúrgica para evitar que o CustomPainter redesenhe tudo do zero
-        for (var freshPage in fps) {
+        for (var freshPage in activePages) {
           final idx = pages.indexWhere((p) => p.clientId == freshPage.clientId);
           if (idx != -1) {
             final existing = pages[idx];
-            // Só atualizamos se a versão da DB for superior ou se houver mudança de timestamp relevante
             if (freshPage.version > existing.version || freshPage.updatedAt > existing.updatedAt) {
               pages[idx] = freshPage;
             }
@@ -303,8 +557,7 @@ class CanvasController extends ChangeNotifier {
             pages.add(freshPage);
           }
         }
-        // Remover páginas apagadas
-        pages.removeWhere((p) => !fps.any((f) => f.clientId == p.clientId));
+        pages.removeWhere((p) => !activePages.any((f) => f.clientId == p.clientId));
         pages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
       }
 
@@ -314,12 +567,15 @@ class CanvasController extends ChangeNotifier {
           if (cp != null) activeTextBlock = cp.textBlocks.firstWhere((t) => t.id == activeTextBlock!.id); 
         } catch (_) { activeInlineTarget = InlineTarget.none; activeTextBlock = null; } 
       } 
-      if (isLoading && pages.isNotEmpty) _resetZoomForPage(pages.first, paperSize); 
       
-      isLoading = false; safeNotify();
+      if (isLoading && pages.isNotEmpty) {
+        _resetZoomForPage(pages.first, pages.first.paperSize);
+      }
+      
+      isLoading = false; 
+      safeNotify();
 
-      // 🚀 CATCH-UP IMEDIATO: Se o caderno for partilhado, forçar um pull inicial da pág 1
-      if (fps.isNotEmpty && liveNotebookSid != null && currentUserRole != 'owner') {
+      if (activePages.isNotEmpty && liveNotebookSid != null && currentUserRole != 'owner') {
          SyncService().pullSpecificPage(liveNotebookSid!, 1);
       }
     });
@@ -332,21 +588,55 @@ class CanvasController extends ChangeNotifier {
       if (senderId != null && _deniedActionKeys.contains('live_invite_$senderId')) return;
       final targets = d['targets'] as List?;
       if (targets != null && targets.isNotEmpty && !targets.contains(myUserId)) return;
-      pendingInvite = d; safeNotify();
+      pendingInvite = d; 
+      safeNotify();
     });
+  }
+
+  void _autoNavigateAfterDeletion() {
+    if (pages.isEmpty) return;
+    int targetIndex = currentPageIndex;
+    if (targetIndex >= pages.length) targetIndex = pages.length - 1;
+    if (targetIndex < 0) targetIndex = 0;
+    
+    jumpToPage(targetIndex);
   }
 
   void _cancelRealtimeSubscriptions() {
     if (_statusListener != null) _realtimeService.statusNotifier.removeListener(_statusListener!);
     _usersSubscription?.cancel(); _strokesSubscription?.cancel(); _textSubscription?.cancel(); _imageSubscription?.cancel(); _viewportSubscription?.cancel(); _activitySubscription?.cancel(); _pointerSubscription?.cancel(); _chatSubscription?.cancel(); _audioMessageSubscription?.cancel(); _reactionSubscription?.cancel(); _collectiveSyncSubscription?.cancel(); _fullStateRequestSubscription?.cancel(); _fullStateReceivedSubscription?.cancel(); _fingerprintSubscription?.cancel(); _globalActionSubscription?.cancel(); _followSubscription?.cancel(); _pageEventSubscription?.cancel(); _pageUpdatedSubscription?.cancel(); _handSubscription?.cancel(); _uploadingSubscription?.cancel(); _voiceCallSubscription?.cancel(); _voiceStateSubscription?.cancel(); _audioLevelSubscription?.cancel();
+    _sessionMetaSubscription?.cancel(); // 🚀
   }
 
   Future<void> initRealtimeCollaboration() async {
     final rt = _realtimeService; if (liveNotebookSid == null || liveNotebookSid == 0) return; await rt.initConnection();
     
     if (_statusListener != null) _realtimeService.statusNotifier.removeListener(_statusListener!);
-    _statusListener = () { if (!_isDisposed && _realtimeService.isConnected && liveNotebookSid != null) { _debounceRoomSync(); _startHeartbeat(); _startCleanupTimer(); } };
+    _statusListener = () { 
+      if (!_isDisposed && _realtimeService.isConnected && liveNotebookSid != null) { 
+        _debounceRoomSync(); 
+        _startHeartbeat(); 
+        _startCleanupTimer(); 
+        
+        // 🚀 AO LIGAR: Se for owner, anunciar políticas atuais
+        if (currentUserRole == 'owner') {
+          rt.broadcastSessionMeta(notebookId: liveNotebookSid!, metaData: {
+            'is_locked': isSessionLocked,
+            'is_colors_enabled': isAuthorColorEnabled,
+          });
+        }
+      } 
+    };
     _realtimeService.statusNotifier.addListener(_statusListener!);
+
+    _sessionMetaSubscription?.cancel(); 
+    _sessionMetaSubscription = rt.onSessionMetaReceived.listen((d) {
+      if (_isDisposed) return;
+      if (d['is_locked'] != null) isSessionLocked = d['is_locked'] == true;
+      if (d['is_colors_enabled'] != null) isAuthorColorEnabled = d['is_colors_enabled'] == true;
+      _sessionMetaStreamController.add(d); // 🚀
+      safeNotify();
+    });
 
     _voiceCallSubscription?.cancel();
     _voiceCallSubscription = rt.onVoiceCallStarted.listen((d) {
@@ -717,7 +1007,15 @@ class CanvasController extends ChangeNotifier {
     _pageEventSubscription?.cancel();
     _pageEventSubscription = rt.onPageEventReceived.listen((d) async {
       if (_isDisposed || d['sender_id'].toString() == myUserId) return;
-      if (d['action'] == 'add' || d['action'] == 'delete') _performCollectiveSync();
+      
+      if (d['action'] == 'add' || d['action'] == 'delete') {
+        await _performCollectiveSync();
+        
+        // 🚀 NAVEGAÇÃO COLETIVA: Se foi uma deleção, garantir que estamos numa página válida
+        if (d['action'] == 'delete') {
+          _autoNavigateAfterDeletion();
+        }
+      }
       else if (d['action'] == 'metadata_update') {
         final int pNum = d['page_number']; final idx = pages.indexWhere((p) => p.pageNumber == pNum);
         if (idx != -1) {
@@ -856,30 +1154,85 @@ class CanvasController extends ChangeNotifier {
     safeNotify();
   }
 
-  Future<void> addNewPage(bool isLandscape) async {
+  Future<void> addNewPage(bool isLandscape, {String paperSize = 'A4'}) async {
     int maxP = 0; for (var p in pages) if (p.pageNumber > maxP) maxP = p.pageNumber;
-    final np = LocalPage(notebookId: currentNotebookId, pageNumber: maxP + 1, isLandscape: isLandscape); _resetZoomForPage(np, currentPaperSize); pages.add(np); 
+    final np = LocalPage(notebookId: currentNotebookId, pageNumber: maxP + 1, isLandscape: isLandscape, paperSize: paperSize);
     
-    // 🚀 Lógica de Propriedade ao criar página (opcional, mas bom para histórico)
-    safeNotify(); await triggerAutoSave(np);
-    if (isRealtimeActive && liveNotebookSid != null) _realtimeService.broadcastPageEvent(notebookId: liveNotebookSid!, myUserId: myUserId, pageData: {'action': 'add', 'notebook_sid': liveNotebookSid, 'page_number': maxP + 1, 'is_landscape': isLandscape});
+    // 🚀 INTEGRAR COM MOTOR DE UNDO
+    final action = AddPageAction(
+      pageClientId: np.clientId,
+      pageNumber: np.pageNumber,
+      isLandscape: isLandscape,
+      paperSize: paperSize,
+    );
+    
+    _executeAction(action, targetPage: np);
+
     if (pageController.hasClients) pageController.animateToPage(pages.length - 1, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
   }
 
   void deletePage(LocalPage pd) async {
-    final int pNum = pd.pageNumber; pages.remove(pd); if (currentPageIndex >= pages.length) currentPageIndex = pages.length - 1; if (currentPageIndex < 0) currentPageIndex = 0; safeNotify();
-    if (pageController.hasClients) pageController.jumpToPage(currentPageIndex);
-    if (pd.id != null) { await _repository.deletePage(pd.id!); SyncService().pushPages(); }
-    if (isRealtimeActive && liveNotebookSid != null) _realtimeService.broadcastPageEvent(notebookId: liveNotebookSid!, myUserId: myUserId, pageData: {'action': 'delete', 'notebook_sid': liveNotebookSid, 'page_number': pNum});
-    if (pages.isNotEmpty) triggerAutoSave(pages[currentPageIndex]);
+    if (pd.id == null) return;
+    
+    // 🚀 FEEDBACK VISUAL: Ativar animação de rasgar
+    pd.isTearing = true;
+    safeNotify();
+    
+    // Aguardar a animação no UI (300ms)
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    // 🚀 INTEGRAR COM MOTOR DE UNDO
+    final action = DeletePageAction(
+      pageClientId: pd.clientId,
+      pageNumber: pd.pageNumber,
+      pageData: pd.toJson(),
+    );
+    
+    _executeAction(action, targetPage: pd);
+    
+    // 🚀 NAVEGAÇÃO AUTOMÁTICA IMEDIATA: Remover da lista local e pular para válida
+    pages.removeWhere((p) => p.clientId == pd.clientId);
+    
+    if (pages.isNotEmpty) {
+      int nextIndex = currentPageIndex;
+      if (nextIndex >= pages.length) nextIndex = pages.length - 1;
+      if (nextIndex < 0) nextIndex = 0;
+      jumpToPage(nextIndex);
+    }
+
+    if (isRealtimeActive && liveNotebookSid != null) {
+      _realtimeService.broadcastPageEvent(
+        notebookId: liveNotebookSid!, 
+        myUserId: myUserId, 
+        pageData: {'action': 'delete', 'notebook_sid': liveNotebookSid, 'page_number': pd.pageNumber}
+      );
+    }
   }
+
+  final Map<int, Matrix4> _pageViewStates = {}; // 🚀 Memória de posicionamento por página
 
   void setPageIndex(int i) { 
     if (currentPageIndex == i) return; 
-    selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear(); // 🚀 Limpar seleção ao mudar
-    currentPageIndex = i; safeNotify(); 
+    
+    // 🚀 SALVAR ESTADO DE VISUALIZAÇÃO ATUAL
+    _pageViewStates[currentPageIndex] = transformationController.value.clone();
 
-    // 🚀 SYNC ON VIEW: Ao mudar de página, forçar uma verificação rápida se estivermos online
+    selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear(); 
+    currentPageIndex = i; 
+    
+    // 🚀 RESTAURAR ESTADO DE VISUALIZAÇÃO DA PÁGINA DESTINO
+    if (_pageViewStates.containsKey(i)) {
+      transformationController.value = _pageViewStates[i]!;
+    } else {
+      // Se for a primeira vez na página, ajusta o zoom inicial baseado no tamanho
+      if (i < pages.length) {
+        _resetZoomForPage(pages[i], pages[i].paperSize);
+      }
+    }
+    
+    safeNotify(); 
+
+    // 🚀 SYNC ON VIEW
     if (isCollaborationEnabled && liveNotebookSid != null && i < pages.length) {
        SyncService().pullSpecificPage(liveNotebookSid!, pages[i].pageNumber);
     }
@@ -947,10 +1300,14 @@ class CanvasController extends ChangeNotifier {
   }
 
   void eraseAtPosition(Offset pos, LocalPage page) {
+    if (page.isFrozen) {
+      _permissionAlertController.add('Esta página está congelada e não pode ser editada.');
+      return;
+    }
     if (selectedStrokeIds.isNotEmpty || selectedTextIds.isNotEmpty || selectedImageIds.isNotEmpty) { deleteSelection(page); return; }
     
     // 🚀 LÓGICA DE PERMISSÕES PARA BORRACHA
-    final bool canDeleteAll = currentUserRole == 'owner' || currentUserRole == 'editor';
+    final bool canDeleteAll = currentUserRole == 'owner' || (currentUserRole == 'editor' && currentTemplateType != 'formal');
     bool deniedByPermission = false;
 
     final sR = page.strokes.where((s) {
@@ -1000,9 +1357,13 @@ class CanvasController extends ChangeNotifier {
   }
 
   void deleteSelection(LocalPage page) {
+    if (page.isFrozen) {
+      _permissionAlertController.add('Esta página está congelada.');
+      return;
+    }
     if (selectedStrokeIds.isEmpty && selectedTextIds.isEmpty && selectedImageIds.isEmpty) return;
     
-    final bool canDeleteAll = currentUserRole == 'owner' || currentUserRole == 'editor';
+    final bool canDeleteAll = currentUserRole == 'owner' || (currentUserRole == 'editor' && currentTemplateType != 'formal');
 
     final sR = page.strokes.where((s) => !s.isDeleted && 
         selectedStrokeIds.contains(s.id) && 
@@ -1047,7 +1408,11 @@ class CanvasController extends ChangeNotifier {
   }
 
   void moveSelectedStrokes(LocalPage page, Offset delta) {
-    final bool canMoveAll = currentUserRole == 'owner' || currentUserRole == 'editor';
+    if (page.isFrozen) {
+      _permissionAlertController.add('Página congelada.');
+      return;
+    }
+    final bool canMoveAll = currentUserRole == 'owner' || (currentUserRole == 'editor' && currentTemplateType != 'formal');
     bool deniedByPermission = false;
 
     for (var id in selectedStrokeIds) { 
@@ -1175,16 +1540,29 @@ class CanvasController extends ChangeNotifier {
 
   LocalPage? _getTargetPage(String cid) { try { return pages.firstWhere((p) => p.clientId == cid); } catch (e) { return null; } }
 
-  void _executeAction(CanvasAction action, {bool isRemote = false}) {
-    final target = _getTargetPage(action.pageClientId); if (target == null) return;
+  void _executeAction(CanvasAction action, {bool isRemote = false, LocalPage? targetPage}) {
+    final target = targetPage ?? _getTargetPage(action.pageClientId); if (target == null) return;
+    if (target.isFrozen && !isRemote) {
+       _permissionAlertController.add('Página congelada.');
+       return;
+    }
     if (currentUserRole == 'viewer' && !isRemote) return;
-    if (!isRemote) { target.version++; target.updatedAt = DateTime.now().millisecondsSinceEpoch; }
+    
+    if (!isRemote) { 
+      target.version++; 
+      target.updatedAt = DateTime.now().millisecondsSinceEpoch; 
+    }
+    
     action.execute(target);
     _undoStack.add(action); _redoStack.clear(); if (_undoStack.length > 50) _undoStack.removeAt(0);
-    triggerAutoSave(target);
     
-    // 🚀 PRIVATIZAÇÃO: Já não enviamos a ação em si para os outros.
-    // O colega receberá apenas o EFEITO (Stroke Final, Delete, etc) via _broadcastAction.
+    // 🚀 LÓGICA ESPECIAL PARA ESTRUTURA
+    if (action is DeletePageAction || action is AddPageAction) {
+       _repository.savePage(target, liveNotebookSid);
+       _repository.reindexPages(currentNotebookId);
+    } else {
+       triggerAutoSave(target);
+    }
     
     if (!isRemote) _broadcastAction(action); 
     safeNotify();
@@ -1224,8 +1602,13 @@ class CanvasController extends ChangeNotifier {
 
   void sendStrokeUpdate({required String pageClientId, required int pageNumber, required String strokeId, required List<Offset> points, bool isFinal = false}) async {
     if (!isRealtimeActive || liveNotebookSid == null) return;
-    // 🚀 FILTRO LEVE (0.2) para garantir fluidez sem estourar limite do Pusher (10KB)
-    List<Offset> pointsToSend = isFinal ? GeometryUtils.simplifyPoints(points, epsilon: 0.2) : points;
+
+    // 🚀 OTIMIZAÇÃO POR TEMPLATE:
+    // No modo 'technical' (Engenharia), priorizamos fidelidade (epsilon menor).
+    // No modo 'study', priorizamos velocidade (epsilon maior para pacotes menores).
+    double epsilon = currentTemplateType == 'technical' ? 0.1 : 0.25;
+
+    List<Offset> pointsToSend = isFinal ? GeometryUtils.simplifyPoints(points, epsilon: epsilon) : points;
     final data = { 
       'page_client_id': pageClientId, // 🚀 Prioridade máxima de roteamento
       'page_number': pageNumber, 
@@ -1326,6 +1709,15 @@ class CanvasController extends ChangeNotifier {
   void onTyping() { setUserActivity('typing'); _typingDebounce?.cancel(); _typingDebounce = Timer(const Duration(seconds: 2), () => setUserActivity('idle')); }
   void setUserActivity(String act) { if (!isRealtimeActive || liveNotebookSid == null) return; _realtimeService.broadcastUserActivity(notebookId: liveNotebookSid!, myUserId: myUserId, activity: act); _realtimeService.updateUserActivityState(myUserId, act); }
 
+  // 🚀 MAPEAMENTO DE CORES PARA DINÂMICAS LIVE
+  Map<String, Color> get userColorsMap {
+    final map = <String, Color>{};
+    for (var u in onlineUsers) {
+      map[u['id'].toString()] = u['color'] as Color;
+    }
+    return map;
+  }
+
   void _markUserBroadcasting(String userId) { _broadcasterTimers[userId]?.cancel(); _broadcasterTimers[userId] = Timer(const Duration(seconds: 4), () { _broadcasterTimers.remove(userId); safeNotify(); }); safeNotify(); }
   Set<String> get activeBroadcasters => _broadcasterTimers.keys.toSet();
 
@@ -1360,7 +1752,52 @@ class CanvasController extends ChangeNotifier {
     isConnectingVoice = false; safeNotify();
   }
 
-  void toggleHandRaise() { isMyHandRaised = !isMyHandRaised; safeNotify(); if (isRealtimeActive && liveNotebookSid != null) { _realtimeService.broadcastHandEvent(notebookId: liveNotebookSid!, myUserId: myUserId, isRaised: isMyHandRaised); _realtimeService.updateUserHandState(myUserId, isMyHandRaised); } }
+  void toggleSessionLock() {
+    if (currentUserRole != 'owner') return;
+    isSessionLocked = !isSessionLocked;
+    _persistSessionPolicies();
+    _broadcastSessionPolicies();
+    safeNotify();
+  }
+
+  void toggleAuthorColors() {
+    if (currentUserRole != 'owner') return;
+    isAuthorColorEnabled = !isAuthorColorEnabled;
+    _persistSessionPolicies();
+    _broadcastSessionPolicies();
+    safeNotify();
+  }
+
+  void toggleHandRaise() { 
+    isMyHandRaised = !isMyHandRaised; 
+    safeNotify(); 
+    if (isRealtimeActive && liveNotebookSid != null) { 
+      _realtimeService.broadcastHandEvent(notebookId: liveNotebookSid!, myUserId: myUserId, isRaised: isMyHandRaised); 
+      _realtimeService.updateUserHandState(myUserId, isMyHandRaised); 
+    } 
+  }
+
+  void _persistSessionPolicies() {
+    final policies = <String>[];
+    if (isSessionLocked) policies.add('locked');
+    if (isAuthorColorEnabled) policies.add('colors');
+    final policyString = policies.join(',');
+
+    final d = db.AppDatabase.instance;
+    (d.update(d.notebooks)..where((t) => t.id.equals(currentNotebookId))).write(
+      db.NotebooksCompanion(collaborationMode: drift.Value(policyString))
+    );
+  }
+
+  void _broadcastSessionPolicies() {
+    if (isRealtimeActive && liveNotebookSid != null) {
+      _realtimeService.broadcastSessionMeta(notebookId: liveNotebookSid!, metaData: {
+        'is_locked': isSessionLocked,
+        'is_colors_enabled': isAuthorColorEnabled,
+      });
+    }
+  }
+
   void toggleFollowUser(String? uid, String myId) { if (uid == myId) return; followingUserId = (followingUserId == uid) ? null : uid; if (liveNotebookSid != null) _realtimeService.broadcastFollowUpdate(notebookId: liveNotebookSid!, myUserId: myId, followingUserId: followingUserId); safeNotify(); }
   void sendReaction(String emoji) { if (!isRealtimeActive || liveNotebookSid == null) return; userReactions[myUserId] = emoji; _reactionTimers[myUserId]?.cancel(); _reactionTimers[myUserId] = Timer(const Duration(seconds: 5), () { userReactions[myUserId] = null; safeNotify(); }); _realtimeService.broadcastReaction(notebookId: liveNotebookSid!, myUserId: myUserId, reaction: emoji); safeNotify(); }
 
@@ -1396,6 +1833,16 @@ class CanvasController extends ChangeNotifier {
       action.undo(target);
       _redoStack.add(action);
       
+      // 🚀 LÓGICA ESPECIAL PARA ESTRUTURA NO UNDO
+      if (action is DeletePageAction || action is AddPageAction) {
+         _repository.savePage(target, liveNotebookSid);
+         _repository.reindexPages(currentNotebookId);
+         
+         // 🚀 NAVEGAÇÃO NO UNDO: Voltar para a página restaurada/criada
+         final idx = pages.indexWhere((p) => p.clientId == action.pageClientId);
+         if (idx != -1) jumpToPage(idx);
+      }
+
       if (isRealtimeActive && liveNotebookSid != null) {
         _realtimeService.broadcastGlobalAction(notebookId: liveNotebookSid!, actionData: {
           'sender_id': myUserId, 
@@ -1404,7 +1851,10 @@ class CanvasController extends ChangeNotifier {
           'data': action.toMap()
         });
       }
-      triggerAutoSave(target);
+      
+      if (!(action is DeletePageAction || action is AddPageAction)) {
+        triggerAutoSave(target);
+      }
     }
     safeNotify();
   }
@@ -1419,6 +1869,16 @@ class CanvasController extends ChangeNotifier {
       action.execute(target);
       _undoStack.add(action);
       
+      // 🚀 LÓGICA ESPECIAL PARA ESTRUTURA NO REDO
+      if (action is DeletePageAction || action is AddPageAction) {
+         _repository.savePage(target, liveNotebookSid);
+         _repository.reindexPages(currentNotebookId);
+
+         // 🚀 NAVEGAÇÃO NO REDO
+         final idx = pages.indexWhere((p) => p.clientId == action.pageClientId);
+         if (idx != -1) jumpToPage(idx);
+      }
+
       if (isRealtimeActive && liveNotebookSid != null) {
         _realtimeService.broadcastGlobalAction(notebookId: liveNotebookSid!, actionData: {
           'sender_id': myUserId, 
@@ -1427,7 +1887,10 @@ class CanvasController extends ChangeNotifier {
           'data': action.toMap()
         });
       }
-      triggerAutoSave(target);
+      
+      if (!(action is DeletePageAction || action is AddPageAction)) {
+        triggerAutoSave(target);
+      }
     }
     safeNotify();
   }
@@ -1544,14 +2007,29 @@ class CanvasController extends ChangeNotifier {
   void _flushPendingChat() async { if (_pendingChatQueue.isEmpty || !isRealtimeActive || liveNotebookSid == null) return; final ts = List<Map<String, dynamic>>.from(_pendingChatQueue); _pendingChatQueue.clear(); for (var m in ts) { if (m['type'] == 'text') await _realtimeService.broadcastChatMessage(notebookId: liveNotebookSid!, myUserId: myUserId, message: m['message']); else if (m['type'] == 'audio') await _realtimeService.broadcastAudioMessage(notebookId: liveNotebookSid!, myUserId: myUserId, audioUrl: m['audio_url'], duration: m['duration'] as int? ?? 0); } }
   void sendChatMessage(String m) { if (liveNotebookSid == null) return; final msg = {'type': 'text', 'sender_id': myUserId, 'message': m, 'timestamp': DateTime.now().toIso8601String()}; _addChatMessage(msg); if (isRealtimeActive && _realtimeService.isConnected) _realtimeService.broadcastChatMessage(notebookId: liveNotebookSid!, myUserId: myUserId, message: m); else _pendingChatQueue.add(msg); }
 
-  RecordConfig _getRecordConfig() => RecordConfig(encoder: kIsWeb ? AudioEncoder.opus : (Platform.isWindows ? AudioEncoder.wav : AudioEncoder.aacLc), bitRate: 32000, sampleRate: Platform.isWindows ? 16000 : 44100, numChannels: 1, echoCancel: true, noiseSuppress: true, autoGain: true);
+  RecordConfig _getRecordConfig() => RecordConfig(
+    encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc, // 🚀 AAC/M4A como padrão universal
+    bitRate: 48000, 
+    sampleRate: 44100, 
+    numChannels: 1, 
+    echoCancel: true, 
+    noiseSuppress: true, 
+    autoGain: true
+  );
   
   Future<void> startRecording({bool isLive = false}) async { 
     try { 
       if (_isDisposed || isRecording) return; 
       if (await _audioRecorder.hasPermission()) { 
         isRecording = true; _isRecordingLive = isLive; _recordingStartTime = DateTime.now(); _activeStreamMessageId = const Uuid().v4(); _currentSegmentIndex = 0; 
-        String? path; if (!kIsWeb) { final dir = await getTemporaryDirectory(); final ext = Platform.isWindows ? 'wav' : 'm4a'; path = '${dir.path}/audio_${_activeStreamMessageId}_0.$ext'; } 
+        
+        String? path; 
+        if (!kIsWeb) { 
+          final dir = await getTemporaryDirectory(); 
+          // 🚀 Padronizado para .m4a em todas as plataformas desktop/mobile
+          path = '${dir.path}/audio_${_activeStreamMessageId}_0.m4a'; 
+        } 
+        
         await _audioRecorder.start(_getRecordConfig(), path: path ?? ''); safeNotify(); 
         if (isLive) { _segmentTimer = Timer.periodic(const Duration(seconds: 3), (timer) => _rotateRecordingSegment()); _startAmplitudeMonitoring(); }
       } 
@@ -1577,10 +2055,17 @@ class CanvasController extends ChangeNotifier {
     final String mid = _activeStreamMessageId!; final int idx = _currentSegmentIndex; 
     final bool isLive = _isRecordingLive;
     try { 
-      final path = await _audioRecorder.stop(); _currentSegmentIndex++; 
-      String? next; if (!kIsWeb) { final dir = await getTemporaryDirectory(); final ext = Platform.isWindows ? 'wav' : 'm4a'; next = '${dir.path}/audio_${mid}_$idx.$ext'; } 
+      final String? stopPath = await _audioRecorder.stop(); _currentSegmentIndex++; 
+      String? next; 
+      if (!kIsWeb) { 
+        final dir = await getTemporaryDirectory(); 
+        next = '${dir.path}/audio_${mid}_$idx.m4a'; 
+      } 
       await _audioRecorder.start(_getRecordConfig(), path: next ?? ''); 
-      if (path != null) { await Future.delayed(const Duration(milliseconds: 100)); _processAndSendSegment(path, mid, idx, 3, isFinal: false, isLive: isLive); } 
+      if (stopPath != null) { 
+        await Future.delayed(const Duration(milliseconds: 100)); 
+        _processAndSendSegment(stopPath, mid, idx, 3, isFinal: false, isLive: isLive); 
+      } 
     } catch (e) { debugPrint('🚨 [Audio] Erro na rotação de segmento: $e'); } 
   }
   
@@ -1603,7 +2088,7 @@ class CanvasController extends ChangeNotifier {
   int getStreamSegmentCount(String streamId) => _audioBuffers[streamId]?.bufferedCount ?? 0;
 
   Future<void> playAudioStream(String streamId) async {
-    if (_playingStreamIds.contains(streamId)) { await _audioPlayer.stop(); _playingStreamIds.remove(streamId); currentlyPlayingAudioUrl = null; safeNotify(); return; }
+    if (_playingStreamIds.contains(streamId)) { await _audioPlayer.stop(); _playingStreamIds.remove(streamId); currentlyPlayingAudioUrl = null; _currentAudioDuration = null; safeNotify(); return; }
     final buffer = _audioBuffers[streamId]; if (buffer == null) return;
     _playingStreamIds.add(streamId); safeNotify();
     while (!buffer.isReadyToStart && _playingStreamIds.contains(streamId)) await Future.delayed(const Duration(milliseconds: 200));
@@ -1611,7 +2096,7 @@ class CanvasController extends ChangeNotifier {
     while (_playingStreamIds.contains(streamId)) {
       final String? nextUrl = buffer.popNext();
       if (nextUrl != null) {
-        starvationRetries = 0; currentlyPlayingAudioUrl = nextUrl; safeNotify();
+        starvationRetries = 0; currentlyPlayingAudioUrl = nextUrl; _currentAudioDuration = null; audioPlaybackProgress = 0.0; safeNotify();
         try {
           if (isSpeakerOn) await _audioPlayer.setVolume(1.0); // 🚀 Garantir volume máximo
           await _audioPlayer.play(UrlSource(nextUrl));
@@ -1629,10 +2114,27 @@ class CanvasController extends ChangeNotifier {
   }
 
   Future<void> playAudioMessage(String url) async {
-    if (currentlyPlayingAudioUrl == url) { await _audioPlayer.stop(); currentlyPlayingAudioUrl = null; safeNotify(); return; }
-    currentlyPlayingAudioUrl = url; safeNotify(); 
-    if (isSpeakerOn) await _audioPlayer.setVolume(1.0); // 🚀 Garantir volume máximo
-    await _audioPlayer.play(UrlSource(url));
+    if (currentlyPlayingAudioUrl == url) { 
+      await _audioPlayer.stop(); 
+      currentlyPlayingAudioUrl = null; 
+      _currentAudioDuration = null; // 🚀 Reset
+      safeNotify(); 
+      return; 
+    }
+    
+    // Novo áudio a começar
+    currentlyPlayingAudioUrl = url; 
+    _currentAudioDuration = null; // 🚀 Reset para calcular nova duração
+    audioPlaybackProgress = 0.0;
+    safeNotify(); 
+
+    if (isSpeakerOn) await _audioPlayer.setVolume(1.0); 
+    
+    if (url.startsWith('http')) {
+      await _audioPlayer.play(UrlSource(url));
+    } else {
+      await _audioPlayer.play(DeviceFileSource(url));
+    }
   }
 
   void _handleIncomingAudioStream(Map<String, dynamic> data) {

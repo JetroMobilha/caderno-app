@@ -1409,6 +1409,31 @@ class $NotebooksTable extends Notebooks
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _templateTypeMeta = const VerificationMeta(
+    'templateType',
+  );
+  @override
+  late final GeneratedColumn<String> templateType = GeneratedColumn<String>(
+    'template_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('study'),
+  );
+  static const VerificationMeta _collaborationModeMeta = const VerificationMeta(
+    'collaborationMode',
+  );
+  @override
+  late final GeneratedColumn<String> collaborationMode =
+      GeneratedColumn<String>(
+        'collaboration_mode',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('study_group'),
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1430,6 +1455,8 @@ class $NotebooksTable extends Notebooks
     syncedWithCloud,
     updatedAt,
     version,
+    templateType,
+    collaborationMode,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1570,6 +1597,24 @@ class $NotebooksTable extends Notebooks
         version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
+    if (data.containsKey('template_type')) {
+      context.handle(
+        _templateTypeMeta,
+        templateType.isAcceptableOrUnknown(
+          data['template_type']!,
+          _templateTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('collaboration_mode')) {
+      context.handle(
+        _collaborationModeMeta,
+        collaborationMode.isAcceptableOrUnknown(
+          data['collaboration_mode']!,
+          _collaborationModeMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1655,6 +1700,14 @@ class $NotebooksTable extends Notebooks
         DriftSqlType.int,
         data['${effectivePrefix}version'],
       )!,
+      templateType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}template_type'],
+      )!,
+      collaborationMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}collaboration_mode'],
+      )!,
     );
   }
 
@@ -1684,6 +1737,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
+  final String templateType;
+  final String collaborationMode;
   const Notebook({
     required this.id,
     this.serverId,
@@ -1704,6 +1759,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
+    required this.templateType,
+    required this.collaborationMode,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1747,6 +1804,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
+    map['template_type'] = Variable<String>(templateType);
+    map['collaboration_mode'] = Variable<String>(collaborationMode);
     return map;
   }
 
@@ -1791,6 +1850,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
+      templateType: Value(templateType),
+      collaborationMode: Value(collaborationMode),
     );
   }
 
@@ -1819,6 +1880,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
+      templateType: serializer.fromJson<String>(json['templateType']),
+      collaborationMode: serializer.fromJson<String>(json['collaborationMode']),
     );
   }
   @override
@@ -1844,6 +1907,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
+      'templateType': serializer.toJson<String>(templateType),
+      'collaborationMode': serializer.toJson<String>(collaborationMode),
     };
   }
 
@@ -1867,6 +1932,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
+    String? templateType,
+    String? collaborationMode,
   }) => Notebook(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -1887,6 +1954,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
+    templateType: templateType ?? this.templateType,
+    collaborationMode: collaborationMode ?? this.collaborationMode,
   );
   Notebook copyWithCompanion(NotebooksCompanion data) {
     return Notebook(
@@ -1921,6 +1990,12 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           : this.syncedWithCloud,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
+      templateType: data.templateType.present
+          ? data.templateType.value
+          : this.templateType,
+      collaborationMode: data.collaborationMode.present
+          ? data.collaborationMode.value
+          : this.collaborationMode,
     );
   }
 
@@ -1945,13 +2020,15 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('templateType: $templateType, ')
+          ..write('collaborationMode: $collaborationMode')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     serverId,
     clientId,
@@ -1971,7 +2048,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     syncedWithCloud,
     updatedAt,
     version,
-  );
+    templateType,
+    collaborationMode,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1994,7 +2073,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           other.isDeleted == this.isDeleted &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
-          other.version == this.version);
+          other.version == this.version &&
+          other.templateType == this.templateType &&
+          other.collaborationMode == this.collaborationMode);
 }
 
 class NotebooksCompanion extends UpdateCompanion<Notebook> {
@@ -2017,6 +2098,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
+  final Value<String> templateType;
+  final Value<String> collaborationMode;
   const NotebooksCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -2037,6 +2120,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.templateType = const Value.absent(),
+    this.collaborationMode = const Value.absent(),
   });
   NotebooksCompanion.insert({
     this.id = const Value.absent(),
@@ -2058,6 +2143,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.templateType = const Value.absent(),
+    this.collaborationMode = const Value.absent(),
   }) : title = Value(title),
        coverType = Value(coverType);
   static Insertable<Notebook> custom({
@@ -2080,6 +2167,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
+    Expression<String>? templateType,
+    Expression<String>? collaborationMode,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2101,6 +2190,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
+      if (templateType != null) 'template_type': templateType,
+      if (collaborationMode != null) 'collaboration_mode': collaborationMode,
     });
   }
 
@@ -2124,6 +2215,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
+    Value<String>? templateType,
+    Value<String>? collaborationMode,
   }) {
     return NotebooksCompanion(
       id: id ?? this.id,
@@ -2145,6 +2238,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      templateType: templateType ?? this.templateType,
+      collaborationMode: collaborationMode ?? this.collaborationMode,
     );
   }
 
@@ -2208,6 +2303,12 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     if (version.present) {
       map['version'] = Variable<int>(version.value);
     }
+    if (templateType.present) {
+      map['template_type'] = Variable<String>(templateType.value);
+    }
+    if (collaborationMode.present) {
+      map['collaboration_mode'] = Variable<String>(collaborationMode.value);
+    }
     return map;
   }
 
@@ -2232,7 +2333,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('templateType: $templateType, ')
+          ..write('collaborationMode: $collaborationMode')
           ..write(')'))
         .toString();
   }
@@ -2398,6 +2501,42 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _isFrozenMeta = const VerificationMeta(
+    'isFrozen',
+  );
+  @override
+  late final GeneratedColumn<int> isFrozen = GeneratedColumn<int>(
+    'is_frozen',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _paperSizeMeta = const VerificationMeta(
+    'paperSize',
+  );
+  @override
+  late final GeneratedColumn<String> paperSize = GeneratedColumn<String>(
+    'paper_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('A4'),
+  );
+  static const VerificationMeta _backgroundPdfPathMeta = const VerificationMeta(
+    'backgroundPdfPath',
+  );
+  @override
+  late final GeneratedColumn<String> backgroundPdfPath =
+      GeneratedColumn<String>(
+        'background_pdf_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2413,6 +2552,9 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     syncedWithCloud,
     updatedAt,
     version,
+    isFrozen,
+    paperSize,
+    backgroundPdfPath,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2514,6 +2656,27 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
+    if (data.containsKey('is_frozen')) {
+      context.handle(
+        _isFrozenMeta,
+        isFrozen.isAcceptableOrUnknown(data['is_frozen']!, _isFrozenMeta),
+      );
+    }
+    if (data.containsKey('paper_size')) {
+      context.handle(
+        _paperSizeMeta,
+        paperSize.isAcceptableOrUnknown(data['paper_size']!, _paperSizeMeta),
+      );
+    }
+    if (data.containsKey('background_pdf_path')) {
+      context.handle(
+        _backgroundPdfPathMeta,
+        backgroundPdfPath.isAcceptableOrUnknown(
+          data['background_pdf_path']!,
+          _backgroundPdfPathMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2575,6 +2738,18 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         DriftSqlType.int,
         data['${effectivePrefix}version'],
       )!,
+      isFrozen: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_frozen'],
+      )!,
+      paperSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}paper_size'],
+      )!,
+      backgroundPdfPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}background_pdf_path'],
+      ),
     );
   }
 
@@ -2598,6 +2773,9 @@ class Page extends DataClass implements Insertable<Page> {
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
+  final int isFrozen;
+  final String paperSize;
+  final String? backgroundPdfPath;
   const Page({
     required this.id,
     this.serverId,
@@ -2612,6 +2790,9 @@ class Page extends DataClass implements Insertable<Page> {
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
+    required this.isFrozen,
+    required this.paperSize,
+    this.backgroundPdfPath,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2639,6 +2820,11 @@ class Page extends DataClass implements Insertable<Page> {
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
+    map['is_frozen'] = Variable<int>(isFrozen);
+    map['paper_size'] = Variable<String>(paperSize);
+    if (!nullToAbsent || backgroundPdfPath != null) {
+      map['background_pdf_path'] = Variable<String>(backgroundPdfPath);
+    }
     return map;
   }
 
@@ -2667,6 +2853,11 @@ class Page extends DataClass implements Insertable<Page> {
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
+      isFrozen: Value(isFrozen),
+      paperSize: Value(paperSize),
+      backgroundPdfPath: backgroundPdfPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(backgroundPdfPath),
     );
   }
 
@@ -2689,6 +2880,11 @@ class Page extends DataClass implements Insertable<Page> {
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
+      isFrozen: serializer.fromJson<int>(json['isFrozen']),
+      paperSize: serializer.fromJson<String>(json['paperSize']),
+      backgroundPdfPath: serializer.fromJson<String?>(
+        json['backgroundPdfPath'],
+      ),
     );
   }
   @override
@@ -2708,6 +2904,9 @@ class Page extends DataClass implements Insertable<Page> {
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
+      'isFrozen': serializer.toJson<int>(isFrozen),
+      'paperSize': serializer.toJson<String>(paperSize),
+      'backgroundPdfPath': serializer.toJson<String?>(backgroundPdfPath),
     };
   }
 
@@ -2725,6 +2924,9 @@ class Page extends DataClass implements Insertable<Page> {
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
+    int? isFrozen,
+    String? paperSize,
+    Value<String?> backgroundPdfPath = const Value.absent(),
   }) => Page(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -2741,6 +2943,11 @@ class Page extends DataClass implements Insertable<Page> {
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
+    isFrozen: isFrozen ?? this.isFrozen,
+    paperSize: paperSize ?? this.paperSize,
+    backgroundPdfPath: backgroundPdfPath.present
+        ? backgroundPdfPath.value
+        : this.backgroundPdfPath,
   );
   Page copyWithCompanion(PagesCompanion data) {
     return Page(
@@ -2771,6 +2978,11 @@ class Page extends DataClass implements Insertable<Page> {
           : this.syncedWithCloud,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
+      isFrozen: data.isFrozen.present ? data.isFrozen.value : this.isFrozen,
+      paperSize: data.paperSize.present ? data.paperSize.value : this.paperSize,
+      backgroundPdfPath: data.backgroundPdfPath.present
+          ? data.backgroundPdfPath.value
+          : this.backgroundPdfPath,
     );
   }
 
@@ -2789,7 +3001,10 @@ class Page extends DataClass implements Insertable<Page> {
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isFrozen: $isFrozen, ')
+          ..write('paperSize: $paperSize, ')
+          ..write('backgroundPdfPath: $backgroundPdfPath')
           ..write(')'))
         .toString();
   }
@@ -2809,6 +3024,9 @@ class Page extends DataClass implements Insertable<Page> {
     syncedWithCloud,
     updatedAt,
     version,
+    isFrozen,
+    paperSize,
+    backgroundPdfPath,
   );
   @override
   bool operator ==(Object other) =>
@@ -2826,7 +3044,10 @@ class Page extends DataClass implements Insertable<Page> {
           other.isDeleted == this.isDeleted &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
-          other.version == this.version);
+          other.version == this.version &&
+          other.isFrozen == this.isFrozen &&
+          other.paperSize == this.paperSize &&
+          other.backgroundPdfPath == this.backgroundPdfPath);
 }
 
 class PagesCompanion extends UpdateCompanion<Page> {
@@ -2843,6 +3064,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
+  final Value<int> isFrozen;
+  final Value<String> paperSize;
+  final Value<String?> backgroundPdfPath;
   const PagesCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -2857,6 +3081,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isFrozen = const Value.absent(),
+    this.paperSize = const Value.absent(),
+    this.backgroundPdfPath = const Value.absent(),
   });
   PagesCompanion.insert({
     this.id = const Value.absent(),
@@ -2872,6 +3099,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isFrozen = const Value.absent(),
+    this.paperSize = const Value.absent(),
+    this.backgroundPdfPath = const Value.absent(),
   }) : notebookId = Value(notebookId),
        pageNumber = Value(pageNumber);
   static Insertable<Page> custom({
@@ -2888,6 +3118,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
+    Expression<int>? isFrozen,
+    Expression<String>? paperSize,
+    Expression<String>? backgroundPdfPath,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2903,6 +3136,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
+      if (isFrozen != null) 'is_frozen': isFrozen,
+      if (paperSize != null) 'paper_size': paperSize,
+      if (backgroundPdfPath != null) 'background_pdf_path': backgroundPdfPath,
     });
   }
 
@@ -2920,6 +3156,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
+    Value<int>? isFrozen,
+    Value<String>? paperSize,
+    Value<String?>? backgroundPdfPath,
   }) {
     return PagesCompanion(
       id: id ?? this.id,
@@ -2935,6 +3174,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      isFrozen: isFrozen ?? this.isFrozen,
+      paperSize: paperSize ?? this.paperSize,
+      backgroundPdfPath: backgroundPdfPath ?? this.backgroundPdfPath,
     );
   }
 
@@ -2980,6 +3222,15 @@ class PagesCompanion extends UpdateCompanion<Page> {
     if (version.present) {
       map['version'] = Variable<int>(version.value);
     }
+    if (isFrozen.present) {
+      map['is_frozen'] = Variable<int>(isFrozen.value);
+    }
+    if (paperSize.present) {
+      map['paper_size'] = Variable<String>(paperSize.value);
+    }
+    if (backgroundPdfPath.present) {
+      map['background_pdf_path'] = Variable<String>(backgroundPdfPath.value);
+    }
     return map;
   }
 
@@ -2998,7 +3249,10 @@ class PagesCompanion extends UpdateCompanion<Page> {
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isFrozen: $isFrozen, ')
+          ..write('paperSize: $paperSize, ')
+          ..write('backgroundPdfPath: $backgroundPdfPath')
           ..write(')'))
         .toString();
   }
@@ -3126,6 +3380,17 @@ class $CanvasStrokesTable extends CanvasStrokes
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientStrokeId,
@@ -3138,6 +3403,7 @@ class $CanvasStrokesTable extends CanvasStrokes
     updatedAt,
     version,
     creatorId,
+    layerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3226,6 +3492,12 @@ class $CanvasStrokesTable extends CanvasStrokes
         creatorId.isAcceptableOrUnknown(data['creator_id']!, _creatorIdMeta),
       );
     }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
     return context;
   }
 
@@ -3275,6 +3547,10 @@ class $CanvasStrokesTable extends CanvasStrokes
         DriftSqlType.string,
         data['${effectivePrefix}creator_id'],
       ),
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
     );
   }
 
@@ -3295,6 +3571,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
   final int updatedAt;
   final int version;
   final String? creatorId;
+  final String? layerId;
   const CanvasStroke({
     required this.clientStrokeId,
     this.serverId,
@@ -3306,6 +3583,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     required this.updatedAt,
     required this.version,
     this.creatorId,
+    this.layerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3323,6 +3601,9 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || creatorId != null) {
       map['creator_id'] = Variable<String>(creatorId);
+    }
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
     }
     return map;
   }
@@ -3343,6 +3624,9 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       creatorId: creatorId == null && nullToAbsent
           ? const Value.absent()
           : Value(creatorId),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
     );
   }
 
@@ -3362,6 +3646,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
     );
   }
   @override
@@ -3378,6 +3663,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
+      'layerId': serializer.toJson<String?>(layerId),
     };
   }
 
@@ -3392,6 +3678,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     int? updatedAt,
     int? version,
     Value<String?> creatorId = const Value.absent(),
+    Value<String?> layerId = const Value.absent(),
   }) => CanvasStroke(
     clientStrokeId: clientStrokeId ?? this.clientStrokeId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -3403,6 +3690,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
+    layerId: layerId.present ? layerId.value : this.layerId,
   );
   CanvasStroke copyWithCompanion(CanvasStrokesCompanion data) {
     return CanvasStroke(
@@ -3424,6 +3712,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
     );
   }
 
@@ -3439,7 +3728,8 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('creatorId: $creatorId')
+          ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId')
           ..write(')'))
         .toString();
   }
@@ -3456,6 +3746,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     updatedAt,
     version,
     creatorId,
+    layerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -3470,7 +3761,8 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.creatorId == this.creatorId);
+          other.creatorId == this.creatorId &&
+          other.layerId == this.layerId);
 }
 
 class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
@@ -3484,6 +3776,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> creatorId;
+  final Value<String?> layerId;
   final Value<int> rowid;
   const CanvasStrokesCompanion({
     this.clientStrokeId = const Value.absent(),
@@ -3496,6 +3789,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasStrokesCompanion.insert({
@@ -3509,6 +3803,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientStrokeId = Value(clientStrokeId),
        pageId = Value(pageId),
@@ -3524,6 +3819,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? creatorId,
+    Expression<String>? layerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3537,6 +3833,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
+      if (layerId != null) 'layer_id': layerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3552,6 +3849,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? creatorId,
+    Value<String?>? layerId,
     Value<int>? rowid,
   }) {
     return CanvasStrokesCompanion(
@@ -3565,6 +3863,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
+      layerId: layerId ?? this.layerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3602,6 +3901,9 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     if (creatorId.present) {
       map['creator_id'] = Variable<String>(creatorId.value);
     }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3621,6 +3923,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3749,6 +4052,17 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientTextId,
@@ -3761,6 +4075,7 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     updatedAt,
     version,
     creatorId,
+    layerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3849,6 +4164,12 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         creatorId.isAcceptableOrUnknown(data['creator_id']!, _creatorIdMeta),
       );
     }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
     return context;
   }
 
@@ -3898,6 +4219,10 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         DriftSqlType.string,
         data['${effectivePrefix}creator_id'],
       ),
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
     );
   }
 
@@ -3918,6 +4243,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
   final int updatedAt;
   final int version;
   final String? creatorId;
+  final String? layerId;
   const CanvasTextBlock({
     required this.clientTextId,
     this.serverId,
@@ -3929,6 +4255,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     required this.updatedAt,
     required this.version,
     this.creatorId,
+    this.layerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3946,6 +4273,9 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || creatorId != null) {
       map['creator_id'] = Variable<String>(creatorId);
+    }
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
     }
     return map;
   }
@@ -3966,6 +4296,9 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       creatorId: creatorId == null && nullToAbsent
           ? const Value.absent()
           : Value(creatorId),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
     );
   }
 
@@ -3985,6 +4318,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
     );
   }
   @override
@@ -4001,6 +4335,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
+      'layerId': serializer.toJson<String?>(layerId),
     };
   }
 
@@ -4015,6 +4350,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     int? updatedAt,
     int? version,
     Value<String?> creatorId = const Value.absent(),
+    Value<String?> layerId = const Value.absent(),
   }) => CanvasTextBlock(
     clientTextId: clientTextId ?? this.clientTextId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -4026,6 +4362,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
+    layerId: layerId.present ? layerId.value : this.layerId,
   );
   CanvasTextBlock copyWithCompanion(CanvasTextBlocksCompanion data) {
     return CanvasTextBlock(
@@ -4045,6 +4382,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
     );
   }
 
@@ -4060,7 +4398,8 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('creatorId: $creatorId')
+          ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId')
           ..write(')'))
         .toString();
   }
@@ -4077,6 +4416,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     updatedAt,
     version,
     creatorId,
+    layerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -4091,7 +4431,8 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.creatorId == this.creatorId);
+          other.creatorId == this.creatorId &&
+          other.layerId == this.layerId);
 }
 
 class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
@@ -4105,6 +4446,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> creatorId;
+  final Value<String?> layerId;
   final Value<int> rowid;
   const CanvasTextBlocksCompanion({
     this.clientTextId = const Value.absent(),
@@ -4117,6 +4459,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasTextBlocksCompanion.insert({
@@ -4130,6 +4473,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientTextId = Value(clientTextId),
        pageId = Value(pageId),
@@ -4145,6 +4489,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? creatorId,
+    Expression<String>? layerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4158,6 +4503,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
+      if (layerId != null) 'layer_id': layerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4173,6 +4519,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? creatorId,
+    Value<String?>? layerId,
     Value<int>? rowid,
   }) {
     return CanvasTextBlocksCompanion(
@@ -4186,6 +4533,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
+      layerId: layerId ?? this.layerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4223,6 +4571,9 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     if (creatorId.present) {
       map['creator_id'] = Variable<String>(creatorId.value);
     }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4242,6 +4593,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4417,6 +4769,17 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientImageId,
@@ -4434,6 +4797,7 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     updatedAt,
     version,
     creatorId,
+    layerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4562,6 +4926,12 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         creatorId.isAcceptableOrUnknown(data['creator_id']!, _creatorIdMeta),
       );
     }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
     return context;
   }
 
@@ -4631,6 +5001,10 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         DriftSqlType.string,
         data['${effectivePrefix}creator_id'],
       ),
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
     );
   }
 
@@ -4657,6 +5031,7 @@ class CanvasImageBlock extends DataClass
   final int updatedAt;
   final int version;
   final String? creatorId;
+  final String? layerId;
   const CanvasImageBlock({
     required this.clientImageId,
     this.serverId,
@@ -4673,6 +5048,7 @@ class CanvasImageBlock extends DataClass
     required this.updatedAt,
     required this.version,
     this.creatorId,
+    this.layerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4695,6 +5071,9 @@ class CanvasImageBlock extends DataClass
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || creatorId != null) {
       map['creator_id'] = Variable<String>(creatorId);
+    }
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
     }
     return map;
   }
@@ -4720,6 +5099,9 @@ class CanvasImageBlock extends DataClass
       creatorId: creatorId == null && nullToAbsent
           ? const Value.absent()
           : Value(creatorId),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
     );
   }
 
@@ -4744,6 +5126,7 @@ class CanvasImageBlock extends DataClass
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
     );
   }
   @override
@@ -4765,6 +5148,7 @@ class CanvasImageBlock extends DataClass
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
+      'layerId': serializer.toJson<String?>(layerId),
     };
   }
 
@@ -4784,6 +5168,7 @@ class CanvasImageBlock extends DataClass
     int? updatedAt,
     int? version,
     Value<String?> creatorId = const Value.absent(),
+    Value<String?> layerId = const Value.absent(),
   }) => CanvasImageBlock(
     clientImageId: clientImageId ?? this.clientImageId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -4800,6 +5185,7 @@ class CanvasImageBlock extends DataClass
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
+    layerId: layerId.present ? layerId.value : this.layerId,
   );
   CanvasImageBlock copyWithCompanion(CanvasImageBlocksCompanion data) {
     return CanvasImageBlock(
@@ -4824,6 +5210,7 @@ class CanvasImageBlock extends DataClass
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
     );
   }
 
@@ -4844,7 +5231,8 @@ class CanvasImageBlock extends DataClass
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('creatorId: $creatorId')
+          ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId')
           ..write(')'))
         .toString();
   }
@@ -4866,6 +5254,7 @@ class CanvasImageBlock extends DataClass
     updatedAt,
     version,
     creatorId,
+    layerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -4885,7 +5274,8 @@ class CanvasImageBlock extends DataClass
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.creatorId == this.creatorId);
+          other.creatorId == this.creatorId &&
+          other.layerId == this.layerId);
 }
 
 class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
@@ -4904,6 +5294,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> creatorId;
+  final Value<String?> layerId;
   final Value<int> rowid;
   const CanvasImageBlocksCompanion({
     this.clientImageId = const Value.absent(),
@@ -4921,6 +5312,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasImageBlocksCompanion.insert({
@@ -4939,6 +5331,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientImageId = Value(clientImageId),
        pageId = Value(pageId),
@@ -4964,6 +5357,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? creatorId,
+    Expression<String>? layerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4982,6 +5376,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
+      if (layerId != null) 'layer_id': layerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5002,6 +5397,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? creatorId,
+    Value<String?>? layerId,
     Value<int>? rowid,
   }) {
     return CanvasImageBlocksCompanion(
@@ -5020,6 +5416,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
+      layerId: layerId ?? this.layerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5072,6 +5469,9 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     if (creatorId.present) {
       map['creator_id'] = Variable<String>(creatorId.value);
     }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5096,6 +5496,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6342,6 +6743,613 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
   }
 }
 
+class $LessonRecordingsTable extends LessonRecordings
+    with TableInfo<$LessonRecordingsTable, LessonRecording> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LessonRecordingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _notebookIdMeta = const VerificationMeta(
+    'notebookId',
+  );
+  @override
+  late final GeneratedColumn<int> notebookId = GeneratedColumn<int>(
+    'notebook_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES notebooks (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _audioUrlMeta = const VerificationMeta(
+    'audioUrl',
+  );
+  @override
+  late final GeneratedColumn<String> audioUrl = GeneratedColumn<String>(
+    'audio_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _durationSecondsMeta = const VerificationMeta(
+    'durationSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> durationSeconds = GeneratedColumn<int>(
+    'duration_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    clientId,
+    notebookId,
+    title,
+    audioUrl,
+    durationSeconds,
+    syncedWithCloud,
+    updatedAt,
+    version,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lesson_recordings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LessonRecording> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
+      );
+    }
+    if (data.containsKey('notebook_id')) {
+      context.handle(
+        _notebookIdMeta,
+        notebookId.isAcceptableOrUnknown(data['notebook_id']!, _notebookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_notebookIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('audio_url')) {
+      context.handle(
+        _audioUrlMeta,
+        audioUrl.isAcceptableOrUnknown(data['audio_url']!, _audioUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_audioUrlMeta);
+    }
+    if (data.containsKey('duration_seconds')) {
+      context.handle(
+        _durationSecondsMeta,
+        durationSeconds.isAcceptableOrUnknown(
+          data['duration_seconds']!,
+          _durationSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LessonRecording map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LessonRecording(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      ),
+      notebookId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}notebook_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      audioUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}audio_url'],
+      )!,
+      durationSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_seconds'],
+      )!,
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
+    );
+  }
+
+  @override
+  $LessonRecordingsTable createAlias(String alias) {
+    return $LessonRecordingsTable(attachedDatabase, alias);
+  }
+}
+
+class LessonRecording extends DataClass implements Insertable<LessonRecording> {
+  final int id;
+  final int? serverId;
+  final String? clientId;
+  final int notebookId;
+  final String title;
+  final String audioUrl;
+  final int durationSeconds;
+  final int syncedWithCloud;
+  final int updatedAt;
+  final int version;
+  const LessonRecording({
+    required this.id,
+    this.serverId,
+    this.clientId,
+    required this.notebookId,
+    required this.title,
+    required this.audioUrl,
+    required this.durationSeconds,
+    required this.syncedWithCloud,
+    required this.updatedAt,
+    required this.version,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
+    if (!nullToAbsent || clientId != null) {
+      map['client_id'] = Variable<String>(clientId);
+    }
+    map['notebook_id'] = Variable<int>(notebookId);
+    map['title'] = Variable<String>(title);
+    map['audio_url'] = Variable<String>(audioUrl);
+    map['duration_seconds'] = Variable<int>(durationSeconds);
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    map['updated_at'] = Variable<int>(updatedAt);
+    map['version'] = Variable<int>(version);
+    return map;
+  }
+
+  LessonRecordingsCompanion toCompanion(bool nullToAbsent) {
+    return LessonRecordingsCompanion(
+      id: Value(id),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+      clientId: clientId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientId),
+      notebookId: Value(notebookId),
+      title: Value(title),
+      audioUrl: Value(audioUrl),
+      durationSeconds: Value(durationSeconds),
+      syncedWithCloud: Value(syncedWithCloud),
+      updatedAt: Value(updatedAt),
+      version: Value(version),
+    );
+  }
+
+  factory LessonRecording.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LessonRecording(
+      id: serializer.fromJson<int>(json['id']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
+      clientId: serializer.fromJson<String?>(json['clientId']),
+      notebookId: serializer.fromJson<int>(json['notebookId']),
+      title: serializer.fromJson<String>(json['title']),
+      audioUrl: serializer.fromJson<String>(json['audioUrl']),
+      durationSeconds: serializer.fromJson<int>(json['durationSeconds']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      version: serializer.fromJson<int>(json['version']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'serverId': serializer.toJson<int?>(serverId),
+      'clientId': serializer.toJson<String?>(clientId),
+      'notebookId': serializer.toJson<int>(notebookId),
+      'title': serializer.toJson<String>(title),
+      'audioUrl': serializer.toJson<String>(audioUrl),
+      'durationSeconds': serializer.toJson<int>(durationSeconds),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'version': serializer.toJson<int>(version),
+    };
+  }
+
+  LessonRecording copyWith({
+    int? id,
+    Value<int?> serverId = const Value.absent(),
+    Value<String?> clientId = const Value.absent(),
+    int? notebookId,
+    String? title,
+    String? audioUrl,
+    int? durationSeconds,
+    int? syncedWithCloud,
+    int? updatedAt,
+    int? version,
+  }) => LessonRecording(
+    id: id ?? this.id,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    clientId: clientId.present ? clientId.value : this.clientId,
+    notebookId: notebookId ?? this.notebookId,
+    title: title ?? this.title,
+    audioUrl: audioUrl ?? this.audioUrl,
+    durationSeconds: durationSeconds ?? this.durationSeconds,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    updatedAt: updatedAt ?? this.updatedAt,
+    version: version ?? this.version,
+  );
+  LessonRecording copyWithCompanion(LessonRecordingsCompanion data) {
+    return LessonRecording(
+      id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      notebookId: data.notebookId.present
+          ? data.notebookId.value
+          : this.notebookId,
+      title: data.title.present ? data.title.value : this.title,
+      audioUrl: data.audioUrl.present ? data.audioUrl.value : this.audioUrl,
+      durationSeconds: data.durationSeconds.present
+          ? data.durationSeconds.value
+          : this.durationSeconds,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      version: data.version.present ? data.version.value : this.version,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LessonRecording(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
+          ..write('notebookId: $notebookId, ')
+          ..write('title: $title, ')
+          ..write('audioUrl: $audioUrl, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    clientId,
+    notebookId,
+    title,
+    audioUrl,
+    durationSeconds,
+    syncedWithCloud,
+    updatedAt,
+    version,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LessonRecording &&
+          other.id == this.id &&
+          other.serverId == this.serverId &&
+          other.clientId == this.clientId &&
+          other.notebookId == this.notebookId &&
+          other.title == this.title &&
+          other.audioUrl == this.audioUrl &&
+          other.durationSeconds == this.durationSeconds &&
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.updatedAt == this.updatedAt &&
+          other.version == this.version);
+}
+
+class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
+  final Value<int> id;
+  final Value<int?> serverId;
+  final Value<String?> clientId;
+  final Value<int> notebookId;
+  final Value<String> title;
+  final Value<String> audioUrl;
+  final Value<int> durationSeconds;
+  final Value<int> syncedWithCloud;
+  final Value<int> updatedAt;
+  final Value<int> version;
+  const LessonRecordingsCompanion({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.notebookId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.audioUrl = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
+  });
+  LessonRecordingsCompanion.insert({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.clientId = const Value.absent(),
+    required int notebookId,
+    required String title,
+    required String audioUrl,
+    this.durationSeconds = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
+  }) : notebookId = Value(notebookId),
+       title = Value(title),
+       audioUrl = Value(audioUrl);
+  static Insertable<LessonRecording> custom({
+    Expression<int>? id,
+    Expression<int>? serverId,
+    Expression<String>? clientId,
+    Expression<int>? notebookId,
+    Expression<String>? title,
+    Expression<String>? audioUrl,
+    Expression<int>? durationSeconds,
+    Expression<int>? syncedWithCloud,
+    Expression<int>? updatedAt,
+    Expression<int>? version,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
+      if (clientId != null) 'client_id': clientId,
+      if (notebookId != null) 'notebook_id': notebookId,
+      if (title != null) 'title': title,
+      if (audioUrl != null) 'audio_url': audioUrl,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (version != null) 'version': version,
+    });
+  }
+
+  LessonRecordingsCompanion copyWith({
+    Value<int>? id,
+    Value<int?>? serverId,
+    Value<String?>? clientId,
+    Value<int>? notebookId,
+    Value<String>? title,
+    Value<String>? audioUrl,
+    Value<int>? durationSeconds,
+    Value<int>? syncedWithCloud,
+    Value<int>? updatedAt,
+    Value<int>? version,
+  }) {
+    return LessonRecordingsCompanion(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      clientId: clientId ?? this.clientId,
+      notebookId: notebookId ?? this.notebookId,
+      title: title ?? this.title,
+      audioUrl: audioUrl ?? this.audioUrl,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (notebookId.present) {
+      map['notebook_id'] = Variable<int>(notebookId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (audioUrl.present) {
+      map['audio_url'] = Variable<String>(audioUrl.value);
+    }
+    if (durationSeconds.present) {
+      map['duration_seconds'] = Variable<int>(durationSeconds.value);
+    }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LessonRecordingsCompanion(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('clientId: $clientId, ')
+          ..write('notebookId: $notebookId, ')
+          ..write('title: $title, ')
+          ..write('audioUrl: $audioUrl, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6357,6 +7365,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $CanvasImageBlocksTable(this);
   late final $NotebookUserTable notebookUser = $NotebookUserTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
+  late final $LessonRecordingsTable lessonRecordings = $LessonRecordingsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6371,6 +7382,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     canvasImageBlocks,
     notebookUser,
     payments,
+    lessonRecordings,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -6436,6 +7448,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('payments', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'notebooks',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('lesson_recordings', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -7536,6 +8555,8 @@ typedef $$NotebooksTableCreateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<String> templateType,
+      Value<String> collaborationMode,
     });
 typedef $$NotebooksTableUpdateCompanionBuilder =
     NotebooksCompanion Function({
@@ -7558,6 +8579,8 @@ typedef $$NotebooksTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<String> templateType,
+      Value<String> collaborationMode,
     });
 
 final class $$NotebooksTableReferences
@@ -7613,6 +8636,26 @@ final class $$NotebooksTableReferences
     ).filter((f) => f.notebookId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_notebookUserRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$LessonRecordingsTable, List<LessonRecording>>
+  _lessonRecordingsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.lessonRecordings,
+    aliasName: 'notebooks__id__lesson_recordings__notebook_id',
+  );
+
+  $$LessonRecordingsTableProcessedTableManager get lessonRecordingsRefs {
+    final manager = $$LessonRecordingsTableTableManager(
+      $_db,
+      $_db.lessonRecordings,
+    ).filter((f) => f.notebookId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _lessonRecordingsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -7718,6 +8761,16 @@ class $$NotebooksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get templateType => $composableBuilder(
+    column: $table.templateType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get collaborationMode => $composableBuilder(
+    column: $table.collaborationMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$SubjectsTableFilterComposer get subjectId {
     final $$SubjectsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -7782,6 +8835,31 @@ class $$NotebooksTableFilterComposer
           }) => $$NotebookUserTableFilterComposer(
             $db: $db,
             $table: $db.notebookUser,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> lessonRecordingsRefs(
+    Expression<bool> Function($$LessonRecordingsTableFilterComposer f) f,
+  ) {
+    final $$LessonRecordingsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lessonRecordings,
+      getReferencedColumn: (t) => t.notebookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LessonRecordingsTableFilterComposer(
+            $db: $db,
+            $table: $db.lessonRecordings,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -7891,6 +8969,16 @@ class $$NotebooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get templateType => $composableBuilder(
+    column: $table.templateType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get collaborationMode => $composableBuilder(
+    column: $table.collaborationMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SubjectsTableOrderingComposer get subjectId {
     final $$SubjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -7990,6 +9078,16 @@ class $$NotebooksTableAnnotationComposer
   GeneratedColumn<int> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
 
+  GeneratedColumn<String> get templateType => $composableBuilder(
+    column: $table.templateType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get collaborationMode => $composableBuilder(
+    column: $table.collaborationMode,
+    builder: (column) => column,
+  );
+
   $$SubjectsTableAnnotationComposer get subjectId {
     final $$SubjectsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -8062,6 +9160,31 @@ class $$NotebooksTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> lessonRecordingsRefs<T extends Object>(
+    Expression<T> Function($$LessonRecordingsTableAnnotationComposer a) f,
+  ) {
+    final $$LessonRecordingsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.lessonRecordings,
+      getReferencedColumn: (t) => t.notebookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LessonRecordingsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.lessonRecordings,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$NotebooksTableTableManager
@@ -8081,6 +9204,7 @@ class $$NotebooksTableTableManager
             bool subjectId,
             bool pagesRefs,
             bool notebookUserRefs,
+            bool lessonRecordingsRefs,
           })
         > {
   $$NotebooksTableTableManager(_$AppDatabase db, $NotebooksTable table)
@@ -8115,6 +9239,8 @@ class $$NotebooksTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<String> templateType = const Value.absent(),
+                Value<String> collaborationMode = const Value.absent(),
               }) => NotebooksCompanion(
                 id: id,
                 serverId: serverId,
@@ -8135,6 +9261,8 @@ class $$NotebooksTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                templateType: templateType,
+                collaborationMode: collaborationMode,
               ),
           createCompanionCallback:
               ({
@@ -8157,6 +9285,8 @@ class $$NotebooksTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<String> templateType = const Value.absent(),
+                Value<String> collaborationMode = const Value.absent(),
               }) => NotebooksCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -8177,6 +9307,8 @@ class $$NotebooksTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                templateType: templateType,
+                collaborationMode: collaborationMode,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -8191,12 +9323,14 @@ class $$NotebooksTableTableManager
                 subjectId = false,
                 pagesRefs = false,
                 notebookUserRefs = false,
+                lessonRecordingsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (pagesRefs) db.pages,
                     if (notebookUserRefs) db.notebookUser,
+                    if (lessonRecordingsRefs) db.lessonRecordings,
                   ],
                   addJoins:
                       <
@@ -8274,6 +9408,27 @@ class $$NotebooksTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (lessonRecordingsRefs)
+                        await $_getPrefetchedData<
+                          Notebook,
+                          $NotebooksTable,
+                          LessonRecording
+                        >(
+                          currentTable: table,
+                          referencedTable: $$NotebooksTableReferences
+                              ._lessonRecordingsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$NotebooksTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).lessonRecordingsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.notebookId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -8298,6 +9453,7 @@ typedef $$NotebooksTableProcessedTableManager =
         bool subjectId,
         bool pagesRefs,
         bool notebookUserRefs,
+        bool lessonRecordingsRefs,
       })
     >;
 typedef $$PagesTableCreateCompanionBuilder =
@@ -8315,6 +9471,9 @@ typedef $$PagesTableCreateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isFrozen,
+      Value<String> paperSize,
+      Value<String?> backgroundPdfPath,
     });
 typedef $$PagesTableUpdateCompanionBuilder =
     PagesCompanion Function({
@@ -8331,6 +9490,9 @@ typedef $$PagesTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isFrozen,
+      Value<String> paperSize,
+      Value<String?> backgroundPdfPath,
     });
 
 final class $$PagesTableReferences
@@ -8479,6 +9641,21 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
 
   ColumnFilters<int> get version => $composableBuilder(
     column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFrozen => $composableBuilder(
+    column: $table.isFrozen,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get paperSize => $composableBuilder(
+    column: $table.paperSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backgroundPdfPath => $composableBuilder(
+    column: $table.backgroundPdfPath,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8650,6 +9827,21 @@ class $$PagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get isFrozen => $composableBuilder(
+    column: $table.isFrozen,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get paperSize => $composableBuilder(
+    column: $table.paperSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backgroundPdfPath => $composableBuilder(
+    column: $table.backgroundPdfPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$NotebooksTableOrderingComposer get notebookId {
     final $$NotebooksTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -8730,6 +9922,17 @@ class $$PagesTableAnnotationComposer
 
   GeneratedColumn<int> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<int> get isFrozen =>
+      $composableBuilder(column: $table.isFrozen, builder: (column) => column);
+
+  GeneratedColumn<String> get paperSize =>
+      $composableBuilder(column: $table.paperSize, builder: (column) => column);
+
+  GeneratedColumn<String> get backgroundPdfPath => $composableBuilder(
+    column: $table.backgroundPdfPath,
+    builder: (column) => column,
+  );
 
   $$NotebooksTableAnnotationComposer get notebookId {
     final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
@@ -8877,6 +10080,9 @@ class $$PagesTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isFrozen = const Value.absent(),
+                Value<String> paperSize = const Value.absent(),
+                Value<String?> backgroundPdfPath = const Value.absent(),
               }) => PagesCompanion(
                 id: id,
                 serverId: serverId,
@@ -8891,6 +10097,9 @@ class $$PagesTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isFrozen: isFrozen,
+                paperSize: paperSize,
+                backgroundPdfPath: backgroundPdfPath,
               ),
           createCompanionCallback:
               ({
@@ -8907,6 +10116,9 @@ class $$PagesTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isFrozen = const Value.absent(),
+                Value<String> paperSize = const Value.absent(),
+                Value<String?> backgroundPdfPath = const Value.absent(),
               }) => PagesCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -8921,6 +10133,9 @@ class $$PagesTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isFrozen: isFrozen,
+                paperSize: paperSize,
+                backgroundPdfPath: backgroundPdfPath,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -9078,6 +10293,7 @@ typedef $$CanvasStrokesTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 typedef $$CanvasStrokesTableUpdateCompanionBuilder =
@@ -9092,6 +10308,7 @@ typedef $$CanvasStrokesTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 
@@ -9175,6 +10392,11 @@ class $$CanvasStrokesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -9253,6 +10475,11 @@ class $$CanvasStrokesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -9321,6 +10548,9 @@ class $$CanvasStrokesTableAnnotationComposer
   GeneratedColumn<String> get creatorId =>
       $composableBuilder(column: $table.creatorId, builder: (column) => column);
 
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -9383,6 +10613,7 @@ class $$CanvasStrokesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasStrokesCompanion(
                 clientStrokeId: clientStrokeId,
@@ -9395,6 +10626,7 @@ class $$CanvasStrokesTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9409,6 +10641,7 @@ class $$CanvasStrokesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasStrokesCompanion.insert(
                 clientStrokeId: clientStrokeId,
@@ -9421,6 +10654,7 @@ class $$CanvasStrokesTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -9502,6 +10736,7 @@ typedef $$CanvasTextBlocksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
@@ -9516,6 +10751,7 @@ typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 
@@ -9600,6 +10836,11 @@ class $$CanvasTextBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -9678,6 +10919,11 @@ class $$CanvasTextBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -9744,6 +10990,9 @@ class $$CanvasTextBlocksTableAnnotationComposer
   GeneratedColumn<String> get creatorId =>
       $composableBuilder(column: $table.creatorId, builder: (column) => column);
 
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -9808,6 +11057,7 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion(
                 clientTextId: clientTextId,
@@ -9820,6 +11070,7 @@ class $$CanvasTextBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9834,6 +11085,7 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion.insert(
                 clientTextId: clientTextId,
@@ -9846,6 +11098,7 @@ class $$CanvasTextBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -9934,6 +11187,7 @@ typedef $$CanvasImageBlocksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
@@ -9953,6 +11207,7 @@ typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 
@@ -10066,6 +11321,11 @@ class $$CanvasImageBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -10169,6 +11429,11 @@ class $$CanvasImageBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -10250,6 +11515,9 @@ class $$CanvasImageBlocksTableAnnotationComposer
   GeneratedColumn<String> get creatorId =>
       $composableBuilder(column: $table.creatorId, builder: (column) => column);
 
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -10322,6 +11590,7 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion(
                 clientImageId: clientImageId,
@@ -10339,6 +11608,7 @@ class $$CanvasImageBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10358,6 +11628,7 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion.insert(
                 clientImageId: clientImageId,
@@ -10375,6 +11646,7 @@ class $$CanvasImageBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -11370,6 +12642,425 @@ typedef $$PaymentsTableProcessedTableManager =
       Payment,
       PrefetchHooks Function({bool userId})
     >;
+typedef $$LessonRecordingsTableCreateCompanionBuilder =
+    LessonRecordingsCompanion Function({
+      Value<int> id,
+      Value<int?> serverId,
+      Value<String?> clientId,
+      required int notebookId,
+      required String title,
+      required String audioUrl,
+      Value<int> durationSeconds,
+      Value<int> syncedWithCloud,
+      Value<int> updatedAt,
+      Value<int> version,
+    });
+typedef $$LessonRecordingsTableUpdateCompanionBuilder =
+    LessonRecordingsCompanion Function({
+      Value<int> id,
+      Value<int?> serverId,
+      Value<String?> clientId,
+      Value<int> notebookId,
+      Value<String> title,
+      Value<String> audioUrl,
+      Value<int> durationSeconds,
+      Value<int> syncedWithCloud,
+      Value<int> updatedAt,
+      Value<int> version,
+    });
+
+final class $$LessonRecordingsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $LessonRecordingsTable, LessonRecording> {
+  $$LessonRecordingsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $NotebooksTable _notebookIdTable(_$AppDatabase db) =>
+      db.notebooks.createAlias('lesson_recordings__notebook_id__notebooks__id');
+
+  $$NotebooksTableProcessedTableManager get notebookId {
+    final $_column = $_itemColumn<int>('notebook_id')!;
+
+    final manager = $$NotebooksTableTableManager(
+      $_db,
+      $_db.notebooks,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_notebookIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$LessonRecordingsTableFilterComposer
+    extends Composer<_$AppDatabase, $LessonRecordingsTable> {
+  $$LessonRecordingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get audioUrl => $composableBuilder(
+    column: $table.audioUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$NotebooksTableFilterComposer get notebookId {
+    final $$NotebooksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableFilterComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LessonRecordingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LessonRecordingsTable> {
+  $$LessonRecordingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get audioUrl => $composableBuilder(
+    column: $table.audioUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$NotebooksTableOrderingComposer get notebookId {
+    final $$NotebooksTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableOrderingComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LessonRecordingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LessonRecordingsTable> {
+  $$LessonRecordingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get audioUrl =>
+      $composableBuilder(column: $table.audioUrl, builder: (column) => column);
+
+  GeneratedColumn<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
+  $$NotebooksTableAnnotationComposer get notebookId {
+    final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.notebookId,
+      referencedTable: $db.notebooks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebooksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.notebooks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LessonRecordingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LessonRecordingsTable,
+          LessonRecording,
+          $$LessonRecordingsTableFilterComposer,
+          $$LessonRecordingsTableOrderingComposer,
+          $$LessonRecordingsTableAnnotationComposer,
+          $$LessonRecordingsTableCreateCompanionBuilder,
+          $$LessonRecordingsTableUpdateCompanionBuilder,
+          (LessonRecording, $$LessonRecordingsTableReferences),
+          LessonRecording,
+          PrefetchHooks Function({bool notebookId})
+        > {
+  $$LessonRecordingsTableTableManager(
+    _$AppDatabase db,
+    $LessonRecordingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LessonRecordingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LessonRecordingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LessonRecordingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
+                Value<int> notebookId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> audioUrl = const Value.absent(),
+                Value<int> durationSeconds = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> version = const Value.absent(),
+              }) => LessonRecordingsCompanion(
+                id: id,
+                serverId: serverId,
+                clientId: clientId,
+                notebookId: notebookId,
+                title: title,
+                audioUrl: audioUrl,
+                durationSeconds: durationSeconds,
+                syncedWithCloud: syncedWithCloud,
+                updatedAt: updatedAt,
+                version: version,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
+                required int notebookId,
+                required String title,
+                required String audioUrl,
+                Value<int> durationSeconds = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> version = const Value.absent(),
+              }) => LessonRecordingsCompanion.insert(
+                id: id,
+                serverId: serverId,
+                clientId: clientId,
+                notebookId: notebookId,
+                title: title,
+                audioUrl: audioUrl,
+                durationSeconds: durationSeconds,
+                syncedWithCloud: syncedWithCloud,
+                updatedAt: updatedAt,
+                version: version,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$LessonRecordingsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({notebookId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (notebookId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.notebookId,
+                                referencedTable:
+                                    $$LessonRecordingsTableReferences
+                                        ._notebookIdTable(db),
+                                referencedColumn:
+                                    $$LessonRecordingsTableReferences
+                                        ._notebookIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$LessonRecordingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LessonRecordingsTable,
+      LessonRecording,
+      $$LessonRecordingsTableFilterComposer,
+      $$LessonRecordingsTableOrderingComposer,
+      $$LessonRecordingsTableAnnotationComposer,
+      $$LessonRecordingsTableCreateCompanionBuilder,
+      $$LessonRecordingsTableUpdateCompanionBuilder,
+      (LessonRecording, $$LessonRecordingsTableReferences),
+      LessonRecording,
+      PrefetchHooks Function({bool notebookId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -11392,4 +13083,6 @@ class $AppDatabaseManager {
       $$NotebookUserTableTableManager(_db, _db.notebookUser);
   $$PaymentsTableTableManager get payments =>
       $$PaymentsTableTableManager(_db, _db.payments);
+  $$LessonRecordingsTableTableManager get lessonRecordings =>
+      $$LessonRecordingsTableTableManager(_db, _db.lessonRecordings);
 }

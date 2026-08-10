@@ -43,7 +43,10 @@ class StaticNotebookPainter extends CustomPainter {
   final Set<String> selectedStrokeIds;
   final Rect? selectionRect;
   final int pageVersion; 
-  final Set<String> remoteMovingStrokeIds; // 🚀
+  final Set<String> remoteMovingStrokeIds; 
+  final Set<String>? visibleAuthorIds; 
+  final bool isAuthorColorEnabled; // 🚀 Alterado
+  final Map<String, Color> userColors; 
 
   StaticNotebookPainter({
     required this.strokes,
@@ -52,7 +55,10 @@ class StaticNotebookPainter extends CustomPainter {
     required this.selectedStrokeIds,
     required this.selectionRect,
     required this.pageVersion,
-    this.remoteMovingStrokeIds = const {}, // 🚀
+    this.remoteMovingStrokeIds = const {},
+    this.visibleAuthorIds,
+    this.isAuthorColorEnabled = false,
+    this.userColors = const {},
   });
 
   @override
@@ -85,10 +91,23 @@ class StaticNotebookPainter extends CustomPainter {
     }
 
     for (final stroke in strokes) {
-      if (stroke.isDeleted || remoteMovingStrokeIds.contains(stroke.id)) continue; // 🚀 Ocultar se estiver em movimento
+      if (stroke.isDeleted || remoteMovingStrokeIds.contains(stroke.id)) continue; 
+      
+      // 🚀 FILTRO DE CAMADA (Por Autor)
+      if (visibleAuthorIds != null && stroke.creatorId != null) {
+        if (!visibleAuthorIds!.contains(stroke.creatorId)) continue;
+      }
+
       final bool isSelected = selectedStrokeIds.contains(stroke.id);
+      
+      // 🚀 CORES DIFERENCIADAS (Controle do Dono)
+      Color strokeColor = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')));
+      if (isAuthorColorEnabled && stroke.creatorId != null && userColors.containsKey(stroke.creatorId)) {
+        strokeColor = userColors[stroke.creatorId]!;
+      }
+
       final paint = Paint()
-        ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
+        ..color = strokeColor
         ..strokeWidth = stroke.thickness
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
@@ -123,7 +142,8 @@ class StaticNotebookPainter extends CustomPainter {
            oldDelegate.lineType != lineType ||
            oldDelegate.lineSpacing != lineSpacing ||
            oldDelegate.selectionRect != selectionRect ||
-           !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) || // 🚀
+           !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) || // 🚀
+           !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) || 
            !setEquals(oldDelegate.selectedStrokeIds, selectedStrokeIds) ||
            !listEquals(oldDelegate.strokes, strokes);
   }
@@ -131,16 +151,16 @@ class StaticNotebookPainter extends CustomPainter {
 
 class ActiveStrokePainter extends CustomPainter {
   final List<Offset> currentPoints;
-  final String currentColor;
+  final Color visualColor; // 🚀 Alterado para usar cor final calculada
   final double currentThickness;
 
-  ActiveStrokePainter({required this.currentPoints, required this.currentColor, required this.currentThickness});
+  ActiveStrokePainter({required this.currentPoints, required this.visualColor, required this.currentThickness});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (currentPoints.isEmpty) return;
     final paint = Paint()
-      ..color = Color(int.parse(currentColor.replaceFirst('#', '0xFF')))
+      ..color = visualColor
       ..strokeWidth = currentThickness
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -150,7 +170,7 @@ class ActiveStrokePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ActiveStrokePainter oldDelegate) {
-    return oldDelegate.currentColor != currentColor ||
+    return oldDelegate.visualColor != visualColor ||
            oldDelegate.currentThickness != currentThickness ||
            !listEquals(oldDelegate.currentPoints, currentPoints);
   }
@@ -159,19 +179,31 @@ class ActiveStrokePainter extends CustomPainter {
 class RemoteLiveStrokesPainter extends CustomPainter {
   final Map<String, Stroke> liveStrokes;
   final int targetPageNumber; // 🚀 Vincular desenho à página
+  final bool isAuthorColorEnabled; // 🚀
+  final Map<String, Color> userColors; // 🚀
 
-  RemoteLiveStrokesPainter({required this.liveStrokes, required this.targetPageNumber});
+  RemoteLiveStrokesPainter({
+    required this.liveStrokes, 
+    required this.targetPageNumber,
+    this.isAuthorColorEnabled = false,
+    this.userColors = const {},
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (liveStrokes.isEmpty) return;
     for (final stroke in liveStrokes.values) {
-      if (stroke.isDeleted || stroke.points.isEmpty) continue;
+      if (stroke.isDeleted || (stroke.points.isEmpty && stroke.liveOffset == null)) continue;
       // 🛡️ Segurança: Só desenhar se pertencer a esta página
       if (stroke.pageNumber != null && stroke.pageNumber != targetPageNumber) continue;
 
+      Color strokeColor = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')));
+      if (isAuthorColorEnabled && stroke.creatorId != null && userColors.containsKey(stroke.creatorId)) {
+        strokeColor = userColors[stroke.creatorId]!;
+      }
+
       final paint = Paint()
-        ..color = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')))
+        ..color = strokeColor.withValues(alpha: 0.8)
         ..strokeWidth = stroke.thickness
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round

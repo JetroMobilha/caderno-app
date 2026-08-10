@@ -42,6 +42,9 @@ class SyncService {
       if (!metadataOnly) {
         await pushPages(); // 🚀 Primeiro enviamos o que é nosso
         await pullPages(); // 🚀 Depois baixamos as novidades
+        
+        await pushRecordings(); // 🚀 Sincronizar gravações de aula
+        await pullRecordings();
       }
       
       debugPrint('✅ [Sync] Ciclo concluído.');
@@ -253,6 +256,8 @@ class SyncService {
           lineType: row.lineType ?? 'ruled',
           paperSize: row.paperSize ?? 'A4',
           lineSpacing: row.lineSpacing,
+          templateType: row.templateType,
+          collaborationMode: row.collaborationMode, // 🚀
           isPublished: row.isPublished,
           price: row.price,
           description: row.description,
@@ -374,6 +379,8 @@ class SyncService {
                   lineType: Value(net['line_type'] ?? 'ruled'),
                   lineSpacing: Value(net['line_spacing'] != null ? double.tryParse(net['line_spacing'].toString()) : null),
                   paperSize: Value(net['paper_size'] ?? 'A4'),
+                  templateType: Value(net['template_type'] ?? 'study'),
+                  collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
                   isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0),
                   price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
                   description: Value(net['description']),
@@ -400,6 +407,8 @@ class SyncService {
                         lineType: companion.lineType,
                         lineSpacing: companion.lineSpacing,
                         paperSize: companion.paperSize,
+                        templateType: companion.templateType,
+                        collaborationMode: companion.collaborationMode,
                         isPublished: companion.isPublished,
                         price: companion.price,
                         description: companion.description,
@@ -661,6 +670,8 @@ class SyncService {
                 notebookId: notebook.id,
                 pageNumber: sPage['page_number'],
                 isLandscape: Value((sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0),
+                isFrozen: Value((sPage['is_frozen'] == true || sPage['is_frozen'] == 1) ? 1 : 0),
+                paperSize: Value(sPage['paper_size']?.toString() ?? 'A4'),
                 headerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['header_data']))),
                 footerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['footer_data']))),
                 extractedText: Value(sPage['extracted_text']?.toString()),
@@ -691,6 +702,7 @@ class SyncService {
                       headerData: pageCompanion.headerData,
                       footerData: pageCompanion.footerData,
                       isLandscape: pageCompanion.isLandscape,
+                      paperSize: pageCompanion.paperSize,
                       extractedText: pageCompanion.extractedText,
                       syncedWithCloud: pageCompanion.syncedWithCloud,
                       updatedAt: pageCompanion.updatedAt,
@@ -794,6 +806,8 @@ class SyncService {
             notebookId: notebook.id,
             pageNumber: sPage['page_number'],
             isLandscape: Value((sPage['is_landscape'] == true || sPage['is_landscape'] == 1) ? 1 : 0),
+            isFrozen: Value((sPage['is_frozen'] == true || sPage['is_frozen'] == 1) ? 1 : 0),
+            paperSize: Value(sPage['paper_size']?.toString() ?? 'A4'),
             headerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['header_data']))),
             footerData: Value(pages_model.LocalPage.encodeMeta(pages_model.LocalPage.parseMeta(sPage['footer_data']))),
             extractedText: Value(sPage['extracted_text']?.toString()),
@@ -823,6 +837,7 @@ class SyncService {
                   headerData: pageCompanion.headerData,
                   footerData: pageCompanion.footerData,
                   isLandscape: pageCompanion.isLandscape,
+                  paperSize: pageCompanion.paperSize,
                   extractedText: pageCompanion.extractedText,
                   syncedWithCloud: pageCompanion.syncedWithCloud,
                   updatedAt: pageCompanion.updatedAt,
@@ -999,5 +1014,88 @@ class SyncService {
     }
     if (data is Iterable) return List.from(data);
     return [];
+  }
+
+  // =========================================================================
+  // 🎙️ 5. GRAVAÇÕES DE AULA (RECORDINGS)
+  // =========================================================================
+  Future<void> pushRecordings() async {
+    try {
+      final unsynced = await (_db.select(_db.lessonRecordings)..where((t) => t.syncedWithCloud.equals(0))).get();
+      if (unsynced.isEmpty) return;
+
+      final List<Map<String, dynamic>> payload = [];
+      for (var row in unsynced) {
+        payload.add({
+          'notebook_id': row.notebookId,
+          'client_id': row.clientId,
+          'title': row.title,
+          'audio_url': row.audioUrl,
+          'duration_seconds': row.durationSeconds,
+          'updated_at': row.updatedAt,
+        });
+      }
+
+      final response = await _apiService.post('/sync/recordings/push', {'recordings': payload});
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        for (var item in data['synced_recordings'] ?? []) {
+          final String clientUuid = item['client_id'].toString();
+          final int serverId = item['server_id'];
+
+          await (_db.update(_db.lessonRecordings)..where((t) => t.clientId.equals(clientUuid))).write(
+            LessonRecordingsCompanion(
+              serverId: Value(serverId),
+              syncedWithCloud: const Value(1),
+            )
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('🚨 Erro PUSH Recordings: $e');
+    }
+  }
+
+  Future<void> pullRecordings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? lastSynced = prefs.getString('last_recordings_sync');
+
+    try {
+      final url = lastSynced != null ? '/sync/recordings/pull?last_synced_at=$lastSynced' : '/sync/recordings/pull';
+      final response = await _apiService.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List serverRecordings = data['data'] ?? [];
+
+        if (data['meta'] != null && data['meta']['server_time'] != null) {
+          await prefs.setString('last_recordings_sync', data['meta']['server_time']);
+        }
+
+        await _db.batch((batch) {
+          for (var rec in serverRecordings) {
+            final int sId = rec['id'];
+            final String? cId = rec['client_id'];
+            final int serverTs = rec['updated_at_ms'] ?? 0;
+
+            batch.insert(_db.lessonRecordings, 
+              LessonRecordingsCompanion.insert(
+                serverId: Value(sId),
+                clientId: Value(cId ?? uniqid()),
+                notebookId: rec['notebook_id'],
+                title: rec['title'] ?? 'Sem título',
+                audioUrl: rec['audio_url'] ?? '',
+                durationSeconds: Value(rec['duration_seconds'] ?? 0),
+                syncedWithCloud: const Value(1),
+                updatedAt: Value(serverTs),
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('🚨 Erro PULL Recordings: $e');
+    }
   }
 }

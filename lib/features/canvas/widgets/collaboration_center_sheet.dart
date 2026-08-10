@@ -69,6 +69,18 @@ class CollaborationCenterSheet extends ConsumerWidget {
             _buildOnlineToggle(controller),
             const SizedBox(height: 16),
 
+            // 🚀 SELETOR DE DINÂMICA (Apenas para o Dono no template Pessoal/Estudo)
+            if (notebook.role == 'owner' && controller.currentTemplateType == 'study' && controller.isCollaborationEnabled) ...[
+              const Divider(height: 32),
+              Text(
+                'Dinâmica da Sessão:',
+                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+              ),
+              const SizedBox(height: 12),
+              _buildDynamicsSelector(controller),
+              const SizedBox(height: 16),
+            ],
+
             const Divider(height: 32),
 
             Text(
@@ -356,6 +368,71 @@ class CollaborationCenterSheet extends ConsumerWidget {
           fontWeight: FontWeight.bold, 
           color: color
         )
+      ),
+    );
+  }
+
+  Widget _buildDynamicsSelector(CanvasController controller) {
+    return Column(
+      children: [
+        _buildDynamicPolicyToggle(
+          controller, 
+          controller.isSessionLocked, 
+          'Bloquear Edição Coletiva', 
+          'Impedir que outros desenhem enquanto explicas.',
+          Icons.lock_person_rounded,
+          const Color(0xFFE74C3C),
+          onTap: () => controller.toggleSessionLock(),
+        ),
+        const SizedBox(height: 12),
+        _buildDynamicPolicyToggle(
+          controller, 
+          controller.isAuthorColorEnabled, 
+          'Identificar Autores por Cor', 
+          'Cada utilizador terá uma cor única (Tutoria).',
+          Icons.palette_rounded,
+          const Color(0xFF0F4C5C),
+          onTap: () => controller.toggleAuthorColors(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDynamicPolicyToggle(CanvasController controller, bool value, String title, String subtitle, IconData icon, Color color, {required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: value ? color.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: value ? color : Colors.grey.shade200, width: 2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: value ? color : Colors.grey.shade100, shape: BoxShape.circle),
+              child: Icon(icon, color: value ? Colors.white : Colors.grey, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: value ? color : Colors.black87)),
+                  Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: Colors.black45)),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: (_) => onTap(),
+              activeColor: color,
+            ),
+          ],
+        ),
       ),
     );
   }

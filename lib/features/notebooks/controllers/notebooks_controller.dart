@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:caderno_digital_app/features/notebooks/repositories/notebook_repository.dart';
 import 'package:caderno_digital_app/features/notebooks/repositories/shared_notebook_repository.dart';
+import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 
 import '../../auth/controllers/auth_controller.dart';
 import '../../subjects/controllers/subjects_controller.dart';
@@ -60,6 +61,7 @@ class NotebooksController extends Notifier<NotebooksState> {
 
   NotebookRepository get _repository => ref.read(notebookRepositoryProvider);
   SharedNotebookRepository get _sharedRepository => ref.read(sharedNotebookRepositoryProvider);
+  CanvasRepository get _canvasRepository => ref.read(canvasRepositoryProvider);
 
   void _loadNormalStream(int subjectId, {bool fromBuild = false}) {
     if (_currentSubjectId == subjectId && !_isShowingShared) return;
@@ -169,6 +171,45 @@ class NotebooksController extends Notifier<NotebooksState> {
   Future<bool> revokeAccess(int notebookServerId, String email) async {
     final bool success = await _repository.removeShareWithFriend(notebookId: notebookServerId, email: email);
     return success;
+  }
+
+  Future<void> duplicateNotebook(Notebook source, int targetSubjectId) async {
+    state = state.copyWith(isLoading: true);
+    try {
+      // 1. Criar o novo caderno local
+      final newNotebook = Notebook(
+        subjectId: targetSubjectId,
+        title: '${source.title} (Cópia)',
+        coverType: source.coverType,
+        color: source.color,
+        coverImage: source.coverImage,
+        lineType: source.lineType,
+        paperSize: source.paperSize,
+        lineSpacing: source.lineSpacing,
+        templateType: source.templateType,
+        authorName: source.authorName, // Mantém o autor original
+        description: source.description,
+      );
+
+      final int newId = await _repository.insertNotebook(newNotebook);
+      newNotebook.id = newId;
+
+      // 2. Buscar páginas do original
+      final sourcePages = await _canvasRepository.getPagesByNotebook(source.id!, source.serverId);
+
+      // 3. Copiar cada página
+      for (var page in sourcePages) {
+        final newPage = page.copyWith(
+          id: null,
+          serverId: null,
+          notebookId: newId,
+          syncedWithCloud: 0,
+        );
+        await _canvasRepository.savePage(newPage, null);
+      }
+    } finally {
+      state = state.copyWith(isLoading: false);
+    }
   }
 }
 

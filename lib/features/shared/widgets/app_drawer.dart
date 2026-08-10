@@ -12,6 +12,8 @@ import 'package:caderno_digital_app/features/auth/views/login_screen.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
+import 'package:caderno_digital_app/core/theme/app_profile.dart'; // 🚀
+import 'package:caderno_digital_app/features/agenda/screens/quick_notes_screen.dart'; // 🚀
 
 import 'package:caderno_digital_app/features/marketplace/views/marketplace_screen.dart';
 
@@ -179,6 +181,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final user = ref.watch(authProvider).currentUser;
     final subjectsList = ref.watch(subjectsProvider);
     final activeSubject = ref.watch(activeSubjectProvider);
+    final activeProfile = ref.watch(appProfileProvider); // 🚀
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
     ImageProvider? userAvatarProvider;
@@ -197,7 +200,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           // =========================================================================
           // 🎨 COMPONENTE DO HEADER MODERNO DO UTILIZADOR
           // =========================================================================
-          _buildModernUserHeader(context, user, dynamicColor, userAvatarProvider),
+          _buildModernUserHeader(context, user, dynamicColor, userAvatarProvider, activeProfile),
 
           // Título da Secção de Disciplinas
           Padding(
@@ -205,7 +208,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('AS MINHAS DISCIPLINAS', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted, letterSpacing: 1.2)),
+                Text(
+                  activeProfile == AppProfile.academico ? 'AS MINHAS DISCIPLINAS' : 'OS MEUS PROJETOS', 
+                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted, letterSpacing: 1.2)
+                ),
                 Tooltip(
                   message: 'Criar Nova Disciplina',
                   child: InkWell(
@@ -304,6 +310,17 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
                 const Divider(height: 1, color: Colors.black12),
 
+                // 🚀 HUB DE PRODUTIVIDADE (Apenas modo Agenda/Profissional)
+                if (activeProfile == AppProfile.agenda || activeProfile == AppProfile.corporativo)
+                  ListTile(
+                    leading: const Icon(Icons.calendar_today_rounded, color: Color(0xFF0F4C5C)),
+                    title: Text('Agenda & Notas Rápidas', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickNotesScreen()));
+                    },
+                  ),
+
                 // 🤝 ABA FIXA INDUSTRIAL: Partilhados Comigo
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -375,7 +392,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   // =========================================================================
   // 🎨 COMPONENTE DO HEADER MODERNO DO UTILIZADOR (COM IMAGEM DE FUNDO)
   // =========================================================================
-  Widget _buildModernUserHeader(BuildContext context, User? user, Color themeColor, ImageProvider? avatarProvider) {
+  Widget _buildModernUserHeader(BuildContext context, User? user, Color themeColor, ImageProvider? avatarProvider, AppProfile activeProfile) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 48, 16, 20),
       decoration: BoxDecoration(
@@ -404,23 +421,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2.5),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 3))
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Colors.white,
-                  backgroundImage: avatarProvider,
-                  child: avatarProvider == null
-                      ? Icon(Icons.person_rounded, color: themeColor, size: 32)
-                      : null,
-                ),
-              ),
+              // 🚀 SELETOR DE PERFIL (STYLISH)
+              _buildProfileSwitcher(activeProfile),
 
               // BOTÕES DE AÇÃO INTERATIVOS
               Row(
@@ -453,7 +455,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
           // ROW INFERIOR: Nome e Email do Estudante
           Text(
-            user?.name ?? 'Estudante',
+            user?.name ?? (activeProfile == AppProfile.academico ? 'Estudante' : 'Profissional'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.lora(
@@ -484,6 +486,52 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildProfileSwitcher(AppProfile active) {
+    return PopupMenuButton<AppProfile>(
+      offset: const Offset(0, 45),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      onSelected: (profile) {
+        ref.read(appProfileProvider.notifier).changeProfile(profile);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Modo "${profile.name}" ativado! ✨'),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          )
+        );
+      },
+      itemBuilder: (context) => AppProfile.values.map((p) => PopupMenuItem(
+        value: p,
+        child: Row(
+          children: [
+            Icon(p.icon, size: 20, color: p == active ? Theme.of(context).primaryColor : Colors.grey),
+            const SizedBox(width: 12),
+            Text(p.name, style: TextStyle(fontWeight: p == active ? FontWeight.bold : FontWeight.normal)),
+          ],
+        ),
+      )).toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(active.icon, color: Colors.white, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              active.name.split(' ').first, // Apenas a primeira palavra para não ocupar muito espaço
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
+          ],
+        ),
       ),
     );
   }

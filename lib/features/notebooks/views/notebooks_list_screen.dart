@@ -9,10 +9,12 @@ import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet
 import 'package:caderno_digital_app/features/marketplace/widgets/publish_notebook_sheet.dart';
 import 'package:caderno_digital_app/features/shared/widgets/app_drawer.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
+import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/canvas/views/canvas_screen.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 import 'package:caderno_digital_app/features/notebooks/widgets/notebook_cover.dart';
+import 'package:caderno_digital_app/core/theme/app_profile.dart'; // 🚀
 
 class NotebooksListScreen extends ConsumerStatefulWidget {
   const NotebooksListScreen({super.key});
@@ -31,6 +33,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
   Widget build(BuildContext context) {
     final activeSubject = ref.watch(activeSubjectProvider);
     final notebooksState = ref.watch(notebooksProvider);
+    final activeProfile = ref.watch(appProfileProvider); // 🚀
     final notebooks = notebooksState.notebooks;
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
@@ -52,7 +55,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
       drawer: const AppDrawer(),
       appBar: AppBar(
         title: Text(
-          activeSubject?.name ?? 'Meus Cadernos',
+          activeSubject?.name ?? (activeProfile == AppProfile.academico ? 'Meus Cadernos' : 'Minhas Agendas'),
           style: GoogleFonts.lora(fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -177,6 +180,8 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                             backgroundColor: Color(0xFF27AE60),
                           ),
                         );
+                      } else if (value == 'duplicate') {
+                         _confirmDuplicate(context, ref, notebook, activeSubject);
                       }
                     },
                     itemBuilder: (context) => [
@@ -187,6 +192,17 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                       if (notebook.role == 'owner')
                         PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
 
+                      // 🚀 OPÇÃO DE DUPLICAR (Ideal para Marketplace/Creative)
+                      PopupMenuItem(
+                        value: 'duplicate', 
+                        child: Row(
+                          children: [
+                            const Icon(Icons.copy_rounded, size: 18, color: Colors.teal), 
+                            const SizedBox(width: 8), 
+                            Text('Criar Minha Cópia', style: GoogleFonts.inter(fontSize: 13, color: Colors.teal))
+                          ]
+                        )
+                      ),
 
                       // 🚀 NOVA OPÇÃO: PUBLICAR NO MARKETPLACE (Só o dono pode publicar)
                       if (notebook.role == 'owner')
@@ -281,12 +297,12 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
   // =========================================================================
   // 📓 MODAL HÍBRIDO (CAMALEÓNICO): ALTERNA ENTRE CRIAR OU EDITAR CADERNOS
   // =========================================================================
-  void _showNotebookModal(BuildContext context, WidgetRef ref, activeSubject, Color themeColor, {required bool isEditing, Notebook? notebookToEdit}) {
+  void _showNotebookModal(BuildContext context, WidgetRef ref, Subject? activeSubject, Color themeColor, {required bool isEditing, Notebook? notebookToEdit}) {
     final titleController = TextEditingController(text: isEditing ? notebookToEdit!.title : '');
     final formKey = GlobalKey<FormState>();
 
-    String selectedLineType = isEditing ? (notebookToEdit!.lineType ?? 'ruled') : 'ruled';
-    String selectedPaperSize = isEditing ? (notebookToEdit!.paperSize ?? 'A4') : 'A4';
+    String selectedLineType = isEditing ? (notebookToEdit!.lineType) : 'ruled';
+    String selectedTemplate = isEditing ? (notebookToEdit!.templateType) : 'study';
 
     // 🎨 As 16 cores premium unificadas da app
     final List<String> availableColors = [
@@ -334,21 +350,54 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                     ),
                     validator: (value) => value == null || value.trim().isEmpty ? 'Introduz o título' : null,
                   ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: selectedPaperSize,
-                    decoration: const InputDecoration(labelText: 'Tamanho da Folha', border: OutlineInputBorder()),
-                    items: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((size) => DropdownMenuItem(value: size, child: Text(size))).toList(),
-                    onChanged: (value) { if (value != null) setModalState(() => selectedPaperSize = value); },
+                  const SizedBox(height: 20),
+                  Text('Propósito do Caderno:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: themeColor)),
+                  const SizedBox(height: 12),
+                  // 🚀 SELETOR DE TEMPLATES (CARDS VISUAIS)
+                  Row(
+                    children: [
+                      _buildTemplateCard(
+                        context, 'Pessoal / Estudo', Icons.school_rounded, 'study', selectedTemplate, themeColor,
+                        onTap: () {
+                          setModalState(() {
+                            selectedTemplate = 'study';
+                            selectedLineType = 'ruled'; // Padrão oculto
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildTemplateCard(
+                        context, 'Técnico', Icons.engineering_rounded, 'technical', selectedTemplate, Colors.blueGrey,
+                        onTap: () {
+                          setModalState(() {
+                            selectedTemplate = 'technical';
+                            selectedLineType = 'grid'; // Pré-configuração
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildTemplateCard(
+                        context, 'Formal', Icons.business_center_rounded, 'formal', selectedTemplate, const Color(0xFF2C3E50),
+                        onTap: () {
+                          setModalState(() {
+                            selectedTemplate = 'formal';
+                            selectedLineType = 'blank'; // Pré-configuração
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildTemplateCard(
+                        context, 'Criativo', Icons.palette_rounded, 'creative', selectedTemplate, const Color(0xFFD81B60),
+                        onTap: () {
+                          setModalState(() {
+                            selectedTemplate = 'creative';
+                            selectedLineType = 'blank'; // Pré-configuração
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: selectedLineType,
-                    decoration: const InputDecoration(labelText: 'Estilo da Pauta', border: OutlineInputBorder()),
-                    items: lineTypes.entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
-                    onChanged: (value) { if (value != null) setModalState(() => selectedLineType = value); },
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   Text('Cor da Capa (16 Tons):', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54)),
                   const SizedBox(height: 8),
                   Wrap(
@@ -384,21 +433,22 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                       title: titleController.text.trim(),
                       color: pickedColorHex,
                       lineType: selectedLineType,
-                      paperSize: selectedPaperSize,
+                      templateType: selectedTemplate,
                     );
                     await notifier.updateNotebook(cadernoEditado);
                     if (contextDialog.mounted) Navigator.pop(contextDialog);
                   } else {
                     final newNotebook = Notebook(
-                      subjectId: activeSubject.id ?? 0,
+                      subjectId: activeSubject?.id ?? 0,
                       title: titleController.text.trim(),
                       coverType: 'color',
                       color: pickedColorHex,
                       lineType: selectedLineType,
-                      paperSize: selectedPaperSize,
+                      paperSize: 'A4', // Default, mas agora definido por folha
+                      templateType: selectedTemplate,
                     );
 
-                     newNotebook.id= await notifier.addNotebook(newNotebook, activeSubject.serverId);
+                    newNotebook.id = await notifier.addNotebook(newNotebook, activeSubject?.serverId);
                     if (contextDialog.mounted) {
                       Navigator.pop(contextDialog);
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -415,6 +465,32 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
               child: Text(isEditing ? 'Atualizar' : 'Criar', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateCard(BuildContext context, String label, IconData icon, String type, String selected, Color color, {required VoidCallback onTap}) {
+    final isSelected = selected == type;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: isSelected ? 2 : 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: isSelected ? color : Colors.grey, size: 24),
+              const SizedBox(height: 6),
+              Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? color : Colors.grey)),
+            ],
+          ),
         ),
       ),
     );
@@ -439,6 +515,36 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
               );
             },
             child: const Text('Apagar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDuplicate(BuildContext context, WidgetRef ref, Notebook notebook, Subject? activeSubject) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Criar Cópia?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.teal)),
+        content: Text('Desejas criar uma cópia local editável do caderno "${notebook.title}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('A criar a tua cópia... ⏳'), duration: Duration(seconds: 1)),
+              );
+              await ref.read(notebooksProvider.notifier).duplicateNotebook(notebook, activeSubject?.id ?? 0);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cópia criada com sucesso! 📓'), backgroundColor: Colors.green),
+                );
+              }
+            },
+            child: const Text('Sim, Copiar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

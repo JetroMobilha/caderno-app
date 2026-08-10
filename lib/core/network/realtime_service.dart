@@ -40,6 +40,7 @@ class RealtimeService {
   final _voiceCallStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _voiceStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _activityStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _sessionMetaStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
   final _pointerStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _chatStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _audioMessageStreamController = StreamController<Map<String, dynamic>>.broadcast();
@@ -67,6 +68,7 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onVoiceCallStarted => _voiceCallStreamController.stream;
   Stream<Map<String, dynamic>> get onVoiceStateReceived => _voiceStateStreamController.stream;
   Stream<Map<String, dynamic>> get onUserActivityReceived => _activityStreamController.stream;
+  Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream; // 🚀 Novo
   Stream<Map<String, dynamic>> get onPointerMoveReceived => _pointerStreamController.stream;
   Stream<Map<String, dynamic>> get onChatMessageReceived => _chatStreamController.stream;
   Stream<Map<String, dynamic>> get onAudioMessageReceived => _audioMessageStreamController.stream;
@@ -293,6 +295,7 @@ class RealtimeService {
     _bindEvent('client-image-uploading', (event) => _uploadingStreamController.add(_safeParse(event.data)));
     _bindEvent('client-voice-call-started', (event) => _voiceCallStreamController.add(_safeParse(event.data)));
     _bindEvent('client-voice-state-update', (event) => _voiceStateStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-session-meta', (event) => _sessionMetaStreamController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-user-activity', (event) => _activityStreamController.add(_safeParse(event.data)));
     _bindEvent('client-pointer-move', (event) => _pointerStreamController.add(_safeParse(event.data)));
     _bindEvent('client-chat-message', (event) => _chatStreamController.add(_safeParse(event.data)));
@@ -406,6 +409,12 @@ class RealtimeService {
       'audio_level': audioLevel,
     };
     _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
+    return true;
+  }
+
+  Future<bool> broadcastSessionMeta({required int notebookId, required Map<String, dynamic> metaData}) async {
+    if (_notebookChannel == null) return false;
+    _notebookChannel!.trigger(eventName: 'client-session-meta', data: jsonEncode(metaData));
     return true;
   }
 

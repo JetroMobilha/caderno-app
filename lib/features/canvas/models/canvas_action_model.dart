@@ -66,6 +66,21 @@ abstract class CanvasAction {
         delta: Offset((data['deltaX'] as num).toDouble(), (data['deltaY'] as num).toDouble()),
         timestamp: ts,
       );
+    } else if (type == 'addPage') {
+      return AddPageAction(
+        pageClientId: cid,
+        pageNumber: pNum,
+        isLandscape: data['isLandscape'] ?? false,
+        paperSize: data['paperSize'] ?? 'A4',
+        timestamp: ts,
+      );
+    } else if (type == 'deletePage') {
+      return DeletePageAction(
+        pageClientId: cid,
+        pageNumber: pNum,
+        pageData: data['pageData'], // JSON do estado completo da página
+        timestamp: ts,
+      );
     }
     return null;
   }
@@ -334,5 +349,67 @@ class UpdateTextAction extends CanvasAction {
     if (idx != -1) {
       page.textBlocks[idx] = oldState.clone();
     }
+  }
+}
+
+class AddPageAction extends CanvasAction {
+  final bool isLandscape;
+  final String paperSize;
+
+  AddPageAction({
+    required String pageClientId, 
+    required int pageNumber, 
+    required this.isLandscape, 
+    required this.paperSize,
+    int? timestamp,
+  }) : super(pageClientId, pageNumber, timestamp: timestamp);
+
+  @override String get type => 'addPage';
+  @override Map<String, dynamic> toMap() => {
+    'pageClientId': pageClientId,
+    'pageNumber': pageNumber,
+    'timestamp': timestamp,
+    'isLandscape': isLandscape,
+    'paperSize': paperSize,
+  };
+
+  @override void execute(LocalPage page) {
+    // A página em si é gerida pelo controlador, a ação apenas marca como ativa
+    page.isDeleted = false;
+    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  }
+
+  @override void undo(LocalPage page) {
+    page.isDeleted = true;
+    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  }
+}
+
+class DeletePageAction extends CanvasAction {
+  final Map<String, dynamic> pageData; // Para restaurar se houver Undo
+
+  DeletePageAction({
+    required String pageClientId, 
+    required int pageNumber, 
+    required this.pageData,
+    int? timestamp,
+  }) : super(pageClientId, pageNumber, timestamp: timestamp);
+
+  @override String get type => 'deletePage';
+  @override Map<String, dynamic> toMap() => {
+    'pageClientId': pageClientId,
+    'pageNumber': pageNumber,
+    'timestamp': timestamp,
+    'pageData': pageData,
+  };
+
+  @override void execute(LocalPage page) {
+    page.isDeleted = true;
+    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  }
+
+  @override void undo(LocalPage page) {
+    page.isDeleted = false;
+    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
   }
 }

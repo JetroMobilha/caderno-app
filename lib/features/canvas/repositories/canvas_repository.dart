@@ -23,7 +23,7 @@ class CanvasRepository {
   // =========================================================================
   Future<List<LocalPage>> getPagesByNotebook(int notebookId, int? notebookServerId) async {
     final pageRows = await (_db.select(_db.pages)
-          ..where((t) => t.notebookId.equals(notebookId))
+          ..where((t) => t.notebookId.equals(notebookId) & t.isDeleted.equals(0))
           ..orderBy([
             (t) => OrderingTerm(expression: t.pageNumber),
             (t) => OrderingTerm(expression: t.clientId), // 🚀 DESEMPATE GLOBAL: Garante ordem idêntica em todos os aparelhos
@@ -81,6 +81,8 @@ class CanvasRepository {
         notebookId: pRow.notebookId,
         pageNumber: pRow.pageNumber,
         isLandscape: pRow.isLandscape == 1,
+        paperSize: pRow.paperSize,
+        isFrozen: pRow.isFrozen == 1,
         title: LocalPage.parseMeta(pRow.headerData),
         footer: LocalPage.parseMeta(pRow.footerData),
         extractedText: pRow.extractedText,
@@ -155,6 +157,8 @@ class CanvasRepository {
                 pageNumber: page.pageNumber,
                 clientId: Value(page.clientId),
                 isLandscape: Value(page.isLandscape ? 1 : 0),
+                isFrozen: Value(page.isFrozen ? 1 : 0),
+                paperSize: Value(page.paperSize),
                 headerData: Value(LocalPage.encodeMeta(page.title)),
                 footerData: Value(LocalPage.encodeMeta(page.footer)),
                 extractedText: Value(page.extractedText),
@@ -170,6 +174,8 @@ class CanvasRepository {
             headerData: Value(LocalPage.encodeMeta(page.title)),
             footerData: Value(LocalPage.encodeMeta(page.footer)),
             extractedText: Value(page.extractedText),
+            isLandscape: Value(page.isLandscape ? 1 : 0),
+            paperSize: Value(page.paperSize),
             syncedWithCloud: Value(page.syncedWithCloud),
             updatedAt: Value(page.updatedAt),
           ),
@@ -304,6 +310,16 @@ class CanvasRepository {
     );
   }
 
+  Future<void> restorePage(int pageId) async {
+    await (_db.update(_db.pages)..where((t) => t.id.equals(pageId))).write(
+      PagesCompanion(
+        isDeleted: const Value(0),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
+  }
+
   Future<void> updateNotebookMetadata(int notebookId, String lineType, double lineSpacing) async {
     await (_db.update(_db.notebooks)..where((t) => t.id.equals(notebookId))).write(
       NotebooksCompanion(
@@ -343,6 +359,33 @@ class CanvasRepository {
         ..headers['Authorization'] = 'Bearer $token'
         ..headers['Accept'] = 'application/json'
         ..files.add(http.MultipartFile.fromBytes('audio', bytes, filename: filename));
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['url'];
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> uploadLessonAudio(int notebookServerId, String filename, Uint8List bytes, {String? title, int? duration, String? clientId}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? token = prefs.getString('sanctum_token');
+      final uri = Uri.parse('${ApiConfig.baseUrl}/notebooks/$notebookServerId/upload-audio');
+      
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $token'
+        ..headers['Accept'] = 'application/json'
+        ..files.add(http.MultipartFile.fromBytes('audio', bytes, filename: filename));
+      
+      if (title != null) request.fields['title'] = title;
+      if (duration != null) request.fields['duration'] = duration.toString();
+      if (clientId != null) request.fields['client_id'] = clientId;
+
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
       if (response.statusCode == 200 || response.statusCode == 201) {

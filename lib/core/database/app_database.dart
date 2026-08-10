@@ -53,6 +53,8 @@ class Notebooks extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
+  TextColumn get templateType => text().withDefault(const Constant('study'))(); // 🚀 study, technical, formal
+  TextColumn get collaborationMode => text().withDefault(const Constant('study_group'))(); // 🚀 study_group, lecture, tutoring
 }
 
 class Pages extends Table {
@@ -69,6 +71,9 @@ class Pages extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
+  IntColumn get isFrozen => integer().withDefault(const Constant(0))(); // 🚀 0 = Open, 1 = Frozen
+  TextColumn get paperSize => text().withDefault(const Constant('A4'))(); // 🚀 Novo: Tamanho por folha
+  TextColumn get backgroundPdfPath => text().nullable()(); // 🚀 Para modo Técnico/Engenharia
 }
 
 class CanvasStrokes extends Table {
@@ -82,6 +87,7 @@ class CanvasStrokes extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()(); // 🚀 Identifica quem criou
+  TextColumn get layerId => text().nullable()(); // 🚀 Agrupamento de traços (Novo)
 
   @override
   Set<Column> get primaryKey => {clientStrokeId};
@@ -98,6 +104,7 @@ class CanvasTextBlocks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()(); // 🚀 Identifica quem criou
+  TextColumn get layerId => text().nullable()(); // 🚀 Agrupamento de textos (Novo)
 
   @override
   Set<Column> get primaryKey => {clientTextId};
@@ -119,6 +126,7 @@ class CanvasImageBlocks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()(); // 🚀 Identifica quem criou
+  TextColumn get layerId => text().nullable()(); // 🚀 Agrupamento de imagens (Novo)
 
   @override
   Set<Column> get primaryKey => {clientImageId};
@@ -151,12 +159,25 @@ class Payments extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
 }
 
+class LessonRecordings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get serverId => integer().nullable().unique()();
+  TextColumn get clientId => text().nullable().unique()();
+  IntColumn get notebookId => integer().references(Notebooks, #id, onDelete: KeyAction.cascade)();
+  TextColumn get title => text()();
+  TextColumn get audioUrl => text()();
+  IntColumn get durationSeconds => integer().withDefault(const Constant(0))();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  IntColumn get version => integer().withDefault(const Constant(1))();
+}
+
 // ====================================================================
 // 2. A CLASSE PRINCIPAL DO BANCO (O seu novo DatabaseHelper)
 // ====================================================================
 @DriftDatabase(tables: [
   Users, Subjects, Notebooks, Pages, CanvasStrokes,
-  CanvasTextBlocks, CanvasImageBlocks, NotebookUser, Payments
+  CanvasTextBlocks, CanvasImageBlocks, NotebookUser, Payments, LessonRecordings
 ])
 class AppDatabase extends _$AppDatabase {
   // Padrão Singleton usando drift_flutter para conexão automática multiplataforma
@@ -185,7 +206,6 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 3) {
           // 🚀 Migração v2 -> v3: Reconstrução total das tabelas para garantir UNIQUE no clientId
-          // Se as colunas clientId forem novas nestas tabelas, precisamos de avisar o Drift.
           await m.alterTable(TableMigration(subjects, newColumns: [subjects.clientId]));
           await m.alterTable(TableMigration(notebooks, newColumns: [notebooks.clientId]));
         }
@@ -197,8 +217,6 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 5) {
           // 🚀 Migração v4 -> v5: Adicionar clientId na tabela Pages
-          // Usamos alterTable com newColumns para informar ao Drift que a coluna é nova
-          // e não deve ser buscada na tabela antiga durante a reconstrução.
           await m.alterTable(TableMigration(pages, newColumns: [pages.clientId]));
         }
         if (from < 6) {
@@ -223,12 +241,39 @@ class AppDatabase extends _$AppDatabase {
           await customStatement('ALTER TABLE canvas_text_blocks ADD COLUMN creator_id TEXT');
           await customStatement('ALTER TABLE canvas_image_blocks ADD COLUMN creator_id TEXT');
         }
+        if (from < 9) {
+          // 🚀 Migração v8 -> v9: Adicionar templateType na tabela Notebooks
+          await m.addColumn(notebooks, notebooks.templateType);
+        }
+        if (from < 10) {
+          // 🚀 Migração v9 -> v10: Adicionar isFrozen na tabela Pages
+          await m.addColumn(pages, pages.isFrozen);
+        }
+        if (from < 11) {
+          // 🚀 Migração v10 -> v11: Adicionar backgroundPdfPath e layerId
+          await m.addColumn(pages, pages.backgroundPdfPath);
+          await m.addColumn(canvasStrokes, canvasStrokes.layerId);
+          await m.addColumn(canvasTextBlocks, canvasTextBlocks.layerId);
+          await m.addColumn(canvasImageBlocks, canvasImageBlocks.layerId);
+        }
+        if (from < 12) {
+          // 🚀 Migração v11 -> v12: Adicionar tabela LessonRecordings
+          await m.createTable(lessonRecordings);
+        }
+        if (from < 13) {
+          // 🚀 Migração v12 -> v13: Adicionar paperSize à tabela Pages
+          await m.addColumn(pages, pages.paperSize);
+        }
+        if (from < 14) {
+          // 🚀 Migração v13 -> v14: Adicionar collaborationMode à tabela Notebooks
+          await m.addColumn(notebooks, notebooks.collaborationMode);
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 14;
 
   // Função equivalente ao seu antigo clearAllData()
   Future<void> clearAllData() async {

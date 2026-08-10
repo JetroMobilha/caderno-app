@@ -81,6 +81,8 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         widget.notebook.lineType, widget.notebook.paperSize, 
         widget.notebook.role, uid,
         lineSpacing: widget.notebook.lineSpacing,
+        templateType: widget.notebook.templateType,
+        collaborationMode: widget.notebook.collaborationMode,
       );
 
       // 🚀 Listener para Alertas de Permissão
@@ -152,6 +154,138 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         child: AIAssistantSheet(
           notebookId: widget.notebook.id,
           pageId: page?.id,
+        ),
+      ),
+    );
+  }
+
+  void _showRecordingsSheet(CanvasController controller) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Gravações da Aula', style: GoogleFonts.lora(fontSize: 22, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
+                  const CloseButton(),
+                ],
+              ),
+              const SizedBox(height: 20),
+              
+              // 🚀 PLAYER ATIVO (Se estiver a tocar)
+              ListenableBuilder(
+                listenable: controller,
+                builder: (context, _) {
+                  if (controller.currentlyPlayingAudioUrl == null) return const SizedBox.shrink();
+                  
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F4C5C).withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF0F4C5C).withOpacity(0.1)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.audiotrack_rounded, color: Color(0xFF0F4C5C)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'A reproduzir...',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: const Color(0xFF0F4C5C)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // Controle de Velocidade
+                            PopupMenuButton<double>(
+                              initialValue: controller.playbackSpeed,
+                              onSelected: (s) => controller.setPlaybackSpeed(s),
+                              child: Chip(
+                                label: Text('${controller.playbackSpeed}x', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                backgroundColor: const Color(0xFF0F4C5C).withOpacity(0.1),
+                              ),
+                              itemBuilder: (context) => [0.5, 1.0, 1.5, 2.0].map((s) => PopupMenuItem(value: s, child: Text('${s}x'))).toList(),
+                            ),
+                          ],
+                        ),
+                        Slider(
+                          value: controller.audioPlaybackProgress,
+                          onChanged: (v) => controller.seekAudio(v),
+                          activeColor: const Color(0xFF0F4C5C),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(icon: const Icon(Icons.replay_10_rounded), onPressed: () => controller.skipAudio(-10)),
+                            const SizedBox(width: 20),
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundColor: const Color(0xFF0F4C5C),
+                              child: IconButton(
+                                icon: const Icon(Icons.pause_rounded, color: Colors.white, size: 32),
+                                onPressed: () => controller.playAudioMessage(controller.currentlyPlayingAudioUrl!),
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                            IconButton(icon: const Icon(Icons.forward_10_rounded), onPressed: () => controller.skipAudio(10)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 24),
+              Text('Lista de Ficheiros:', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54)),
+              const SizedBox(height: 12),
+              
+              if (controller.lessonRecordings.isEmpty)
+                const Expanded(child: Center(child: Text('Nenhuma gravação nesta aula.', style: TextStyle(color: Colors.black38))))
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: controller.lessonRecordings.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final rec = controller.lessonRecordings[index];
+                      final isPlaying = controller.currentlyPlayingAudioUrl == rec.audioUrl;
+                      
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: isPlaying ? const Color(0xFF0F4C5C) : Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: isPlaying ? Colors.white : Colors.black87),
+                        ),
+                        title: Text(rec.title, style: GoogleFonts.inter(fontWeight: isPlaying ? FontWeight.bold : FontWeight.normal)),
+                        subtitle: Text('${(rec.durationSeconds / 60).floor()}:${(rec.durationSeconds % 60).toString().padLeft(2, '0')}'),
+                        onTap: () {
+                          // 🚀 FIX: playAudioMessage é async, não pode estar dentro do setState callback
+                          controller.playAudioMessage(rec.audioUrl);
+                          setState(() {}); // Apenas para atualizar o ícone play/pause localmente no sheet
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -244,15 +378,28 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               onPageChanged: (index) => controller.setPageIndex(index),
               itemBuilder: (context, index) {
                 final page = controller.pages[index];
-                final Size pSize = page.isLandscape ? Size(baseSize.height, baseSize.width) : baseSize;
+                
+                // 🚀 SUPORTE A MÚLTIPLOS TAMANHOS: Cada folha consulta o seu próprio tamanho
+                final Size? rawSize = _paperSizes[page.paperSize];
+                final Size effectiveBaseSize = rawSize ?? const Size(595, 842);
+                final Size pSize = page.isLandscape 
+                    ? Size(effectiveBaseSize.height, effectiveBaseSize.width) 
+                    : effectiveBaseSize;
 
                 final bool isFollowing = controller.followingUserId != null;
-                final bool isBlocked = (controller.currentTool == ToolMode.pan || widget.notebook.role == 'viewer') && !isFollowing;
-                final bool canTapCanvas = controller.currentTool == ToolMode.text || 
+                final bool isBlocked = (controller.currentTool == ToolMode.pan || widget.notebook.role == 'viewer' || page.isFrozen) && !isFollowing;
+                final bool canTapCanvas = (controller.currentTool == ToolMode.text || 
                                         controller.currentTool == ToolMode.eraser ||
-                                        controller.currentTool == ToolMode.draw;
+                                        controller.currentTool == ToolMode.draw) && !page.isFrozen;
 
-                return InteractiveViewer.builder(
+                return AnimatedSlide(
+                  duration: const Duration(milliseconds: 300),
+                  offset: page.isTearing ? const Offset(0, -1.2) : Offset.zero, // 🚀 "Rasgar" para cima
+                  curve: Curves.easeInBack,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 250),
+                    opacity: page.isTearing ? 0.0 : 1.0,
+                    child: InteractiveViewer.builder(
                   scaleEnabled: (controller.currentTool == ToolMode.pan || _activePointers.length >= 2) && !isFollowing,
                   panEnabled: (controller.currentTool == ToolMode.pan || _activePointers.length >= 2) && !isFollowing,
                   maxScale: 6.0, 
@@ -281,7 +428,17 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                     return Center(
                       child: Container(
                         width: pSize.width, height: pSize.height,
-                        decoration: const BoxDecoration(color: Color(0xFFFDFBF7)),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDFBF7),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.black12, width: 1), // 🚀 Borda para ver o limite da folha
+                        ),
                         child: ClipRect(
                           child: Stack(
                             clipBehavior: Clip.none,
@@ -295,7 +452,8 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                       lineSpacing: controller.liveLineSpacing,
                                       selectedStrokeIds: const {}, selectionRect: null,
                                       pageVersion: page.version,
-                                      remoteMovingStrokeIds: controller.remoteMovingStrokeIds, // 🚀
+                                      remoteMovingStrokeIds: controller.remoteMovingStrokeIds, 
+                                      visibleAuthorIds: controller.visibleAuthorIds, // 🚀
                                   ),
                                 ),
                               ),
@@ -658,13 +816,16 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                             size: pSize,
                                             painter: StaticNotebookPainter(
                                               strokes: page.strokes, 
-                                              lineType: 'blank',
+                                              lineType: controller.liveLineType, 
                                               lineSpacing: controller.liveLineSpacing,
                                               selectedStrokeIds: controller.selectedStrokeIds,
                                               pageVersion: page.version, 
-                                              remoteMovingStrokeIds: controller.remoteMovingStrokeIds, // 🚀
+                                              remoteMovingStrokeIds: controller.remoteMovingStrokeIds, 
                                               selectionRect: controller.selectionRectStart != null && controller.selectionRectEnd != null
                                                   ? Rect.fromPoints(controller.selectionRectStart!, controller.selectionRectEnd!) : null,
+                                              visibleAuthorIds: controller.visibleAuthorIds,
+                                              isAuthorColorEnabled: controller.isAuthorColorEnabled, // 🚀 FIX: Was isPrivateTutoring
+                                              userColors: controller.userColorsMap, 
                                             ),
                                           ),
                                         ),
@@ -675,23 +836,37 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                           builder: (context, remoteMap, _) => RepaintBoundary(
                                             child: CustomPaint(
                                               size: pSize,
-                                              painter: RemoteLiveStrokesPainter(liveStrokes: remoteMap, targetPageNumber: page.pageNumber)
+                                              painter: RemoteLiveStrokesPainter(
+                                                liveStrokes: remoteMap, 
+                                                targetPageNumber: page.pageNumber,
+                                                isAuthorColorEnabled: controller.isAuthorColorEnabled, // 🚀
+                                                userColors: controller.userColorsMap,
+                                              )
                                             ),
                                           ),
                                         ),
 
-                                        // ✍️ Traço Ativo: Alta frequência (Sem RepaintBoundary para evitar overhead de rasterização)
-                                        ValueListenableBuilder<List<Offset>>(
-                                          valueListenable: controller.activePointsNotifier,
-                                          builder: (context, points, _) {
-                                            if (controller.activeDrawingPageNumber != page.pageNumber) return const SizedBox.shrink();
-                                            
-                                            return CustomPaint(
-                                              size: pSize,
-                                              painter: ActiveStrokePainter(currentPoints: points, currentColor: controller.selectedColorHex, currentThickness: controller.selectedThickness)
-                                            );
-                                          },
-                                        ),
+                                          ValueListenableBuilder<List<Offset>>(
+                                            valueListenable: controller.activePointsNotifier,
+                                            builder: (context, points, _) {
+                                              if (controller.activeDrawingPageNumber != page.pageNumber) return const SizedBox.shrink();
+                                              
+                                              // 🚀 CALCULAR COR VISUAL (Se modo Tutoria, usar cor do utilizador)
+                                              Color visualColor = Color(int.parse(controller.selectedColorHex.replaceFirst('#', '0xFF')));
+                                              if (controller.isAuthorColorEnabled) {
+                                                visualColor = controller.userColorsMap[controller.myUserId] ?? visualColor;
+                                              }
+
+                                              return CustomPaint(
+                                                size: pSize,
+                                                painter: ActiveStrokePainter(
+                                                  currentPoints: points, 
+                                                  visualColor: visualColor, 
+                                                  currentThickness: controller.selectedThickness
+                                                )
+                                              );
+                                            },
+                                          ),
 
                                         // 🖱️ Cursores: Camada independente
                                         ValueListenableBuilder<Map<String, dynamic>>(
@@ -707,6 +882,26 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                             ),
                                           ),
                                         ),
+
+                                        // ❄️ INDICADOR DE PÁGINA CONGELADA (Overlay Visual)
+                                        if (page.isFrozen)
+                                          IgnorePointer(
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.blueGrey.withValues(alpha: 0.03),
+                                              ),
+                                              child: Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.lock_outline_rounded, size: 80, color: Colors.blueGrey.withValues(alpha: 0.1)),
+                                                    const SizedBox(height: 10),
+                                                    Text('PÁGINA CONGELADA', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.blueGrey.withValues(alpha: 0.1), letterSpacing: 4)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -914,8 +1109,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                           ),
                         ),
                       ),
-                    );
-                  },
+                  ),
                 );
               },
             ),
@@ -965,7 +1159,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                         isHandRaised: controller.isMyHandRaised, // 🚀
                         onSpeakerToggle: controller.toggleSpeaker,
                         onMicTap: controller.handleLiveAudioAction,
-                        onHandToggle: controller.toggleHandRaise, // 🚀
+                        onHandToggle: () => controller.toggleHandRaise(), // 🚀 Fix: Was getter
                         onBroadcastToggle: () {
                           if (controller.isBroadcastingViewport) {
                             controller.stopViewportBroadcasting();
@@ -1075,6 +1269,35 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                 top: 60, left: 0, right: 0,
                 child: Center(child: _buildGlobalSyncBadge()),
               ),
+
+            // 🚀 INDICADOR DE ESTADO DA AULA (OCR & Gravações)
+            if (!controller.isFocusMode && controller.currentTemplateType == 'study' && controller.pages.isNotEmpty)
+              Positioned(
+                top: 60, right: 16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Indicador de OCR (Bot Inteligente)
+                    if (controller.pages[controller.currentPageIndex].extractedText != null)
+                      _buildMiniBadge(
+                        icon: Icons.auto_awesome,
+                        label: 'OCR PRONTO',
+                        color: Colors.amber.shade700,
+                        onTap: () => controller.generateAiSummary(controller.pages[controller.currentPageIndex]),
+                      ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Botão de Gravações
+                    _buildMiniBadge(
+                      icon: Icons.library_music_rounded,
+                      label: '${controller.lessonRecordings.length} GRAVAÇÕES',
+                      color: const Color(0xFF0F4C5C),
+                      onTap: () => _showRecordingsSheet(controller),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
         floatingActionButton: (hasPages || widget.notebook.role == 'viewer' || controller.isFocusMode)
@@ -1110,6 +1333,28 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMiniBadge({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 14),
+            const SizedBox(width: 6),
+            Text(label, style: GoogleFonts.inter(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          ],
+        ),
       ),
     );
   }
@@ -1394,12 +1639,11 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                       ],
                     ),
                   ),
-                );
-              },
-            ),
+              );
+            },
           ),
           if (widget.notebook.role != 'viewer')
-            Padding(
+          Padding(
               padding: const EdgeInsets.all(16.0),
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
@@ -1520,34 +1764,56 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
   void _showAddPageDialog(CanvasController controller) {
     bool isLand = false;
+    String pSize = 'A4';
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: const Color(0xFFFDFBF7),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Text('Nova Folha', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Orientação do Papel:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54)),
+            Text('Tamanho do Papel:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54, fontSize: 13)),
             const SizedBox(height: 8),
-            RadioListTile<bool>(
-              title: const Text('Retrato (Vertical)'),
-              value: false,
-              groupValue: isLand,
-              activeColor: const Color(0xFF0F4C5C),
-              onChanged: (v) => setModalState(() => isLand = v!),
+            DropdownButtonFormField<String>(
+              value: pSize,
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              items: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+              onChanged: (v) => setModalState(() => pSize = v!),
             ),
-            RadioListTile<bool>(
-              title: const Text('Paisagem (Horizontal)'),
-              value: true,
-              groupValue: isLand,
-              activeColor: const Color(0xFF0F4C5C),
-              onChanged: (v) => setModalState(() => isLand = v!),
+            const SizedBox(height: 20),
+            Text('Orientação:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54, fontSize: 13)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Retrato'),
+                    selected: !isLand,
+                    onSelected: (s) => setModalState(() => isLand = !s),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Paisagem'),
+                    selected: isLand,
+                    onSelected: (s) => setModalState(() => isLand = s),
+                  ),
+                ),
+              ],
             ),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.black54))),
-            ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () { controller.addNewPage(isLand); Navigator.pop(context); }, child: const Text('Adicionar Folha', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), 
+              onPressed: () { controller.addNewPage(isLand, paperSize: pSize); Navigator.pop(context); }, 
+              child: const Text('Criar Folha', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+            ),
           ],
         ),
       ),

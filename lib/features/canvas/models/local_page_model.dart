@@ -12,6 +12,10 @@ class LocalPage {
   final int notebookId;
   final int pageNumber;
   final bool isLandscape;
+  final String paperSize; // 🚀 Novo
+  bool isFrozen; // 🚀
+  bool isDeleted; // 🚀
+  bool isTearing = false; // 🚀 Feedback visual
 
   String title;
   String footer;
@@ -28,6 +32,48 @@ class LocalPage {
   int updatedAt;
   int version; // 🔄 Versão local para trigger de UI
 
+  LocalPage copyWith({
+    int? id,
+    int? serverId,
+    String? clientId,
+    int? notebookId,
+    int? pageNumber,
+    bool? isLandscape,
+    String? paperSize,
+    bool? isFrozen,
+    bool? isDeleted,
+    String? title,
+    String? footer,
+    String? extractedText,
+    List<Stroke>? strokes,
+    List<TextBlock>? textBlocks,
+    List<ImageBlock>? imageBlocks,
+    int? syncedWithCloud,
+    int? updatedAt,
+    int? version,
+  }) {
+    return LocalPage(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      clientId: clientId ?? this.clientId,
+      notebookId: notebookId ?? this.notebookId,
+      pageNumber: pageNumber ?? this.pageNumber,
+      isLandscape: isLandscape ?? this.isLandscape,
+      paperSize: paperSize ?? this.paperSize,
+      isFrozen: isFrozen ?? this.isFrozen,
+      isDeleted: isDeleted ?? this.isDeleted,
+      title: title ?? this.title,
+      footer: footer ?? this.footer,
+      extractedText: extractedText ?? this.extractedText,
+      strokes: strokes ?? List.from(this.strokes),
+      textBlocks: textBlocks ?? List.from(this.textBlocks),
+      imageBlocks: imageBlocks ?? List.from(this.imageBlocks),
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+    );
+  }
+
   LocalPage({
     this.id,
     this.serverId,
@@ -35,6 +81,9 @@ class LocalPage {
     required this.notebookId,
     required this.pageNumber,
     required this.isLandscape,
+    this.paperSize = 'A4',
+    this.isFrozen = false,
+    this.isDeleted = false,
     List<Stroke>? strokes,
     this.title = '',
     this.footer = '',
@@ -76,6 +125,10 @@ class LocalPage {
       components.add('i:${i.id}:${i.updatedAt}');
     }
 
+    // 4. Metadados Críticos
+    components.add('f:${isFrozen ? 1 : 0}');
+    components.add('ps:$paperSize');
+
     // Retorna uma string que representa o estado atual (ordenado para consistência)
     return components.join('|');
   }
@@ -90,6 +143,9 @@ class LocalPage {
       'notebook_id': notebookId,
       'page_number': pageNumber,
       'is_landscape': isLandscape,
+      'paper_size': paperSize,
+      'is_frozen': isFrozen ? 1 : 0,
+      'is_deleted': isDeleted ? 1 : 0,
       'header_data': {'title': title},
       'footer_data': {'title': footer},
       'extracted_text': extractedText,
@@ -113,6 +169,9 @@ class LocalPage {
       'notebook_id': notebookId,
       'page_number': pageNumber,
       'is_landscape': isLandscape,
+      'paper_size': paperSize,
+      'is_frozen': isFrozen ? 1 : 0,
+      'is_deleted': isDeleted ? 1 : 0,
       'header_data': {'title': title}, // 🚀 JSON estruturado para o MySQL
       'footer_data': {'title': footer}, // 🚀 JSON estruturado para o MySQL
       'extracted_text': extractedText,
@@ -167,6 +226,9 @@ class LocalPage {
       notebookId: int.tryParse(json['notebook_id']?.toString() ?? '0') ?? 0,
       pageNumber: int.tryParse(json['page_number']?.toString() ?? '0') ?? 0,
       isLandscape: json['is_landscape'] == true || json['is_landscape'] == 1,
+      paperSize: json['paper_size']?.toString() ?? 'A4',
+      isFrozen: json['is_frozen'] == true || json['is_frozen'] == 1,
+      isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
       title: parseMeta(json['header_data']),
       footer: parseMeta(json['footer_data']),
       extractedText: json['extracted_text']?.toString(),

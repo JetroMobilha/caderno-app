@@ -67,6 +67,15 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Future<List<_i5.LocalPage>>);
 
   @override
+  _i4.Future<void> reindexPages(int? notebookId) =>
+      (super.noSuchMethod(
+            Invocation.method(#reindexPages, [notebookId]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
   _i4.Stream<List<_i5.LocalPage>> watchPagesByNotebook(int? notebookId) =>
       (super.noSuchMethod(
             Invocation.method(#watchPagesByNotebook, [notebookId]),
@@ -138,24 +147,6 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Future<void>);
 
   @override
-  _i4.Future<void> updatePageMetadata(
-    int? pageId,
-    String? title,
-    String? footer, {
-    String? extractedText,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #updatePageMetadata,
-              [pageId, title, footer],
-              {#extractedText: extractedText},
-            ),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
-
-  @override
   _i4.Future<void> deletePage(int? pageId) =>
       (super.noSuchMethod(
             Invocation.method(#deletePage, [pageId]),
@@ -176,15 +167,6 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
               lineType,
               lineSpacing,
             ]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
-
-  @override
-  _i4.Future<void> triggerSyncRadar(int? pageId) =>
-      (super.noSuchMethod(
-            Invocation.method(#triggerSyncRadar, [pageId]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
@@ -218,6 +200,25 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
               filename,
               bytes,
             ]),
+            returnValue: _i4.Future<String?>.value(),
+          )
+          as _i4.Future<String?>);
+
+  @override
+  _i4.Future<String?> uploadLessonAudio(
+    int? notebookServerId,
+    String? filename,
+    _i9.Uint8List? bytes, {
+    String? title,
+    int? duration,
+    String? clientId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #uploadLessonAudio,
+              [notebookServerId, filename, bytes],
+              {#title: title, #duration: duration, #clientId: clientId},
+            ),
             returnValue: _i4.Future<String?>.value(),
           )
           as _i4.Future<String?>);
@@ -366,6 +367,14 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
   _i4.Stream<Map<String, dynamic>> get onUserActivityReceived =>
       (super.noSuchMethod(
             Invocation.getter(#onUserActivityReceived),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
+  _i4.Stream<Map<String, dynamic>> get onSessionMetaReceived =>
+      (super.noSuchMethod(
+            Invocation.getter(#onSessionMetaReceived),
             returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
           )
           as _i4.Stream<Map<String, dynamic>>);
@@ -683,6 +692,20 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
               #isInCall: isInCall,
               #isTalking: isTalking,
               #audioLevel: audioLevel,
+            }),
+            returnValue: _i4.Future<bool>.value(false),
+          )
+          as _i4.Future<bool>);
+
+  @override
+  _i4.Future<bool> broadcastSessionMeta({
+    required int? notebookId,
+    required Map<String, dynamic>? metaData,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#broadcastSessionMeta, [], {
+              #notebookId: notebookId,
+              #metaData: metaData,
             }),
             returnValue: _i4.Future<bool>.value(false),
           )

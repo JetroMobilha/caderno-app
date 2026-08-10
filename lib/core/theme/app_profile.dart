@@ -1,14 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppProfile { corporativo, academico, desenho, notas, agenda }
 
 class AppProfileNotifier extends StateNotifier<AppProfile> {
   // O perfil padrão arranca no Académico
-  AppProfileNotifier() : super(AppProfile.academico);
+  AppProfileNotifier() : super(AppProfile.academico) {
+    _restoreProfile();
+  }
 
-  void changeProfile(AppProfile newProfile) => state = newProfile;
+  Future<void> _restoreProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final index = prefs.getInt('active_app_profile');
+    if (index != null && index < AppProfile.values.length) {
+      state = AppProfile.values[index];
+    }
+  }
+
+  Future<void> changeProfile(AppProfile newProfile) async {
+    state = newProfile;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('active_app_profile', newProfile.index);
+  }
 }
 
 final appProfileProvider = StateNotifierProvider<AppProfileNotifier, AppProfile>((ref) {

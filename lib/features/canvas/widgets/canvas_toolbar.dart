@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../controllers/canvas_controller.dart';
 import '../models/local_page_model.dart';
 
@@ -26,7 +27,52 @@ class CanvasToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
 
+    // 🚀 LÓGICA DE VISIBILIDADE ADAPTATIVA (Sessões Live)
+    // Se a sessão estiver bloqueada pelo Dono, outros não podem desenhar.
+    final bool isProfessor = controller.currentUserRole == 'owner';
+    final bool hideDrawingTools = (controller.isSessionLocked && !isProfessor) || controller.currentUserRole == 'viewer';
+
     final bool hasImages = currentPage.imageBlocks.isNotEmpty;
+
+    if (hideDrawingTools) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 15, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              controller.currentUserRole == 'viewer' ? Icons.visibility_outlined : Icons.lock_person_rounded, 
+              color: controller.currentUserRole == 'viewer' ? Colors.blueGrey : const Color(0xFF27AE60), 
+              size: 20
+            ),
+            const SizedBox(width: 12),
+            Text(
+              controller.currentUserRole == 'viewer' ? 'Modo Leitura' : 'Sessão Bloqueada pelo Professor',
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+            ),
+            const SizedBox(width: 16),
+            _buildCompactIconButton(Icons.chat_bubble_outline_rounded, () {
+               controller.isChatOpen = true;
+            }, 'Fazer Pergunta', const Color(0xFF0F4C5C)),
+            if (controller.currentUserRole != 'viewer')
+              _buildCompactIconButton(
+                controller.isMyHandRaised ? Icons.pan_tool : Icons.pan_tool_outlined, 
+                () => controller.toggleHandRaise(), 
+                'Levantar Mão', 
+                controller.isMyHandRaised ? Colors.orange : Colors.grey
+              ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -53,6 +99,45 @@ class CanvasToolbar extends StatelessWidget {
 
           if (!isSmallScreen)
             _buildCompactIconButton(Icons.add_photo_alternate_outlined, () => controller.pickAndInsertImage(currentPage), 'Adicionar Imagem', const Color(0xFF1A1A24)),
+          
+          // 🚀 RECURSOS ADAPTATIVOS POR TEMPLATE
+          if (controller.currentTemplateType == 'study') ...[
+            _buildCompactIconButton(
+              controller.isLessonRecording ? Icons.stop_circle_rounded : Icons.mic_rounded, 
+              () {
+                if (controller.isLessonRecording) {
+                  _showRecordingTitleDialog(context, controller);
+                } else {
+                  controller.startLessonRecording();
+                }
+              }, 
+              controller.isLessonRecording ? 'Parar Gravação' : 'Gravar Aula', 
+              controller.isLessonRecording ? Colors.redAccent : const Color(0xFF0F4C5C)
+            ),
+            _buildCompactIconButton(
+              Icons.auto_awesome_rounded, 
+              controller.isAiSummarizing ? null : () => controller.generateAiSummary(currentPage), 
+              'Resumo IA', 
+              controller.isAiSummarizing ? Colors.grey : Colors.amber.shade700
+            ),
+          ],
+
+          if (controller.currentTemplateType == 'technical')
+            _buildCompactIconButton(
+              controller.visibleAuthorIds == null ? Icons.layers_outlined : Icons.layers_clear_outlined, 
+              () => controller.visibleAuthorIds == null ? controller.toggleAuthorVisibility(controller.myUserId) : controller.resetAuthorVisibility(), 
+              'Filtro de Camadas', 
+              Colors.blueGrey
+            ),
+
+          if (controller.currentTemplateType == 'formal' && controller.currentUserRole == 'owner')
+            _buildCompactIconButton(
+              currentPage.isFrozen ? Icons.lock_rounded : Icons.lock_open_rounded, 
+              () => controller.togglePageFreeze(currentPage), 
+              currentPage.isFrozen ? 'Descongelar Página' : 'Congelar Página', 
+              currentPage.isFrozen ? Colors.redAccent : Colors.green
+            ),
+
           if (hasImages)
             _buildToolButton(Icons.transform, ToolMode.imageEdit, 'Editar Imagem'),
 
@@ -90,7 +175,14 @@ class CanvasToolbar extends StatelessWidget {
             )
           else ...[
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            _buildCompactIconButton(Icons.copy_all_outlined, () => controller.exportPageText(currentPage, context), 'Exportar Texto', const Color(0xFF0F4C5C)),
+            _buildCompactIconButton(
+              Icons.copy_all_outlined, 
+              (controller.currentTemplateType == 'creative' && controller.currentUserRole == 'viewer') 
+                ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A exportação está protegida pelo autor neste modo.')))
+                : () => controller.exportPageText(currentPage, context), 
+              'Exportar Texto', 
+              (controller.currentTemplateType == 'creative' && controller.currentUserRole == 'viewer') ? Colors.grey : const Color(0xFF0F4C5C)
+            ),
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
             _buildCompactIconButton(Icons.grid_on, onChangePaperTap, 'Mudar Pauta', const Color(0xFF0F4C5C)),
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
@@ -123,5 +215,32 @@ class CanvasToolbar extends StatelessWidget {
 
   Widget _buildCompactIconButton(IconData icon, VoidCallback? onPressed, String tooltip, Color color) {
     return IconButton(iconSize: 20, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, icon: Icon(icon, color: color), onPressed: onPressed, tooltip: tooltip);
+  }
+
+  void _showRecordingTitleDialog(BuildContext context, CanvasController controller) {
+    final now = DateTime.now();
+    final defaultTitle = 'Aula de ${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
+    final titleController = TextEditingController(text: defaultTitle);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Título da Gravação'),
+        content: TextField(
+          controller: titleController,
+          decoration: const InputDecoration(hintText: 'Ex: Introdução à Anatomia'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () {
+              controller.stopLessonRecording(titleController.text.trim());
+              Navigator.pop(ctx);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
   }
 }

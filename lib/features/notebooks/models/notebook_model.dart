@@ -12,6 +12,8 @@ class Notebook {
   String lineType;
   String paperSize;
   double? lineSpacing; // 📏 Espaçamento dinâmico entre linhas/grelha
+  String templateType; // 🚀 'study', 'technical', 'formal'
+  String collaborationMode; // 🚀 'study_group', 'lecture', 'tutoring'
   int version; // 🔄 Versão lógica para UI/Compatibilidade
 
   // 🌟 Novas propriedades EdTech/Marketplace
@@ -37,6 +39,8 @@ class Notebook {
     required this.lineType,
     required this.paperSize,
     this.lineSpacing,
+    this.templateType = 'study',
+    this.collaborationMode = 'study_group',
     this.isPublished = 0,
     this.price = 0.00,
     this.description,
@@ -61,6 +65,8 @@ class Notebook {
     String? lineType,
     String? paperSize,
     double? lineSpacing,
+    String? templateType,
+    String? collaborationMode,
     int? isPublished,
     double? price,
     String? description,
@@ -83,6 +89,8 @@ class Notebook {
       lineType: lineType ?? this.lineType,
       paperSize: paperSize ?? this.paperSize,
       lineSpacing: lineSpacing ?? this.lineSpacing,
+      templateType: templateType ?? this.templateType,
+      collaborationMode: collaborationMode ?? this.collaborationMode,
       isPublished: isPublished ?? this.isPublished,
       price: price ?? this.price,
       description: description ?? this.description,
@@ -111,6 +119,8 @@ class Notebook {
       'line_type': lineType,
       'paper_size': paperSize,
       'line_spacing': lineSpacing,
+      'template_type': templateType,
+      'collaboration_mode': collaborationMode,
       'is_published': isPublished,
       'price': price,
       'description': description,
@@ -140,6 +150,8 @@ class Notebook {
       lineType: lineType,
       paperSize: json['paper_size'] ?? 'A4',
       lineSpacing: json['line_spacing'] != null ? double.tryParse(json['line_spacing'].toString()) : null,
+      templateType: json['template_type'] ?? 'study',
+      collaborationMode: json['collaboration_mode'] ?? 'study_group',
       isPublished: int.tryParse(json['is_published']?.toString() ?? '0') ?? 0,
       price: double.tryParse(json['price']?.toString() ?? '0.0') ?? 0.0,
       description: json['description'],

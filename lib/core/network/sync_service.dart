@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../features/subjects/models/subject_model.dart' as subjects_model;
 import '../../features/notebooks/models/notebook_model.dart' as notebooks_model;
@@ -499,6 +500,9 @@ class SyncService {
       final unsyncedPages = await query.get();
       if (unsyncedPages.isEmpty) return true;
 
+      // 🚀 PRIORIZAÇÃO: Enviar páginas deletadas primeiro para evitar conflitos de numeração
+      unsyncedPages.sort((a, b) => b.isDeleted.compareTo(a.isDeleted));
+
       bool allSuccess = true;
 
       for (var row in unsyncedPages) {
@@ -541,7 +545,7 @@ class SyncService {
             pageMap['is_deleted'] = 0;
           }
 
-          debugPrint('📤 [Sync] A enviar página ${row.pageNumber} do caderno ${notebook.serverId}...');
+          debugPrint('[SYNC-LOG] 📤 Enviando página ${row.pageNumber} (${row.clientId}). IsDeleted: ${row.isDeleted == 1}');
           var response = await _apiService.post('/sync/pages/push', {'pages': [pageMap]});
 
           // 🚀 FALLBACK PARA PAYLOAD TOO LARGE (Estratégia de Simplificação Progressiva)
@@ -572,8 +576,9 @@ class SyncService {
               final String? status = syncedItem['status']?.toString();
 
               if (status == 'ignored_old') {
-                debugPrint('⚠️ [Sync] Página ${row.pageNumber} rejeitada pelo servidor (ignored_old). Forçando PULL...');
-                await pullSpecificPage(notebook.serverId!, row.pageNumber);
+                debugPrint('⚠️ [Sync] Página ${row.pageNumber} rejeitada pelo servidor (ignored_old). Forçando PULL por ClientID...');
+                // 🚀 ESTRATÉGIA ROBUSTA: Puxar pelo ClientId unívoco, ignorando o número da página local que pode estar errado
+                await pullSpecificPage(notebook.serverId!, row.pageNumber, clientId: row.clientId);
                 continue;
               }
 
@@ -610,17 +615,27 @@ class SyncService {
     }
   }
 
-  Future<bool> pullPages() async {
+  Future<bool> pullPages({bool forceFull = false, int? onlyNotebookId}) async {
     final prefs = await SharedPreferences.getInstance();
     
     final localCount = await _db.pages.count().getSingle();
-    final String? lastSynced = localCount > 0 ? prefs.getString('last_pages_sync') : null;
+    final String? lastSynced = (localCount > 0 && !forceFull) ? prefs.getString('last_pages_sync') : null;
 
     try {
-      String? nextUrl = lastSynced != null ? '/sync/pages/pull?last_synced_at=$lastSynced' : '/sync/pages/pull';
+      String? baseUrl = '/sync/pages/pull';
+      if (lastSynced != null) {
+        baseUrl += '?last_synced_at=$lastSynced';
+      }
+      if (onlyNotebookId != null) {
+        baseUrl += (lastSynced != null ? '&' : '?') + 'notebook_id=$onlyNotebookId';
+      }
+      
+      String? nextUrl = baseUrl;
       bool anyChanges = false;
+      final Set<String> serverClientIds = {};
 
       while (nextUrl != null) {
+        debugPrint('[SYNC-LOG] 🛫 GET $nextUrl');
         final response = await _apiService.get(nextUrl);
 
         if (response.statusCode == 200) {
@@ -645,6 +660,7 @@ class SyncService {
               final int sNotebookId = sPage['notebook_id'] is int ? sPage['notebook_id'] : int.parse(sPage['notebook_id'].toString());
               final int sId = sPage['id'] is int ? sPage['id'] : int.parse(sPage['id'].toString());
               final String? cId = sPage['client_id']?.toString();
+              if (cId != null) serverClientIds.add(cId);
               
               // 🚀 TRATAMENTO DE DELEÇÃO REMOTA
               if (sPage['deleted_at'] != null || sPage['is_deleted'] == 1) {
@@ -764,6 +780,30 @@ class SyncService {
           throw Exception('Erro ${response.statusCode} no PULL Pages');
         }
       }
+
+      // 🚀 LIMPEZA DE "PÁGINAS FANTASMAS" (Apenas em Pull TOTAL para garantir lista completa)
+      if (forceFull) {
+        debugPrint('[SYNC-LOG] 🔍 Iniciando limpeza de fantasmas. Servidor tem: ${serverClientIds.length} páginas.');
+        // Buscar todas as páginas locais sincronizadas
+        final query = _db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(1));
+        if (onlyNotebookId != null) {
+          // Precisamos do localId do notebook se passámos o serverId
+          final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(onlyNotebookId))).getSingleOrNull();
+          if (nb != null) {
+            query.where((t) => t.notebookId.equals(nb.id));
+          }
+        }
+        
+        final localSyncedPages = await query.get();
+        
+        for (var lp in localSyncedPages) {
+          if (!serverClientIds.contains(lp.clientId)) {
+            debugPrint('🗑️ [Sync] Removendo folha fantasma local: ${lp.pageNumber} (${lp.clientId})');
+            await (_db.delete(_db.pages)..where((t) => t.id.equals(lp.id))).go();
+          }
+        }
+      }
+
       return anyChanges;
     } catch (e) {
       debugPrint('🚨 Erro PULL Pages: $e');
@@ -771,10 +811,18 @@ class SyncService {
     }
   }
 
-  Future<void> pullSpecificPage(int notebookServerId, int pageNumber, {bool isRetry = false}) async {
+  Future<void> pullSpecificPage(int notebookServerId, int pageNumber, {String? clientId, bool isRetry = false}) async {
     try {
-      debugPrint('🔍 [Sync] Iniciando PULL específico: Notebook $notebookServerId, Página $pageNumber ${isRetry ? "(Retry)" : ""}');
-      final response = await _apiService.get('/sync/pages/pull?notebook_id=$notebookServerId&page_number=$pageNumber');
+      debugPrint('🔍 [Sync] Iniciando PULL específico: Notebook $notebookServerId, Página $pageNumber ${clientId != null ? "(CID: $clientId)" : ""} ${isRetry ? "(Retry)" : ""}');
+      
+      String url = '/sync/pages/pull?notebook_id=$notebookServerId';
+      if (clientId != null) {
+        url += '&client_id=$clientId';
+      } else {
+        url += '&page_number=$pageNumber';
+      }
+
+      final response = await _apiService.get(url);
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         final List serverPages = responseData['data'] ?? responseData['pages'] ?? [];
@@ -1026,14 +1074,22 @@ class SyncService {
 
       final List<Map<String, dynamic>> payload = [];
       for (var row in unsynced) {
-        payload.add({
-          'notebook_id': row.notebookId,
-          'client_id': row.clientId,
-          'title': row.title,
-          'audio_url': row.audioUrl,
-          'duration_seconds': row.durationSeconds,
-          'updated_at': row.updatedAt,
-        });
+        // 🚀 CRÍTICO: Buscar o server_id do caderno, pois o backend usa chaves estrangeiras reais
+        final notebookRow = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
+        final int? serverNotebookId = notebookRow?.serverId;
+        
+        if (serverNotebookId != null) {
+          payload.add({
+            'notebook_id': serverNotebookId,
+            'client_id': row.clientId,
+            'title': row.title,
+            'audio_url': row.audioUrl,
+            'duration_seconds': row.durationSeconds,
+            'updated_at': row.updatedAt,
+          });
+        } else {
+          debugPrint('⚠️ [Sync] Pulando gravação ${row.clientId} - Caderno local ${row.notebookId} ainda não tem server_id.');
+        }
       }
 
       final response = await _apiService.post('/sync/recordings/push', {'recordings': payload});
@@ -1068,6 +1124,12 @@ class SyncService {
         final data = jsonDecode(response.body);
         final List serverRecordings = data['data'] ?? [];
 
+        // 🚀 MAPEAR SERVER_ID PARA LOCAL_ID (Para evitar erro de chave estrangeira)
+        final allNotebooks = await _db.select(_db.notebooks).get();
+        final Map<int, int> serverToLocalNotebookId = {
+          for (var n in allNotebooks) if (n.serverId != null) n.serverId!: n.id
+        };
+
         if (data['meta'] != null && data['meta']['server_time'] != null) {
           await prefs.setString('last_recordings_sync', data['meta']['server_time']);
         }
@@ -1077,12 +1139,20 @@ class SyncService {
             final int sId = rec['id'];
             final String? cId = rec['client_id'];
             final int serverTs = rec['updated_at_ms'] ?? 0;
+            final int? sNotebookId = rec['notebook_id'];
+            
+            final int? localNotebookId = serverToLocalNotebookId[sNotebookId];
+            
+            if (localNotebookId == null) {
+              debugPrint('⚠️ [Sync] Pulando gravação $sId - Caderno server_id $sNotebookId não encontrado localmente.');
+              continue;
+            }
 
-            batch.insert(_db.lessonRecordings, 
+            batch.insert(_db.lessonRecordings,
               LessonRecordingsCompanion.insert(
                 serverId: Value(sId),
-                clientId: Value(cId ?? uniqid()),
-                notebookId: rec['notebook_id'],
+                clientId: Value(cId ?? Uuid().v4()),
+                notebookId: localNotebookId,
                 title: rec['title'] ?? 'Sem título',
                 audioUrl: rec['audio_url'] ?? '',
                 durationSeconds: Value(rec['duration_seconds'] ?? 0),

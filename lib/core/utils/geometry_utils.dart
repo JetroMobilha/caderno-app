@@ -2,6 +2,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class GeometryUtils {
+  static const Map<String, Size> paperSizes = {
+    'A5': Size(420, 595), 'A4': Size(595, 842),
+    'A3': Size(842, 1191), 'A2': Size(1191, 1684),
+    'A1': Size(1684, 2384), 'A0': Size(2384, 3370),
+  };
+
+  static Size getPaperSize(String key) => paperSizes[key] ?? paperSizes['A4']!;
+
   /// Simplifica uma lista de pontos usando o algoritmo de Ramer-Douglas-Peucker.
   /// [epsilon] é a tolerância de distância. Valores maiores simplificam mais.
   static List<Offset> simplifyPoints(List<Offset> points, {double epsilon = 1.0}) {

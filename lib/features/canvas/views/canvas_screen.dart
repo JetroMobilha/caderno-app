@@ -191,9 +191,9 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F4C5C).withOpacity(0.05),
+                      color: const Color(0xFF0F4C5C).withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF0F4C5C).withOpacity(0.1)),
+                      border: Border.all(color: const Color(0xFF0F4C5C).withValues(alpha: 0.1)),
                     ),
                     child: Column(
                       children: [
@@ -214,7 +214,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                               onSelected: (s) => controller.setPlaybackSpeed(s),
                               child: Chip(
                                 label: Text('${controller.playbackSpeed}x', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                backgroundColor: const Color(0xFF0F4C5C).withOpacity(0.1),
+                                backgroundColor: const Color(0xFF0F4C5C).withValues(alpha: 0.1),
                               ),
                               itemBuilder: (context) => [0.5, 1.0, 1.5, 2.0].map((s) => PopupMenuItem(value: s, child: Text('${s}x'))).toList(),
                             ),
@@ -348,7 +348,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
     final bool hasPages = controller.pages.isNotEmpty;
     final LocalPage? currentPage = hasPages ? controller.pages[controller.currentPageIndex] : null;
-    final Size baseSize = _paperSizes[widget.notebook.paperSize] ?? const Size(595, 842);
+    // 🚀 Tamanho base removido pois cada página agora dita o seu tamanho
 
     return Listener(
       onPointerDown: (e) {
@@ -392,20 +392,22 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                         controller.currentTool == ToolMode.eraser ||
                                         controller.currentTool == ToolMode.draw) && !page.isFrozen;
 
+                final bool isTearing = controller.tearingPageClientIds.contains(page.clientId);
+
                 return AnimatedSlide(
-                  duration: const Duration(milliseconds: 300),
-                  offset: page.isTearing ? const Offset(0, -1.2) : Offset.zero, // 🚀 "Rasgar" para cima
+                  duration: const Duration(milliseconds: 450),
+                  offset: isTearing ? const Offset(0.3, -1.5) : Offset.zero, // 🚀 Rasgo mais natural
                   curve: Curves.easeInBack,
                   child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 250),
-                    opacity: page.isTearing ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 350),
+                    opacity: isTearing ? 0.0 : 1.0,
                     child: InteractiveViewer.builder(
                   scaleEnabled: (controller.currentTool == ToolMode.pan || _activePointers.length >= 2) && !isFollowing,
                   panEnabled: (controller.currentTool == ToolMode.pan || _activePointers.length >= 2) && !isFollowing,
                   maxScale: 6.0, 
                   minScale: 0.1,
                   transformationController: controller.transformationController,
-                  boundaryMargin: const EdgeInsets.all(3000),
+                  boundaryMargin: const EdgeInsets.symmetric(horizontal: 500, vertical: 800), // 🚀 Margem reduzida para não perder a folha
                   onInteractionUpdate: (details) {
                     if (controller.isBroadcastingViewport) {
                       final Matrix4 matrix = controller.transformationController.value;
@@ -432,7 +434,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                           color: const Color(0xFFFDFBF7),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withValues(alpha: 0.2),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -1109,6 +1111,9 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                           ),
                         ),
                       ),
+                    );
+                  },
+                    ),
                   ),
                 );
               },
@@ -1639,8 +1644,9 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                       ],
                     ),
                   ),
-              );
-            },
+                );
+              },
+            ),
           ),
           if (widget.notebook.role != 'viewer')
           Padding(
@@ -1776,7 +1782,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             Text('Tamanho do Papel:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54, fontSize: 13)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: pSize,
+              initialValue: pSize,
               decoration: InputDecoration(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

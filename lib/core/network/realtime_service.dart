@@ -52,7 +52,9 @@ class RealtimeService {
   final _fullStateReceivedController = StreamController<Map<String, dynamic>>.broadcast();
   final _pageFingerprintStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _cloudSyncSignalStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
-  final _globalActionStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _globalActionStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
+  final _syncPushFinishedController = StreamController<Map<String, dynamic>>.broadcast();
+  final _pageDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Sinal do servidor
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -80,7 +82,9 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onFullStateReceived => _fullStateReceivedController.stream;
   Stream<Map<String, dynamic>> get onPageFingerprintReceived => _pageFingerprintStreamController.stream;
   Stream<Map<String, dynamic>> get onCloudSyncSignalReceived => _cloudSyncSignalStreamController.stream; // 🚀 Novo
-  Stream<Map<String, dynamic>> get onGlobalActionReceived => _globalActionStreamController.stream; // 🚀 Novo
+  Stream<Map<String, dynamic>> get onGlobalActionReceived => _globalActionStreamController.stream; 
+  Stream<Map<String, dynamic>> get onSyncPushFinished => _syncPushFinishedController.stream; 
+  Stream<Map<String, dynamic>> get onPageDeleted => _pageDeletedStreamController.stream; // 🚀
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
@@ -308,7 +312,9 @@ class RealtimeService {
     _bindEvent('client-full-state-deliver', (event) => _fullStateReceivedController.add(_safeParse(event.data)));
     _bindEvent('client-page-fingerprint', (event) => _pageFingerprintStreamController.add(_safeParse(event.data)));
     _bindEvent('client-cloud-sync-signal', (event) => _cloudSyncSignalStreamController.add(_safeParse(event.data))); // 🚀 Novo
-    _bindEvent('client-global-action', (event) => _globalActionStreamController.add(_safeParse(event.data))); // 🚀 Novo
+    _bindEvent('client-global-action', (event) => _globalActionStreamController.add(_safeParse(event.data))); 
+    _bindEvent('client-sync-push-finished', (event) => _syncPushFinishedController.add(_safeParse(event.data)));
+    _bindEvent('page.deleted', (event) => _pageDeletedStreamController.add(_safeParse(event.data))); // 🚀
     _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
 
     _notebookChannel!.subscribe();
@@ -539,6 +545,12 @@ class RealtimeService {
   Future<void> broadcastGlobalAction({required int notebookId, required Map<String, dynamic> actionData}) async {
     if (_notebookChannel == null) return;
     _notebookChannel!.trigger(eventName: 'client-global-action', data: jsonEncode(actionData));
+  }
+
+  Future<void> broadcastSyncPushFinished({required int notebookId, required String myUserId}) async {
+    if (_notebookChannel == null) return;
+    final data = {'sender_id': myUserId};
+    _notebookChannel!.trigger(eventName: 'client-sync-push-finished', data: jsonEncode(data));
   }
 
   Future<bool> broadcastReaction({required int notebookId, required String myUserId, required String reaction}) async {

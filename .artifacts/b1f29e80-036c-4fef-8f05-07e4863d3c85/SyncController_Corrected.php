@@ -111,5 +111,42 @@ class SyncController extends Controller
         return response()->json(['message' => 'Páginas salvas.', 'synced_pages' => $syncedPages]);
     }
 
+    public function pullPages(Request $request)
+    {
+        $query = Page::query();
+
+        if ($request->has('notebook_id')) {
+            $query->where('notebook_id', $request->input('notebook_id'));
+        }
+
+        // 🚀 NOVIDADE: Permitir busca direta por ClientID para resolver conflitos de numeração
+        if ($request->has('client_id')) {
+            $query->where('client_id', $request->input('client_id'));
+        } elseif ($request->has('page_number')) {
+            $query->where('page_number', $request->input('page_number'));
+        }
+
+        if ($request->has('last_synced_at')) {
+            $query->where('updated_at', '>', $request->input('last_synced_at'));
+        }
+
+        $pages = $query->get()->map(function($page) {
+            return [
+                'id' => $page->id,
+                'notebook_id' => $page->notebook_id,
+                'client_id' => $page->client_id,
+                'page_number' => $page->page_number,
+                'updated_at_ms' => $page->updated_at->getPreciseTimestamp(3) / 1000,
+                'stroke_data' => json_decode($page->stroke_data),
+                'text_data' => json_decode($page->text_data),
+                'image_data' => json_decode($page->image_data),
+                'is_landscape' => $page->is_landscape,
+                'is_frozen' => $page->is_frozen,
+            ];
+        });
+
+        return response()->json(['data' => $pages, 'server_time' => now()->toIso8601String()]);
+    }
+
     // ... [Restantes métodos mantêm-se iguais] ...
 }

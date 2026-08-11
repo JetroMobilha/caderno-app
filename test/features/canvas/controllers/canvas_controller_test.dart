@@ -99,5 +99,13 @@ void main() {
       final visibleStrokes = controller.pages.first.strokes.where((s) => !s.isDeleted).toList();
       expect(visibleStrokes.isEmpty, true);
     });
+
+    test('Follow the Pen should be correctly configured when user is following', () {
+      controller.followingUserId = 'user123';
+      controller.lastScreenSize = const Size(1080, 1920);
+      
+      expect(controller.followingUserId, 'user123');
+      expect(controller.lastScreenSize?.width, 1080);
+    });
   });
 }

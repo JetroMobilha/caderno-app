@@ -101,13 +101,13 @@ class CanvasRepository {
   // =========================================================================
   Future<void> reindexPages(int notebookId) async {
     await _db.transaction(() async {
-      // 1. Buscar todas as páginas (incluindo as marcadas como deletadas se necessário, 
-      // mas aqui focamos nas ativas para a numeração do usuário)
+      // 1. Buscar todas as páginas (ativas para a numeração do usuário)
       final allPages = await (_db.select(_db.pages)
             ..where((t) => t.notebookId.equals(notebookId) & t.isDeleted.equals(0))
             ..orderBy([
-              (t) => OrderingTerm(expression: t.pageNumber),
-              (t) => OrderingTerm(expression: t.clientId), // 🚀 CRUCIAL: UUID como critério de desempate universal
+              (t) => OrderingTerm(expression: t.pageNumber, mode: OrderingMode.asc),
+              (t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.asc),
+              (t) => OrderingTerm(expression: t.clientId, mode: OrderingMode.asc), // 🚀 DESEMPATE GLOBAL POR UUID
             ]))
           .get();
 
@@ -176,6 +176,8 @@ class CanvasRepository {
             extractedText: Value(page.extractedText),
             isLandscape: Value(page.isLandscape ? 1 : 0),
             paperSize: Value(page.paperSize),
+            isFrozen: Value(page.isFrozen ? 1 : 0),
+            isDeleted: Value(page.isDeleted ? 1 : 0),
             syncedWithCloud: Value(page.syncedWithCloud),
             updatedAt: Value(page.updatedAt),
           ),

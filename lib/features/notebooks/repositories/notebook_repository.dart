@@ -156,9 +156,22 @@ class NotebookRepository {
   // =========================================================================
   // 🤝 PARTILHAR CADERNO COM COLEGA (API)
   // =========================================================================
-  Future<bool> shareNotebookWithFriend({required int notebookId, required String email, required String role}) async {
+  Future<bool> shareNotebookWithFriend({
+    required int notebookId, 
+    required String email, 
+    required String role,
+    String? alternativeTitle,
+    String? sharingType,
+    List<int>? pageIds,
+  }) async {
     try {
-      final response = await _apiService.post('/notebooks/$notebookId/share', {'email': email, 'role': role});
+      final response = await _apiService.post('/notebooks/$notebookId/share', {
+        'email': email, 
+        'role': role,
+        if (alternativeTitle != null) 'alternative_title': alternativeTitle,
+        if (sharingType != null) 'sharing_type': sharingType,
+        if (pageIds != null) 'page_ids': pageIds,
+      });
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       debugPrint('🚨 Erro ao partilhar nas rotas da API: $e');
@@ -199,14 +212,17 @@ class NotebookRepository {
   }
 
   // C. Deletar permissão na nuvem
-  Future<bool> removeShareWithFriend({required int notebookId, required String email}) async {
+  // D. Buscar status da sessão
+  Future<Map<String, dynamic>?> fetchSessionStatus(int notebookId) async {
     try {
-      final response = await _apiService.deleteWithBody('/notebooks/$notebookId/share', {'email': email});
-      return response.statusCode == 200;
+      final response = await _apiService.get('/notebooks/$notebookId/session/status');
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
     } catch (e) {
-      debugPrint('🚨 Erro ao revogar acesso: $e');
-      return false;
+      debugPrint('🚨 Erro ao buscar status da sessão: $e');
     }
+    return null;
   }
 }
 

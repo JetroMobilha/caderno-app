@@ -54,9 +54,10 @@ class RealtimeService {
   final _cloudSyncSignalStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
   final _globalActionStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
   final _syncPushFinishedController = StreamController<Map<String, dynamic>>.broadcast();
-  final _pageDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Sinal do servidor
-  final _notebookDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
-  final _notebookStructureStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _pageDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
+  final _notebookDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
+  final _notebookAccessRevokedController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _notebookStructureStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -86,9 +87,10 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onCloudSyncSignalReceived => _cloudSyncSignalStreamController.stream; // 🚀 Novo
   Stream<Map<String, dynamic>> get onGlobalActionReceived => _globalActionStreamController.stream; 
   Stream<Map<String, dynamic>> get onSyncPushFinished => _syncPushFinishedController.stream; 
-  Stream<Map<String, dynamic>> get onPageDeleted => _pageDeletedStreamController.stream; // 🚀
-  Stream<Map<String, dynamic>> get onNotebookDeleted => _notebookDeletedStreamController.stream; // 🚀
-  Stream<Map<String, dynamic>> get onNotebookStructureUpdated => _notebookStructureStreamController.stream; // 🚀
+  Stream<Map<String, dynamic>> get onPageDeleted => _pageDeletedStreamController.stream; 
+  Stream<Map<String, dynamic>> get onNotebookDeleted => _notebookDeletedStreamController.stream; 
+  Stream<Map<String, dynamic>> get onNotebookAccessRevoked => _notebookAccessRevokedController.stream; // 🚀
+  Stream<Map<String, dynamic>> get onNotebookStructureUpdated => _notebookStructureStreamController.stream; 
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
@@ -600,6 +602,12 @@ class RealtimeService {
     if (_userChannel == null) return;
     _userChannel!.bind('LiveSessionInvite').listen((event) {
       _inviteStreamController.add(_safeParse(event.data));
+    });
+    
+    // 🚀 OUVIR REVOGAÇÃO DE ACESSO
+    _userChannel!.bind('notebook.access_revoked').listen((event) {
+      debugPrint('🚨 [Realtime] Acesso revogado recebido via canal privado!');
+      _notebookAccessRevokedController.add(_safeParse(event.data));
     });
   }
 

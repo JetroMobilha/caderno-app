@@ -160,8 +160,15 @@ class NotebooksController extends Notifier<NotebooksState> {
     await _repository.updateNotebook(updated);
   }
 
-  Future<bool> shareNotebook(int notebookServerId, String email, String role) async {
-    final bool success = await _repository.shareNotebookWithFriend(notebookId: notebookServerId, email: email, role: role);
+  Future<bool> shareNotebook(int notebookServerId, String email, String role, {String? alternativeTitle, String? sharingType, List<int>? pageIds}) async {
+    final bool success = await _repository.shareNotebookWithFriend(
+      notebookId: notebookServerId, 
+      email: email, 
+      role: role,
+      alternativeTitle: alternativeTitle,
+      sharingType: sharingType,
+      pageIds: pageIds,
+    );
     return success;
   }
 
@@ -176,6 +183,10 @@ class NotebooksController extends Notifier<NotebooksState> {
   Future<bool> revokeAccess(int notebookServerId, String email) async {
     final bool success = await _repository.removeShareWithFriend(notebookId: notebookServerId, email: email);
     return success;
+  }
+
+  Future<Map<String, dynamic>?> getSessionStatus(int notebookServerId) async {
+    return await _repository.fetchSessionStatus(notebookServerId);
   }
 
   Future<void> duplicateNotebook(Notebook source, int targetSubjectId) async {

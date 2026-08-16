@@ -33,22 +33,20 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
   Widget build(BuildContext context) {
     final activeSubject = ref.watch(activeSubjectProvider);
     final notebooksState = ref.watch(notebooksProvider);
-    final activeProfile = ref.watch(appProfileProvider); // 🚀
+    final activeProfile = ref.watch(appProfileProvider); 
     final notebooks = notebooksState.notebooks;
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
-    // Se estiver carregando inicialmente ou mudando de stream
     final bool isLoading = notebooksState.isLoading;
 
-    // 📱 CALCULA COLUNAS CONFORME O ESPAÇO DISPONÍVEL (Responsividade Pura)
     final double screenWidth = MediaQuery.of(context).size.width;
     final int crossAxisCount = screenWidth > 1200
-        ? 6 // Ecrãs Ultra-Largas (PCs Grandes)
+        ? 6 
         : screenWidth > 800
-        ? 4 // Notebooks / Tablets em Paisagem
+        ? 4 
         : screenWidth > 600
-        ? 3 // Tablets em Retrato
-        : 2; // Telemóveis
+        ? 3 
+        : 2; 
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -68,190 +66,172 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
       ),
       body: isLoading
           ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: dynamicColor, strokeWidth: 3),
-            const SizedBox(height: 16),
-            Text('A abrir a secretária...', style: GoogleFonts.inter(color: Colors.black54, fontSize: 14)),
-          ],
-        ),
-      )
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: dynamicColor, strokeWidth: 3),
+                  const SizedBox(height: 16),
+                  Text('A abrir a secretária...', style: GoogleFonts.inter(color: Colors.black54, fontSize: 14)),
+                ],
+              ),
+            )
           : activeSubject == null
-          ? _buildNoSubjectState(dynamicColor)
-          : notebooks.isEmpty
-          ? _buildEmptyState(dynamicColor, activeSubject.name)
-          : Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.builder(
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount, // 🚀 Colunas adaptáveis!
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 0.75, // Garante que o caderno mantém a proporção 3:4
-          ),
-          itemCount: notebooks.length,
-          itemBuilder: (context, index) {
-            final notebook = notebooks[index];
-            return Stack(
-              children: [
-                // 🚀 1. O Teu Componente Visual de Capa Premium
-                Positioned.fill(
-                  child: NotebookCover(
-                    notebook: notebook,
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CanvasScreen(
-                            notebook: notebook
-                          ),
+              ? _buildNoSubjectState(dynamicColor)
+              : notebooks.isEmpty
+                  ? _buildEmptyState(dynamicColor, activeSubject.name)
+                  : Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: GridView.builder(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.75,
                         ),
-                      );
-                    },
-                  ),
-                ),
+                        itemCount: notebooks.length,
+                        itemBuilder: (context, index) {
+                          final notebook = notebooks[index];
+                          return Stack(
+                            children: [
+                              Positioned.fill(
+                                child: NotebookCover(
+                                  notebook: notebook,
+                                  onTap: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => CanvasScreen(notebook: notebook),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              Positioned(
+                                top: 6,
+                                right: 4,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    onSelected: (value) async {
+                                      if (value == 'edit') {
+                                        _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: true, notebookToEdit: notebook);
+                                      } else if (value == 'delete') {
+                                        _confirmDelete(context, notebook);
+                                      } else if (value == 'share') {
+                                        Notebook currentNotebook = notebook;
+                                        if (currentNotebook.serverId == null) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('A ligar caderno à nuvem... ☁️'), duration: Duration(seconds: 1)),
+                                          );
+                                          await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+                                          final notebooksState = ref.read(notebooksProvider);
+                                          currentNotebook = notebooksState.notebooks.firstWhere((n) => n.id == notebook.id, orElse: () => notebook);
+                                        }
 
-                // 🚀 2. O Menu Flutuante de Três Pontos (Editar / Apagar)
-                Positioned(
-                  top: 8,
-                  right: 4,
-                  child: // 1️⃣ DENTRO DO TEU BUILD, SUBSTITUI O POPUPMENUBUTTON POR ESTE:
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onSelected: (value) async { // 🚀 Atenção: Coloca o async aqui!
-                      if (value == 'edit') {
-                        _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: true, notebookToEdit: notebook);
-                      } else if (value == 'delete') {
-                        _confirmDelete(context, notebook);
-                      } else if (value == 'share') {
+                                        if (currentNotebook.serverId == null) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Sem internet. Não é possível partilhar agora.'), backgroundColor: Colors.redAccent),
+                                          );
+                                          return;
+                                        }
 
-                        // 🧠 LÓGICA INTELIGENTE DE PARTILHA: Se não tem ID no servidor, forçamos o push invisível!
-                        Notebook currentNotebook = notebook;
-
-                        if (currentNotebook.serverId == null) {
-                          // 1. Avisa o utilizador que estamos a preparar o caderno (Loading visual rápido)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('A ligar caderno à nuvem... ☁️'), duration: Duration(seconds: 1)),
+                                        if (context.mounted) {
+                                          showModalBottomSheet(
+                                            context: context,
+                                            isScrollControlled: true,
+                                            backgroundColor: Colors.transparent,
+                                            builder: (context) => ShareNotebookBottomSheet(notebook: currentNotebook),
+                                          );
+                                        }
+                                      } else if (value == 'publish') {
+                                        if (context.mounted) {
+                                          showModalBottomSheet(
+                                            context: context,
+                                            isScrollControlled: true,
+                                            backgroundColor: Colors.transparent,
+                                            builder: (context) => PublishNotebookSheet(notebook: notebook),
+                                          );
+                                        }
+                                      } else if (value == 'view_store') {
+                                        Clipboard.setData(ClipboardData(text: 'https://app.cadernodigital.ao/loja/caderno/${notebook.serverId}'));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Link de partilha copiado! 🔗 Envia aos teus alunos ou colegas.'),
+                                            backgroundColor: Color(0xFF27AE60),
+                                          ),
+                                        );
+                                      } else if (value == 'duplicate') {
+                                        _confirmDuplicate(context, ref, notebook, activeSubject);
+                                      } else if (value == 'move') {
+                                        _showMoveNotebookDialog(context, ref, notebook);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      if (notebook.role == 'owner' || notebook.role == 'editor')
+                                        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
+                                      if (notebook.role == 'owner')
+                                        PopupMenuItem(value: 'move', child: Row(children: [const Icon(Icons.drive_file_move_outlined, size: 18, color: Colors.blueGrey), const SizedBox(width: 8), Text('Mover', style: GoogleFonts.inter(fontSize: 13))])),
+                                      if (notebook.role == 'owner')
+                                        PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
+                                      PopupMenuItem(
+                                        value: 'duplicate',
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.copy_rounded, size: 18, color: Colors.teal),
+                                            const SizedBox(width: 8),
+                                            Text('Criar Minha Cópia', style: GoogleFonts.inter(fontSize: 13, color: Colors.teal)),
+                                          ],
+                                        ),
+                                      ),
+                                      if (notebook.role == 'owner')
+                                        PopupMenuItem(
+                                          value: 'publish',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.storefront_rounded, size: 18, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.primary),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                notebook.isPublished == 1 ? 'Loja (Publicado) 🟢' : 'Publicar na Loja 🛒',
+                                                style: GoogleFonts.inter(fontSize: 13, fontWeight: notebook.isPublished == 1 ? FontWeight.bold : FontWeight.normal, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.textDark),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      if (notebook.isPublished == 1)
+                                        PopupMenuItem(
+                                          value: 'view_store',
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.share_arrival_time_rounded, size: 18, color: Color(0xFF27AE60)),
+                                              const SizedBox(width: 8),
+                                              Text('Link da Loja 🔗', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))),
+                                            ],
+                                          ),
+                                        ),
+                                      if (notebook.role == 'owner')
+                                        PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           );
-
-                          // 2. Dispara o Sync apenas para enviar o que falta
-                          await ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
-
-                          // 3. Atualiza o objeto do caderno com o novo Server ID que acabou de chegar
-                          final notebooksState = ref.read(notebooksProvider);
-                          currentNotebook = notebooksState.notebooks.firstWhere((n) => n.id == notebook.id, orElse: () => notebook);
-                        }
-
-                        // Se a internet falhou e mesmo assim não obteve serverId, aborta com graciosidade
-                        if (currentNotebook.serverId == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Sem internet. Não é possível partilhar agora.'), backgroundColor: Colors.redAccent),
-                          );
-                          return;
-                        }
-
-                        // 4. Agora sim, com o caderno seguro na nuvem, abrimos o Modal de luxo!
-                        if (context.mounted) {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => ShareNotebookBottomSheet(notebook: currentNotebook),
-                          );
-                        }
-                      } else if (value == 'publish') {
-                        // 🚀 Abre o Bottom Sheet de Publicação do Marketplace
-                        if (context.mounted) {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => PublishNotebookSheet(notebook: notebook),
-                          );
-                        }
-                      } else if (value == 'view_store') {
-                        // Copia o ID ou link para a área de transferência e avisa o utilizador
-                        Clipboard.setData(ClipboardData(text: 'https://app.cadernodigital.ao/loja/caderno/${notebook.serverId}'));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Link de partilha copiado! 🔗 Envia aos teus alunos ou colegas.'),
-                            backgroundColor: Color(0xFF27AE60),
-                          ),
-                        );
-                      } else if (value == 'duplicate') {
-                         _confirmDuplicate(context, ref, notebook, activeSubject);
-                      } else if (value == 'move') {
-                         _showMoveNotebookDialog(context, ref, notebook);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      if (notebook.role == 'owner' || notebook.role == 'editor')
-                        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
-
-                      if (notebook.role == 'owner')
-                        PopupMenuItem(value: 'move', child: Row(children: [const Icon(Icons.drive_file_move_outlined, size: 18, color: Colors.blueGrey), const SizedBox(width: 8), Text('Mover', style: GoogleFonts.inter(fontSize: 13))])),
-
-                      // 🌟 A MAGIA DA PARTILHA AQUI (Só o Dono pode partilhar)
-                      if (notebook.role == 'owner')
-                        PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
-
-                      // 🚀 OPÇÃO DE DUPLICAR (Ideal para Marketplace/Creative)
-                      PopupMenuItem(
-                        value: 'duplicate', 
-                        child: Row(
-                          children: [
-                            const Icon(Icons.copy_rounded, size: 18, color: Colors.teal), 
-                            const SizedBox(width: 8), 
-                            Text('Criar Minha Cópia', style: GoogleFonts.inter(fontSize: 13, color: Colors.teal))
-                          ]
-                        )
+                        },
                       ),
-
-                      // 🚀 NOVA OPÇÃO: PUBLICAR NO MARKETPLACE (Só o dono pode publicar)
-                      if (notebook.role == 'owner')
-                        PopupMenuItem(
-                          value: 'publish',
-                          child: Row(
-                            children: [
-                              Icon(Icons.storefront_rounded, size: 18, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.primary),
-                              const SizedBox(width: 8),
-                              Text(
-                                notebook.isPublished == 1 ? 'Loja (Publicado) 🟢' : 'Publicar na Loja 🛒',
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: notebook.isPublished == 1 ? FontWeight.bold : FontWeight.normal, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.textDark),
-                              )
-                            ],
-                          ),
-                        ),
-
-                      // 🌐 OPÇÃO EXCLUSIVA PARA CADERNOS PUBLICADOS: Ver na Loja / Copiar Link
-                      if (notebook.isPublished == 1)
-                        PopupMenuItem(
-                          value: 'view_store',
-                          child: Row(
-                            children: [
-                              const Icon(Icons.share_arrival_time_rounded, size: 18, color: Color(0xFF27AE60)),
-                              const SizedBox(width: 8),
-                              Text('Link da Loja 🔗', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))),
-                            ],
-                          ),
-                        ),
-
-                      if (notebook.role == 'owner')
-                        PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
-                    ],
-                  )
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-      floatingActionButton: activeSubject == null ? null : FloatingActionButton(
-        onPressed: () => _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: false),
-        child: const Icon(Icons.add),
-      ),
+                    ),
+      floatingActionButton: activeSubject == null
+          ? null
+          : FloatingActionButton(
+              onPressed: () => _showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: false),
+              child: const Icon(Icons.add),
+            ),
     );
   }
 

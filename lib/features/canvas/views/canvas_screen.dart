@@ -435,11 +435,14 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         builder: (context) => StartCollaborationSheet(
           pages: controller.pages, 
           currentTitle: widget.notebook.title,
-          onStart: (pIds, altTitle) {
-            controller.toggleCollaboration(true, pageIds: pIds, alternativeTitle: altTitle);
+          onStart: (pIds, altTitle, sType) {
+            controller.toggleCollaboration(true, pageIds: pIds, alternativeTitle: altTitle, sharingType: sType);
           },
         ),
       );
+    } else if (!controller.isCollaborationEnabled && widget.notebook.role != 'owner') {
+      // 🚀 SE FOR CONVIDADO: Liga-se apenas (não escolhe modo)
+      controller.toggleCollaboration(true);
     } else {
       // Caso contrário, abre o centro normal
       showModalBottomSheet(

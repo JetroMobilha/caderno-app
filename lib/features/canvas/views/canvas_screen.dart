@@ -12,6 +12,8 @@ import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/features/auth/controllers/auth_controller.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
+import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/start_collaboration_sheet.dart'; // 🚀
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart'; 
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
@@ -105,7 +107,139 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
           );
         }
       });
+
+      // 🚀 LISTENER PARA DELEÇÃO PELO DONO
+      controller.onNotebookDeletedByOwner.listen((_) {
+        if (mounted) {
+          _showNotebookDeletedDialog(controller);
+        }
+      });
     });
+  }
+
+  void _showNotebookDeletedDialog(CanvasController controller) {
+    int? selectedSubId;
+    bool isCreatingNew = false;
+    final TextEditingController newSubController = TextEditingController();
+    final subjects = ref.read(subjectsProvider);
+
+    if (subjects.isNotEmpty) {
+      selectedSubId = subjects.first.id;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, 
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateModal) => PopScope(
+          canPop: false, 
+          child: AlertDialog(
+            backgroundColor: const Color(0xFFFDFBF7),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+                const SizedBox(width: 12),
+                Text('Caderno Apagado!', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 18)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'O proprietário decidiu apagar este caderno.',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Podes salvar uma cópia privada nas tuas disciplinas para não perderes o teu trabalho.',
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  Text('Onde queres guardar a cópia?', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: const Color(0xFF0F4C5C))),
+                  const SizedBox(height: 10),
+                  
+                  if (!isCreatingNew) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.black12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: selectedSubId,
+                          isExpanded: true,
+                          items: subjects.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                          onChanged: (val) => setStateModal(() => selectedSubId = val),
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => setStateModal(() => isCreatingNew = true),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Criar Nova Disciplina', style: TextStyle(fontSize: 12)),
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: newSubController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Nome da Disciplina...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => setStateModal(() => isCreatingNew = false),
+                      icon: const Icon(Icons.list, size: 16),
+                      label: const Text('Voltar à lista', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.pop(context);
+                },
+                child: const Text('Descartar e Sair', style: TextStyle(color: Colors.black45)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F4C5C), 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                ),
+                onPressed: () async {
+                  if (isCreatingNew && newSubController.text.trim().isEmpty) return;
+
+                  final String? newName = isCreatingNew ? newSubController.text.trim() : null;
+                  
+                  await controller.cloneCurrentStateToNewNotebook(
+                    selectedSubId, 
+                    widget.notebook.title, 
+                    newSubjectName: newName
+                  );
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cópia guardada com sucesso! ✨')));
+                    Navigator.pop(ctx);
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('Salvar Cópia', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -292,12 +426,29 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   }
 
   void _showCollaborationCenter(CanvasController controller) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => CollaborationCenterSheet(notebook: widget.notebook),
-    );
+    if (!controller.isCollaborationEnabled && widget.notebook.role == 'owner') {
+      // 🚀 SE FOR DONO E ESTIVER A LIGAR AGORA: Abrir seletor de páginas
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => StartCollaborationSheet(
+          pages: controller.pages, 
+          currentTitle: widget.notebook.title,
+          onStart: (pIds, altTitle) {
+            controller.toggleCollaboration(true, pageIds: pIds, alternativeTitle: altTitle);
+          },
+        ),
+      );
+    } else {
+      // Caso contrário, abre o centro normal
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => CollaborationCenterSheet(notebook: widget.notebook),
+      );
+    }
   }
 
   void _confirmDeletePage(CanvasController controller, LocalPage page, int index) {
@@ -1499,8 +1650,8 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               Flexible(
                 child: Text(
                   hasPages 
-                    ? '${widget.notebook.title} (${controller.currentPageIndex + 1}/${controller.pages.length})'
-                    : widget.notebook.title,
+                    ? '${controller.sessionTitle ?? widget.notebook.title} (${controller.currentPageIndex + 1}/${controller.pages.length})'
+                    : (controller.sessionTitle ?? widget.notebook.title),
                   style: GoogleFonts.inter(color: const Color(0xFF1A1A24), fontWeight: FontWeight.bold, fontSize: 16),
                   overflow: TextOverflow.ellipsis,
                 ),

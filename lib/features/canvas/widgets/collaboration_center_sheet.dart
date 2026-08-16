@@ -165,45 +165,67 @@ class CollaborationCenterSheet extends ConsumerWidget {
   // -------------------------------------------------------------------------
 
   Widget _buildOnlineToggle(CanvasController controller) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: controller.isCollaborationEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
+    return ValueListenableBuilder<RealtimeStatus>(
+      valueListenable: controller.statusNotifier, // 🚀 Usar o status do controlador
+      builder: (context, status, _) {
+        final bool isSyncing = controller.isGlobalSyncing;
+        final bool isConnecting = status == RealtimeStatus.connecting;
+        final bool isLoading = isSyncing || (controller.isCollaborationEnabled && isConnecting);
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: controller.isCollaborationEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(
-                controller.isCollaborationEnabled ? Icons.wifi_tethering : Icons.wifi_tethering_off,
-                color: controller.isCollaborationEnabled ? Colors.green : Colors.grey,
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  Text(
-                    controller.isCollaborationEnabled ? 'Modo Online Ativo' : 'Modo Offline',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87),
-                  ),
-                  Text(
-                    controller.isCollaborationEnabled ? 'Outros podem ver o teu progresso' : 'Privacidade total garantida',
-                    style: GoogleFonts.inter(fontSize: 11, color: Colors.black45),
+                  if (isLoading)
+                    const SizedBox(
+                      width: 24, height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F4C5C)),
+                    )
+                  else
+                    Icon(
+                      controller.isCollaborationEnabled ? Icons.wifi_tethering : Icons.wifi_tethering_off,
+                      color: controller.isCollaborationEnabled ? Colors.green : Colors.grey,
+                    ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isLoading 
+                            ? (isSyncing ? 'A preparar dados...' : 'A ligar ao servidor...') 
+                            : (controller.isCollaborationEnabled ? 'Modo Online Ativo' : 'Modo Offline'),
+                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87),
+                      ),
+                      Text(
+                        isLoading
+                            ? 'Por favor aguarda um momento'
+                            : (controller.isCollaborationEnabled ? 'Outros podem ver o teu progresso' : 'Privacidade total garantida'),
+                        style: GoogleFonts.inter(fontSize: 11, color: Colors.black45),
+                      ),
+                    ],
                   ),
                 ],
               ),
+              if (isLoading)
+                const SizedBox(width: 48, height: 48) // Espaço reservado para o switch
+              else
+                Switch(
+                  value: controller.isCollaborationEnabled,
+                  activeThumbColor: Colors.green,
+                  activeTrackColor: Colors.green.withValues(alpha: 0.5),
+                  onChanged: (val) => controller.toggleCollaboration(val),
+                ),
             ],
           ),
-          Switch(
-            value: controller.isCollaborationEnabled,
-            activeThumbColor: Colors.green,
-            activeTrackColor: Colors.green.withValues(alpha: 0.5),
-            onChanged: (val) => controller.toggleCollaboration(val),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

@@ -5,9 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:caderno_digital_app/core/network/sync_service.dart';
+import 'package:caderno_digital_app/core/network/sync_provider.dart'; // 🚀 Novo
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
-import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 import 'package:caderno_digital_app/features/auth/models/user_model.dart';
 import 'package:caderno_digital_app/features/auth/repositories/auth_repository.dart';
 import 'package:caderno_digital_app/core/network/api_service.dart';
@@ -108,7 +107,7 @@ class AuthController extends ChangeNotifier {
         }
 
         debugPrint('🔄 [Auth] A iniciar sincronização de metadados pós-login...');
-        await SyncService().syncAll(metadataOnly: true);
+        await ref.read(appSyncServiceProvider).syncAll(metadataOnly: true);
 
         _isLoading = false;
         notifyListeners();
@@ -159,7 +158,7 @@ class AuthController extends ChangeNotifier {
         }
 
         debugPrint('🔄 [Auth] A iniciar sincronização de metadados pós-registo...');
-        await SyncService().syncAll(metadataOnly: true);
+        await ref.read(appSyncServiceProvider).syncAll(metadataOnly: true);
 
         _isLoading = false;
         notifyListeners();
@@ -272,7 +271,7 @@ class AuthController extends ChangeNotifier {
     // 🚀 0. SINCRONIZAÇÃO FORÇADA DE SEGURANÇA
     try {
       debugPrint('🔄 [Auth] A iniciar sincronização final antes do logout...');
-      await SyncService().syncAll(forced: true, metadataOnly: false);
+      await ref.read(appSyncServiceProvider).syncAll(forced: true, metadataOnly: false);
       debugPrint('✅ [Auth] Sincronização final concluída.');
     } catch (e) {
       debugPrint('🚨 [Auth] Erro na sincronização final (prosseguindo logout): $e');

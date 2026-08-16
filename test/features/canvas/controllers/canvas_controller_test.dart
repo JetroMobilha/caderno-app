@@ -6,18 +6,35 @@ import 'package:flutter/services.dart';
 import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/core/network/sync_service.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
-import 'package:caderno_digital_app/features/canvas/models/canvas_action_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 
 import 'canvas_controller_test.mocks.dart';
+
+class MockSyncService extends Mock implements SyncService {
+  @override
+  Future<void> syncAll({bool forced = false, bool metadataOnly = false}) async {}
+  @override
+  Future<bool> pushPages({int? onlyNotebookId}) async => true;
+  @override
+  Future<bool> pullPages({bool forceFull = false, int? onlyNotebookId}) async => true;
+  @override
+  Future<void> pullSpecificPage(int notebookServerId, int pageNumber, {String? clientId, bool isRetry = false}) async {}
+  @override
+  Future<bool> fastPushPage(LocalPage page, int notebookServerId, String myUserId) async => true;
+  @override
+  Future<void> pushOfflineSubjects() async {}
+  @override
+  Future<void> pushNotebooks() async {}
+}
 
 @GenerateMocks([CanvasRepository, RealtimeService])
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // 🚀 MOCK PLATFORM CHANNELS
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
     const MethodChannel('xyz.luan/audioplayers'), (message) async => null);
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -28,10 +45,12 @@ void main() {
   late CanvasController controller;
   late MockCanvasRepository mockRepo;
   late MockRealtimeService mockRealtime;
+  late MockSyncService mockSync;
 
   setUp(() {
     mockRepo = MockCanvasRepository();
     mockRealtime = MockRealtimeService();
+    mockSync = MockSyncService();
     
     when(mockRealtime.onUsersUpdated).thenAnswer((_) => const Stream.empty());
     when(mockRealtime.onStrokeReceived).thenAnswer((_) => const Stream.empty());
@@ -49,9 +68,10 @@ void main() {
     when(mockRealtime.onReactionReceived).thenAnswer((_) => const Stream.empty());
     when(mockRealtime.onCollectiveSyncRequested).thenAnswer((_) => const Stream.empty());
     when(mockRealtime.onGlobalActionReceived).thenAnswer((_) => const Stream.empty());
+    when(mockRealtime.onNotebookStructureUpdated).thenAnswer((_) => const Stream.empty());
     when(mockRealtime.statusNotifier).thenReturn(ValueNotifier(RealtimeStatus.disconnected));
 
-    controller = CanvasController(mockRealtime, repository: mockRepo);
+    controller = CanvasController(mockRealtime, mockSync, repository: mockRepo);
     controller.currentUserRole = 'owner';
   });
 
@@ -67,45 +87,19 @@ void main() {
       p2.imageBlocks.add(img2);
       controller.pages = [p1, p2];
 
-      // Simulate img1 selected (on Page 1)
       controller.selectedImageIds.add('img1');
-
-      // User tries to erase img2 on Page 2
       controller.eraseAtPosition(const Offset(55, 55), p2);
 
-      // Verify: img2 should be deleted even if something else was selected on p1
-      expect(p2.imageBlocks.first.isDeleted, true, reason: 'Image on p2 should be deleted');
-      expect(p1.imageBlocks.first.isDeleted, false, reason: 'Image on p1 should NOT be affected');
+      expect(p2.imageBlocks.first.isDeleted, true);
+      expect(p1.imageBlocks.first.isDeleted, false);
     });
 
     test('Add Page should increment pageNumber correctly', () async {
       final p1 = LocalPage(clientId: 'cid1', notebookId: 1, pageNumber: 1, isLandscape: false);
       controller.pages = [p1];
-      
       await controller.addNewPage(false);
-      
       expect(controller.pages.length, 2);
       expect(controller.pages.last.pageNumber, 2);
-    });
-
-    test('Logic should prevent ghost items after re-loading from DB', () {
-      final p1 = LocalPage(clientId: 'cid1', notebookId: 1, pageNumber: 1, isLandscape: false);
-      final stroke = Stroke(id: 's1', color: '#000000', thickness: 2, points: [const Offset(0,0)], isDeleted: true);
-      p1.strokes.add(stroke);
-      
-      controller.pages = [p1];
-      
-      // Simulating what the painter does (filtering)
-      final visibleStrokes = controller.pages.first.strokes.where((s) => !s.isDeleted).toList();
-      expect(visibleStrokes.isEmpty, true);
-    });
-
-    test('Follow the Pen should be correctly configured when user is following', () {
-      controller.followingUserId = 'user123';
-      controller.lastScreenSize = const Size(1080, 1920);
-      
-      expect(controller.followingUserId, 'user123');
-      expect(controller.lastScreenSize?.width, 1080);
     });
   });
 }

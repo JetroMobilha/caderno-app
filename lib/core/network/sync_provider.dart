@@ -3,15 +3,17 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/controllers/auth_controller.dart';
+import '../../features/canvas/repositories/canvas_repository.dart';
+import 'api_provider.dart';
 import 'sync_service.dart';
 
 class SyncNotifier extends StateNotifier<SyncState> {
   final Ref ref;
   Timer? _syncTimer;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  final SyncService _syncService = SyncService();
+  final SyncService _syncService;
 
-  SyncNotifier(this.ref) : super(SyncState.idle) {
+  SyncNotifier(this.ref, this._syncService) : super(SyncState.idle) {
     // 1. Iniciar o loop de sincronização periódica (Failsafe)
     _startAutoSync();
     
@@ -81,6 +83,13 @@ class SyncNotifier extends StateNotifier<SyncState> {
 
 enum SyncState { idle, syncing, error }
 
+final appSyncServiceProvider = Provider<SyncService>((ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  final canvasRepository = ref.watch(canvasRepositoryProvider);
+  return SyncService(apiService, canvasRepository);
+});
+
 final syncProvider = StateNotifierProvider<SyncNotifier, SyncState>((ref) {
-  return SyncNotifier(ref);
+  final syncService = ref.watch(appSyncServiceProvider);
+  return SyncNotifier(ref, syncService);
 });

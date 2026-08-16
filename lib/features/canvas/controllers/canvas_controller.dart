@@ -16,6 +16,7 @@ import 'package:vector_math/vector_math_64.dart' hide Colors, Matrix4;
 import 'package:caderno_digital_app/core/database/app_database.dart' as db hide Notebook, Subject, User, Page;
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/core/network/sync_service.dart';
+import 'package:caderno_digital_app/core/network/sync_provider.dart'; // 🚀 Novo
 import 'package:caderno_digital_app/core/network/api_service.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
@@ -33,9 +34,12 @@ enum InlineTarget { none, block, title, footer }
 class CanvasController extends ChangeNotifier {
   final CanvasRepository _repository;
   final RealtimeService _realtimeService;
+  final SyncService _syncService; // 🚀 Injetado
   final ApiService _apiService = ApiService();
 
-  CanvasController(this._realtimeService, {CanvasRepository? repository}) 
+  ValueNotifier<RealtimeStatus> get statusNotifier => _realtimeService.statusNotifier; // 🚀 Acesso ao status
+
+  CanvasController(this._realtimeService, this._syncService, {CanvasRepository? repository}) 
       : _repository = repository ?? CanvasRepository(db.AppDatabase.instance) {
     transformationController = TransformationController();
     _audioPlayer.onPlayerComplete.listen((_) {
@@ -101,6 +105,9 @@ class CanvasController extends ChangeNotifier {
   final StreamController<String> _permissionAlertController = StreamController.broadcast();
   Stream<String> get onPermissionAlert => _permissionAlertController.stream;
 
+  final StreamController<void> _notebookDeletedByOwnerController = StreamController.broadcast(); // 🚀 Novo
+  Stream<void> get onNotebookDeletedByOwner => _notebookDeletedByOwnerController.stream;
+
   final StreamController<Map<String, dynamic>> _sessionMetaStreamController = StreamController.broadcast(); // 🚀
   Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream;
 
@@ -145,9 +152,6 @@ class CanvasController extends ChangeNotifier {
   final Set<String> _playingStreamIds = {};
   final List<Map<String, dynamic>> _failedSegmentsQueue = [];
   final Map<int, DateTime> _lastFullStateRequestTime = {};
-  final Set<String> _usersReadyForPull = {}; // 🚀 Utilizadores que já confirmaram o PUSH
-  bool _isWaitingForOthersToPush = false;
-  Completer<void>? _coordinatedSyncCompleter;
   // -------------------------------------------------------------------------
 
   // State Properties (Canvas)
@@ -173,6 +177,8 @@ class CanvasController extends ChangeNotifier {
   String currentTemplateType = 'study'; // 🚀 study, technical, formal
   Set<String>? visibleAuthorIds; // 🚀 Nulo significa "Todos"
   String myUserId = ""; 
+  String? authorityId; // 🚀 Utilizador que é a fonte da verdade
+  bool get isAuthority => authorityId == myUserId;
 
   String? selectedEditingImageId; 
   ToolMode currentTool = ToolMode.draw;
@@ -201,6 +207,9 @@ class CanvasController extends ChangeNotifier {
   bool isRealtimeActive = false;
   bool isCollaborationEnabled = false; 
   bool isFocusMode = false; 
+
+  String? sessionTitle; // 🚀 Título alternativo da sala
+  Set<int>? authorizedPageIds; // 🚀 Whitelist de páginas (IDs reais do DB)
 
   void toggleFocusMode() { isFocusMode = !isFocusMode; safeNotify(); }
 
@@ -297,8 +306,9 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _dbPagesSubscription;
   StreamSubscription? _dbNotebookSubscription;
   StreamSubscription? _sessionMetaSubscription; // 🚀
-  StreamSubscription? _syncPushFinishedSubscription; // 🚀
-  StreamSubscription? _pageDeletedSubscription; // 🚀
+  StreamSubscription? _pageDeletedSubscription; 
+  StreamSubscription? _notebookDeletedSubscription; // 🚀
+  StreamSubscription? _notebookStructureSubscription; // 🚀
   VoidCallback? _statusListener;
 
   final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier({});
@@ -318,8 +328,8 @@ class CanvasController extends ChangeNotifier {
     _isDisposed = true; activePointsNotifier.dispose(); remoteLiveStrokes.dispose(); remotePointers.dispose(); transformationController.dispose(); pageController.dispose();
     _cancelRealtimeSubscriptions();
     _sessionMetaSubscription?.cancel(); // 🚀
-    _syncPushFinishedSubscription?.cancel(); // 🚀
-    _pageDeletedSubscription?.cancel(); // 🚀
+    _pageDeletedSubscription?.cancel();
+    _notebookStructureSubscription?.cancel(); // 🚀
     _dbPagesSubscription?.cancel(); _dbNotebookSubscription?.cancel();
     if (_statusListener != null) _realtimeService.statusNotifier.removeListener(_statusListener!);
     _viewportBroadcastTimer?.cancel(); _autoSyncPushTimer?.cancel(); _typingDebounce?.cancel(); _textBroadcastDebounce?.cancel(); _roomSyncDebouncer?.cancel(); _remoteImageSaveTimer?.cancel(); _metadataBroadcastThrottle?.cancel(); _smoothTimer?.cancel(); _segmentTimer?.cancel(); _amplitudeTimer?.cancel(); _fingerprintTimer?.cancel(); _cleanupTimer?.cancel();
@@ -331,6 +341,7 @@ class CanvasController extends ChangeNotifier {
     _newMessageAlertController.close();
     _permissionAlertController.close();
     _sessionMetaStreamController.close(); // 🚀
+    leaveSession(); // 🚀 Notificar saída via API
     if (liveNotebookSid != null && liveNotebookSid != 0) _realtimeService.leaveNotebookChannel(liveNotebookSid!);
     SyncService.isCollaborationActive = false; super.dispose();
   }
@@ -501,6 +512,109 @@ class CanvasController extends ChangeNotifier {
     }
   }
 
+  Timer? _heartbeatTimer;
+
+  Future<void> refreshAuthority() async {
+    if (liveNotebookSid == null || liveNotebookSid == 0) return;
+    try {
+      final response = await _apiService.get('/notebooks/$liveNotebookSid/session/status');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['active'] == true) {
+          final String? newAuthorityId = data['authority_id']?.toString();
+          if (authorityId != newAuthorityId) {
+            authorityId = newAuthorityId;
+            debugPrint('📡 [Session] Nova autoridade eleita: $authorityId ${isAuthority ? "(Eu!)" : ""}');
+            safeNotify();
+          }
+        } else {
+          // 🚀 SE O SERVIDOR DIZ QUE NÃO ESTÁ ATIVO, TENTAR RE-ENTRAR (Self-Healing)
+          debugPrint('⚠️ [Session] Servidor não detetou sessão ativa. Tentando re-entrar...');
+          fetchSessionStatus();
+        }
+      }
+    } catch (e) {
+      debugPrint('🚨 [Session] Erro ao atualizar autoridade: $e');
+    }
+  }
+
+  Future<void> fetchSessionStatus({List<int>? pageIds, String? alternativeTitle}) async {
+    if (liveNotebookSid == null || liveNotebookSid == 0) return;
+    debugPrint('🚀 [Session] Enviando pedido de Join para caderno $liveNotebookSid...');
+    try {
+      final response = await _apiService.post('/notebooks/$liveNotebookSid/session/join', {
+        if (pageIds != null) 'page_ids': pageIds,
+        if (alternativeTitle != null) 'alternative_title': alternativeTitle,
+      });
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['active'] == true) {
+          authorityId = data['authority_id']?.toString();
+          sessionTitle = data['alternative_title']?.toString();
+          
+          if (data['authorized_page_ids'] != null) {
+            authorizedPageIds = Set<int>.from(data['authorized_page_ids']);
+            debugPrint('🔒 [Session] Whitelist de páginas ativa: $authorizedPageIds');
+            _filterPagesByWhitelist();
+          }
+
+          debugPrint('✅ [Session] Join bem-sucedido. Autoridade: $authorityId ${isAuthority ? "(Eu!)" : ""} | Titulo: $sessionTitle');
+          
+          _startHeartbeatTimer();
+          safeNotify();
+        }
+      } else {
+        debugPrint('❌ [Session] Falha no Join: HTTP ${response.statusCode} | ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('🚨 [Session] Erro ao entrar na sessão: $e');
+    }
+  }
+
+  void _filterPagesByWhitelist() {
+    if (authorizedPageIds == null || currentUserRole == 'owner') return;
+    
+    // Removendo localmente páginas que não estão na whitelist do servidor
+    final beforeCount = pages.length;
+    pages.removeWhere((p) => p.id != null && !authorizedPageIds!.contains(p.id!));
+    
+    if (pages.length != beforeCount) {
+      debugPrint('🧹 [Session] Filtradas ${beforeCount - pages.length} páginas privadas.');
+      if (currentPageIndex >= pages.length) {
+        currentPageIndex = pages.isEmpty ? 0 : pages.length - 1;
+      }
+      safeNotify();
+    }
+  }
+
+  void _startHeartbeatTimer() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (timer) async {
+      if (!isRealtimeActive || liveNotebookSid == null) {
+        timer.cancel();
+        return;
+      }
+      try {
+        await _apiService.post('/notebooks/$liveNotebookSid/session/heartbeat', {});
+        // 🚀 Aproveitar o pulso para garantir que a autoridade está atualizada
+        refreshAuthority();
+      } catch (e) {
+        debugPrint('⚠️ [Session] Falha no heartbeat.');
+      }
+    });
+  }
+
+  Future<void> leaveSession() async {
+    _heartbeatTimer?.cancel();
+    if (liveNotebookSid != null && liveNotebookSid != 0) {
+      try {
+        await _apiService.post('/notebooks/$liveNotebookSid/session/leave', {});
+      } catch (e) {
+        debugPrint('🚨 [Session] Erro ao sair da sessão: $e');
+      }
+    }
+  }
+
   Future<void> initNotebook(int notebookId, int? notebookSid, String lineType, String paperSize, String role, String? userId, {double? lineSpacing, String? templateType, String? collaborationMode}) async {
     isLoading = true; currentNotebookId = notebookId; liveNotebookSid = notebookSid; liveLineType = lineType; currentPaperSize = paperSize; liveLineSpacing = lineSpacing ?? ((lineType == 'grid' || lineType == 'dots') ? 25.0 : 28.0); currentUserRole = role; 
     currentTemplateType = templateType ?? 'study';
@@ -610,7 +724,7 @@ class CanvasController extends ChangeNotifier {
       }
 
       if (activePages.isNotEmpty && liveNotebookSid != null && currentUserRole != 'owner') {
-         SyncService().pullSpecificPage(liveNotebookSid!, 1);
+         _syncService.pullSpecificPage(liveNotebookSid!, 1);
       }
     });
 
@@ -639,15 +753,17 @@ class CanvasController extends ChangeNotifier {
   void _cancelRealtimeSubscriptions() {
     if (_statusListener != null) _realtimeService.statusNotifier.removeListener(_statusListener!);
     _usersSubscription?.cancel(); _strokesSubscription?.cancel(); _textSubscription?.cancel(); _imageSubscription?.cancel(); _viewportSubscription?.cancel(); _activitySubscription?.cancel(); _pointerSubscription?.cancel(); _chatSubscription?.cancel(); _audioMessageSubscription?.cancel(); _reactionSubscription?.cancel(); _collectiveSyncSubscription?.cancel(); _fullStateRequestSubscription?.cancel(); _fullStateReceivedSubscription?.cancel(); _fingerprintSubscription?.cancel(); _globalActionSubscription?.cancel(); _followSubscription?.cancel(); _pageEventSubscription?.cancel(); _pageUpdatedSubscription?.cancel(); _handSubscription?.cancel(); _uploadingSubscription?.cancel(); _voiceCallSubscription?.cancel(); _voiceStateSubscription?.cancel(); _audioLevelSubscription?.cancel();
-    _sessionMetaSubscription?.cancel(); // 🚀
+    _sessionMetaSubscription?.cancel(); 
+    _notebookStructureSubscription?.cancel(); // 🚀
   }
 
-  Future<void> initRealtimeCollaboration() async {
+  Future<void> initRealtimeCollaboration({List<int>? pageIds, String? alternativeTitle}) async {
     final rt = _realtimeService; if (liveNotebookSid == null || liveNotebookSid == 0) return; await rt.initConnection();
     
     if (_statusListener != null) _realtimeService.statusNotifier.removeListener(_statusListener!);
     _statusListener = () { 
       if (!_isDisposed && _realtimeService.isConnected && liveNotebookSid != null) { 
+        fetchSessionStatus(pageIds: pageIds, alternativeTitle: alternativeTitle); // 🚀 Passar escopo
         _debounceRoomSync(); 
         _startHeartbeat(); 
         _startCleanupTimer(); 
@@ -662,6 +778,11 @@ class CanvasController extends ChangeNotifier {
       } 
     };
     _realtimeService.statusNotifier.addListener(_statusListener!);
+    
+    // 🚀 DISPARAR IMEDIATAMENTE SE JÁ ESTIVER LIGADO (Race Condition Fix)
+    if (_realtimeService.isConnected && liveNotebookSid != null) {
+      _statusListener!();
+    }
 
     _sessionMetaSubscription?.cancel(); 
     _sessionMetaSubscription = rt.onSessionMetaReceived.listen((d) {
@@ -941,28 +1062,34 @@ class CanvasController extends ChangeNotifier {
       final int pNum = d['page_number'];
       final String remoteFingerprint = d['fingerprint'];
       final int remoteTs = d['updated_at'] ?? 0;
+      final String senderId = d['sender_id'].toString();
       
       final idx = pages.indexWhere((p) => p.pageNumber == pNum);
       if (idx != -1) {
         final localFingerprint = pages[idx].generateFingerprint();
         if (localFingerprint != remoteFingerprint) {
           debugPrint('[SYNC-LOG] 📍 Divergência na página $pNum. Remoto: $remoteFingerprint, Local: $localFingerprint');
-          // 🚀 ELEIÇÃO DE FONTE: Só peço dados se o remoto for mais recente
-          if (remoteTs > pages[idx].updatedAt) {
-            debugPrint('[SYNC-LOG] 🔄 Fonte remota é mais recente (${remoteTs} vs ${pages[idx].updatedAt}).');
+          
+          // 🚀 ELEIÇÃO DE FONTE MELHORADA (Sessão Autorizada)
+          // Priorizamos a Autoridade da sala, mesmo que o timestamp local seja maior,
+          // pois a autoridade é quem está há mais tempo online sem interrupções.
+          bool shouldSync = (senderId == authorityId) || (remoteTs > pages[idx].updatedAt);
+
+          if (shouldSync) {
+            debugPrint('[SYNC-LOG] 🔄 Fonte ${senderId == authorityId ? "AUTORITATIVA" : "mais recente"} detetada.');
             
             final now = DateTime.now();
             final lastReq = _lastFullStateRequestTime[pNum];
             if (lastReq == null || now.difference(lastReq).inSeconds > 10) {
               _lastFullStateRequestTime[pNum] = now;
               debugPrint('📡 [Sync] Solicitando Full State para página $pNum...');
-              rt.requestFullState(notebookId: liveNotebookSid!, targetUserId: d['sender_id'].toString(), pageNumber: pNum);
+              rt.requestFullState(notebookId: liveNotebookSid!, targetUserId: senderId, pageNumber: pNum);
               
               // 🚀 FAIL-SAFE: Disparar também um PULL direto via REST para garantir a integridade
               Future.delayed(const Duration(milliseconds: 500), () async {
                 if (!_isDisposed) {
                   debugPrint('🔗 [Sync] Disparando REST Fail-safe para página $pNum...');
-                  await SyncService().pullSpecificPage(liveNotebookSid!, pNum);
+                  await _syncService.pullSpecificPage(liveNotebookSid!, pNum);
                 }
               });
             }
@@ -976,7 +1103,7 @@ class CanvasController extends ChangeNotifier {
       if (_isDisposed || d['sender_id'].toString() == myUserId) return;
       final int pNum = d['page_number'];
       debugPrint('☁️ [Sync] Sinal de Cloud Sync recebido para página $pNum. Descarregando...');
-      await SyncService().pullSpecificPage(liveNotebookSid!, pNum);
+      await _syncService.pullSpecificPage(liveNotebookSid!, pNum);
       
       // Forçar atualização visual
       final idx = pages.indexWhere((p) => p.pageNumber == pNum);
@@ -1130,7 +1257,7 @@ class CanvasController extends ChangeNotifier {
         debugPrint('🔔 [Sync] Sinal de atualização da Nuvem recebido para página $pNum. Sincronizando...');
         
         // 🚀 OTIMIZAÇÃO: Em vez de push/pull total, fazemos apenas pull da página afetada
-        await SyncService().pullSpecificPage(liveNotebookSid!, pNum);
+        await _syncService.pullSpecificPage(liveNotebookSid!, pNum);
         
         // Atualizar lista local de páginas para refletir mudanças (ex: metadados, strokes)
         final fresh = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
@@ -1146,27 +1273,6 @@ class CanvasController extends ChangeNotifier {
       }
     });
     
-    _syncPushFinishedSubscription?.cancel();
-    _syncPushFinishedSubscription = rt.onSyncPushFinished.listen((d) {
-      if (_isDisposed) return;
-      final String uid = d['sender_id'].toString();
-      if (uid == myUserId) return;
-      
-      _usersReadyForPull.add(uid);
-      debugPrint('🤝 [Sync] Utilizador $uid confirmou PUSH concluído.');
-      
-      // Se eu estiver à espera e todos os outros já terminaram
-      if (_isWaitingForOthersToPush) {
-        final otherOnlineUsers = onlineUsers.where((u) => u['id'].toString() != myUserId).map((u) => u['id'].toString()).toSet();
-        if (_usersReadyForPull.containsAll(otherOnlineUsers)) {
-          debugPrint('[SYNC-LOG] 🏁 TODOS os utilizadores terminaram o PUSH (${_usersReadyForPull.length}). Prosseguindo para PULL...');
-          if (_coordinatedSyncCompleter != null && !_coordinatedSyncCompleter!.isCompleted) {
-            _coordinatedSyncCompleter!.complete();
-          }
-        }
-      }
-    });
-
     _pageDeletedSubscription?.cancel();
     _pageDeletedSubscription = rt.onPageDeleted.listen((d) async {
       if (_isDisposed) return;
@@ -1178,6 +1284,27 @@ class CanvasController extends ChangeNotifier {
         final d = db.AppDatabase.instance;
         await (d.delete(d.pages)..where((t) => t.clientId.equals(pcid))).go();
         _autoNavigateAfterDeletion();
+      }
+    });
+
+    _notebookDeletedSubscription?.cancel();
+    _notebookDeletedSubscription = rt.onNotebookDeleted.listen((d) {
+      if (_isDisposed) return;
+      debugPrint('🚨 [Realtime] Caderno apagado pelo proprietário!');
+      _notebookDeletedByOwnerController.add(null);
+    });
+
+    _notebookStructureSubscription?.cancel();
+    _notebookStructureSubscription = rt.onNotebookStructureUpdated.listen((d) async {
+      if (_isDisposed) return;
+      debugPrint('[SYNC-LOG] 🏗️ Estrutura do caderno atualizada pelo servidor. Re-indexando...');
+      await _syncService.pullPages(forceFull: true, onlyNotebookId: liveNotebookSid);
+      
+      final fresh = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
+      if (fresh.isNotEmpty) {
+        pages = fresh;
+        for (var p in pages) p.version++;
+        safeNotify();
       }
     });
 
@@ -1203,25 +1330,32 @@ class CanvasController extends ChangeNotifier {
       final int prev = onlineUsers.length;
       final newList = _mapUserList(ul.toList());
       
-      // 🚀 Detectar novos membros (especialmente estudantes) para enviar fingerprint
+      // 🚀 HANDSHAKE PROATIVO: Se alguém entrou, eu (Owner/Editor) anuncio a verdade atual
       if (newList.length > prev && (currentUserRole == 'owner' || currentUserRole == 'editor')) {
         final newUsers = newList.where((nu) => !onlineUsers.any((ou) => ou['id'] == nu['id'])).toList();
-        if (newUsers.any((u) => u['role'] == 'student' || u['id'] != myUserId)) {
-          if (pages.isNotEmpty && currentPageIndex >= 0 && currentPageIndex < pages.length) {
-            final currentPage = pages[currentPageIndex];
-            _realtimeService.broadcastPageFingerprint(
-              notebookId: liveNotebookSid!,
-              myUserId: myUserId,
-              pageNumber: currentPage.pageNumber,
-              fingerprint: currentPage.generateFingerprint(),
-              updatedAt: currentPage.updatedAt, // 🚀
-            );
-          }
+        if (newUsers.isNotEmpty) {
+           debugPrint('[SYNC-LOG] 🤝 Novo colega detectado. Enviando Handshake de Fingerprint...');
+           if (pages.isNotEmpty && currentPageIndex >= 0 && currentPageIndex < pages.length) {
+              final currentPage = pages[currentPageIndex];
+              _realtimeService.broadcastPageFingerprint(
+                notebookId: liveNotebookSid!,
+                myUserId: myUserId,
+                pageNumber: currentPage.pageNumber,
+                fingerprint: currentPage.generateFingerprint(),
+                updatedAt: currentPage.updatedAt,
+              );
+           }
         }
       }
 
       onlineUsers = newList;
       isRemoteVoiceCallActive = onlineUsers.any((u) => u['id'].toString() != myUserId && u['isInCall'] == true);
+      
+      // 🚀 ATUALIZAR AUTORIDADE SE HOUVE MUDANÇA NA SALA (Hierarquia de Papéis)
+      if (newList.length != prev) {
+        refreshAuthority();
+      }
+
       if (onlineUsers.length > prev && prev > 0 && isCollaborationEnabled) { _debounceRoomSync(); _realtimeService.requestCollectiveSync(myUserId: myUserId); }
       safeNotify();
     });
@@ -1266,22 +1400,42 @@ class CanvasController extends ChangeNotifier {
     }).toList();
   }
 
-  Future<void> toggleCollaboration(bool enable, {bool suppressBroadcast = false}) async {
+  Future<void> toggleCollaboration(bool enable, {bool suppressBroadcast = false, List<int>? pageIds, String? alternativeTitle}) async {
     if (isCollaborationEnabled == enable) return; 
-    isCollaborationEnabled = enable; SyncService.isCollaborationActive = enable;
+    
     if (enable) { 
-      if (liveNotebookSid == null || liveNotebookSid == 0) { try { await SyncService().pushOfflineSubjects(); await SyncService().pushNotebooks(); await Future.delayed(const Duration(seconds: 1)); } catch (e) {} } 
+      isGlobalSyncing = true; safeNotify();
+      try {
+        // 🚀 OFFLINE CATCH-UP
+        await _syncService.pushOfflineSubjects();
+        await _syncService.pushNotebooks();
+        
+        if (liveNotebookSid != null && liveNotebookSid != 0) {
+          await _syncService.pushPages(onlyNotebookId: currentNotebookId);
+        }
+      } catch (e) {
+        debugPrint('🚨 [Sync] Falha no Catch-up offline: $e');
+      } finally {
+        isGlobalSyncing = false; safeNotify();
+      }
+
+      isCollaborationEnabled = true; SyncService.isCollaborationActive = true;
+
       if (liveNotebookSid != null && liveNotebookSid != 0) { 
         await _realtimeService.joinNotebookChannel(notebookId: liveNotebookSid!);
-        await initRealtimeCollaboration(); 
+        await initRealtimeCollaboration(pageIds: pageIds, alternativeTitle: alternativeTitle); 
         isRealtimeActive = true; 
         if (!suppressBroadcast && (currentUserRole == 'owner' || currentUserRole == 'editor')) {
           _realtimeService.broadcastLiveInvite(notebookId: liveNotebookSid!, myUserId: myUserId, senderName: "Um colega", targetUserIds: []); 
         }
       } 
-      else { isCollaborationEnabled = false; SyncService.isCollaborationActive = false; isRealtimeActive = false; } 
+      else { 
+        isCollaborationEnabled = false; SyncService.isCollaborationActive = false; isRealtimeActive = false; 
+        _permissionAlertController.add('Não foi possível sincronizar o caderno com a nuvem.');
+      } 
     }
     else { 
+      isCollaborationEnabled = false; SyncService.isCollaborationActive = false;
       if (liveNotebookSid != null) _realtimeService.leaveNotebookChannel(liveNotebookSid!); 
       _cancelRealtimeSubscriptions();
       chatMessages.clear(); unreadChatCount = 0; isLiveSessionActive = false; isRealtimeActive = false; onlineUsers = []; usersInLiveSession.clear(); userAudioLevels.clear();
@@ -1291,17 +1445,66 @@ class CanvasController extends ChangeNotifier {
 
   Future<void> addNewPage(bool isLandscape, {String paperSize = 'A4'}) async {
     int maxP = 0; for (var p in pages) if (p.pageNumber > maxP) maxP = p.pageNumber;
-    final np = LocalPage(notebookId: currentNotebookId, pageNumber: maxP + 1, isLandscape: isLandscape, paperSize: paperSize);
+    final int requestedPageNumber = maxP + 1;
+    final String clientId = const Uuid().v4();
 
-    // 🚀 INTEGRAR COM MOTOR DE UNDO
-    final action = AddPageAction(
-      pageClientId: np.clientId,
-      pageNumber: np.pageNumber,
-      isLandscape: isLandscape,
-      paperSize: paperSize,
-    );
+    // 🚀 SE ESTIVER ONLINE, VALIDAR NO SERVIDOR PRIMEIRO (CONSETIMENTO)
+    if (isRealtimeActive && liveNotebookSid != null) {
+      isGlobalSyncing = true; safeNotify();
+      try {
+        final response = await _apiService.post('/notebooks/$liveNotebookSid/pages', {
+          'client_id': clientId,
+          'page_number': requestedPageNumber,
+          'paper_size': paperSize,
+          'is_landscape': isLandscape,
+        });
 
-    // 🚀 ATUALIZAR LISTA LOCAL IMEDIATAMENTE (Feedback UI + Testes)
+        if (response.statusCode == 201 || response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          // O servidor pode ter atribuído um número diferente se houve conflito
+          final int finalPageNumber = data['page_number'];
+          final int serverId = data['id'];
+
+          final np = LocalPage(
+            id: serverId,
+            serverId: serverId,
+            notebookId: currentNotebookId, 
+            pageNumber: finalPageNumber, 
+            isLandscape: isLandscape, 
+            paperSize: paperSize,
+            clientId: clientId,
+            syncedWithCloud: 1,
+            updatedAt: DateTime.now().millisecondsSinceEpoch,
+          );
+
+          await _repository.savePage(np, liveNotebookSid);
+          await _repository.reindexPages(currentNotebookId);
+          
+          final fresh = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
+          pages = fresh;
+          
+          if (pageController.hasClients) {
+            final idx = pages.indexWhere((p) => p.clientId == clientId);
+            if (idx != -1) {
+              pageController.animateToPage(idx, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+            }
+          }
+          debugPrint('✅ [Canvas] Página criada com consentimento do servidor: $finalPageNumber');
+        } else {
+          _permissionAlertController.add('O servidor recusou a criação da folha.');
+        }
+      } catch (e) {
+        _permissionAlertController.add('Erro ao contactar o servidor para criar folha.');
+      } finally {
+        isGlobalSyncing = false; safeNotify();
+      }
+      return;
+    }
+
+    // --- LÓGICA OFFLINE (OTIMISTA) ---
+    final np = LocalPage(notebookId: currentNotebookId, pageNumber: requestedPageNumber, isLandscape: isLandscape, paperSize: paperSize, clientId: clientId);
+    final action = AddPageAction(pageClientId: np.clientId, pageNumber: np.pageNumber, isLandscape: isLandscape, paperSize: paperSize);
+
     if (!pages.any((p) => p.clientId == np.clientId)) {
       pages.add(np);
       pages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
@@ -1320,6 +1523,42 @@ class CanvasController extends ChangeNotifier {
   Future<void> deletePage(LocalPage pd) async {
     if (pd.id == null) return;
 
+    // 🚀 SE ESTIVER ONLINE, VALIDAR NO SERVIDOR (CONSETIMENTO)
+    if (isRealtimeActive && liveNotebookSid != null && pd.serverId != null) {
+      isGlobalSyncing = true; safeNotify();
+      try {
+        final response = await _apiService.post('/sync/pages/push', {
+          'pages': [{
+            'client_id': pd.clientId,
+            'is_deleted': 1,
+            'notebook_id': liveNotebookSid,
+            'updated_at': DateTime.now().millisecondsSinceEpoch,
+          }]
+        });
+
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          debugPrint('✅ [Canvas] Página apagada com consentimento do servidor.');
+          // O SyncService remoto (via WebSocket) enviará o evento structural e o alinhamento
+          // Mas vamos apagar localmente já para feedback instantâneo se o servidor confirmou
+          final database = db.AppDatabase.instance;
+          await (database.delete(database.pages)..where((t) => t.id.equals(pd.id!))).go();
+          await _repository.reindexPages(currentNotebookId);
+          
+          final fresh = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
+          pages = fresh;
+          _autoNavigateAfterDeletion();
+        } else {
+          _permissionAlertController.add('O servidor recusou apagar a folha.');
+        }
+      } catch (e) {
+        _permissionAlertController.add('Erro ao contactar o servidor para apagar folha.');
+      } finally {
+        isGlobalSyncing = false; safeNotify();
+      }
+      return;
+    }
+
+    // --- LÓGICA OFFLINE ---
     // 🚀 FEEDBACK VISUAL IMERSIVO: Notificar colegas ANTES de rasgar (se online)
     if (isRealtimeActive && liveNotebookSid != null) {
       _realtimeService.broadcastPageEvent(
@@ -1395,7 +1634,7 @@ class CanvasController extends ChangeNotifier {
 
     // 🚀 SYNC ON VIEW
     if (isCollaborationEnabled && liveNotebookSid != null && i < pages.length) {
-       SyncService().pullSpecificPage(liveNotebookSid!, pages[i].pageNumber);
+       _syncService.pullSpecificPage(liveNotebookSid!, pages[i].pageNumber);
     }
   }
   void jumpToPage(int i) { 
@@ -1776,6 +2015,30 @@ class CanvasController extends ChangeNotifier {
       // 🚀 Garantir sincronização final após movimento consolidado no histórico
       _broadcastSelectionMovement(target, isFinal: true);
     }
+    else if (action is AddPageAction) {
+      _realtimeService.broadcastPageEvent(
+        notebookId: liveNotebookSid!,
+        myUserId: myUserId,
+        pageData: {
+          'action': 'add',
+          'page_client_id': action.pageClientId,
+          'page_number': action.pageNumber,
+          'is_landscape': action.isLandscape,
+          'paper_size': action.paperSize,
+        }
+      );
+    }
+    else if (action is DeletePageAction) {
+      _realtimeService.broadcastPageEvent(
+        notebookId: liveNotebookSid!,
+        myUserId: myUserId,
+        pageData: {
+          'action': 'delete',
+          'page_client_id': action.pageClientId,
+          'page_number': action.pageNumber,
+        }
+      );
+    }
 
     // 🚀 Notificar todos sobre o novo Fingerprint da página após a ação
     _realtimeService.broadcastPageFingerprint(
@@ -2094,53 +2357,38 @@ class CanvasController extends ChangeNotifier {
     if (isGlobalSyncing) return;
     isGlobalSyncing = true; safeNotify();
     try {
-      debugPrint('🤝 [Sync] Iniciando Reconciliação Coletiva Coordenada...');
-      _usersReadyForPull.clear();
-      _isWaitingForOthersToPush = true;
-      _coordinatedSyncCompleter = Completer<void>();
+      debugPrint('[SYNC-LOG] 🔄 Alinhamento Estrutural iniciado...');
 
-      // 1. FASE DE UPLOAD: Todos os editores enviam os seus dados
+      // 1. FASE DE UPLOAD (Garante que o meu trabalho offline sobe antes de baixar)
       if (currentUserRole == 'owner' || currentUserRole == 'editor') {
-        debugPrint('📤 [Sync] Fase 1: Realizando PUSH local...');
-        await SyncService().pushPages(onlyNotebookId: currentNotebookId);
+        await _syncService.pushPages(onlyNotebookId: currentNotebookId);
       }
 
-      // 2. SINALIZAÇÃO: Avisar os outros que terminei o meu upload
-      if (isRealtimeActive && liveNotebookSid != null) {
-        debugPrint('📢 [Sync] Notificando colegas sobre PUSH concluído.');
-        _realtimeService.broadcastSyncPushFinished(notebookId: liveNotebookSid!, myUserId: myUserId);
-      }
+      // 2. FASE DE DOWNLOAD (O servidor agora é o orquestrador autoritativo)
+      debugPrint('📥 [Sync] Puxando estrutura autoritativa (Pull Total)...');
+      await _syncService.pullPages(forceFull: true, onlyNotebookId: liveNotebookSid);
 
-      // 3. AGUARDAR COORDENAÇÃO: Esperar que os outros também terminem
-      final otherOnlineUsers = onlineUsers.where((u) => u['id'].toString() != myUserId).map((u) => u['id'].toString()).toSet();
-      
-      if (otherOnlineUsers.isNotEmpty) {
-        debugPrint('[SYNC-LOG] ⏳ Aguardando PUSH de ${otherOnlineUsers.length} colegas: $otherOnlineUsers. (Eu sou: $myUserId)');
-        // 🚀 TIMEOUT AUMENTADO: 10 segundos para conexões lentas ou re-indexações pesadas
-        try {
-          await _coordinatedSyncCompleter!.future.timeout(const Duration(seconds: 10));
-          debugPrint('[SYNC-LOG] ✅ Todos os colegas confirmaram PUSH.');
-        } catch (_) {
-          final missing = otherOnlineUsers.difference(_usersReadyForPull);
-          debugPrint('[SYNC-LOG] ⚠️ Timeout na coordenação! Faltaram sinais de: $missing. Prosseguindo Pull de emergência...');
-        }
-      }
-
-      _isWaitingForOthersToPush = false;
-
-      // 4. FASE DE DOWNLOAD: Agora que todos enviaram, descarregamos a verdade fundida
-      debugPrint('📥 [Sync] Fase 2: Puxando alinhamento estrutural (Pull Total)...');
-      await SyncService().pullPages(forceFull: true, onlyNotebookId: liveNotebookSid);
-
-      // 5. ATUALIZAÇÃO VISUAL
+      // 3. ATUALIZAÇÃO VISUAL
       final fresh = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
       if (fresh.isNotEmpty) {
         pages = fresh;
-        // 🚀 FORÇAR ATUALIZAÇÃO VISUAL EM TODOS OS UTILIZADORES
         for (var p in pages) p.version++;
       }
       
-      debugPrint('✅ [Sync] Reconciliação coordenada concluída com sucesso.');
+      // 4. 🚀 HANDSHAKE DE FECHO: Pequena pausa e emissão de Fingerprint para validar
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (pages.isNotEmpty && currentPageIndex < pages.length) {
+        final cp = pages[currentPageIndex];
+        _realtimeService.broadcastPageFingerprint(
+          notebookId: liveNotebookSid!,
+          myUserId: myUserId,
+          pageNumber: cp.pageNumber,
+          fingerprint: cp.generateFingerprint(),
+          updatedAt: cp.updatedAt,
+        );
+      }
+
+      debugPrint('✅ [Sync] Alinhamento concluído com Handshake final.');
     } finally {
       isGlobalSyncing = false;
       safeNotify();
@@ -2167,9 +2415,15 @@ class CanvasController extends ChangeNotifier {
     await _repository.savePage(page, liveNotebookSid); 
     if (isRealtimeActive && liveNotebookSid != null && liveNotebookSid != 0) { 
       _autoSyncPushTimer?.cancel(); 
-      _autoSyncPushTimer = Timer(const Duration(milliseconds: 1500), () async {
-        debugPrint('[SYNC-LOG] ☁️ Salvando página ${page.pageNumber} na nuvem (Auto-Sync)...');
-        await _repository.savePageToCloud(page, liveNotebookSid!, myUserId);
+      // 🚀 FAST SYNC: Debounce reduzido para 800ms pois o Redis no backend aguenta a carga
+      _autoSyncPushTimer = Timer(const Duration(milliseconds: 800), () async {
+        debugPrint('[SYNC-LOG] ⚡ Persistindo folha ${page.pageNumber} via FastSync (Redis)...');
+        final success = await _syncService.fastPushPage(page, liveNotebookSid!, myUserId);
+        
+        if (!success) {
+          debugPrint('⚠️ [Sync] FastSync falhou. Tentando Fallback para Cloud Sync tradicional...');
+          await _repository.savePageToCloud(page, liveNotebookSid!, myUserId);
+        }
       }); 
     } 
   }
@@ -2412,6 +2666,127 @@ class CanvasController extends ChangeNotifier {
   }
   // -------------------------------------------------------------------------
 
+  Future<int?> cloneCurrentStateToNewNotebook(int? targetSubjectId, String title, {String? newSubjectName}) async {
+    try {
+      isGlobalSyncing = true; safeNotify();
+      final d = db.AppDatabase.instance;
+      
+      int subjectId;
+      
+      // 🚀 CRIAR NOVA DISCIPLINA SE SOLICITADO
+      if (newSubjectName != null && newSubjectName.isNotEmpty) {
+        final users = await d.select(d.users).get();
+        if (users.isEmpty) return null;
+        final int localUserId = users.first.id;
+        
+        subjectId = await d.into(d.subjects).insert(db.SubjectsCompanion.insert(
+          userId: localUserId,
+          clientId: drift.Value(const Uuid().v4()),
+          name: newSubjectName,
+          color: '#0F4C5C',
+          updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+        ));
+      } else {
+        subjectId = targetSubjectId ?? 0;
+        if (subjectId == 0) {
+          final all = await d.select(d.subjects).get();
+          if (all.isEmpty) return null;
+          subjectId = all.first.id;
+        }
+      }
+
+      // 1. Criar o novo caderno local com NOVO ClientID
+      final newNotebookClientId = const Uuid().v4();
+      final int newId = await (d.into(d.notebooks).insert(db.NotebooksCompanion.insert(
+        subjectId: drift.Value(subjectId),
+        clientId: drift.Value(newNotebookClientId),
+        title: '$title (Cópia)',
+        coverType: 'color',
+        color: drift.Value('#0F4C5C'),
+        lineType: drift.Value(liveLineType),
+        paperSize: drift.Value(currentPaperSize),
+        lineSpacing: drift.Value(liveLineSpacing),
+        templateType: drift.Value(currentTemplateType),
+        syncedWithCloud: const drift.Value(0),
+        updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+      )));
+
+      // 2. Copiar as páginas atuais em memória para o novo caderno (DEEP CLONE)
+      for (var page in pages) {
+        final newPageClientId = const Uuid().v4();
+        
+        // 🚀 CLONAR ELEMENTOS INTERNOS COM NOVOS IDs
+        final List<Stroke> clonedStrokes = page.strokes.map((s) => s.clone()..updatedAt = DateTime.now().millisecondsSinceEpoch).toList();
+        // Nota: O método .clone() e .toJson() precisam garantir que novos UUIDs possam ser injetados se necessário.
+        // Como o Stroke/TextBlock etc são modelos de dados, vamos gerar novos IDs aqui.
+        
+        final newPageId = await d.into(d.pages).insert(db.PagesCompanion.insert(
+          notebookId: newId,
+          pageNumber: page.pageNumber,
+          clientId: drift.Value(newPageClientId),
+          isLandscape: drift.Value(page.isLandscape ? 1 : 0),
+          paperSize: drift.Value(page.paperSize),
+          headerData: drift.Value(LocalPage.encodeMeta(page.title)),
+          footerData: drift.Value(LocalPage.encodeMeta(page.footer)),
+          updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+          syncedWithCloud: const drift.Value(0),
+        ));
+
+        // Inserir Strokes Clonados
+        for (var s in clonedStrokes) {
+          final newStrokeId = const Uuid().v4();
+          await d.into(d.canvasStrokes).insert(db.CanvasStrokesCompanion.insert(
+            clientStrokeId: newStrokeId,
+            pageId: newPageId,
+            strokeData: s.toJsonString(), // s ainda tem o ID antigo no JSON, mas o Drift usa a PK clientStrokeId
+            updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+            creatorId: drift.Value(myUserId),
+            syncedWithCloud: const drift.Value(0),
+          ));
+        }
+
+        // Inserir TextBlocks Clonados
+        for (var t in page.textBlocks) {
+          final newTextId = const Uuid().v4();
+          await d.into(d.canvasTextBlocks).insert(db.CanvasTextBlocksCompanion.insert(
+            clientTextId: newTextId,
+            pageId: newPageId,
+            textData: jsonEncode(t.toJson()),
+            updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+            creatorId: drift.Value(myUserId),
+            syncedWithCloud: const drift.Value(0),
+          ));
+        }
+        
+        // Inserir ImageBlocks Clonados
+        for (var img in page.imageBlocks) {
+          final newImgId = const Uuid().v4();
+          await d.into(d.canvasImageBlocks).insert(db.CanvasImageBlocksCompanion.insert(
+            clientImageId: newImgId,
+            pageId: newPageId,
+            imagePath: img.imagePath,
+            posX: img.position.dx,
+            posY: img.position.dy,
+            width: img.width,
+            height: img.height,
+            rotation: img.rotation,
+            updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+            creatorId: drift.Value(myUserId),
+            syncedWithCloud: const drift.Value(0),
+          ));
+        }
+      }
+
+      debugPrint('✅ [Canvas] Caderno clonado com sucesso: ID $newId com novos ClientIDs.');
+      return newId;
+    } catch (e) {
+      debugPrint('🚨 [Canvas] Erro ao clonar caderno: $e');
+      return null;
+    } finally {
+      isGlobalSyncing = false; safeNotify();
+    }
+  }
+
   Future<void> pickAndInsertImage(LocalPage p) async {
     final picker = ImagePicker(); final pf = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (pf != null) {
@@ -2434,5 +2809,8 @@ class CanvasController extends ChangeNotifier {
 }
 
 final canvasProvider = ChangeNotifierProvider.autoDispose<CanvasController>((ref) {
-  return CanvasController(ref.read(realtimeServiceProvider), repository: ref.read(canvasRepositoryProvider));
+  final realtime = ref.read(realtimeServiceProvider);
+  final syncService = ref.read(appSyncServiceProvider);
+  final repository = ref.read(canvasRepositoryProvider);
+  return CanvasController(realtime, syncService, repository: repository);
 });

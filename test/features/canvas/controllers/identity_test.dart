@@ -5,15 +5,19 @@ import 'package:flutter/services.dart';
 import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
-import 'package:caderno_digital_app/features/canvas/models/canvas_action_model.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/core/network/sync_service.dart';
 
 import 'canvas_controller_test.mocks.dart';
+
+class MockSyncService extends Mock implements SyncService {
+  @override
+  Future<void> pullSpecificPage(int notebookServerId, int pageNumber, {String? clientId, bool isRetry = false}) async {}
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // Mocks para plugins nativos
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
     const MethodChannel('xyz.luan/audioplayers'), (message) async => null);
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -24,20 +28,22 @@ void main() {
   late CanvasController controller;
   late MockCanvasRepository mockRepo;
   late MockRealtimeService mockRealtime;
+  late MockSyncService mockSync;
 
   setUp(() {
     mockRepo = MockCanvasRepository();
     mockRealtime = MockRealtimeService();
+    mockSync = MockSyncService();
     when(mockRealtime.onUsersUpdated).thenAnswer((_) => const Stream.empty());
+    when(mockRealtime.onNotebookStructureUpdated).thenAnswer((_) => const Stream.empty());
     when(mockRealtime.statusNotifier).thenReturn(ValueNotifier(RealtimeStatus.disconnected));
 
-    controller = CanvasController(mockRealtime, repository: mockRepo);
+    controller = CanvasController(mockRealtime, mockSync, repository: mockRepo);
     controller.currentUserRole = 'owner';
   });
 
   group('Page Identity Resilience', () {
     test('Eraser should target the correct page CID even if page numbers are duplicated', () async {
-      // 1. Criar duas páginas com o MESMO número (Simulando erro de sync ou race condition)
       final p1 = LocalPage(clientId: 'cid-1', notebookId: 1, pageNumber: 1, isLandscape: false);
       final p2 = LocalPage(clientId: 'cid-2', notebookId: 1, pageNumber: 1, isLandscape: false);
       
@@ -46,17 +52,12 @@ void main() {
       
       p1.imageBlocks.add(imgP1);
       p2.imageBlocks.add(imgP2);
-      
       controller.pages = [p1, p2];
 
-      // 2. Ação: Apagar na "segunda" página (que tem cid-2 e pageNumber 1)
       controller.eraseAtPosition(const Offset(15, 15), p2);
 
-      // 3. Verificar: Apenas o item da cid-2 deve estar apagado
-      expect(p2.imageBlocks.first.isDeleted, true, reason: 'Item na página alvo (cid-2) devia sumir');
-      expect(p1.imageBlocks.first.isDeleted, false, reason: 'Item na página 1 (mesmo número) não devia ser afetado');
-      
-      // Verificar que o controlador encontrou a página correta via CID
+      expect(p2.imageBlocks.first.isDeleted, true);
+      expect(p1.imageBlocks.first.isDeleted, false);
       expect(p2.version, 2);
       expect(p1.version, 1);
     });

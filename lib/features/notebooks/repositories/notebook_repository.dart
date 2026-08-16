@@ -120,6 +120,7 @@ class NotebookRepository {
     if (notebook.id == null) return;
     await (_db.update(_db.notebooks)..where((t) => t.id.equals(notebook.id!))).write(
       NotebooksCompanion(
+        subjectId: Value(notebook.subjectId), // 🚀 Permitir mover entre disciplinas
         title: Value(notebook.title),
         coverType: Value(notebook.coverType),
         color: Value(notebook.color),

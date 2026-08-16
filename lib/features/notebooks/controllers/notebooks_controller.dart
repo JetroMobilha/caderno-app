@@ -155,6 +155,11 @@ class NotebooksController extends Notifier<NotebooksState> {
     await _repository.deleteNotebook(notebook);
   }
 
+  Future<void> moveNotebook(Notebook notebook, int targetSubjectId) async {
+    final updated = notebook.copyWith(subjectId: targetSubjectId);
+    await _repository.updateNotebook(updated);
+  }
+
   Future<bool> shareNotebook(int notebookServerId, String email, String role) async {
     final bool success = await _repository.shareNotebookWithFriend(notebookId: notebookServerId, email: email, role: role);
     return success;

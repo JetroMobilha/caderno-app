@@ -13,12 +13,10 @@ import 'api_service.dart';
 
 class SyncService {
   final AppDatabase _db = AppDatabase.instance;
-  final ApiService _apiService = ApiService();
-  late final CanvasRepository _canvasRepository;
+  final ApiService _apiService;
+  final CanvasRepository _canvasRepository;
 
-  SyncService() {
-    _canvasRepository = CanvasRepository(_db);
-  }
+  SyncService(this._apiService, this._canvasRepository);
 
   static bool isCollaborationActive = false;
   static int? activeNotebookId; // 🚀 ID do caderno aberto no momento
@@ -395,7 +393,57 @@ class SyncService {
                 final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
                 
                 if (existing != null) {
-                  // 🚀 REGRA LWW
+                  // 🛡️ PROTEÇÃO CONTRA DELEÇÃO DE TRABALHO OFFLINE
+                  final bool isBeingDeletedOnServer = net['deleted_at'] != null;
+                  
+                  if (isBeingDeletedOnServer) {
+                    // Verificar se existem páginas locais "sujas" (não sincronizadas)
+                    final unsyncedPages = await (_db.select(_db.pages)..where((t) => t.notebookId.equals(existing.id) & t.syncedWithCloud.equals(0))).get();
+                    
+                    if (unsyncedPages.isNotEmpty) {
+                      debugPrint('🛡️ [Sync] O servidor apagou o caderno $sId, mas tens trabalho local pendente. Convertendo em CÓPIA LOCAL.');
+                      
+                      // 🚀 DEEP IDENTITY RESET: Garantir isolamento total do original apagado
+                      final String newNotebookClientId = const Uuid().v4();
+
+                      await _db.transaction(() async {
+                        // 1. Atualizar Caderno
+                        await (_db.update(_db.notebooks)..where((t) => t.id.equals(existing.id))).write(
+                          NotebooksCompanion(
+                            serverId: const Value(null), 
+                            clientId: Value(newNotebookClientId),
+                            title: Value('${existing.title} (Recuperado Offline)'),
+                            syncedWithCloud: const Value(0),
+                            updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+                          )
+                        );
+
+                        // 2. Atualizar todas as páginas e itens internos (Reset UUIDs)
+                        final allPages = await (_db.select(_db.pages)..where((t) => t.notebookId.equals(existing.id))).get();
+                        for (var p in allPages) {
+                          final String newPageCid = const Uuid().v4();
+                          await (_db.update(_db.pages)..where((t) => t.id.equals(p.id))).write(
+                            PagesCompanion(
+                              serverId: const Value(null),
+                              clientId: Value(newPageCid),
+                              syncedWithCloud: const Value(0),
+                            )
+                          );
+                          
+                          // Reset Strokes
+                          await (_db.update(_db.canvasStrokes)..where((t) => t.pageId.equals(p.id))).write(
+                            const CanvasStrokesCompanion(syncedWithCloud: Value(0))
+                          );
+                          // Nota: clientStrokeId é PK, se quisermos trocar o ID aqui teríamos que deletar e inserir.
+                          // Para simplificar, manter os IDs dos itens internos é OK se a Página e o Caderno forem novos,
+                          // pois o servidor não terá colisão (o par notebook+page+item será único).
+                        }
+                      });
+                      continue; 
+                    }
+                  }
+
+                  // 🚀 REGRA LWW (Normal)
                   if (serverTime > existing.updatedAt) {
                     await (_db.update(_db.notebooks)..where((t) => t.id.equals(existing.id))).write(
                       NotebooksCompanion(
@@ -1166,6 +1214,40 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('🚨 Erro PULL Recordings: $e');
+    }
+  }
+
+  // =========================================================================
+  // 🚀 6. SINCRONIZAÇÃO EM TEMPO REAL (HÍBRIDA - REDIS)
+  // =========================================================================
+  
+  /// Envia apenas os dados essenciais da página para persistência rápida no Redis.
+  /// Usado ao finalizar traços ou edições de texto ("End of Touch").
+  Future<bool> fastPushPage(pages_model.LocalPage page, int notebookServerId, String myUserId) async {
+    try {
+      final Map<String, dynamic> payload = await page.toJsonAsync();
+      
+      // Simplificação do payload para economizar banda (opcional, mas recomendado para tempo real)
+      // Aqui simplificamos os traços conforme o template definido no Controller
+      payload['stroke_data'] = page.strokes.map((s) => s.simplify(epsilon: 0.25).toJson()).toList();
+      payload['notebook_id'] = notebookServerId;
+      payload['sender_id'] = myUserId;
+      
+      // 🚀 SINALIZAR SE É UMA PÁGINA NOVA (ESTRUTURAL)
+      if (page.serverId == null) {
+        payload['is_new_page'] = true;
+      }
+
+      final response = await _apiService.post('/sync/realtime/update', {'page': payload});
+      
+      if (response.statusCode == 200) {
+        debugPrint('⚡ [FastSync] Dados da folha ${page.pageNumber} buffered no Redis.');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('🚨 [FastSync] Falha no push em tempo real: $e');
+      return false;
     }
   }
 }

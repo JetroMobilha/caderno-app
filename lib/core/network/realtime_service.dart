@@ -55,6 +55,8 @@ class RealtimeService {
   final _globalActionStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
   final _syncPushFinishedController = StreamController<Map<String, dynamic>>.broadcast();
   final _pageDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Sinal do servidor
+  final _notebookDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _notebookStructureStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -85,6 +87,8 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onGlobalActionReceived => _globalActionStreamController.stream; 
   Stream<Map<String, dynamic>> get onSyncPushFinished => _syncPushFinishedController.stream; 
   Stream<Map<String, dynamic>> get onPageDeleted => _pageDeletedStreamController.stream; // 🚀
+  Stream<Map<String, dynamic>> get onNotebookDeleted => _notebookDeletedStreamController.stream; // 🚀
+  Stream<Map<String, dynamic>> get onNotebookStructureUpdated => _notebookStructureStreamController.stream; // 🚀
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
@@ -262,25 +266,14 @@ class RealtimeService {
       
       debugPrint('🔴 [Realtime] EVENTO MEMBER_REMOVED DETECTADO: $uid | Data: $rawData');
 
-      // 🚀 RECUPERAÇÃO DE ID RESILIENTE
+      // 🚀 RECUPERAÇÃO DE ID MELHORADA PARA REVERB
       if (uid == null && rawData != null) {
-        if (rawData is Map) {
-          uid = rawData['user_id']?.toString() ?? rawData['id']?.toString();
-        } else if (rawData is String && rawData.isNotEmpty) {
-          if (rawData.startsWith('{')) {
-            final dataMap = _safeParse(rawData);
-            uid = dataMap['user_id']?.toString() ?? dataMap['id']?.toString();
-          } else {
-            uid = rawData;
-          }
-        } else if (rawData is int) {
-          uid = rawData.toString();
-        }
+        final parsedData = _safeParse(rawData);
+        uid = parsedData['user_id']?.toString() ?? parsedData['id']?.toString();
       }
       
       if (uid != null) {
         _estudantesNaSala.remove(uid);
-        _estudantesNaSala.removeWhere((key, value) => key == uid || value['id']?.toString() == uid);
         _broadcastUsersList();
       }
     });
@@ -315,6 +308,8 @@ class RealtimeService {
     _bindEvent('client-global-action', (event) => _globalActionStreamController.add(_safeParse(event.data))); 
     _bindEvent('client-sync-push-finished', (event) => _syncPushFinishedController.add(_safeParse(event.data)));
     _bindEvent('page.deleted', (event) => _pageDeletedStreamController.add(_safeParse(event.data))); // 🚀
+    _bindEvent('notebook.deleted', (event) => _notebookDeletedStreamController.add(_safeParse(event.data))); // 🚀
+    _bindEvent('notebook.structure.updated', (event) => _notebookStructureStreamController.add(_safeParse(event.data))); // 🚀
     _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
 
     _notebookChannel!.subscribe();

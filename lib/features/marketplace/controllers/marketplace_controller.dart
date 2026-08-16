@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/network/api_service.dart';
-import '../../../core/network/sync_service.dart';
+import '../../../core/network/sync_provider.dart'; // 🚀 Novo
 import '../../../core/database/app_database.dart' hide Notebook;
 import '../../auth/controllers/auth_controller.dart';
 import '../../notebooks/controllers/notebooks_controller.dart';
@@ -106,7 +104,7 @@ class MarketplaceNotifier extends StateNotifier<MarketplaceState> {
     try {
       // 1. Primeiro garantimos que temos as matérias atualizadas da nuvem
       // (Para garantir que a matéria "Matérias Adquiridas" existe localmente)
-      await SyncService().pullSubjects();
+      await ref.read(appSyncServiceProvider).pullSubjects();
 
       // 2. Chamar a API de aquisição
       final clonedNotebook = await _repository.acquireNotebook(serverId);

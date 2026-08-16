@@ -182,11 +182,16 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         );
                       } else if (value == 'duplicate') {
                          _confirmDuplicate(context, ref, notebook, activeSubject);
+                      } else if (value == 'move') {
+                         _showMoveNotebookDialog(context, ref, notebook);
                       }
                     },
                     itemBuilder: (context) => [
                       if (notebook.role == 'owner' || notebook.role == 'editor')
                         PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
+
+                      if (notebook.role == 'owner')
+                        PopupMenuItem(value: 'move', child: Row(children: [const Icon(Icons.drive_file_move_outlined, size: 18, color: Colors.blueGrey), const SizedBox(width: 8), Text('Mover', style: GoogleFonts.inter(fontSize: 13))])),
 
                       // 🌟 A MAGIA DA PARTILHA AQUI (Só o Dono pode partilhar)
                       if (notebook.role == 'owner')
@@ -547,6 +552,73 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
             child: const Text('Sim, Copiar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showMoveNotebookDialog(BuildContext context, WidgetRef ref, Notebook notebook) {
+    int? selectedSubId;
+    final subjects = ref.read(subjectsProvider);
+
+    if (subjects.isNotEmpty) {
+      selectedSubId = subjects.firstWhere((s) => s.id != notebook.subjectId, orElse: () => subjects.first).id;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateModal) => AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.drive_file_move_outlined, color: Colors.blueGrey),
+              const SizedBox(width: 10),
+              Text('Mover Caderno', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Para qual disciplina desejas mover "${notebook.title}"?', style: GoogleFonts.inter(fontSize: 14)),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: selectedSubId,
+                    isExpanded: true,
+                    items: subjects.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                    onChanged: (val) => setStateModal(() => selectedSubId = val),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+              onPressed: () async {
+                if (selectedSubId != null) {
+                  await ref.read(notebooksProvider.notifier).moveNotebook(notebook, selectedSubId!);
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Caderno movido com sucesso! 🚀'), backgroundColor: Colors.green),
+                    );
+                  }
+                }
+              },
+              child: const Text('Mover Agora', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -15,6 +15,8 @@ class SharedNotebookRepository {
 
     query.where(_db.notebookUser.userId.equals(currentUserId));
     query.where(_db.notebooks.isDeleted.equals(0));
+    // 🚀 FILTRAR APENAS PARTILHADOS: Remover cadernos onde sou o dono
+    query.where(_db.notebookUser.role.isNotValue('owner'));
     
     // Simular o GROUP BY n.id para evitar duplicados se o usuário tiver múltiplas roles
     query.groupBy([_db.notebooks.id]);
@@ -24,9 +26,12 @@ class SharedNotebookRepository {
 
     return rows.map((row) {
       final n = row.readTable(_db.notebooks);
+      final pivot = row.readTable(_db.notebookUser); // 🚀 Ler o papel real do pivô
+      
       return Notebook(
         id: n.id,
         serverId: n.serverId,
+        clientId: n.clientId,
         subjectId: n.subjectId,
         title: n.title,
         coverType: n.coverType,
@@ -42,6 +47,9 @@ class SharedNotebookRepository {
         isDeleted: n.isDeleted,
         syncedWithCloud: n.syncedWithCloud,
         updatedAt: n.updatedAt,
+        role: pivot.role, // 🚀 PRIORIDADE: O papel da partilha
+        alternativeTitle: n.alternativeTitle,
+        sharingType: n.sharingType ?? 'full',
       );
     }).toList();
   }
@@ -56,15 +64,20 @@ class SharedNotebookRepository {
 
     query.where(_db.notebookUser.userId.equals(currentUserId));
     query.where(_db.notebooks.isDeleted.equals(0));
+    // 🚀 FILTRAR APENAS PARTILHADOS: Remover cadernos onde sou o dono
+    query.where(_db.notebookUser.role.isNotValue('owner'));
     
     query.groupBy([_db.notebooks.id]);
     query.orderBy([OrderingTerm(expression: _db.notebooks.updatedAt, mode: OrderingMode.desc)]);
 
     return query.watch().map((rows) => rows.map((row) {
           final n = row.readTable(_db.notebooks);
+          final pivot = row.readTable(_db.notebookUser); // 🚀 Ler o papel real do pivô
+          
           return Notebook(
             id: n.id,
             serverId: n.serverId,
+            clientId: n.clientId,
             subjectId: n.subjectId,
             title: n.title,
             coverType: n.coverType,
@@ -80,6 +93,9 @@ class SharedNotebookRepository {
             isDeleted: n.isDeleted,
             syncedWithCloud: n.syncedWithCloud,
             updatedAt: n.updatedAt,
+            role: pivot.role, // 🚀 PRIORIDADE: O papel da partilha
+            alternativeTitle: n.alternativeTitle,
+            sharingType: n.sharingType ?? 'full',
           );
         }).toList());
   }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/theme/app_theme.dart'; // 🚀 Importa o tema unificado
 import 'package:caderno_digital_app/features/auth/views/splash_screen.dart';
+import 'package:caderno_digital_app/features/shared/widgets/notification_overlay.dart';
 import 'package:flutter/foundation.dart'; // 🚀 Para kIsWeb
 import 'dart:io';
 
@@ -43,6 +44,7 @@ class MyApp extends ConsumerWidget {
       title: 'Caderno Digital',
       debugShowCheckedModeBanner: false,
       theme: dynamicTheme, // Injeta o motor dinâmico
+      builder: (context, child) => NotificationOverlay(child: child!),
       home: const SplashScreen(),
     );
   }

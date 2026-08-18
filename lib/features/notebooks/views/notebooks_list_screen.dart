@@ -14,7 +14,7 @@ import 'package:caderno_digital_app/features/canvas/views/canvas_screen.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 import 'package:caderno_digital_app/features/notebooks/widgets/notebook_cover.dart';
-import 'package:caderno_digital_app/core/theme/app_profile.dart'; // 🚀
+import 'package:caderno_digital_app/core/theme/app_profile.dart';
 
 class NotebooksListScreen extends ConsumerStatefulWidget {
   const NotebooksListScreen({super.key});
@@ -171,53 +171,84 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                                         _confirmDuplicate(context, ref, notebook, activeSubject);
                                       } else if (value == 'move') {
                                         _showMoveNotebookDialog(context, ref, notebook);
+                                      } else if (value == 'leave') {
+                                        _confirmLeave(context, ref, notebook);
                                       }
                                     },
-                                    itemBuilder: (context) => [
-                                      if (notebook.role == 'owner' || notebook.role == 'editor')
-                                        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
-                                      if (notebook.role == 'owner')
-                                        PopupMenuItem(value: 'move', child: Row(children: [const Icon(Icons.drive_file_move_outlined, size: 18, color: Colors.blueGrey), const SizedBox(width: 8), Text('Mover', style: GoogleFonts.inter(fontSize: 13))])),
-                                      if (notebook.role == 'owner')
-                                        PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
-                                      PopupMenuItem(
-                                        value: 'duplicate',
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.copy_rounded, size: 18, color: Colors.teal),
-                                            const SizedBox(width: 8),
-                                            Text('Criar Minha Cópia', style: GoogleFonts.inter(fontSize: 13, color: Colors.teal)),
-                                          ],
-                                        ),
-                                      ),
-                                      if (notebook.role == 'owner')
+                                    itemBuilder: (context) {
+                                      // 🚀 VERIFICAÇÃO DE SEGURANÇA REFORÇADA
+                                      // Um caderno é considerado partilhado se estivermos na aba de partilhados (subjectId == -1)
+                                      // ou se a sua role local não for 'owner'.
+                                      final bool isSharedTab = activeSubject?.id == -1;
+                                      final String currentRole = (notebook.role).toLowerCase().trim();
+                                      
+                                      final bool isOwner = !isSharedTab && currentRole == 'owner';
+                                      final bool isEditor = currentRole == 'editor';
+                                      
+                                      debugPrint('🔍 [Menu] Caderno: ${notebook.title} | TabShared: $isSharedTab | Role: $currentRole | ResultOwner: $isOwner');
+
+                                      return [
+                                        // 📝 Editar: Proprietário ou Editor
+                                        if (isOwner || isEditor)
+                                          PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
+                                        
+                                        // 🚚 Mover: APENAS Proprietário Real
+                                        if (isOwner)
+                                          PopupMenuItem(value: 'move', child: Row(children: [const Icon(Icons.drive_file_move_outlined, size: 18, color: Colors.blueGrey), const SizedBox(width: 8), Text('Mover', style: GoogleFonts.inter(fontSize: 13))])),
+                                        
+                                        // 🤝 Partilhar: Proprietário ou Editor
+                                        if (isOwner || isEditor)
+                                          PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
+                                        
+                                        // 👯 Duplicar: TODOS podem criar a sua cópia
                                         PopupMenuItem(
-                                          value: 'publish',
+                                          value: 'duplicate',
                                           child: Row(
                                             children: [
-                                              Icon(Icons.storefront_rounded, size: 18, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.primary),
+                                              const Icon(Icons.copy_rounded, size: 18, color: Colors.teal),
                                               const SizedBox(width: 8),
-                                              Text(
-                                                notebook.isPublished == 1 ? 'Loja (Publicado) 🟢' : 'Publicar na Loja 🛒',
-                                                style: GoogleFonts.inter(fontSize: 13, fontWeight: notebook.isPublished == 1 ? FontWeight.bold : FontWeight.normal, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.textDark),
-                                              ),
+                                              Text(isOwner ? 'Duplicar Caderno' : 'Criar Minha Cópia', style: GoogleFonts.inter(fontSize: 13, color: Colors.teal)),
                                             ],
                                           ),
                                         ),
-                                      if (notebook.isPublished == 1)
-                                        PopupMenuItem(
-                                          value: 'view_store',
-                                          child: Row(
-                                            children: [
-                                              const Icon(Icons.share_arrival_time_rounded, size: 18, color: Color(0xFF27AE60)),
-                                              const SizedBox(width: 8),
-                                              Text('Link da Loja 🔗', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))),
-                                            ],
+                                        
+                                        // 🛒 Publicar: APENAS Proprietário Real
+                                        if (isOwner)
+                                          PopupMenuItem(
+                                            value: 'publish',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.storefront_rounded, size: 18, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.primary),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  notebook.isPublished == 1 ? 'Loja (Publicado) 🟢' : 'Publicar na Loja 🛒',
+                                                  style: GoogleFonts.inter(fontSize: 13, fontWeight: notebook.isPublished == 1 ? FontWeight.bold : FontWeight.normal, color: notebook.isPublished == 1 ? AppColors.accent : AppColors.textDark),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                      if (notebook.role == 'owner')
-                                        PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
-                                    ],
+                                        
+                                        if (notebook.isPublished == 1)
+                                          PopupMenuItem(
+                                            value: 'view_store',
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.share_arrival_time_rounded, size: 18, color: Color(0xFF27AE60)),
+                                                const SizedBox(width: 8),
+                                                Text('Link da Loja 🔗', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))),
+                                              ],
+                                            ),
+                                          ),
+                                        
+                                        // 👋 Sair: Disponível para qualquer um que não seja o Owner (na aba partilhados ou role convidada)
+                                        if (!isOwner)
+                                          PopupMenuItem(value: 'leave', child: Row(children: [const Icon(Icons.logout_rounded, size: 18, color: Colors.orangeAccent), const SizedBox(width: 8), Text('Sair do Caderno', style: GoogleFonts.inter(fontSize: 13, color: Colors.orangeAccent))])),
+                                        
+                                        // 🧨 Apagar: APENAS Proprietário Real
+                                        if (isOwner)
+                                          PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
+                                      ];
+                                    },
                                   ),
                                 ),
                               ),
@@ -279,17 +310,11 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
     );
   }
 
-  // =========================================================================
-  // 📓 MODAL HÍBRIDO (CAMALEÓNICO): ALTERNA ENTRE CRIAR OU EDITAR CADERNOS
-  // =========================================================================
   void _showNotebookModal(BuildContext context, WidgetRef ref, Subject? activeSubject, Color themeColor, {required bool isEditing, Notebook? notebookToEdit}) {
     final titleController = TextEditingController(text: isEditing ? notebookToEdit!.title : '');
     final formKey = GlobalKey<FormState>();
-
     String selectedLineType = isEditing ? (notebookToEdit!.lineType) : 'ruled';
     String selectedTemplate = isEditing ? (notebookToEdit!.templateType) : 'study';
-
-    // 🎨 As 16 cores premium unificadas da app
     final List<String> availableColors = [
       '#8B0000', '#0F4C5C', '#1F4E79', '#3F51B5',
       '#6C3483', '#9B59B6', '#D81B60', '#E91E63',
@@ -297,8 +322,6 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
       '#27AE60', '#16A085', '#4E342E', '#607D8B',
     ];
     String pickedColorHex = isEditing ? (notebookToEdit!.color ?? '#8B0000') : '#8B0000';
-
-    final Map<String, String> lineTypes = {'ruled': 'Pautado', 'grid': 'Quadriculado', 'blank': 'Liso / Em Branco'};
 
     showDialog(
       context: context,
@@ -338,7 +361,6 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                   const SizedBox(height: 20),
                   Text('Propósito do Caderno:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: themeColor)),
                   const SizedBox(height: 12),
-                  // 🚀 SELETOR DE TEMPLATES (CARDS VISUAIS)
                   Row(
                     children: [
                       _buildTemplateCard(
@@ -346,7 +368,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'study';
-                            selectedLineType = 'ruled'; // Padrão oculto
+                            selectedLineType = 'ruled';
                           });
                         },
                       ),
@@ -356,7 +378,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'technical';
-                            selectedLineType = 'grid'; // Pré-configuração
+                            selectedLineType = 'grid';
                           });
                         },
                       ),
@@ -366,7 +388,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'formal';
-                            selectedLineType = 'blank'; // Pré-configuração
+                            selectedLineType = 'blank';
                           });
                         },
                       ),
@@ -376,7 +398,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'creative';
-                            selectedLineType = 'blank'; // Pré-configuração
+                            selectedLineType = 'blank';
                           });
                         },
                       ),
@@ -404,7 +426,6 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
               ),
             ),
           ),
-          actionsPadding: const EdgeInsets.only(right: 20, bottom: 20),
           actions: [
             TextButton(onPressed: () => Navigator.pop(contextDialog), child: const Text('Cancelar', style: TextStyle(color: Colors.black45))),
             ElevatedButton(
@@ -429,7 +450,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                       coverType: 'color',
                       color: pickedColorHex,
                       lineType: selectedLineType,
-                      paperSize: 'A4', // Default, mas agora definido por folha
+                      paperSize: 'A4',
                       templateType: selectedTemplate,
                     );
 
@@ -507,31 +528,98 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
   }
 
   void _confirmDuplicate(BuildContext context, WidgetRef ref, Notebook notebook, Subject? activeSubject) {
+    int? selectedSubId;
+    final subjects = ref.read(subjectsProvider).where((s) => s.id != -1).toList();
+
+    if (subjects.isNotEmpty) {
+      // Pré-selecionar a disciplina atual se não for a aba de partilhados
+      selectedSubId = (activeSubject != null && activeSubject.id != -1) 
+          ? activeSubject.id 
+          : subjects.first.id;
+    }
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Criar Cópia?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.teal)),
-        content: Text('Desejas criar uma cópia local editável do caderno "${notebook.title}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('A criar a tua cópia... ⏳'), duration: Duration(seconds: 1)),
-              );
-              await ref.read(notebooksProvider.notifier).duplicateNotebook(notebook, activeSubject?.id ?? 0);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cópia criada com sucesso! 📓'), backgroundColor: Colors.green),
-                );
-              }
-            },
-            child: const Text('Sim, Copiar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateModal) => AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.copy_rounded, color: Colors.teal),
+              const SizedBox(width: 10),
+              Text(notebook.role == 'owner' ? 'Duplicar Caderno' : 'Criar Minha Cópia', 
+                style: GoogleFonts.lora(fontWeight: FontWeight.bold)
+              ),
+            ],
           ),
-        ],
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Onde desejas guardar a cópia de "${notebook.title}"?', style: GoogleFonts.inter(fontSize: 14)),
+              const SizedBox(height: 20),
+              Text('Disciplina de Destino:', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: selectedSubId,
+                    isExpanded: true,
+                    items: subjects.map((s) => DropdownMenuItem(
+                      value: s.id, 
+                      child: Text(s.name, style: GoogleFonts.inter(fontSize: 14))
+                    )).toList(),
+                    onChanged: (val) => setStateModal(() => selectedSubId = val),
+                  ),
+                ),
+              ),
+              if (notebook.role != 'owner') ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.privacy_tip_outlined, size: 16, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('Apenas as folhas autorizadas pelo dono serão copiadas.', style: GoogleFonts.inter(fontSize: 11, color: Colors.amber.shade900))),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: selectedSubId == null ? null : () async {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('A criar a tua cópia... ⏳'), duration: Duration(seconds: 2)),
+                );
+                
+                await ref.read(notebooksProvider.notifier).duplicateNotebook(notebook, selectedSubId!);
+                
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Cópia criada com sucesso! 📓'), backgroundColor: Colors.green),
+                  );
+                }
+              },
+              child: const Text('Confirmar Cópia', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -599,6 +687,33 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmLeave(BuildContext context, WidgetRef ref, Notebook notebook) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Sair do Caderno?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
+        content: Text('Deixarás de ter acesso a "${notebook.title}". Terás de pedir um novo convite ao dono para voltar.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await ref.read(notebooksProvider.notifier).leaveNotebook(notebook);
+              if (success && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Removeste o teu acesso com sucesso. 👋'), backgroundColor: Colors.blueGrey),
+                );
+              }
+            },
+            child: const Text('Sair Agora', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

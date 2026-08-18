@@ -158,7 +158,7 @@ class _NotebookCoverState extends State<NotebookCover> with SingleTickerProvider
                             ],
                           ),
                           child: Text(
-                            widget.notebook.title,
+                            widget.notebook.alternativeTitle ?? widget.notebook.title,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.lora(

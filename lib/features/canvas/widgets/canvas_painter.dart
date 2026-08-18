@@ -257,7 +257,9 @@ class RemotePointersPainter extends CustomPainter {
       canvas.drawPath(path, paint);
 
       final String label = user['name'] ?? 'Colega';
+      final String? tool = data['tool'];
 
+      // 1. Configurar o Texto do Nome
       final textPainter = TextPainter(
         text: TextSpan(
           text: label,
@@ -266,11 +268,53 @@ class RemotePointersPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       );
       textPainter.layout();
-      
-      final rect = Rect.fromLTWH(pos.dx + 14, pos.dy + 14, textPainter.width + 8, textPainter.height + 4);
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), paint);
-      textPainter.paint(canvas, pos + const Offset(18, 16));
+
+      // 2. Configurar o Ícone da Ferramenta
+      IconData? toolIcon;
+      if (tool != null) {
+        toolIcon = _getToolIcon(tool);
+      }
+
+      final iconPainter = toolIcon != null ? TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(toolIcon.codePoint),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.9),
+            fontSize: 10,
+            fontFamily: toolIcon.fontFamily,
+            package: toolIcon.fontPackage,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      ) : null;
+      iconPainter?.layout();
+
+      // 3. Calcular dimensões do balão
+      final double iconWidth = iconPainter != null ? iconPainter.width + 4 : 0;
+      final double totalWidth = textPainter.width + iconWidth + 12;
+      final double totalHeight = textPainter.height + 6;
+
+      final rect = Rect.fromLTWH(pos.dx + 14, pos.dy + 14, totalWidth, totalHeight);
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), paint);
+
+      // 4. Pintar Ícone e Texto
+      if (iconPainter != null) {
+        iconPainter.paint(canvas, pos + const Offset(18, 16));
+      }
+      textPainter.paint(canvas, pos + Offset(18 + iconWidth, 17));
     });
+  }
+
+  IconData _getToolIcon(String toolName) {
+    switch (toolName) {
+      case 'draw': return Icons.edit_rounded;
+      case 'text': return Icons.text_fields_rounded;
+      case 'eraser': return Icons.auto_fix_normal_rounded;
+      case 'select': return Icons.ads_click_rounded;
+      case 'insertImage':
+      case 'imageEdit': return Icons.image_rounded;
+      default: return Icons.pan_tool_alt_rounded;
+    }
   }
 
   @override

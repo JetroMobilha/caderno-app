@@ -16,16 +16,12 @@ class NotebookRepository {
   // 📚 LISTAR CADERNOS ATIVOS DA DISCIPLINA (Com Blindagem de ID)
   // =========================================================================
   Future<List<Notebook>> getNotebooksBySubject(int subjectId, int? subjectServerId) async {
-    // 🚀 BLINDAGEM ANTI-FANTASMA: Descobre o ID local real da matéria!
     int realLocalSubjectId = subjectId;
     if (subjectServerId != null) {
       final subQuery = await (_db.select(_db.subjects)..where((t) => t.serverId.equals(subjectServerId))).getSingleOrNull();
-      if (subQuery != null) {
-        realLocalSubjectId = subQuery.id;
-      }
+      if (subQuery != null) realLocalSubjectId = subQuery.id;
     }
 
-    // Agora procura com absoluta certeza na tabela de cadernos
     final rows = await (_db.select(_db.notebooks)
           ..where((t) => t.isDeleted.equals(0) & t.subjectId.equals(realLocalSubjectId))
           ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
@@ -34,7 +30,7 @@ class NotebookRepository {
     return rows.map((row) => Notebook(
       id: row.id,
       serverId: row.serverId,
-      clientId: row.clientId, // 🆔 Restaurado do banco
+      clientId: row.clientId,
       subjectId: row.subjectId,
       title: row.title,
       coverType: row.coverType,
@@ -51,6 +47,9 @@ class NotebookRepository {
       isDeleted: row.isDeleted,
       syncedWithCloud: row.syncedWithCloud,
       updatedAt: row.updatedAt,
+      role: row.role ?? 'owner',
+      alternativeTitle: row.alternativeTitle,
+      sharingType: row.sharingType ?? 'full',
     )).toList();
   }
 
@@ -65,7 +64,7 @@ class NotebookRepository {
         .map((rows) => rows.map((row) => Notebook(
               id: row.id,
               serverId: row.serverId,
-              clientId: row.clientId, // 🆔 Restaurado do banco
+              clientId: row.clientId,
               subjectId: row.subjectId,
               title: row.title,
               coverType: row.coverType,
@@ -82,6 +81,9 @@ class NotebookRepository {
               isDeleted: row.isDeleted,
               syncedWithCloud: row.syncedWithCloud,
               updatedAt: row.updatedAt,
+              role: row.role ?? 'owner',
+              alternativeTitle: row.alternativeTitle,
+              sharingType: row.sharingType ?? 'full',
             )).toList());
   }
 
@@ -91,7 +93,7 @@ class NotebookRepository {
   Future<int> insertNotebook(Notebook notebook) async {
     final companion = NotebooksCompanion.insert(
       serverId: Value(notebook.serverId),
-      clientId: Value(notebook.clientId), // 🆔 Persistindo identidade única (Corrigido para Value)
+      clientId: Value(notebook.clientId),
       subjectId: Value(notebook.subjectId),
       title: notebook.title,
       coverType: notebook.coverType,
@@ -109,7 +111,6 @@ class NotebookRepository {
       isDeleted: const Value(0),
       updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
     );
-
     return await _db.into(_db.notebooks).insert(companion);
   }
 
@@ -120,7 +121,7 @@ class NotebookRepository {
     if (notebook.id == null) return;
     await (_db.update(_db.notebooks)..where((t) => t.id.equals(notebook.id!))).write(
       NotebooksCompanion(
-        subjectId: Value(notebook.subjectId), // 🚀 Permitir mover entre disciplinas
+        subjectId: Value(notebook.subjectId),
         title: Value(notebook.title),
         coverType: Value(notebook.coverType),
         color: Value(notebook.color),
@@ -179,7 +180,6 @@ class NotebookRepository {
     }
   }
 
-  // A. Procurar e-mails para sugestões
   Future<List<String>> searchEmails(String query) async {
     try {
       final response = await _apiService.get('/users/search?q=$query');
@@ -193,13 +193,13 @@ class NotebookRepository {
     return [];
   }
 
-  // B. Puxar colaboradores guardados na nuvem
   Future<List<Map<String, String>>> fetchCollaborators(int notebookId) async {
     try {
       final response = await _apiService.get('/notebooks/$notebookId/collaborators');
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((c) => {
+          'id': c['id'].toString(),
           'name': c['name'] as String,
           'email': c['email'] as String,
           'role': c['role'] as String,
@@ -211,18 +211,50 @@ class NotebookRepository {
     return [];
   }
 
-  // C. Deletar permissão na nuvem
-  // D. Buscar status da sessão
+  Future<bool> removeShareWithFriend({required int notebookId, required String email}) async {
+    try {
+      final response = await _apiService.deleteWithBody('/notebooks/$notebookId/share', {
+        'email': email,
+      });
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('🚨 Erro ao remover partilha: $e');
+      return false;
+    }
+  }
+
+  Future<bool> leaveSharedNotebook(int notebookId, String myEmail) async {
+    return await removeShareWithFriend(notebookId: notebookId, email: myEmail);
+  }
+
   Future<Map<String, dynamic>?> fetchSessionStatus(int notebookId) async {
     try {
       final response = await _apiService.get('/notebooks/$notebookId/session/status');
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
+      if (response.statusCode == 200) return jsonDecode(response.body);
     } catch (e) {
       debugPrint('🚨 Erro ao buscar status da sessão: $e');
     }
     return null;
+  }
+
+  Future<bool> updateSessionSettings({
+    required int notebookId,
+    required String sharingType,
+    String? alternativeTitle,
+    List<int>? pageIds,
+  }) async {
+    try {
+      final payload = {
+        'sharing_type': sharingType,
+        if (alternativeTitle != null) 'alternative_title': alternativeTitle,
+        if (pageIds != null) 'page_ids': pageIds,
+      };
+      final response = await _apiService.post('/notebooks/$notebookId/session/update-settings', payload);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('🚨 Erro ao guardar configurações: $e');
+      return false;
+    }
   }
 }
 

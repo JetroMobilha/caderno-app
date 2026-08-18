@@ -1434,6 +1434,39 @@ class $NotebooksTable extends Notebooks
         requiredDuringInsert: false,
         defaultValue: const Constant('study_group'),
       );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('owner'),
+  );
+  static const VerificationMeta _alternativeTitleMeta = const VerificationMeta(
+    'alternativeTitle',
+  );
+  @override
+  late final GeneratedColumn<String> alternativeTitle = GeneratedColumn<String>(
+    'alternative_title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sharingTypeMeta = const VerificationMeta(
+    'sharingType',
+  );
+  @override
+  late final GeneratedColumn<String> sharingType = GeneratedColumn<String>(
+    'sharing_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('full'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1457,6 +1490,9 @@ class $NotebooksTable extends Notebooks
     version,
     templateType,
     collaborationMode,
+    role,
+    alternativeTitle,
+    sharingType,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1615,6 +1651,30 @@ class $NotebooksTable extends Notebooks
         ),
       );
     }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    }
+    if (data.containsKey('alternative_title')) {
+      context.handle(
+        _alternativeTitleMeta,
+        alternativeTitle.isAcceptableOrUnknown(
+          data['alternative_title']!,
+          _alternativeTitleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sharing_type')) {
+      context.handle(
+        _sharingTypeMeta,
+        sharingType.isAcceptableOrUnknown(
+          data['sharing_type']!,
+          _sharingTypeMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1708,6 +1768,18 @@ class $NotebooksTable extends Notebooks
         DriftSqlType.string,
         data['${effectivePrefix}collaboration_mode'],
       )!,
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+      alternativeTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}alternative_title'],
+      ),
+      sharingType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sharing_type'],
+      )!,
     );
   }
 
@@ -1739,6 +1811,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   final int version;
   final String templateType;
   final String collaborationMode;
+  final String role;
+  final String? alternativeTitle;
+  final String sharingType;
   const Notebook({
     required this.id,
     this.serverId,
@@ -1761,6 +1836,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     required this.version,
     required this.templateType,
     required this.collaborationMode,
+    required this.role,
+    this.alternativeTitle,
+    required this.sharingType,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1806,6 +1884,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     map['version'] = Variable<int>(version);
     map['template_type'] = Variable<String>(templateType);
     map['collaboration_mode'] = Variable<String>(collaborationMode);
+    map['role'] = Variable<String>(role);
+    if (!nullToAbsent || alternativeTitle != null) {
+      map['alternative_title'] = Variable<String>(alternativeTitle);
+    }
+    map['sharing_type'] = Variable<String>(sharingType);
     return map;
   }
 
@@ -1852,6 +1935,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       version: Value(version),
       templateType: Value(templateType),
       collaborationMode: Value(collaborationMode),
+      role: Value(role),
+      alternativeTitle: alternativeTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(alternativeTitle),
+      sharingType: Value(sharingType),
     );
   }
 
@@ -1882,6 +1970,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       version: serializer.fromJson<int>(json['version']),
       templateType: serializer.fromJson<String>(json['templateType']),
       collaborationMode: serializer.fromJson<String>(json['collaborationMode']),
+      role: serializer.fromJson<String>(json['role']),
+      alternativeTitle: serializer.fromJson<String?>(json['alternativeTitle']),
+      sharingType: serializer.fromJson<String>(json['sharingType']),
     );
   }
   @override
@@ -1909,6 +2000,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       'version': serializer.toJson<int>(version),
       'templateType': serializer.toJson<String>(templateType),
       'collaborationMode': serializer.toJson<String>(collaborationMode),
+      'role': serializer.toJson<String>(role),
+      'alternativeTitle': serializer.toJson<String?>(alternativeTitle),
+      'sharingType': serializer.toJson<String>(sharingType),
     };
   }
 
@@ -1934,6 +2028,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     int? version,
     String? templateType,
     String? collaborationMode,
+    String? role,
+    Value<String?> alternativeTitle = const Value.absent(),
+    String? sharingType,
   }) => Notebook(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -1956,6 +2053,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     version: version ?? this.version,
     templateType: templateType ?? this.templateType,
     collaborationMode: collaborationMode ?? this.collaborationMode,
+    role: role ?? this.role,
+    alternativeTitle: alternativeTitle.present
+        ? alternativeTitle.value
+        : this.alternativeTitle,
+    sharingType: sharingType ?? this.sharingType,
   );
   Notebook copyWithCompanion(NotebooksCompanion data) {
     return Notebook(
@@ -1996,6 +2098,13 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       collaborationMode: data.collaborationMode.present
           ? data.collaborationMode.value
           : this.collaborationMode,
+      role: data.role.present ? data.role.value : this.role,
+      alternativeTitle: data.alternativeTitle.present
+          ? data.alternativeTitle.value
+          : this.alternativeTitle,
+      sharingType: data.sharingType.present
+          ? data.sharingType.value
+          : this.sharingType,
     );
   }
 
@@ -2022,7 +2131,10 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('templateType: $templateType, ')
-          ..write('collaborationMode: $collaborationMode')
+          ..write('collaborationMode: $collaborationMode, ')
+          ..write('role: $role, ')
+          ..write('alternativeTitle: $alternativeTitle, ')
+          ..write('sharingType: $sharingType')
           ..write(')'))
         .toString();
   }
@@ -2050,6 +2162,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     version,
     templateType,
     collaborationMode,
+    role,
+    alternativeTitle,
+    sharingType,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -2075,7 +2190,10 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
           other.templateType == this.templateType &&
-          other.collaborationMode == this.collaborationMode);
+          other.collaborationMode == this.collaborationMode &&
+          other.role == this.role &&
+          other.alternativeTitle == this.alternativeTitle &&
+          other.sharingType == this.sharingType);
 }
 
 class NotebooksCompanion extends UpdateCompanion<Notebook> {
@@ -2100,6 +2218,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   final Value<int> version;
   final Value<String> templateType;
   final Value<String> collaborationMode;
+  final Value<String> role;
+  final Value<String?> alternativeTitle;
+  final Value<String> sharingType;
   const NotebooksCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -2122,6 +2243,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.version = const Value.absent(),
     this.templateType = const Value.absent(),
     this.collaborationMode = const Value.absent(),
+    this.role = const Value.absent(),
+    this.alternativeTitle = const Value.absent(),
+    this.sharingType = const Value.absent(),
   });
   NotebooksCompanion.insert({
     this.id = const Value.absent(),
@@ -2145,6 +2269,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.version = const Value.absent(),
     this.templateType = const Value.absent(),
     this.collaborationMode = const Value.absent(),
+    this.role = const Value.absent(),
+    this.alternativeTitle = const Value.absent(),
+    this.sharingType = const Value.absent(),
   }) : title = Value(title),
        coverType = Value(coverType);
   static Insertable<Notebook> custom({
@@ -2169,6 +2296,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Expression<int>? version,
     Expression<String>? templateType,
     Expression<String>? collaborationMode,
+    Expression<String>? role,
+    Expression<String>? alternativeTitle,
+    Expression<String>? sharingType,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2192,6 +2322,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       if (version != null) 'version': version,
       if (templateType != null) 'template_type': templateType,
       if (collaborationMode != null) 'collaboration_mode': collaborationMode,
+      if (role != null) 'role': role,
+      if (alternativeTitle != null) 'alternative_title': alternativeTitle,
+      if (sharingType != null) 'sharing_type': sharingType,
     });
   }
 
@@ -2217,6 +2350,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Value<int>? version,
     Value<String>? templateType,
     Value<String>? collaborationMode,
+    Value<String>? role,
+    Value<String?>? alternativeTitle,
+    Value<String>? sharingType,
   }) {
     return NotebooksCompanion(
       id: id ?? this.id,
@@ -2240,6 +2376,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       version: version ?? this.version,
       templateType: templateType ?? this.templateType,
       collaborationMode: collaborationMode ?? this.collaborationMode,
+      role: role ?? this.role,
+      alternativeTitle: alternativeTitle ?? this.alternativeTitle,
+      sharingType: sharingType ?? this.sharingType,
     );
   }
 
@@ -2309,6 +2448,15 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     if (collaborationMode.present) {
       map['collaboration_mode'] = Variable<String>(collaborationMode.value);
     }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (alternativeTitle.present) {
+      map['alternative_title'] = Variable<String>(alternativeTitle.value);
+    }
+    if (sharingType.present) {
+      map['sharing_type'] = Variable<String>(sharingType.value);
+    }
     return map;
   }
 
@@ -2335,7 +2483,10 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('templateType: $templateType, ')
-          ..write('collaborationMode: $collaborationMode')
+          ..write('collaborationMode: $collaborationMode, ')
+          ..write('role: $role, ')
+          ..write('alternativeTitle: $alternativeTitle, ')
+          ..write('sharingType: $sharingType')
           ..write(')'))
         .toString();
   }
@@ -4052,17 +4203,6 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _layerIdMeta = const VerificationMeta(
-    'layerId',
-  );
-  @override
-  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
-    'layer_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   @override
   List<GeneratedColumn> get $columns => [
     clientTextId,
@@ -4075,7 +4215,6 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     updatedAt,
     version,
     creatorId,
-    layerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4164,12 +4303,6 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         creatorId.isAcceptableOrUnknown(data['creator_id']!, _creatorIdMeta),
       );
     }
-    if (data.containsKey('layer_id')) {
-      context.handle(
-        _layerIdMeta,
-        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
-      );
-    }
     return context;
   }
 
@@ -4219,10 +4352,6 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         DriftSqlType.string,
         data['${effectivePrefix}creator_id'],
       ),
-      layerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}layer_id'],
-      ),
     );
   }
 
@@ -4243,7 +4372,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
   final int updatedAt;
   final int version;
   final String? creatorId;
-  final String? layerId;
   const CanvasTextBlock({
     required this.clientTextId,
     this.serverId,
@@ -4255,7 +4383,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     required this.updatedAt,
     required this.version,
     this.creatorId,
-    this.layerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4273,9 +4400,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || creatorId != null) {
       map['creator_id'] = Variable<String>(creatorId);
-    }
-    if (!nullToAbsent || layerId != null) {
-      map['layer_id'] = Variable<String>(layerId);
     }
     return map;
   }
@@ -4296,9 +4420,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       creatorId: creatorId == null && nullToAbsent
           ? const Value.absent()
           : Value(creatorId),
-      layerId: layerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(layerId),
     );
   }
 
@@ -4318,7 +4439,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
-      layerId: serializer.fromJson<String?>(json['layerId']),
     );
   }
   @override
@@ -4335,7 +4455,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
-      'layerId': serializer.toJson<String?>(layerId),
     };
   }
 
@@ -4350,7 +4469,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     int? updatedAt,
     int? version,
     Value<String?> creatorId = const Value.absent(),
-    Value<String?> layerId = const Value.absent(),
   }) => CanvasTextBlock(
     clientTextId: clientTextId ?? this.clientTextId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -4362,7 +4480,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
-    layerId: layerId.present ? layerId.value : this.layerId,
   );
   CanvasTextBlock copyWithCompanion(CanvasTextBlocksCompanion data) {
     return CanvasTextBlock(
@@ -4382,7 +4499,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
-      layerId: data.layerId.present ? data.layerId.value : this.layerId,
     );
   }
 
@@ -4398,8 +4514,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('creatorId: $creatorId, ')
-          ..write('layerId: $layerId')
+          ..write('creatorId: $creatorId')
           ..write(')'))
         .toString();
   }
@@ -4416,7 +4531,6 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     updatedAt,
     version,
     creatorId,
-    layerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -4431,8 +4545,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.creatorId == this.creatorId &&
-          other.layerId == this.layerId);
+          other.creatorId == this.creatorId);
 }
 
 class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
@@ -4446,7 +4559,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> creatorId;
-  final Value<String?> layerId;
   final Value<int> rowid;
   const CanvasTextBlocksCompanion({
     this.clientTextId = const Value.absent(),
@@ -4459,7 +4571,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
-    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasTextBlocksCompanion.insert({
@@ -4473,7 +4584,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
-    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientTextId = Value(clientTextId),
        pageId = Value(pageId),
@@ -4489,7 +4599,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? creatorId,
-    Expression<String>? layerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4503,7 +4612,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
-      if (layerId != null) 'layer_id': layerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4519,7 +4627,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? creatorId,
-    Value<String?>? layerId,
     Value<int>? rowid,
   }) {
     return CanvasTextBlocksCompanion(
@@ -4533,7 +4640,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
-      layerId: layerId ?? this.layerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4571,9 +4677,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     if (creatorId.present) {
       map['creator_id'] = Variable<String>(creatorId.value);
     }
-    if (layerId.present) {
-      map['layer_id'] = Variable<String>(layerId.value);
-    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4593,7 +4696,6 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
-          ..write('layerId: $layerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4769,17 +4871,6 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _layerIdMeta = const VerificationMeta(
-    'layerId',
-  );
-  @override
-  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
-    'layer_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   @override
   List<GeneratedColumn> get $columns => [
     clientImageId,
@@ -4797,7 +4888,6 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     updatedAt,
     version,
     creatorId,
-    layerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4926,12 +5016,6 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         creatorId.isAcceptableOrUnknown(data['creator_id']!, _creatorIdMeta),
       );
     }
-    if (data.containsKey('layer_id')) {
-      context.handle(
-        _layerIdMeta,
-        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
-      );
-    }
     return context;
   }
 
@@ -5001,10 +5085,6 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         DriftSqlType.string,
         data['${effectivePrefix}creator_id'],
       ),
-      layerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}layer_id'],
-      ),
     );
   }
 
@@ -5031,7 +5111,6 @@ class CanvasImageBlock extends DataClass
   final int updatedAt;
   final int version;
   final String? creatorId;
-  final String? layerId;
   const CanvasImageBlock({
     required this.clientImageId,
     this.serverId,
@@ -5048,7 +5127,6 @@ class CanvasImageBlock extends DataClass
     required this.updatedAt,
     required this.version,
     this.creatorId,
-    this.layerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5071,9 +5149,6 @@ class CanvasImageBlock extends DataClass
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || creatorId != null) {
       map['creator_id'] = Variable<String>(creatorId);
-    }
-    if (!nullToAbsent || layerId != null) {
-      map['layer_id'] = Variable<String>(layerId);
     }
     return map;
   }
@@ -5099,9 +5174,6 @@ class CanvasImageBlock extends DataClass
       creatorId: creatorId == null && nullToAbsent
           ? const Value.absent()
           : Value(creatorId),
-      layerId: layerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(layerId),
     );
   }
 
@@ -5126,7 +5198,6 @@ class CanvasImageBlock extends DataClass
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
-      layerId: serializer.fromJson<String?>(json['layerId']),
     );
   }
   @override
@@ -5148,7 +5219,6 @@ class CanvasImageBlock extends DataClass
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
-      'layerId': serializer.toJson<String?>(layerId),
     };
   }
 
@@ -5168,7 +5238,6 @@ class CanvasImageBlock extends DataClass
     int? updatedAt,
     int? version,
     Value<String?> creatorId = const Value.absent(),
-    Value<String?> layerId = const Value.absent(),
   }) => CanvasImageBlock(
     clientImageId: clientImageId ?? this.clientImageId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -5185,7 +5254,6 @@ class CanvasImageBlock extends DataClass
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
-    layerId: layerId.present ? layerId.value : this.layerId,
   );
   CanvasImageBlock copyWithCompanion(CanvasImageBlocksCompanion data) {
     return CanvasImageBlock(
@@ -5210,7 +5278,6 @@ class CanvasImageBlock extends DataClass
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
-      layerId: data.layerId.present ? data.layerId.value : this.layerId,
     );
   }
 
@@ -5231,8 +5298,7 @@ class CanvasImageBlock extends DataClass
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('creatorId: $creatorId, ')
-          ..write('layerId: $layerId')
+          ..write('creatorId: $creatorId')
           ..write(')'))
         .toString();
   }
@@ -5254,7 +5320,6 @@ class CanvasImageBlock extends DataClass
     updatedAt,
     version,
     creatorId,
-    layerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -5274,8 +5339,7 @@ class CanvasImageBlock extends DataClass
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.creatorId == this.creatorId &&
-          other.layerId == this.layerId);
+          other.creatorId == this.creatorId);
 }
 
 class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
@@ -5294,7 +5358,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> creatorId;
-  final Value<String?> layerId;
   final Value<int> rowid;
   const CanvasImageBlocksCompanion({
     this.clientImageId = const Value.absent(),
@@ -5312,7 +5375,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
-    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasImageBlocksCompanion.insert({
@@ -5331,7 +5393,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
-    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientImageId = Value(clientImageId),
        pageId = Value(pageId),
@@ -5357,7 +5418,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? creatorId,
-    Expression<String>? layerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5376,7 +5436,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
-      if (layerId != null) 'layer_id': layerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5397,7 +5456,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? creatorId,
-    Value<String?>? layerId,
     Value<int>? rowid,
   }) {
     return CanvasImageBlocksCompanion(
@@ -5416,7 +5474,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
-      layerId: layerId ?? this.layerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5469,9 +5526,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     if (creatorId.present) {
       map['creator_id'] = Variable<String>(creatorId.value);
     }
-    if (layerId.present) {
-      map['layer_id'] = Variable<String>(layerId.value);
-    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5496,7 +5550,6 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
-          ..write('layerId: $layerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8557,6 +8610,9 @@ typedef $$NotebooksTableCreateCompanionBuilder =
       Value<int> version,
       Value<String> templateType,
       Value<String> collaborationMode,
+      Value<String> role,
+      Value<String?> alternativeTitle,
+      Value<String> sharingType,
     });
 typedef $$NotebooksTableUpdateCompanionBuilder =
     NotebooksCompanion Function({
@@ -8581,6 +8637,9 @@ typedef $$NotebooksTableUpdateCompanionBuilder =
       Value<int> version,
       Value<String> templateType,
       Value<String> collaborationMode,
+      Value<String> role,
+      Value<String?> alternativeTitle,
+      Value<String> sharingType,
     });
 
 final class $$NotebooksTableReferences
@@ -8768,6 +8827,21 @@ class $$NotebooksTableFilterComposer
 
   ColumnFilters<String> get collaborationMode => $composableBuilder(
     column: $table.collaborationMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get alternativeTitle => $composableBuilder(
+    column: $table.alternativeTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sharingType => $composableBuilder(
+    column: $table.sharingType,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8979,6 +9053,21 @@ class $$NotebooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get alternativeTitle => $composableBuilder(
+    column: $table.alternativeTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sharingType => $composableBuilder(
+    column: $table.sharingType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SubjectsTableOrderingComposer get subjectId {
     final $$SubjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -9085,6 +9174,19 @@ class $$NotebooksTableAnnotationComposer
 
   GeneratedColumn<String> get collaborationMode => $composableBuilder(
     column: $table.collaborationMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+
+  GeneratedColumn<String> get alternativeTitle => $composableBuilder(
+    column: $table.alternativeTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sharingType => $composableBuilder(
+    column: $table.sharingType,
     builder: (column) => column,
   );
 
@@ -9241,6 +9343,9 @@ class $$NotebooksTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String> templateType = const Value.absent(),
                 Value<String> collaborationMode = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<String?> alternativeTitle = const Value.absent(),
+                Value<String> sharingType = const Value.absent(),
               }) => NotebooksCompanion(
                 id: id,
                 serverId: serverId,
@@ -9263,6 +9368,9 @@ class $$NotebooksTableTableManager
                 version: version,
                 templateType: templateType,
                 collaborationMode: collaborationMode,
+                role: role,
+                alternativeTitle: alternativeTitle,
+                sharingType: sharingType,
               ),
           createCompanionCallback:
               ({
@@ -9287,6 +9395,9 @@ class $$NotebooksTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String> templateType = const Value.absent(),
                 Value<String> collaborationMode = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<String?> alternativeTitle = const Value.absent(),
+                Value<String> sharingType = const Value.absent(),
               }) => NotebooksCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -9309,6 +9420,9 @@ class $$NotebooksTableTableManager
                 version: version,
                 templateType: templateType,
                 collaborationMode: collaborationMode,
+                role: role,
+                alternativeTitle: alternativeTitle,
+                sharingType: sharingType,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -10736,7 +10850,6 @@ typedef $$CanvasTextBlocksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
-      Value<String?> layerId,
       Value<int> rowid,
     });
 typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
@@ -10751,7 +10864,6 @@ typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
-      Value<String?> layerId,
       Value<int> rowid,
     });
 
@@ -10836,11 +10948,6 @@ class $$CanvasTextBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get layerId => $composableBuilder(
-    column: $table.layerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -10919,11 +11026,6 @@ class $$CanvasTextBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get layerId => $composableBuilder(
-    column: $table.layerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -10990,9 +11092,6 @@ class $$CanvasTextBlocksTableAnnotationComposer
   GeneratedColumn<String> get creatorId =>
       $composableBuilder(column: $table.creatorId, builder: (column) => column);
 
-  GeneratedColumn<String> get layerId =>
-      $composableBuilder(column: $table.layerId, builder: (column) => column);
-
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -11057,7 +11156,6 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
-                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion(
                 clientTextId: clientTextId,
@@ -11070,7 +11168,6 @@ class $$CanvasTextBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
-                layerId: layerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -11085,7 +11182,6 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
-                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion.insert(
                 clientTextId: clientTextId,
@@ -11098,7 +11194,6 @@ class $$CanvasTextBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
-                layerId: layerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -11187,7 +11282,6 @@ typedef $$CanvasImageBlocksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
-      Value<String?> layerId,
       Value<int> rowid,
     });
 typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
@@ -11207,7 +11301,6 @@ typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
-      Value<String?> layerId,
       Value<int> rowid,
     });
 
@@ -11321,11 +11414,6 @@ class $$CanvasImageBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get layerId => $composableBuilder(
-    column: $table.layerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -11429,11 +11517,6 @@ class $$CanvasImageBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get layerId => $composableBuilder(
-    column: $table.layerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -11515,9 +11598,6 @@ class $$CanvasImageBlocksTableAnnotationComposer
   GeneratedColumn<String> get creatorId =>
       $composableBuilder(column: $table.creatorId, builder: (column) => column);
 
-  GeneratedColumn<String> get layerId =>
-      $composableBuilder(column: $table.layerId, builder: (column) => column);
-
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -11590,7 +11670,6 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
-                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion(
                 clientImageId: clientImageId,
@@ -11608,7 +11687,6 @@ class $$CanvasImageBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
-                layerId: layerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -11628,7 +11706,6 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
-                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion.insert(
                 clientImageId: clientImageId,
@@ -11646,7 +11723,6 @@ class $$CanvasImageBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
-                layerId: layerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -4,18 +4,16 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i4;
-import 'dart:typed_data' as _i9;
-import 'dart:ui' as _i11;
+import 'dart:typed_data' as _i8;
+import 'dart:ui' as _i10;
 
-import 'package:caderno_digital_app/core/network/realtime_service.dart' as _i10;
+import 'package:caderno_digital_app/core/network/realtime_service.dart' as _i9;
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart'
-    as _i8;
+    as _i7;
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart'
     as _i5;
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart'
     as _i6;
-import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart'
-    as _i7;
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart'
     as _i3;
 import 'package:flutter/foundation.dart' as _i2;
@@ -67,6 +65,50 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Future<List<_i5.LocalPage>>);
 
   @override
+  _i4.Stream<List<_i5.LocalPage>> watchPagesByNotebook(int? notebookId) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchPagesByNotebook, [notebookId]),
+            returnValue: _i4.Stream<List<_i5.LocalPage>>.empty(),
+          )
+          as _i4.Stream<List<_i5.LocalPage>>);
+
+  @override
+  _i4.Future<void> savePage(_i5.LocalPage? page, int? notebookSid) =>
+      (super.noSuchMethod(
+            Invocation.method(#savePage, [page, notebookSid]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<void> saveSingleStroke(int? pageId, _i6.Stroke? s) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveSingleStroke, [pageId, s]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<void> deleteSingleStroke(int? pageId, String? strokeId) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteSingleStroke, [pageId, strokeId]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<void> saveSingleImageBlock(int? pageId, _i7.ImageBlock? i) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveSingleImageBlock, [pageId, i]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
   _i4.Future<void> reindexPages(int? notebookId) =>
       (super.noSuchMethod(
             Invocation.method(#reindexPages, [notebookId]),
@@ -76,84 +118,47 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Future<void>);
 
   @override
-  _i4.Stream<List<_i5.LocalPage>> watchPagesByNotebook(int? notebookId) =>
-      (super.noSuchMethod(
-            Invocation.method(#watchPagesByNotebook, [notebookId]),
-            returnValue: _i4.Stream<List<_i5.LocalPage>>.empty(),
-          )
-          as _i4.Stream<List<_i5.LocalPage>>);
-
-  @override
-  _i4.Future<void> savePage(_i5.LocalPage? page, int? notebookServerId) =>
-      (super.noSuchMethod(
-            Invocation.method(#savePage, [page, notebookServerId]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
-
-  @override
-  _i4.Future<_i5.LocalPage?> createNewPage(
+  _i4.Future<String?> uploadImage(
     int? notebookId,
-    int? pageNumber,
-    bool? isLandscape,
-    int? notebookServerId,
+    String? fileName,
+    _i8.Uint8List? bytes,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#createNewPage, [
-              notebookId,
-              pageNumber,
-              isLandscape,
-              notebookServerId,
-            ]),
-            returnValue: _i4.Future<_i5.LocalPage?>.value(),
+            Invocation.method(#uploadImage, [notebookId, fileName, bytes]),
+            returnValue: _i4.Future<String?>.value(),
           )
-          as _i4.Future<_i5.LocalPage?>);
+          as _i4.Future<String?>);
 
   @override
-  _i4.Future<void> saveSingleStroke(int? pageId, _i6.Stroke? stroke) =>
+  _i4.Future<String?> uploadAudio(
+    int? notebookId,
+    String? fileName,
+    _i8.Uint8List? bytes,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#saveSingleStroke, [pageId, stroke]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            Invocation.method(#uploadAudio, [notebookId, fileName, bytes]),
+            returnValue: _i4.Future<String?>.value(),
           )
-          as _i4.Future<void>);
+          as _i4.Future<String?>);
 
   @override
-  _i4.Future<void> saveSingleTextBlock(int? pageId, _i7.TextBlock? block) =>
+  _i4.Future<String?> uploadLessonAudio(
+    int? notebookId,
+    String? fileName,
+    _i8.Uint8List? bytes, {
+    required String? title,
+    required int? duration,
+    String? clientId,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#saveSingleTextBlock, [pageId, block]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            Invocation.method(
+              #uploadLessonAudio,
+              [notebookId, fileName, bytes],
+              {#title: title, #duration: duration, #clientId: clientId},
+            ),
+            returnValue: _i4.Future<String?>.value(),
           )
-          as _i4.Future<void>);
-
-  @override
-  _i4.Future<void> deleteSingleStroke(int? pageId, String? clientStrokeId) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteSingleStroke, [pageId, clientStrokeId]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
-
-  @override
-  _i4.Future<void> saveSingleImageBlock(int? pageId, _i8.ImageBlock? img) =>
-      (super.noSuchMethod(
-            Invocation.method(#saveSingleImageBlock, [pageId, img]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
-
-  @override
-  _i4.Future<void> deletePage(int? pageId) =>
-      (super.noSuchMethod(
-            Invocation.method(#deletePage, [pageId]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
+          as _i4.Future<String?>);
 
   @override
   _i4.Future<void> updateNotebookMetadata(
@@ -173,91 +178,45 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Future<void>);
 
   @override
-  _i4.Future<bool> savePageToCloud(
+  _i4.Future<void> savePageToCloud(
     _i5.LocalPage? page,
-    int? notebookServerId,
+    int? notebookSid,
     String? myUserId,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#savePageToCloud, [
-              page,
-              notebookServerId,
-              myUserId,
-            ]),
-            returnValue: _i4.Future<bool>.value(false),
+            Invocation.method(#savePageToCloud, [page, notebookSid, myUserId]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
           )
-          as _i4.Future<bool>);
+          as _i4.Future<void>);
 
   @override
-  _i4.Future<String?> uploadAudio(
-    int? notebookServerId,
-    String? filename,
-    _i9.Uint8List? bytes,
-  ) =>
+  _i4.Future<Map<String, dynamic>?> fetchSessionStatus(int? notebookId) =>
       (super.noSuchMethod(
-            Invocation.method(#uploadAudio, [
-              notebookServerId,
-              filename,
-              bytes,
-            ]),
-            returnValue: _i4.Future<String?>.value(),
+            Invocation.method(#fetchSessionStatus, [notebookId]),
+            returnValue: _i4.Future<Map<String, dynamic>?>.value(),
           )
-          as _i4.Future<String?>);
-
-  @override
-  _i4.Future<String?> uploadLessonAudio(
-    int? notebookServerId,
-    String? filename,
-    _i9.Uint8List? bytes, {
-    String? title,
-    int? duration,
-    String? clientId,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #uploadLessonAudio,
-              [notebookServerId, filename, bytes],
-              {#title: title, #duration: duration, #clientId: clientId},
-            ),
-            returnValue: _i4.Future<String?>.value(),
-          )
-          as _i4.Future<String?>);
-
-  @override
-  _i4.Future<String?> uploadImage(
-    int? notebookServerId,
-    String? filename,
-    _i9.Uint8List? bytes,
-  ) =>
-      (super.noSuchMethod(
-            Invocation.method(#uploadImage, [
-              notebookServerId,
-              filename,
-              bytes,
-            ]),
-            returnValue: _i4.Future<String?>.value(),
-          )
-          as _i4.Future<String?>);
+          as _i4.Future<Map<String, dynamic>?>);
 }
 
 /// A class which mocks [RealtimeService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
+class MockRealtimeService extends _i1.Mock implements _i9.RealtimeService {
   MockRealtimeService() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i2.ValueNotifier<_i10.RealtimeStatus> get statusNotifier =>
+  _i2.ValueNotifier<_i9.RealtimeStatus> get statusNotifier =>
       (super.noSuchMethod(
             Invocation.getter(#statusNotifier),
-            returnValue: _FakeValueNotifier_0<_i10.RealtimeStatus>(
+            returnValue: _FakeValueNotifier_0<_i9.RealtimeStatus>(
               this,
               Invocation.getter(#statusNotifier),
             ),
           )
-          as _i2.ValueNotifier<_i10.RealtimeStatus>);
+          as _i2.ValueNotifier<_i9.RealtimeStatus>);
 
   @override
   _i4.Stream<Map<String, dynamic>> get onStrokeReceived =>
@@ -348,6 +307,14 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
           as _i4.Stream<Map<String, dynamic>>);
 
   @override
+  _i4.Stream<Map<String, dynamic>> get onSyncRequestedReceived =>
+      (super.noSuchMethod(
+            Invocation.getter(#onSyncRequestedReceived),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
   _i4.Stream<Map<String, dynamic>> get onVoiceCallStarted =>
       (super.noSuchMethod(
             Invocation.getter(#onVoiceCallStarted),
@@ -375,6 +342,14 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
   _i4.Stream<Map<String, dynamic>> get onSessionMetaReceived =>
       (super.noSuchMethod(
             Invocation.getter(#onSessionMetaReceived),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
+  _i4.Stream<Map<String, dynamic>> get onRoleUpdateReceived =>
+      (super.noSuchMethod(
+            Invocation.getter(#onRoleUpdateReceived),
             returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
           )
           as _i4.Stream<Map<String, dynamic>>);
@@ -471,6 +446,46 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
   _i4.Stream<Map<String, dynamic>> get onGlobalActionReceived =>
       (super.noSuchMethod(
             Invocation.getter(#onGlobalActionReceived),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
+  _i4.Stream<Map<String, dynamic>> get onSyncPushFinished =>
+      (super.noSuchMethod(
+            Invocation.getter(#onSyncPushFinished),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
+  _i4.Stream<Map<String, dynamic>> get onPageDeleted =>
+      (super.noSuchMethod(
+            Invocation.getter(#onPageDeleted),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
+  _i4.Stream<Map<String, dynamic>> get onNotebookDeleted =>
+      (super.noSuchMethod(
+            Invocation.getter(#onNotebookDeleted),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
+  _i4.Stream<Map<String, dynamic>> get onNotebookAccessRevoked =>
+      (super.noSuchMethod(
+            Invocation.getter(#onNotebookAccessRevoked),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
+  _i4.Stream<Map<String, dynamic>> get onNotebookStructureUpdated =>
+      (super.noSuchMethod(
+            Invocation.getter(#onNotebookStructureUpdated),
             returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
           )
           as _i4.Stream<Map<String, dynamic>>);
@@ -678,6 +693,22 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
           as _i4.Future<bool>);
 
   @override
+  _i4.Future<bool> broadcastRoleUpdate({
+    required int? notebookId,
+    required String? targetUserId,
+    required String? newRole,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#broadcastRoleUpdate, [], {
+              #notebookId: notebookId,
+              #targetUserId: targetUserId,
+              #newRole: newRole,
+            }),
+            returnValue: _i4.Future<bool>.value(false),
+          )
+          as _i4.Future<bool>);
+
+  @override
   _i4.Future<bool> broadcastVoiceStateUpdate({
     required int? notebookId,
     required String? myUserId,
@@ -731,7 +762,7 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
   _i4.Future<bool> broadcastPointerMove({
     required int? notebookId,
     required String? myUserId,
-    required _i11.Offset? pos,
+    required _i10.Offset? pos,
     int? pageNumber,
   }) =>
       (super.noSuchMethod(
@@ -903,6 +934,21 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
             Invocation.method(#broadcastGlobalAction, [], {
               #notebookId: notebookId,
               #actionData: actionData,
+            }),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<void> broadcastSyncPushFinished({
+    required int? notebookId,
+    required String? myUserId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#broadcastSyncPushFinished, [], {
+              #notebookId: notebookId,
+              #myUserId: myUserId,
             }),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),

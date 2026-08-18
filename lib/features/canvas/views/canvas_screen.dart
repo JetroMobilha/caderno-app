@@ -426,21 +426,10 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   }
 
   void _showCollaborationCenter(CanvasController controller) {
-    if (!controller.isCollaborationEnabled && widget.notebook.role == 'owner') {
-      // 🚀 SE FOR DONO E ESTIVER A LIGAR AGORA: Abrir seletor de páginas
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => StartCollaborationSheet(
-          pages: controller.pages, 
-          currentTitle: widget.notebook.title,
-          onStart: (pIds, altTitle, sType) {
-            controller.toggleCollaboration(true, pageIds: pIds, alternativeTitle: altTitle, sharingType: sType);
-          },
-        ),
-      );
-    } else if (!controller.isCollaborationEnabled && widget.notebook.role != 'owner') {
+    if (!controller.isCollaborationEnabled && controller.currentUserRole == 'owner') {
+      // 🚀 ENTRADA ÁGIL: Tentar ligar diretamente com as últimas definições
+      controller.enableCollaborationWithLastSettings();
+    } else if (!controller.isCollaborationEnabled && controller.currentUserRole != 'owner') {
       // 🚀 SE FOR CONVIDADO: Liga-se apenas (não escolhe modo)
       controller.toggleCollaboration(true);
     } else {
@@ -452,6 +441,23 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         builder: (context) => CollaborationCenterSheet(notebook: widget.notebook),
       );
     }
+  }
+
+  void _showCollaborationSettings(CanvasController controller) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StartCollaborationSheet(
+        notebookServerId: widget.notebook.serverId!,
+        pages: controller.pages, 
+        currentTitle: widget.notebook.title,
+        role: controller.currentUserRole,
+        onStart: (pIds, altTitle, sType) {
+          controller.toggleCollaboration(true, pageIds: pIds, alternativeTitle: altTitle, sharingType: sType);
+        },
+      ),
+    );
   }
 
   void _confirmDeletePage(CanvasController controller, LocalPage page, int index) {
@@ -541,7 +547,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                     : effectiveBaseSize;
 
                 final bool isFollowing = controller.followingUserId != null;
-                final bool isBlocked = (controller.currentTool == ToolMode.pan || widget.notebook.role == 'viewer' || page.isFrozen) && !isFollowing;
+                final bool isBlocked = (controller.currentTool == ToolMode.pan || controller.currentUserRole == 'viewer' || page.isFrozen) && !isFollowing;
                 final bool canTapCanvas = (controller.currentTool == ToolMode.text || 
                                         controller.currentTool == ToolMode.eraser ||
                                         controller.currentTool == ToolMode.draw) && !page.isFrozen;
@@ -668,7 +674,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                                     controller.safeNotify();
                                                   }
                                                 } : null,
-                                                onPanUpdate: isImageToolActive && isSelected && widget.notebook.role != 'viewer' ? (d) {
+                                                onPanUpdate: isImageToolActive && isSelected && controller.currentUserRole != 'viewer' ? (d) {
                                                     final double cosA = math.cos(img.rotation);
                                                     final double sinA = math.sin(img.rotation);
                                                     final Offset rotatedDelta = Offset(
@@ -715,7 +721,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                               ),
                                             ),
                                             
-                                          if (isSelected && widget.notebook.role != 'viewer') ...[
+                                          if (isSelected && controller.currentUserRole != 'viewer') ...[
                                             Positioned(
                                               left: padding + img.width - 18, top: padding + img.height - 18, width: 36, height: 36,
                                               child: GestureDetector(
@@ -820,7 +826,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                             (controller.currentTool == ToolMode.text && controller.activeInlineTarget == InlineTarget.block),
                                   child: GestureDetector(
                                     behavior: HitTestBehavior.opaque,
-                                    onTapDown: canTapCanvas && widget.notebook.role != 'viewer' ? (details) {
+                                    onTapDown: canTapCanvas && controller.currentUserRole != 'viewer' ? (details) {
                                       if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
                                       
                                       // 🚀 TENTAR marcar checklist primeiro (em qualquer modo)
@@ -847,12 +853,9 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                             if (mounted) _textFocusNode.requestFocus();
                                           });
                                         }
-                                      } else if (controller.currentTool == ToolMode.draw) {
-                                        // 🚀 Selecionar texto se for apenas um toque rápido (hit-test)
-                                        controller.selectTextBlockAt(details.localPosition, page);
                                       }
                                     } : null,
-                                    onTapUp: controller.currentTool == ToolMode.eraser && widget.notebook.role != 'viewer' ? (details) {
+                                    onTapUp: controller.currentTool == ToolMode.eraser && controller.currentUserRole != 'viewer' ? (details) {
                                       controller.eraseAtPosition(details.localPosition, page);
                                     } : null,
                                     onPanStart: !isBlocked ? (details) {
@@ -1084,13 +1087,13 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                   top: tb.position.dy - hitboxPadding,
                                   width: (pSize.width - tb.position.dx - 20.0).clamp(60.0, pSize.width) + (hitboxPadding * 2),
                                   child: IgnorePointer(
-                                    ignoring: controller.currentTool != ToolMode.text && !isEditing, 
+                                    ignoring: controller.currentTool != ToolMode.text, 
                                     child: Stack(
                                       clipBehavior: Clip.none,
                                       children: [
                                         GestureDetector(
                                           behavior: HitTestBehavior.opaque, 
-                                          onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (d) {
+                                          onPanUpdate: controller.currentTool == ToolMode.text && !isEditing && controller.currentUserRole != 'viewer' && editedBy == null ? (d) {
                                             tb.position += d.delta;
                                             if (controller.isBroadcastingViewport) {
                                               controller.currentViewportCenter = tb.position;
@@ -1098,7 +1101,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                             controller.safeNotify();
                                             controller.broadcastThrottledTextBlockUpdate(page, tb);
                                           } : null,
-                                          onTapDown: controller.currentTool == ToolMode.text && !isEditing && widget.notebook.role != 'viewer' && editedBy == null ? (_) {
+                                          onTapDown: controller.currentTool == ToolMode.text && !isEditing && controller.currentUserRole != 'viewer' && editedBy == null ? (_) {
                                             if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
                                             
                                             // 🚀 SELECIONAR antes de editar
@@ -1189,7 +1192,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                                       crossAxisAlignment: CrossAxisAlignment.center,
                                                       children: [
                                                         GestureDetector(
-                                                          onTap: widget.notebook.role != 'viewer' ? () => controller.toggleLineChecked(tb, idx) : null,
+                                                          onTap: controller.currentUserRole != 'viewer' ? () => controller.toggleLineChecked(tb, idx) : null,
                                                           child: Padding(
                                                             padding: const EdgeInsets.only(right: 6, bottom: 2),
                                                             child: Icon(
@@ -1239,26 +1242,77 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                 );
                               }),
 
-                              // 🏷️ Z-INDEX 5: CABEÇALHOS META
+                              // 🏷️ Z-INDEX 5: CABEÇALHOS META (Área do Título)
                               Positioned(
-                                top: 30, left: 40, right: 40,
-                                child: Center(
-                                  child: controller.activeInlineTarget == InlineTarget.title
-                                      ? TextField(
-                                    controller: _textController, focusNode: _textFocusNode, autofocus: true, textAlign: TextAlign.center,
-                                    style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold),
-                                    decoration: const InputDecoration(border: InputBorder.none, hintText: 'Título da Folha...', isDense: true),
-                                    onSubmitted: (_) => _finishEditingInline(page),
-                                  )
-                                      : GestureDetector(
-                                    onTap: controller.currentTool == ToolMode.text && widget.notebook.role != 'viewer' ? () {
-                                      if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
-                                      controller.setTextEditing(InlineTarget.title);
-                                      _textController.text = page.title;
-                                      _textFocusNode.requestFocus();
-                                    } : null,
-                                    child: Text(page.title.isEmpty ? (controller.currentTool == ToolMode.text && widget.notebook.role != 'viewer' ? '[ Escrever Título ]' : '') : page.title, style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.bold, color: page.title.isEmpty ? Colors.black26 : const Color(0xFF1A1A24))),
-                                  ),
+                                top: 25, left: 0, right: 0,
+                                child: IgnorePointer(
+                                  ignoring: controller.currentTool != ToolMode.text,
+                                  child: Column(
+                                    children: [
+                                      // 🚀 ETIQUETA DE QUEM ESTÁ A EDITAR O TÍTULO
+                                    Builder(builder: (context) {
+                                      final String? editorId = controller.remoteEditingTitles[page.pageNumber];
+                                      if (editorId == null) return const SizedBox(height: 18);
+                                      
+                                      final String editorName = controller.onlineUsers.firstWhere(
+                                        (u) => u['id'].toString() == editorId, 
+                                        orElse: () => {'name': 'Alguém'}
+                                      )['name'];
+                                      
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 2),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                                          decoration: BoxDecoration(color: Colors.orange.shade800, borderRadius: BorderRadius.circular(4)),
+                                          child: Text('A editar título: $editorName', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                        ),
+                                      );
+                                    }),
+
+                                    Container(
+                                      margin: const EdgeInsets.symmetric(horizontal: 40),
+                                      padding: const EdgeInsets.only(bottom: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border(bottom: BorderSide(color: const Color(0xFF0F4C5C).withValues(alpha: 0.15), width: 1.5))
+                                      ),
+                                      child: Center(
+                                        child: controller.activeInlineTarget == InlineTarget.title
+                                            ? TextField(
+                                          controller: _textController, focusNode: _textFocusNode, autofocus: true, textAlign: TextAlign.center,
+                                          style: GoogleFonts.lora(fontSize: 28, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A24)),
+                                          decoration: const InputDecoration(border: InputBorder.none, hintText: 'Título da Folha...', isDense: true),
+                                          onChanged: (val) {
+                                            page.title = val;
+                                            // 🚀 BROADCAST EM TEMPO REAL (Keystrokes)
+                                            controller.broadcastThrottledPageMetadataUpdate(page, isEditing: true);
+                                          },
+                                          onSubmitted: (_) {
+                                            _finishEditingInline(page);
+                                            controller.broadcastPageMetadataUpdate(page, isEditing: false); 
+                                          },
+                                        )
+                                            : GestureDetector(
+                                          // 🚀 PERMITIR EDIÇÃO APENAS COM FERRAMENTA DE TEXTO
+                                          onTap: controller.currentTool == ToolMode.text && controller.currentUserRole != 'viewer' ? () {
+                                            if (controller.activeInlineTarget != InlineTarget.none) _finishEditingInline(page);
+                                            controller.setTextEditing(InlineTarget.title);
+                                            _textController.text = page.title;
+                                            _textFocusNode.requestFocus();
+                                            controller.broadcastPageMetadataUpdate(page, isEditing: true);
+                                          } : null,
+                                          child: Text(
+                                            page.title.isEmpty ? (controller.currentTool == ToolMode.text && controller.currentUserRole != 'viewer' ? '[ Escrever Título ]' : '') : page.title, 
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.lora(
+                                              fontSize: 28, 
+                                              fontWeight: FontWeight.bold, 
+                                              color: page.title.isEmpty ? Colors.black12 : const Color(0xFF1A1A24)
+                                            )
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -1273,7 +1327,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               },
             ),
 
-            if (widget.notebook.role != 'viewer' && !controller.isFocusMode)
+            if (controller.currentUserRole != 'viewer' && !controller.isFocusMode)
               Positioned(
                 bottom: 20, left: 0, right: 0,
                 child: Center(
@@ -1459,7 +1513,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               ),
           ],
         ),
-        floatingActionButton: (hasPages || widget.notebook.role == 'viewer' || controller.isFocusMode)
+        floatingActionButton: (hasPages || controller.currentUserRole == 'viewer' || controller.isFocusMode)
             ? null
             : FloatingActionButton(
           backgroundColor: const Color(0xFF0F4C5C),
@@ -1685,11 +1739,19 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               statusIcon = Icons.error_outline;
             }
             
-            return IconButton(
-              icon: Icon(statusIcon),
-              color: statusColor,
-              tooltip: 'Centro de Colaboração',
-              onPressed: () => _showCollaborationCenter(controller),
+            return GestureDetector(
+              onTap: () => _showCollaborationCenter(controller),
+              onLongPress: () {
+                if (controller.currentUserRole == 'owner') {
+                   _showCollaborationSettings(controller);
+                } else {
+                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Apenas o dono pode configurar a sala. 🔒')));
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                child: Icon(statusIcon, color: statusColor),
+              ),
             );
           },
         ),
@@ -1802,7 +1864,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               },
             ),
           ),
-          if (widget.notebook.role != 'viewer')
+          if (controller.currentUserRole != 'viewer')
           Padding(
               padding: const EdgeInsets.all(16.0),
               child: ElevatedButton.icon(

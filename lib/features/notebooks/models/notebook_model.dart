@@ -26,6 +26,8 @@ class Notebook {
   final int isDeleted;
   final int updatedAt;
   final String role; // 🚀 'owner', 'editor', 'viewer' ou 'student'
+  final String? alternativeTitle; // 🚀
+  final String sharingType; // 🚀 'full' ou 'scoped'
 
   Notebook({
     this.id,
@@ -50,6 +52,8 @@ class Notebook {
     int? updatedAt,
     this.version = 1,
     this.role = 'owner',
+    this.alternativeTitle,
+    this.sharingType = 'full',
   }) : clientId = clientId ?? const Uuid().v4(),
        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
@@ -76,6 +80,8 @@ class Notebook {
     int? updatedAt,
     int? version,
     String? role,
+    String? alternativeTitle,
+    String? sharingType,
   }) {
     return Notebook(
       id: id ?? this.id,
@@ -100,6 +106,8 @@ class Notebook {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       role: role ?? this.role,
+      alternativeTitle: alternativeTitle ?? this.alternativeTitle,
+      sharingType: sharingType ?? this.sharingType,
     );
   }
 
@@ -130,6 +138,8 @@ class Notebook {
       'updated_at': updatedAt,
       'version': 1,
       'role': role,
+      'alternative_title': alternativeTitle,
+      'sharing_type': sharingType,
     };
   }
 
@@ -160,6 +170,8 @@ class Notebook {
       isDeleted: json['deleted_at'] != null ? 1 : 0,
       updatedAt: (json['updated_at'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
       role: json['role'] ?? 'owner',
+      alternativeTitle: json['alternative_title'],
+      sharingType: json['sharing_type'] ?? 'full',
     );
   }
 }

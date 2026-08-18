@@ -5,34 +5,26 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
 import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/start_collaboration_sheet.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
+import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 
-// -------------------------------------------------------------------------
-// 🛡️ [ZONA PROTEGIDA] CENTRO DE COLABORAÇÃO UI 🛡️
-// ESTE COMPONENTE GERE A INTERFACE CRÍTICA DE LIGAÇÃO E SESSÕES LIVE.
-// -------------------------------------------------------------------------
 class CollaborationCenterSheet extends ConsumerWidget {
   final Notebook notebook;
-
   const CollaborationCenterSheet({super.key, required this.notebook});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(canvasProvider);
     final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
+    final themeColor = const Color(0xFF0F4C5C);
 
-    return DraggableScrollableSheet( 
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      expand: false,
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7, minChildSize: 0.4, maxChildSize: 0.95, expand: false,
       builder: (context, scrollController) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: ListView( 
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+        child: ListView(
           controller: scrollController,
           children: [
             Column(
@@ -40,18 +32,17 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const SizedBox(width: 48), 
+                    const SizedBox(width: 48),
                     Expanded(
                       child: Text(
                         'Centro de Colaboração 🛰️',
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: themeColor),
                       ),
                     ),
                     IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                   ],
                 ),
-                const SizedBox(height: 8),
                 if (controller.isCollaborationEnabled)
                   ValueListenableBuilder<RealtimeStatus>(
                     valueListenable: realtimeStatus,
@@ -60,29 +51,24 @@ class CollaborationCenterSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 24),
-
             if (controller.incomingVoiceCall != null) ...[
               _buildInternalVoiceInvite(controller),
               const SizedBox(height: 16),
             ],
-
             _buildOnlineToggle(controller),
             const SizedBox(height: 16),
-
-            // 🚀 SELETOR DE DINÂMICA (Apenas para o Dono no template Pessoal/Estudo)
-            if (notebook.role == 'owner' && controller.currentTemplateType == 'study' && controller.isCollaborationEnabled) ...[
+            // 🚀 Dinâmica de Sessão (Apenas para o Dono)
+            if (controller.currentUserRole == 'owner' && controller.currentTemplateType == 'study' && controller.isCollaborationEnabled) ...[
               const Divider(height: 32),
               Text(
                 'Dinâmica da Sessão:',
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: themeColor),
               ),
               const SizedBox(height: 12),
               _buildDynamicsSelector(controller),
               const SizedBox(height: 16),
             ],
-
             const Divider(height: 32),
-
             Text(
               'Colegas na Sala:',
               style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
@@ -93,30 +79,26 @@ class CollaborationCenterSheet extends ConsumerWidget {
             else if (controller.onlineUsers.isEmpty)
               _buildEmptyState('Estás sozinho na sala. Convida alguém!')
             else
-              _buildUserList(controller, context),
-
-            const SizedBox(height: 32), 
-
+              _buildUserList(controller, context, ref),
+            const SizedBox(height: 32),
             ValueListenableBuilder<RealtimeStatus>(
               valueListenable: realtimeStatus,
               builder: (context, status, _) {
                 if (!controller.isCollaborationEnabled || status != RealtimeStatus.connected) {
                   return const SizedBox.shrink();
                 }
-
                 return Column(
+                  key: ValueKey(controller.onlineUsers.length), // 🚀 Forçar rebuild
                   children: [
                     Row(
                       children: [
-                        Expanded(
-                          child: _buildVoiceButton(controller, context),
-                        ),
+                        Expanded(child: _buildVoiceButton(controller, context)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildActionButton(
                             icon: controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off,
                             label: controller.isBroadcastingViewport ? 'Parar Visão' : 'Transmitir Visão',
-                            color: controller.isBroadcastingViewport ? Colors.redAccent : const Color(0xFF0F4C5C),
+                            color: controller.isBroadcastingViewport ? Colors.redAccent : themeColor,
                             onTap: () {
                               if (controller.isBroadcastingViewport) {
                                 controller.stopViewportBroadcasting();
@@ -134,25 +116,30 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 );
               },
             ),
-
-            if (notebook.role == 'owner')
-              SizedBox(
-                width: double.infinity,
-                child: _buildActionButton(
-                  icon: Icons.person_add_alt_1,
-                  label: 'Convidar Amigos para o Caderno',
-                  color: const Color(0xFF0F4C5C),
-                  onTap: () {
-                    Navigator.pop(context);
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (context) => ShareNotebookBottomSheet(notebook: notebook),
-                    );
-                  },
+            // 🚀 Gestão de Acessos (Apenas para o Dono)
+            if (controller.currentUserRole == 'owner') ...[
+              const Divider(height: 32),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: _buildActionButton(
+                    icon: Icons.person_add_alt_1,
+                    label: 'Convidar Amigos para este Caderno',
+                    color: themeColor,
+                    onTap: () {
+                      Navigator.pop(context);
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => ShareNotebookBottomSheet(notebook: notebook),
+                      );
+                    },
+                  ),
                 ),
               ),
+            ],
             const SizedBox(height: 16),
           ],
         ),
@@ -160,18 +147,13 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // 🛡️ MÉTODOS DE CONSTRUÇÃO DE INTERFACE PROTEGIDOS 🛡️
-  // -------------------------------------------------------------------------
-
   Widget _buildOnlineToggle(CanvasController controller) {
     return ValueListenableBuilder<RealtimeStatus>(
-      valueListenable: controller.statusNotifier, // 🚀 Usar o status do controlador
+      valueListenable: controller.statusNotifier,
       builder: (context, status, _) {
         final bool isSyncing = controller.isGlobalSyncing;
         final bool isConnecting = status == RealtimeStatus.connecting;
         final bool isLoading = isSyncing || (controller.isCollaborationEnabled && isConnecting);
-
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
@@ -184,10 +166,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
               Row(
                 children: [
                   if (isLoading)
-                    const SizedBox(
-                      width: 24, height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F4C5C)),
-                    )
+                    const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F4C5C)))
                   else
                     Icon(
                       controller.isCollaborationEnabled ? Icons.wifi_tethering : Icons.wifi_tethering_off,
@@ -198,24 +177,18 @@ class CollaborationCenterSheet extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isLoading 
-                            ? (isSyncing ? 'A preparar dados...' : 'A ligar ao servidor...') 
-                            : (controller.isCollaborationEnabled ? 'Modo Online Ativo' : 'Modo Offline'),
+                        isLoading ? (isSyncing ? 'A preparar dados...' : 'A ligar ao servidor...') : (controller.isCollaborationEnabled ? 'Modo Online Ativo' : 'Modo Offline'),
                         style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
                       Text(
-                        isLoading
-                            ? 'Por favor aguarda um momento'
-                            : (controller.isCollaborationEnabled ? 'Outros podem ver o teu progresso' : 'Privacidade total garantida'),
+                        isLoading ? 'Por favor aguarda um momento' : (controller.isCollaborationEnabled ? 'Outros podem ver o teu progresso' : 'Privacidade total garantida'),
                         style: GoogleFonts.inter(fontSize: 11, color: Colors.black45),
                       ),
                     ],
                   ),
                 ],
               ),
-              if (isLoading)
-                const SizedBox(width: 48, height: 48) // Espaço reservado para o switch
-              else
+              if (!isLoading)
                 Switch(
                   value: controller.isCollaborationEnabled,
                   activeThumbColor: Colors.green,
@@ -242,7 +215,6 @@ class CollaborationCenterSheet extends ConsumerWidget {
       text = 'Erro de rede';
       color = Colors.red;
     }
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -253,9 +225,8 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildUserList(CanvasController controller, BuildContext context) {
+  Widget _buildUserList(CanvasController controller, BuildContext context, WidgetRef ref) {
     final others = controller.onlineUsers.where((u) => u['id'].toString() != controller.myUserId).toList();
-
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -267,7 +238,6 @@ class CollaborationCenterSheet extends ConsumerWidget {
         final bool isFollowing = controller.followingUserId == uId;
         final bool isTalking = u['isTalking'] == true;
         final bool isHandRaised = u['isHandRaised'] == true;
-
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -287,15 +257,13 @@ class CollaborationCenterSheet extends ConsumerWidget {
                   if (isTalking)
                     Positioned.fill(
                       child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.green, width: 2),
-                        ),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.green, width: 2)),
                       ),
                     ),
                   if (isHandRaised)
                     const Positioned(
-                      right: -2, top: -2,
+                      right: -2,
+                      top: -2,
                       child: CircleAvatar(radius: 8, backgroundColor: Colors.orange, child: Icon(Icons.pan_tool, size: 8, color: Colors.white)),
                     ),
                 ],
@@ -309,11 +277,21 @@ class CollaborationCenterSheet extends ConsumerWidget {
                       children: [
                         Flexible(child: Text(u['name'], style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14))),
                         const SizedBox(width: 8),
-                        _buildRoleBadge(u['role'] ?? 'student', isSmall: true), 
+                        if (controller.currentUserRole == 'owner')
+                          _buildRolePicker(context, ref, u, notebook.serverId!)
+                        else
+                          _buildRoleBadge(u['role'] ?? 'student', isSmall: true),
                       ],
                     ),
-                    Text(isFollowing ? 'A assistir visão...' : 'Online agora', 
-                         style: GoogleFonts.inter(fontSize: 11, color: isFollowing ? Colors.blue : Colors.black45)),
+                    Consumer(builder: (context, ref, _) {
+                       // 🚀 Observar mudanças globais nos usuários online
+                       final freshUsers = ref.watch(canvasProvider).onlineUsers;
+                       final freshRole = freshUsers.firstWhere((user) => user['id'] == uId, orElse: () => {'role': 'student'})['role'];
+                       return Text(
+                         isFollowing ? 'A assistir visão...' : 'Online agora ($freshRole)',
+                         style: GoogleFonts.inter(fontSize: 11, color: isFollowing ? Colors.blue : Colors.black45),
+                       );
+                    }),
                   ],
                 ),
               ),
@@ -339,138 +317,165 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState(String message) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-      child: Center(
-        child: Text(message, textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 12, color: Colors.black38, fontStyle: FontStyle.italic)),
-      ),
-    );
-  }
+  Widget _buildEmptyState(String message) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+        child: Center(
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.black38, fontStyle: FontStyle.italic),
+          ),
+        ),
+      );
 
-  Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback? onTap}) {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 0,
-        disabledBackgroundColor: color.withValues(alpha: 0.3),
-        disabledForegroundColor: Colors.white70,
-      ),
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold)),
-    );
-  }
+  Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback? onTap}) => ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+          disabledBackgroundColor: color.withValues(alpha: 0.3),
+          disabledForegroundColor: Colors.white70,
+        ),
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold)),
+      );
 
   Widget _buildRoleBadge(String role, {bool isSmall = false}) {
     Color color = Colors.grey;
     String label = 'Visitante';
-
-    if (role == 'owner') { color = Colors.orange; label = 'Dono'; }
-    else if (role == 'editor') { color = Colors.blue; label = 'Editor'; }
-    else if (role == 'student') { color = Colors.teal; label = 'Aluno'; }
-    else if (role == 'viewer') { color = Colors.blueGrey; label = 'Leitor'; }
-
+    if (role == 'owner') {
+      color = Colors.orange;
+      label = 'Dono';
+    } else if (role == 'editor') {
+      color = Colors.blue;
+      label = 'Editor';
+    } else if (role == 'student') {
+      color = Colors.teal;
+      label = 'Aluno';
+    } else if (role == 'viewer') {
+      color = Colors.blueGrey;
+      label = 'Leitor';
+    }
     return Container(
       padding: EdgeInsets.symmetric(horizontal: isSmall ? 6 : 10, vertical: isSmall ? 1 : 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15), 
-        borderRadius: BorderRadius.circular(20), 
-        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.5)
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.5),
       ),
       child: Text(
-        label, 
-        style: GoogleFonts.inter(
-          fontSize: isSmall ? 9 : 11, 
-          fontWeight: FontWeight.bold, 
-          color: color
-        )
+        label,
+        style: GoogleFonts.inter(fontSize: isSmall ? 9 : 11, fontWeight: FontWeight.bold, color: color),
       ),
     );
   }
 
-  Widget _buildDynamicsSelector(CanvasController controller) {
-    return Column(
-      children: [
-        _buildDynamicPolicyToggle(
-          controller, 
-          controller.isSessionLocked, 
-          'Bloquear Edição Coletiva', 
-          'Impedir que outros desenhem enquanto explicas.',
-          Icons.lock_person_rounded,
-          const Color(0xFFE74C3C),
-          onTap: () => controller.toggleSessionLock(),
-        ),
-        const SizedBox(height: 12),
-        _buildDynamicPolicyToggle(
-          controller, 
-          controller.isAuthorColorEnabled, 
-          'Identificar Autores por Cor', 
-          'Cada utilizador terá uma cor única (Tutoria).',
-          Icons.palette_rounded,
-          const Color(0xFF0F4C5C),
-          onTap: () => controller.toggleAuthorColors(),
-        ),
+  Widget _buildRolePicker(BuildContext context, WidgetRef ref, Map<String, dynamic> user, int notebookSid) {
+    final String currentRole = user['role'] ?? 'student';
+    final String email = user['email'] ?? '';
+    return PopupMenuButton<String>(
+      initialValue: currentRole,
+      tooltip: 'Alterar permissão',
+      onSelected: (newRole) async {
+        if (email.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro: E-mail do utilizador não encontrado.')));
+          return;
+        }
+        final success = await ref.read(notebooksProvider.notifier).updateUserRole(
+              notebookSid,
+              email,
+              newRole,
+              targetUserId: user['id'].toString(),
+            );
+        if (success && context.mounted) {
+          // 🚀 Feedback imediato no controlador
+          ref.read(canvasProvider).updateUserRoleLocally(user['id'].toString(), newRole);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Papel de ${user['name']} alterado para $newRole! 🎭')));
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'editor', child: Text('Editor (Pode apagar)')),
+        const PopupMenuItem(value: 'student', child: Text('Aluno (Pode desenhar)')),
+        const PopupMenuItem(value: 'viewer', child: Text('Leitor (Apenas vê)')),
       ],
+      child: _buildRoleBadge(currentRole, isSmall: true),
     );
   }
 
-  Widget _buildDynamicPolicyToggle(CanvasController controller, bool value, String title, String subtitle, IconData icon, Color color, {required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: value ? color.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: value ? color : Colors.grey.shade200, width: 2),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: value ? color : Colors.grey.shade100, shape: BoxShape.circle),
-              child: Icon(icon, color: value ? Colors.white : Colors.grey, size: 20),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: value ? color : Colors.black87)),
-                  Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: Colors.black45)),
-                ],
+  Widget _buildDynamicsSelector(CanvasController controller) => Column(
+        children: [
+          _buildDynamicPolicyToggle(
+            controller,
+            controller.isSessionLocked,
+            'Bloquear Edição Coletiva',
+            'Impedir que outros desenhem enquanto explicas.',
+            Icons.lock_person_rounded,
+            const Color(0xFFE74C3C),
+            onTap: () => controller.toggleSessionLock(),
+          ),
+          const SizedBox(height: 12),
+          _buildDynamicPolicyToggle(
+            controller,
+            controller.isAuthorColorEnabled,
+            'Identificar Autores por Cor',
+            'Cada utilizador terá uma cor única (Tutoria).',
+            Icons.palette_rounded,
+            const Color(0xFF0F4C5C),
+            onTap: () => controller.toggleAuthorColors(),
+          )
+        ],
+      );
+
+  Widget _buildDynamicPolicyToggle(CanvasController controller, bool value, String title, String subtitle, IconData icon, Color color, {required VoidCallback onTap}) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: value ? color.withValues(alpha: 0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: value ? color : Colors.grey.shade200, width: 2),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: value ? color : Colors.grey.shade100, shape: BoxShape.circle),
+                child: Icon(icon, color: value ? Colors.white : Colors.grey, size: 20),
               ),
-            ),
-            Switch(
-              value: value,
-              onChanged: (_) => onTap(),
-              activeColor: color,
-            ),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: value ? color : Colors.black87),
+                    ),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.black45),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(value: value, onChanged: (_) => onTap(), activeThumbColor: color)
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  // 🛡️ GESTÃO DE CONVITES E ACÇÕES DE VOZ 🛡️
-  // -------------------------------------------------------------------------
+      );
 
   Widget _buildVoiceButton(CanvasController controller, BuildContext context) {
     final bool isModerator = controller.currentUserRole == 'owner' || controller.currentUserRole == 'editor';
-
     String label = 'Iniciar Estudo Live';
     IconData icon = Icons.podcasts;
     Color color = const Color(0xFF0F4C5C);
     VoidCallback? action = () => controller.toggleVoiceCall(controller.myUserId);
-
     if (controller.isLiveSessionActive) {
       label = 'Sair do Estudo Live';
       icon = Icons.stop_screen_share;
@@ -485,13 +490,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
       color = Colors.grey;
       action = null;
     }
-
-    return _buildActionButton(
-      icon: icon,
-      label: label,
-      color: color,
-      onTap: action != null ? () { action!(); Navigator.pop(context); } : null,
-    );
+    return _buildActionButton(icon: icon, label: label, color: color, onTap: action != null ? () { action!(); Navigator.pop(context); } : null);
   }
 
   Widget _buildInternalVoiceInvite(CanvasController controller) {
@@ -513,17 +512,11 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Conversa de Voz!',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF27AE60)),
-                    ),
-                    Text(
-                      '${call['sender_name'] ?? 'Um colega'} iniciou a chamada.',
-                      style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
-                    ),
+                    Text('Conversa de Voz!', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF27AE60))),
+                    Text('${call['sender_name'] ?? 'Um colega'} iniciou a chamada.', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54)),
                   ],
                 ),
-              ),
+              )
             ],
           ),
           const SizedBox(height: 16),
@@ -553,7 +546,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 ),
               ),
             ],
-          ),
+          )
         ],
       ),
     );

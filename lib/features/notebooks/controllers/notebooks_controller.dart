@@ -5,6 +5,8 @@ import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dar
 import 'package:caderno_digital_app/features/notebooks/repositories/notebook_repository.dart';
 import 'package:caderno_digital_app/features/notebooks/repositories/shared_notebook_repository.dart';
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
+import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/core/network/realtime_service.dart';
 
 import '../../auth/controllers/auth_controller.dart';
 import '../../subjects/controllers/subjects_controller.dart';
@@ -185,6 +187,54 @@ class NotebooksController extends Notifier<NotebooksState> {
     return success;
   }
 
+  Future<bool> leaveNotebook(Notebook notebook) async {
+    if (notebook.serverId == null) return false;
+    final currentUser = ref.read(authProvider).currentUser;
+    if (currentUser == null) return false;
+
+    final bool success = await _repository.leaveSharedNotebook(notebook.serverId!, currentUser.email);
+    if (success) {
+      // 🚀 REMOÇÃO IMEDIATA LOCAL: Não esperar pelo próximo sync
+      await _repository.deleteNotebook(notebook);
+      // Opcional: forçar sync para limpar qualquer resíduo
+      ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+    }
+    return success;
+  }
+
+  Future<bool> updateSessionSettings({
+    required int notebookId,
+    required String sharingType,
+    String? alternativeTitle,
+    List<int>? pageIds,
+  }) async {
+    return await _repository.updateSessionSettings(
+      notebookId: notebookId,
+      sharingType: sharingType,
+      alternativeTitle: alternativeTitle,
+      pageIds: pageIds,
+    );
+  }
+
+  Future<bool> updateUserRole(int notebookServerId, String email, String role, {String? targetUserId}) async {
+    // 🚀 REUTILIZAR LÓGICA DE SHARE (que faz updateOrInsert no Laravel)
+    final bool success = await _repository.shareNotebookWithFriend(
+      notebookId: notebookServerId, 
+      email: email, 
+      role: role,
+    );
+
+    if (success && targetUserId != null) {
+      // 🚀 AVISAR EM TEMPO REAL VIA WEBSOCKET
+      ref.read(realtimeServiceProvider).broadcastRoleUpdate(
+        notebookId: notebookServerId, 
+        targetUserId: targetUserId, 
+        newRole: role,
+      );
+    }
+    return success;
+  }
+
   Future<Map<String, dynamic>?> getSessionStatus(int notebookServerId) async {
     return await _repository.fetchSessionStatus(notebookServerId);
   }
@@ -195,7 +245,7 @@ class NotebooksController extends Notifier<NotebooksState> {
       // 1. Criar o novo caderno local
       final newNotebook = Notebook(
         subjectId: targetSubjectId,
-        title: '${source.title} (Cópia)',
+        title: source.role == 'owner' ? '${source.title} (Cópia)' : '${source.title} (Minha Cópia)',
         coverType: source.coverType,
         color: source.color,
         coverImage: source.coverImage,
@@ -203,7 +253,7 @@ class NotebooksController extends Notifier<NotebooksState> {
         paperSize: source.paperSize,
         lineSpacing: source.lineSpacing,
         templateType: source.templateType,
-        authorName: source.authorName, // Mantém o autor original
+        authorName: source.role == 'owner' ? source.authorName : 'Eu (Original: ${source.authorName ?? "Colega"})',
         description: source.description,
       );
 
@@ -211,6 +261,8 @@ class NotebooksController extends Notifier<NotebooksState> {
       newNotebook.id = newId;
 
       // 2. Buscar páginas do original
+      // 🚀 PRIVACIDADE: Se não for o dono, o sistema de Sync já deve ter limpado o lixo local.
+      // Mas por segurança, o repositório local só retorna o que existe no SQLite.
       final sourcePages = await _canvasRepository.getPagesByNotebook(source.id!, source.serverId);
 
       // 3. Copiar cada página
@@ -222,6 +274,8 @@ class NotebooksController extends Notifier<NotebooksState> {
           syncedWithCloud: 0,
         );
         await _canvasRepository.savePage(newPage, null);
+        
+        // 🚀 Opcional: Clonar traços e textos se necessário (o repositório savePage já lida com isso se passarmos o objeto completo)
       }
     } finally {
       state = state.copyWith(isLoading: false);

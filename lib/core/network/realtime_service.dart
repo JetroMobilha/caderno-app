@@ -37,10 +37,12 @@ class RealtimeService {
   final _handStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _uploadingStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _inviteStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _syncRequestedStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
   final _voiceCallStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _voiceStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _activityStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _sessionMetaStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _sessionMetaStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
+  final _roleUpdateStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
   final _pointerStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _chatStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _audioMessageStreamController = StreamController<Map<String, dynamic>>.broadcast();
@@ -70,10 +72,12 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onHandEventReceived => _handStreamController.stream;
   Stream<Map<String, dynamic>> get onRemoteUploading => _uploadingStreamController.stream;
   Stream<Map<String, dynamic>> get onLiveInviteReceived => _inviteStreamController.stream;
+  Stream<Map<String, dynamic>> get onSyncRequestedReceived => _syncRequestedStreamController.stream; // 🚀 Novo
   Stream<Map<String, dynamic>> get onVoiceCallStarted => _voiceCallStreamController.stream;
   Stream<Map<String, dynamic>> get onVoiceStateReceived => _voiceStateStreamController.stream;
   Stream<Map<String, dynamic>> get onUserActivityReceived => _activityStreamController.stream;
-  Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream; // 🚀 Novo
+  Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream; 
+  Stream<Map<String, dynamic>> get onRoleUpdateReceived => _roleUpdateStreamController.stream; // 🚀 Novo
   Stream<Map<String, dynamic>> get onPointerMoveReceived => _pointerStreamController.stream;
   Stream<Map<String, dynamic>> get onChatMessageReceived => _chatStreamController.stream;
   Stream<Map<String, dynamic>> get onAudioMessageReceived => _audioMessageStreamController.stream;
@@ -294,7 +298,8 @@ class RealtimeService {
     _bindEvent('client-image-uploading', (event) => _uploadingStreamController.add(_safeParse(event.data)));
     _bindEvent('client-voice-call-started', (event) => _voiceCallStreamController.add(_safeParse(event.data)));
     _bindEvent('client-voice-state-update', (event) => _voiceStateStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-session-meta', (event) => _sessionMetaStreamController.add(_safeParse(event.data))); // 🚀 Novo
+    _bindEvent('client-session-meta', (event) => _sessionMetaStreamController.add(_safeParse(event.data))); 
+    _bindEvent('client-role-updated', (event) => _roleUpdateStreamController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-user-activity', (event) => _activityStreamController.add(_safeParse(event.data)));
     _bindEvent('client-pointer-move', (event) => _pointerStreamController.add(_safeParse(event.data)));
     _bindEvent('client-chat-message', (event) => _chatStreamController.add(_safeParse(event.data)));
@@ -397,6 +402,13 @@ class RealtimeService {
     return true;
   }
 
+  Future<bool> broadcastRoleUpdate({required int notebookId, required String targetUserId, required String newRole}) async {
+    if (_notebookChannel == null) return false;
+    final data = {'target_id': targetUserId, 'role': newRole};
+    _notebookChannel!.trigger(eventName: 'client-role-updated', data: jsonEncode(data));
+    return true;
+  }
+
   Future<bool> broadcastVoiceStateUpdate({
     required int notebookId, 
     required String myUserId, 
@@ -428,13 +440,14 @@ class RealtimeService {
     return true;
   }
 
-  Future<bool> broadcastPointerMove({required int notebookId, required String myUserId, required Offset pos, int? pageNumber}) async {
+  Future<bool> broadcastPointerMove({required int notebookId, required String myUserId, required Offset pos, int? pageNumber, String? tool}) async {
     if (_notebookChannel == null) return false;
     final data = {
       'sender_id': myUserId, 
       'x': double.parse(pos.dx.toStringAsFixed(1)), 
       'y': double.parse(pos.dy.toStringAsFixed(1)),
       'page_number': pageNumber,
+      if (tool != null) 'tool': tool,
     };
     _notebookChannel!.trigger(eventName: 'client-pointer-move', data: jsonEncode(data));
     return true;
@@ -593,7 +606,10 @@ class RealtimeService {
       headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
     );
     _userChannel = _pusher!.privateChannel(channelName, authorizationDelegate: authDelegate);
-    _userChannel!.bind('SyncRequested').listen((event) => onGlobalSyncNeeded());
+    _userChannel!.bind('SyncRequested').listen((event) {
+      _syncRequestedStreamController.add(_safeParse(event.data));
+      onGlobalSyncNeeded();
+    });
     _rebindGlobalListeners(userId);
     _userChannel!.subscribe();
   }

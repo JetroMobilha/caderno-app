@@ -1,12 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
-// O Drift gerará este arquivo para nós com as nossas tabelas e tipos seguros
 part 'app_database.g.dart';
 
-// ====================================================================
-// 1. AS TABELAS DO SEU CADERNO DEFINIDAS EM DRIFT
-// ====================================================================
 class Users extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
@@ -22,7 +18,7 @@ class Users extends Table {
 class Subjects extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
-  TextColumn get clientId => text().nullable().unique()(); // 🆔 Identidade única global
+  TextColumn get clientId => text().nullable().unique()();
   IntColumn get userId => integer().references(Users, #id, onDelete: KeyAction.cascade)();
   TextColumn get name => text()();
   TextColumn get color => text()();
@@ -36,7 +32,7 @@ class Subjects extends Table {
 class Notebooks extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
-  TextColumn get clientId => text().nullable().unique()(); // 🆔 Identidade única global
+  TextColumn get clientId => text().nullable().unique()();
   IntColumn get subjectId => integer().nullable().references(Subjects, #id, onDelete: KeyAction.cascade)();
   TextColumn get title => text()();
   TextColumn get coverType => text()();
@@ -44,7 +40,7 @@ class Notebooks extends Table {
   TextColumn get coverImage => text().nullable()();
   TextColumn get lineType => text().nullable()();
   TextColumn get paperSize => text().nullable()();
-  RealColumn get lineSpacing => real().nullable()(); // 📏 Espaçamento dinâmico
+  RealColumn get lineSpacing => real().nullable()();
   IntColumn get isPublished => integer().withDefault(const Constant(0))();
   RealColumn get price => real().withDefault(const Constant(0.00))();
   TextColumn get description => text().nullable()();
@@ -53,27 +49,30 @@ class Notebooks extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  TextColumn get templateType => text().withDefault(const Constant('study'))(); // 🚀 study, technical, formal
-  TextColumn get collaborationMode => text().withDefault(const Constant('study_group'))(); // 🚀 study_group, lecture, tutoring
+  TextColumn get templateType => text().withDefault(const Constant('study'))();
+  TextColumn get collaborationMode => text().withDefault(const Constant('study_group'))();
+  TextColumn get role => text().withDefault(const Constant('owner'))();
+  TextColumn get alternativeTitle => text().nullable()(); // 🚀 Sincronizado com sessão viva
+  TextColumn get sharingType => text().withDefault(const Constant('full'))(); // 🚀 full ou scoped
 }
 
 class Pages extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
-  TextColumn get clientId => text().nullable().unique()(); // 🆔 Identidade única global
+  TextColumn get clientId => text().nullable().unique()();
   IntColumn get notebookId => integer().references(Notebooks, #id, onDelete: KeyAction.cascade)();
   IntColumn get pageNumber => integer()();
   IntColumn get isLandscape => integer().withDefault(const Constant(0))();
   TextColumn get headerData => text().nullable()();
   TextColumn get footerData => text().nullable()();
-  TextColumn get extractedText => text().nullable()(); // 🧠 O cérebro local: Armazena o texto convertido da escrita manual
+  TextColumn get extractedText => text().nullable()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  IntColumn get isFrozen => integer().withDefault(const Constant(0))(); // 🚀 0 = Open, 1 = Frozen
-  TextColumn get paperSize => text().withDefault(const Constant('A4'))(); // 🚀 Novo: Tamanho por folha
-  TextColumn get backgroundPdfPath => text().nullable()(); // 🚀 Para modo Técnico/Engenharia
+  IntColumn get isFrozen => integer().withDefault(const Constant(0))();
+  TextColumn get paperSize => text().withDefault(const Constant('A4'))();
+  TextColumn get backgroundPdfPath => text().nullable()();
 }
 
 class CanvasStrokes extends Table {
@@ -82,13 +81,12 @@ class CanvasStrokes extends Table {
   IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
   TextColumn get strokeData => text()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
-  IntColumn get deletedInSession => integer().withDefault(const Constant(0))(); // 🚀 Novo
+  IntColumn get deletedInSession => integer().withDefault(const Constant(0))();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  TextColumn get creatorId => text().nullable()(); // 🚀 Identifica quem criou
-  TextColumn get layerId => text().nullable()(); // 🚀 Agrupamento de traços (Novo)
-
+  TextColumn get creatorId => text().nullable()();
+  TextColumn get layerId => text().nullable()();
   @override
   Set<Column> get primaryKey => {clientStrokeId};
 }
@@ -99,13 +97,11 @@ class CanvasTextBlocks extends Table {
   IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
   TextColumn get textData => text()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
-  IntColumn get deletedInSession => integer().withDefault(const Constant(0))(); 
+  IntColumn get deletedInSession => integer().withDefault(const Constant(0))();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  TextColumn get creatorId => text().nullable()(); // 🚀 Identifica quem criou
-  TextColumn get layerId => text().nullable()(); // 🚀 Agrupamento de textos (Novo)
-
+  TextColumn get creatorId => text().nullable()();
   @override
   Set<Column> get primaryKey => {clientTextId};
 }
@@ -121,13 +117,11 @@ class CanvasImageBlocks extends Table {
   RealColumn get height => real()();
   RealColumn get rotation => real()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
-  IntColumn get deletedInSession => integer().withDefault(const Constant(0))(); 
+  IntColumn get deletedInSession => integer().withDefault(const Constant(0))();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  TextColumn get creatorId => text().nullable()(); // 🚀 Identifica quem criou
-  TextColumn get layerId => text().nullable()(); // 🚀 Agrupamento de imagens (Novo)
-
+  TextColumn get creatorId => text().nullable()();
   @override
   Set<Column> get primaryKey => {clientImageId};
 }
@@ -172,15 +166,11 @@ class LessonRecordings extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
 }
 
-// ====================================================================
-// 2. A CLASSE PRINCIPAL DO BANCO (O seu novo DatabaseHelper)
-// ====================================================================
 @DriftDatabase(tables: [
   Users, Subjects, Notebooks, Pages, CanvasStrokes,
   CanvasTextBlocks, CanvasImageBlocks, NotebookUser, Payments, LessonRecordings
 ])
 class AppDatabase extends _$AppDatabase {
-  // Padrão Singleton usando drift_flutter para conexão automática multiplataforma
   AppDatabase._privateConstructor() : super(driftDatabase(
     name: 'caderno_digital_v9',
     web: DriftWebOptions(
@@ -190,7 +180,6 @@ class AppDatabase extends _$AppDatabase {
   ));
   static final AppDatabase instance = AppDatabase._privateConstructor();
 
-  // Construtor para Testes
   AppDatabase.forTesting(QueryExecutor connection) : super(connection);
 
   @override
@@ -200,31 +189,19 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('PRAGMA foreign_keys = ON');
       },
       onUpgrade: (m, from, to) async {
-        if (from < 2) {
-          // Migração da v1 para v2: Adicionar coluna extractedText
-          await m.addColumn(pages, pages.extractedText);
-        }
+        if (from < 2) await m.addColumn(pages, pages.extractedText);
         if (from < 3) {
-          // 🚀 Migração v2 -> v3: Reconstrução total das tabelas para garantir UNIQUE no clientId
           await m.alterTable(TableMigration(subjects, newColumns: [subjects.clientId]));
           await m.alterTable(TableMigration(notebooks, newColumns: [notebooks.clientId]));
         }
         if (from < 4) {
-          // 🚀 Migração v3 -> v4: Adicionar colunas deletedInSession
           await m.addColumn(canvasStrokes, canvasStrokes.deletedInSession);
           await m.addColumn(canvasTextBlocks, canvasTextBlocks.deletedInSession);
           await m.addColumn(canvasImageBlocks, canvasImageBlocks.deletedInSession);
         }
-        if (from < 5) {
-          // 🚀 Migração v4 -> v5: Adicionar clientId na tabela Pages
-          await m.alterTable(TableMigration(pages, newColumns: [pages.clientId]));
-        }
-        if (from < 6) {
-          // 🚀 Migração v5 -> v6: Adicionar lineSpacing na tabela Notebooks
-          await m.addColumn(notebooks, notebooks.lineSpacing);
-        }
+        if (from < 5) await m.alterTable(TableMigration(pages, newColumns: [pages.clientId]));
+        if (from < 6) await m.addColumn(notebooks, notebooks.lineSpacing);
         if (from < 7) {
-          // 🚀 Migração v6 -> v7: Adicionar version em TODAS as tabelas para consistência
           await m.addColumn(users, users.version);
           await m.addColumn(subjects, subjects.version);
           await m.addColumn(notebooks, notebooks.version);
@@ -236,46 +213,41 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(payments, payments.version);
         }
         if (from < 8) {
-          // 🚀 Migração v7 -> v8: Adicionar creatorId
           await customStatement('ALTER TABLE canvas_strokes ADD COLUMN creator_id TEXT');
           await customStatement('ALTER TABLE canvas_text_blocks ADD COLUMN creator_id TEXT');
           await customStatement('ALTER TABLE canvas_image_blocks ADD COLUMN creator_id TEXT');
         }
-        if (from < 9) {
-          // 🚀 Migração v8 -> v9: Adicionar templateType na tabela Notebooks
-          await m.addColumn(notebooks, notebooks.templateType);
-        }
-        if (from < 10) {
-          // 🚀 Migração v9 -> v10: Adicionar isFrozen na tabela Pages
-          await m.addColumn(pages, pages.isFrozen);
-        }
+        if (from < 9) await m.addColumn(notebooks, notebooks.templateType);
+        if (from < 10) await m.addColumn(pages, pages.isFrozen);
         if (from < 11) {
-          // 🚀 Migração v10 -> v11: Adicionar backgroundPdfPath e layerId
           await m.addColumn(pages, pages.backgroundPdfPath);
           await m.addColumn(canvasStrokes, canvasStrokes.layerId);
-          await m.addColumn(canvasTextBlocks, canvasTextBlocks.layerId);
-          await m.addColumn(canvasImageBlocks, canvasImageBlocks.layerId);
         }
-        if (from < 12) {
-          // 🚀 Migração v11 -> v12: Adicionar tabela LessonRecordings
-          await m.createTable(lessonRecordings);
+        if (from < 12) await m.createTable(lessonRecordings);
+        if (from < 13) await m.addColumn(pages, pages.paperSize);
+        if (from < 14) await m.addColumn(notebooks, notebooks.collaborationMode);
+        if (from < 15) {
+           try {
+             await customStatement('ALTER TABLE notebooks ADD COLUMN role TEXT DEFAULT "owner"');
+           } catch (e) {
+             print('⚠️ Migração role ignorada (provavelmente já existe): $e');
+           }
         }
-        if (from < 13) {
-          // 🚀 Migração v12 -> v13: Adicionar paperSize à tabela Pages
-          await m.addColumn(pages, pages.paperSize);
-        }
-        if (from < 14) {
-          // 🚀 Migração v13 -> v14: Adicionar collaborationMode à tabela Notebooks
-          await m.addColumn(notebooks, notebooks.collaborationMode);
+        if (from < 16) {
+           try {
+             await customStatement('ALTER TABLE notebooks ADD COLUMN alternative_title TEXT');
+             await customStatement('ALTER TABLE notebooks ADD COLUMN sharing_type TEXT DEFAULT "full"');
+           } catch (e) {
+             print('⚠️ Migração versao 16 ignorada: $e');
+           }
         }
       },
     );
   }
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 16;
 
-  // Função equivalente ao seu antigo clearAllData()
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();
     await delete(canvasTextBlocks).go();

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' as io;
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -434,25 +435,22 @@ class SyncService {
         final List serverPages = responseData['data'] ?? responseData['pages'] ?? [];
         if (serverPages.isNotEmpty) {
           final sPage = serverPages.first;
-          final int sId = sPage['id'] is int ? sPage['id'] : int.parse(sPage['id'].toString());
-          final String? cId = sPage['client_id']?.toString();
           final int inNbId = int.tryParse(sPage['notebook_id']?.toString() ?? '') ?? 0;
           if (inNbId != notebookServerId) return;
           final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookServerId))).getSingleOrNull();
           if (notebook == null) return;
           
           final newPageData = pages_model.LocalPage.fromJson(sPage);
-          // 🚀 Usar o repositório para salvar garante a resolução de duplicados
           final localId = await _canvasRepository.savePage(newPageData, notebookServerId);
-          
           await _pullCanvasData(localId, sPage, serverTs: (newPageData.updatedAt));
         }
-        } else if (!isRetry) {
-             await Future.delayed(const Duration(seconds: 2));
-             return pullSpecificPage(notebookServerId, pageNumber, isRetry: true);
-        }
+      } else if (!isRetry) {
+        await Future.delayed(const Duration(seconds: 2));
+        return pullSpecificPage(notebookServerId, pageNumber, isRetry: true);
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('🚨 [Sync] Erro no pullSpecificPage: $e');
+    }
   }
 
   Future<void> _pullCanvasData(int localPageId, Map sPage, {int? serverTs}) async {
@@ -515,21 +513,64 @@ class SyncService {
     try {
       final unsynced = await (_db.select(_db.lessonRecordings)..where((t) => t.syncedWithCloud.equals(0))).get();
       if (unsynced.isEmpty) return;
-      final List<Map<String, dynamic>> payload = [];
+
       for (var row in unsynced) {
         final notebookRow = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
-        if (notebookRow?.serverId != null) payload.add({'notebook_id': notebookRow!.serverId, 'client_id': row.clientId, 'title': row.title, 'audio_url': row.audioUrl, 'duration_seconds': row.durationSeconds, 'updated_at': row.updatedAt});
-      }
-      final response = await _apiService.post('/sync/recordings/push', {'recordings': payload});
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        for (var item in data['synced_recordings'] ?? []) {
-          final String clientUuid = item['client_id'].toString();
-          final int serverId = item['server_id'];
-          await (_db.update(_db.lessonRecordings)..where((t) => t.clientId.equals(clientUuid))).write(LessonRecordingsCompanion(serverId: Value(serverId), syncedWithCloud: const Value(1)));
+        if (notebookRow?.serverId == null) continue;
+
+        String audioUrl = row.audioUrl;
+        
+        // 🚀 Se for um path local, tentar upload primeiro
+        if (!kIsWeb && !audioUrl.startsWith('http')) {
+          final file = io.File(audioUrl);
+          if (await file.exists()) {
+            final bytes = await file.readAsBytes();
+            final remoteUrl = await _canvasRepository.uploadLessonAudio(
+              notebookRow!.serverId!, 
+              'lesson_${row.clientId}.m4a', 
+              bytes,
+              title: row.title,
+              duration: row.durationSeconds,
+              clientId: row.clientId
+            );
+            if (remoteUrl != null) {
+              audioUrl = remoteUrl;
+              // Atualizar localmente com a nova URL (opcional aqui, o push final confirmará)
+            } else {
+              continue; // Tenta no próximo ciclo
+            }
+          }
+        }
+
+        final response = await _apiService.post('/sync/recordings/push', {
+          'recordings': [{
+            'notebook_id': notebookRow!.serverId, 
+            'client_id': row.clientId, 
+            'title': row.title, 
+            'audio_url': audioUrl, 
+            'duration_seconds': row.durationSeconds, 
+            'updated_at': row.updatedAt
+          }]
+        });
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final data = jsonDecode(response.body);
+          final syncedItem = (data['synced_recordings'] as List?)?.first;
+          if (syncedItem != null) {
+            final int serverId = syncedItem['server_id'];
+            await (_db.update(_db.lessonRecordings)..where((t) => t.clientId.equals(row.clientId!))).write(
+              LessonRecordingsCompanion(
+                serverId: Value(serverId), 
+                audioUrl: Value(audioUrl),
+                syncedWithCloud: const Value(1)
+              )
+            );
+          }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('🚨 [Sync-Recordings] Erro no push: $e');
+    }
   }
 
   Future<void> pullRecordings() async {

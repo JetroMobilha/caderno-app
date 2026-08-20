@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -72,7 +72,7 @@ class ImageBlock {
             }
           }
         } else {
-          final bytes = await File(imagePath).readAsBytes();
+          final bytes = await io.File(imagePath).readAsBytes();
           base64Image = base64Encode(bytes);
         }
       } catch (e) {
@@ -92,8 +92,8 @@ class ImageBlock {
     if (!kIsWeb && json['image_base64'] != null && json['image_base64'].toString().isNotEmpty) {
       try {
         final Uint8List bytes = base64Decode(json['image_base64']);
-        final tempDir = Directory.systemTemp;
-        final File file = File('${tempDir.path}/sync_img_${json['id']}.png');
+        final tempDir = io.Directory.systemTemp;
+        final io.File file = io.File('${tempDir.path}/sync_img_${json['id']}.png');
         file.writeAsBytesSync(bytes);
         path = file.path;
       } catch (e) {

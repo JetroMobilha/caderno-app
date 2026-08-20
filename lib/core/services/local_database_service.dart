@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart';
 import 'dart:ui';
 import 'package:drift/drift.dart';
 import '../../features/canvas/models/image_block_model.dart';
@@ -140,7 +141,7 @@ class LocalDatabaseService {
         final String path = m.imagePath;
 
         // 🛡️ O NOVO ESCUDO: É válido se for um link da internet OU um ficheiro físico no disco!
-        final bool isValidImage = path.startsWith('http') || File(path).existsSync();
+        final bool isValidImage = path.startsWith('http') || (!kIsWeb && io.File(path).existsSync());
 
         if (isValidImage) {
           safeImages.add(

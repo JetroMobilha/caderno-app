@@ -60,6 +60,7 @@ class RealtimeService {
   final _notebookDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
   final _notebookAccessRevokedController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
   final _notebookStructureStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
+  final _voicePolicyStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
 
   Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
   Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
@@ -95,6 +96,7 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onNotebookDeleted => _notebookDeletedStreamController.stream; 
   Stream<Map<String, dynamic>> get onNotebookAccessRevoked => _notebookAccessRevokedController.stream; // 🚀
   Stream<Map<String, dynamic>> get onNotebookStructureUpdated => _notebookStructureStreamController.stream; 
+  Stream<Map<String, dynamic>> get onVoicePolicyUpdated => _voicePolicyStreamController.stream; // 🚀 Novo
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
 
@@ -132,7 +134,12 @@ class RealtimeService {
         debugPrint('✅ [Realtime] Conexão estabelecida com sucesso.');
         final prefs = await SharedPreferences.getInstance();
         final currentUserIdStr = prefs.getString('user_id');
-        if (currentUserIdStr != null) _rebindGlobalListeners(int.parse(currentUserIdStr));
+        if (currentUserIdStr != null) {
+          final parsedId = int.tryParse(currentUserIdStr);
+          if (parsedId != null) {
+            _rebindGlobalListeners(parsedId);
+          }
+        }
       } else if (state == PusherChannelsClientLifeCycleState.pendingConnection) {
         statusNotifier.value = RealtimeStatus.connecting;
       } else if (state == PusherChannelsClientLifeCycleState.disconnected) {
@@ -317,6 +324,7 @@ class RealtimeService {
     _bindEvent('page.deleted', (event) => _pageDeletedStreamController.add(_safeParse(event.data))); // 🚀
     _bindEvent('notebook.deleted', (event) => _notebookDeletedStreamController.add(_safeParse(event.data))); // 🚀
     _bindEvent('notebook.structure.updated', (event) => _notebookStructureStreamController.add(_safeParse(event.data))); // 🚀
+    _bindEvent('client-voice-policy-updated', (event) => _voicePolicyStreamController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
 
     _notebookChannel!.subscribe();
@@ -470,7 +478,7 @@ class RealtimeService {
     required int notebookId, 
     required String myUserId, 
     required String audioUrl, 
-    required int duration, 
+    required num duration, 
     bool isLive = false,
     String? streamMsgId,
     int? segmentIndex,

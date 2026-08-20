@@ -98,6 +98,9 @@ class CanvasToolbar extends StatelessWidget {
             _buildCompactIconButton(Icons.psychology_outlined, onAiAssistantTap, 'Assistente IA', const Color(0xFF0F4C5C)),
 
           if (!isSmallScreen)
+            _buildCompactIconButton(Icons.style_rounded, () => Scaffold.of(context).openEndDrawer(), 'Ver Páginas', const Color(0xFF1A1A24)),
+
+          if (!isSmallScreen)
             _buildCompactIconButton(Icons.add_photo_alternate_outlined, () => controller.pickAndInsertImage(currentPage), 'Adicionar Imagem', const Color(0xFF1A1A24)),
           
           // 🚀 RECURSOS ADAPTATIVOS POR TEMPLATE

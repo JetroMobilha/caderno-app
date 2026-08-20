@@ -240,8 +240,24 @@ class CanvasRepository {
     ));
   }
 
+  Future<void> saveSingleTextBlock(int pageId, TextBlock t) async {
+    await _db.into(_db.canvasTextBlocks).insertOnConflictUpdate(CanvasTextBlocksCompanion.insert(
+      clientTextId: t.id,
+      pageId: pageId,
+      textData: jsonEncode(t.toJson()),
+      isDeleted: Value(t.isDeleted ? 1 : 0),
+      deletedInSession: Value(t.deletedInSession ? 1 : 0),
+      creatorId: Value(t.creatorId),
+      updatedAt: Value(t.updatedAt),
+    ));
+  }
+
   Future<void> deleteSingleStroke(int pageId, String strokeId) async {
     await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(strokeId))).write(const CanvasStrokesCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleTextBlock(int pageId, String textId) async {
+    await (_db.update(_db.canvasTextBlocks)..where((t) => t.clientTextId.equals(textId))).write(const CanvasTextBlocksCompanion(isDeleted: Value(1)));
   }
 
   Future<void> saveSingleImageBlock(int pageId, ImageBlock i) async {

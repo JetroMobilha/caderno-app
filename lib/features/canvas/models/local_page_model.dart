@@ -220,6 +220,19 @@ class LocalPage {
     final List<dynamic> textList = json['text_data'] ?? [];
     final List<dynamic> imageList = json['image_data'] ?? [];
 
+    // 🚀 Lógica resiliente para data de atualização
+    int? upAt;
+    if (json['updated_at_ms'] != null) {
+      upAt = (json['updated_at_ms'] as num).toInt();
+    } else if (json['updated_at'] != null) {
+      final val = json['updated_at'];
+      if (val is num) {
+        upAt = val.toInt();
+      } else if (val is String) {
+        upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
+      }
+    }
+
     return LocalPage(
       serverId: json['id'] != null ? int.tryParse(json['id'].toString()) : null,
       clientId: json['client_id']?.toString(), // 🆔 Recuperar clientId
@@ -236,7 +249,7 @@ class LocalPage {
       textBlocks: textList.map((t) => TextBlock.fromJson(t)).toList(),
       imageBlocks: imageList.map((img) => ImageBlock.fromJson(img)).toList(),
       syncedWithCloud: 1,
-      updatedAt: (json['updated_at'] as num?)?.toInt(),
+      updatedAt: upAt,
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     );
   }

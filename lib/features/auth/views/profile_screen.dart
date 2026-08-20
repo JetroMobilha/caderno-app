@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -127,7 +127,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             radius: 64,
                             backgroundColor: const Color(0xFFFDFBF7),
                             backgroundImage: _selectedImage != null
-                                ? (kIsWeb ? NetworkImage(_selectedImage!.path) : FileImage(File(_selectedImage!.path))) as ImageProvider
+                                ? (kIsWeb ? NetworkImage(_selectedImage!.path) : FileImage(io.File(_selectedImage!.path))) as ImageProvider
                                 : (currentUser?.avatar != null
                                 ? NetworkImage("${ApiService.baseUrlImagem}${currentUser!.avatar!}")
                                 : null) as ImageProvider?,

@@ -6,6 +6,7 @@ class LiveVoiceCockpit extends StatelessWidget {
   final Map<String, String?> userReactions; 
   final String? followingUserId;
   final String myUserId; // 🚀 Novo
+  final bool canSpeak; // 🎤 Novo: Permissão de voz
   final bool isSpeakerOn;
   final bool isRecording; // 🎙️ Novo
   final bool isLoading; 
@@ -26,6 +27,7 @@ class LiveVoiceCockpit extends StatelessWidget {
     required this.userReactions,
     this.followingUserId,
     required this.myUserId, 
+    required this.canSpeak, 
     required this.isSpeakerOn,
     this.isRecording = false, 
     this.isLoading = false,
@@ -188,11 +190,14 @@ class LiveVoiceCockpit extends StatelessWidget {
           const SizedBox(width: 4),
 
           // 🎙️ MICROFONE (Live Audio)
-          _buildVoiceButton(
-            icon: isRecording ? Icons.mic : Icons.mic_none,
-            color: isRecording ? Colors.redAccent : Colors.white12,
-            onTap: onMicTap,
-            isRecording: isRecording,
+          Opacity(
+            opacity: canSpeak ? 1.0 : 0.4,
+            child: _buildVoiceButton(
+              icon: isRecording ? Icons.mic : (canSpeak ? Icons.mic_none : Icons.mic_off),
+              color: isRecording ? Colors.redAccent : Colors.white12,
+              onTap: canSpeak ? onMicTap : () {},
+              isRecording: isRecording,
+            ),
           ),
           const SizedBox(width: 4),
 

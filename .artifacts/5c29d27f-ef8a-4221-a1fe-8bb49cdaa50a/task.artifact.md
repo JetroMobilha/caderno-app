@@ -1,0 +1,10 @@
+- [x] Backend: Criar migração para `can_speak` na tabela `notebook_user`
+- [x] UI: Corrigir erro de contexto no `Scaffold.of` da AppBar
+- [x] UI: Restaurar Bold, Italic, Underline e Checklist na barra de edição
+- [x] UI: Remover linha redundante na zona do título
+- [x] Áudio: Otimizar latência para 1.5 segundos
+- [x] UI: Refatorar Cabeçalho da Gaveta de Páginas
+- [x] UI: Adicionar metadados (A4, Pauta) na lista de folhas do Drawer
+- [ ] UI: Adicionar botão "Visualizar Páginas" na Toolbar principal
+- [ ] Áudio: Otimizar latência para 1.0 segundo (Voz Instantânea)
+- [ ] UI: Remover linha extra na zona do título (Ajuste Final)

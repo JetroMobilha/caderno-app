@@ -4,16 +4,18 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i4;
-import 'dart:typed_data' as _i8;
-import 'dart:ui' as _i10;
+import 'dart:typed_data' as _i9;
+import 'dart:ui' as _i11;
 
-import 'package:caderno_digital_app/core/network/realtime_service.dart' as _i9;
+import 'package:caderno_digital_app/core/network/realtime_service.dart' as _i10;
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart'
-    as _i7;
+    as _i8;
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart'
     as _i5;
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart'
     as _i6;
+import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart'
+    as _i7;
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart'
     as _i3;
 import 'package:flutter/foundation.dart' as _i2;
@@ -73,18 +75,26 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Stream<List<_i5.LocalPage>>);
 
   @override
-  _i4.Future<void> savePage(_i5.LocalPage? page, int? notebookSid) =>
+  _i4.Future<int> savePage(_i5.LocalPage? page, int? notebookSid) =>
       (super.noSuchMethod(
             Invocation.method(#savePage, [page, notebookSid]),
+            returnValue: _i4.Future<int>.value(0),
+          )
+          as _i4.Future<int>);
+
+  @override
+  _i4.Future<void> saveSingleStroke(int? pageId, _i6.Stroke? s) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveSingleStroke, [pageId, s]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
           as _i4.Future<void>);
 
   @override
-  _i4.Future<void> saveSingleStroke(int? pageId, _i6.Stroke? s) =>
+  _i4.Future<void> saveSingleTextBlock(int? pageId, _i7.TextBlock? t) =>
       (super.noSuchMethod(
-            Invocation.method(#saveSingleStroke, [pageId, s]),
+            Invocation.method(#saveSingleTextBlock, [pageId, t]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
@@ -100,7 +110,16 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Future<void>);
 
   @override
-  _i4.Future<void> saveSingleImageBlock(int? pageId, _i7.ImageBlock? i) =>
+  _i4.Future<void> deleteSingleTextBlock(int? pageId, String? textId) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteSingleTextBlock, [pageId, textId]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<void> saveSingleImageBlock(int? pageId, _i8.ImageBlock? i) =>
       (super.noSuchMethod(
             Invocation.method(#saveSingleImageBlock, [pageId, i]),
             returnValue: _i4.Future<void>.value(),
@@ -121,7 +140,7 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
   _i4.Future<String?> uploadImage(
     int? notebookId,
     String? fileName,
-    _i8.Uint8List? bytes,
+    _i9.Uint8List? bytes,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#uploadImage, [notebookId, fileName, bytes]),
@@ -133,7 +152,7 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
   _i4.Future<String?> uploadAudio(
     int? notebookId,
     String? fileName,
-    _i8.Uint8List? bytes,
+    _i9.Uint8List? bytes,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#uploadAudio, [notebookId, fileName, bytes]),
@@ -145,7 +164,7 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
   _i4.Future<String?> uploadLessonAudio(
     int? notebookId,
     String? fileName,
-    _i8.Uint8List? bytes, {
+    _i9.Uint8List? bytes, {
     required String? title,
     required int? duration,
     String? clientId,
@@ -202,21 +221,21 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
 /// A class which mocks [RealtimeService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockRealtimeService extends _i1.Mock implements _i9.RealtimeService {
+class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
   MockRealtimeService() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i2.ValueNotifier<_i9.RealtimeStatus> get statusNotifier =>
+  _i2.ValueNotifier<_i10.RealtimeStatus> get statusNotifier =>
       (super.noSuchMethod(
             Invocation.getter(#statusNotifier),
-            returnValue: _FakeValueNotifier_0<_i9.RealtimeStatus>(
+            returnValue: _FakeValueNotifier_0<_i10.RealtimeStatus>(
               this,
               Invocation.getter(#statusNotifier),
             ),
           )
-          as _i2.ValueNotifier<_i9.RealtimeStatus>);
+          as _i2.ValueNotifier<_i10.RealtimeStatus>);
 
   @override
   _i4.Stream<Map<String, dynamic>> get onStrokeReceived =>
@@ -762,8 +781,9 @@ class MockRealtimeService extends _i1.Mock implements _i9.RealtimeService {
   _i4.Future<bool> broadcastPointerMove({
     required int? notebookId,
     required String? myUserId,
-    required _i10.Offset? pos,
+    required _i11.Offset? pos,
     int? pageNumber,
+    String? tool,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#broadcastPointerMove, [], {
@@ -771,6 +791,7 @@ class MockRealtimeService extends _i1.Mock implements _i9.RealtimeService {
               #myUserId: myUserId,
               #pos: pos,
               #pageNumber: pageNumber,
+              #tool: tool,
             }),
             returnValue: _i4.Future<bool>.value(false),
           )

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' as io;
 import 'package:drift/drift.dart' as drift;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:flutter/foundation.dart'; 
@@ -45,9 +46,11 @@ class CanvasController extends ChangeNotifier {
     _audioPlayer.onPlayerComplete.listen((_) {
       audioPlaybackProgress = 0.0;
       _currentAudioDuration = null;
+      _currentAudioPosition = null;
       safeNotify();
     });
     _audioPlayer.onPositionChanged.listen((pos) {
+      _currentAudioPosition = pos;
       if (currentlyPlayingAudioUrl == null) return;
       
       if (_currentAudioDuration != null && _currentAudioDuration!.inMilliseconds > 0) {
@@ -66,6 +69,9 @@ class CanvasController extends ChangeNotifier {
     });
     _audioPlayer.setVolume(1.0);
   }
+
+  bool _isNotebookDeleted = false;
+  bool get isNotebookDeleted => _isNotebookDeleted;
 
   bool _isDisposed = false; 
   void safeNotify() { if (!_isDisposed) notifyListeners(); }
@@ -121,6 +127,22 @@ class CanvasController extends ChangeNotifier {
   double audioPlaybackProgress = 0.0; 
   double playbackSpeed = 1.0; 
   Duration? _currentAudioDuration; // 🚀 Cache de duração
+  Duration? _currentAudioPosition; // 🚀
+
+  bool get isAudioPlaying => _audioPlayer.state == PlayerState.playing;
+  Duration get audioPosition => _currentAudioPosition ?? Duration.zero;
+  Duration get audioDuration => _currentAudioDuration ?? Duration.zero;
+
+  Future<void> pauseAudio() async { await _audioPlayer.pause(); safeNotify(); }
+  Future<void> resumeAudio() async { await _audioPlayer.resume(); safeNotify(); }
+  Future<void> stopAudio() async { await _audioPlayer.stop(); currentlyPlayingAudioUrl = null; safeNotify(); }
+
+  db.LessonRecording? currentlyPlayingRecording;
+
+  Future<void> playRecording(db.LessonRecording rec) async {
+    currentlyPlayingRecording = rec;
+    await playAudioMessage(rec.audioUrl);
+  }
 
   void setPlaybackSpeed(double speed) {
     playbackSpeed = speed;
@@ -160,6 +182,7 @@ class CanvasController extends ChangeNotifier {
   bool isLoading = true;
   bool isUploadingImage = false; 
   bool isGlobalSyncing = false; 
+  bool get hasUnsyncedChanges => pages.any((p) => p.syncedWithCloud == 0); // 🚀 Novo
   bool isAiSummarizing = false; // 🚀
   bool isLessonRecording = false; // 🚀
 
@@ -170,6 +193,9 @@ class CanvasController extends ChangeNotifier {
   // 🚀 POLÍTICAS DE SESSÃO (SUBSTITUEM LIVE_ROOM_TYPE)
   bool isSessionLocked = false; // Bloqueia escrita para não-donos
   bool isAuthorColorEnabled = false; // Identifica quem escreve por cor
+  String sessionVoiceMode = 'open'; // 🚀 open, authority_only, muted
+  bool _isVoiceAuthorized = true; // 🚀 Permissão explícita do servidor
+  List<Map<String, dynamic>> enrolledMembers = []; // 🚀 Novo: Membros que têm acesso
   
   late String liveLineType;
   late double liveLineSpacing; 
@@ -179,6 +205,13 @@ class CanvasController extends ChangeNotifier {
   String myUserId = ""; 
   String? authorityId; // 🚀 Utilizador que é a fonte da verdade
   bool get isAuthority => authorityId == myUserId;
+  
+  // 🚀 PERMISSÃO DE VOZ: Hierarquia + Permissão Dinâmica do Servidor
+  bool get canSpeak {
+    if (currentUserRole == 'owner' || currentUserRole == 'editor') return true;
+    if (sessionVoiceMode == 'muted') return false;
+    return _isVoiceAuthorized;
+  }
 
   String? selectedEditingImageId; 
   ToolMode currentTool = ToolMode.draw;
@@ -203,6 +236,7 @@ class CanvasController extends ChangeNotifier {
   Offset? selectionRectEnd;
   bool isMovingStrokes = false;
   Offset? lastPanOffset;
+  DeleteAction? _activeEraserBatch; // 🚀 Acumulador para apagar em massa
 
   bool isRealtimeActive = false;
   bool isCollaborationEnabled = false; 
@@ -259,6 +293,7 @@ class CanvasController extends ChangeNotifier {
   Timer? _amplitudeTimer;
   Timer? _fingerprintTimer;
   Timer? _cleanupTimer;
+  Timer? _backgroundSyncTimer; // 🚀 Novo: Sync resiliente em Angola
 
   // Session state
   bool isLiveSessionActive = false; 
@@ -311,6 +346,7 @@ class CanvasController extends ChangeNotifier {
   StreamSubscription? _pageDeletedSubscription; 
   StreamSubscription? _notebookDeletedSubscription; // 🚀
   StreamSubscription? _notebookStructureSubscription; // 🚀
+  StreamSubscription? _voicePolicySubscription; // 🚀 Novo
   VoidCallback? _statusListener;
 
   final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier({});
@@ -337,7 +373,7 @@ class CanvasController extends ChangeNotifier {
     _notebookStructureSubscription?.cancel(); 
     _dbPagesSubscription?.cancel(); _dbNotebookSubscription?.cancel();
     if (_statusListener != null) _realtimeService.statusNotifier.removeListener(_statusListener!);
-    _viewportBroadcastTimer?.cancel(); _autoSyncPushTimer?.cancel(); _typingDebounce?.cancel(); _textBroadcastDebounce?.cancel(); _roomSyncDebouncer?.cancel(); _remoteImageSaveTimer?.cancel(); _metadataBroadcastThrottle?.cancel(); _smoothTimer?.cancel(); _segmentTimer?.cancel(); _amplitudeTimer?.cancel(); _fingerprintTimer?.cancel(); _cleanupTimer?.cancel();
+    _viewportBroadcastTimer?.cancel(); _autoSyncPushTimer?.cancel(); _typingDebounce?.cancel(); _textBroadcastDebounce?.cancel(); _roomSyncDebouncer?.cancel(); _remoteImageSaveTimer?.cancel(); _metadataBroadcastThrottle?.cancel(); _smoothTimer?.cancel(); _segmentTimer?.cancel(); _amplitudeTimer?.cancel(); _fingerprintTimer?.cancel(); _cleanupTimer?.cancel(); _backgroundSyncTimer?.cancel();
     for (var t in _broadcasterTimers.values) { t.cancel(); }
     for (var t in _editingTimers.values) { t.cancel(); }
     chatMessages.clear(); unreadChatCount = 0;
@@ -349,6 +385,47 @@ class CanvasController extends ChangeNotifier {
     leaveSession(); // 🚀 Notificar saída via API
     if (liveNotebookSid != null && liveNotebookSid != 0) _realtimeService.leaveNotebookChannel(liveNotebookSid!);
     SyncService.isCollaborationActive = false; super.dispose();
+  }
+
+  void exitNotebook() {
+    _cancelRealtimeSubscriptions();
+    pages.clear();
+    currentPageIndex = 0;
+    liveNotebookSid = null;
+    isRealtimeActive = false;
+    isCollaborationEnabled = false;
+    safeNotify();
+  }
+
+  Future<void> saveCopyOfNotebook(int? subjectId) async {
+    await cloneNotebookToSubject(subjectId ?? 0);
+  }
+
+  Future<void> savePageMetadata(LocalPage page) async {
+    await _repository.savePage(page, liveNotebookSid);
+  }
+
+  void deleteTextBlock(LocalPage page, TextBlock tb) {
+    tb.isDeleted = true;
+    triggerAutoSave(page);
+    broadcastTextBlockUpdate(page, tb, isDeleted: true);
+  }
+
+  void recordTextBlockUpdate(LocalPage page, TextBlock oldB, TextBlock newB) {
+    recordTextUpdate(page, oldB, newB);
+  }
+
+  Future<void> saveTextBlock(LocalPage page, TextBlock tb) async {
+    if (page.id != null) {
+      await _repository.saveSingleTextBlock(page.id!, tb);
+    }
+    triggerAutoSave(page);
+  }
+
+  void clearTextEditing() {
+    activeInlineTarget = InlineTarget.none;
+    activeTextBlock = null;
+    safeNotify();
   }
 
   // -------------------------------------------------------------------------
@@ -423,15 +500,15 @@ class CanvasController extends ChangeNotifier {
       _recordingStartTime = null;
       safeNotify();
 
-      if (tempPath != null) {
+      if (tempPath != null && !kIsWeb) {
         // 🚀 OFFLINE-FIRST: Mover de temp para diretório permanente
         final appDir = await getApplicationDocumentsDirectory();
-        final recordingsDir = Directory('${appDir.path}/recordings');
+        final recordingsDir = io.Directory('${appDir.path}/recordings');
         if (!await recordingsDir.exists()) await recordingsDir.create(recursive: true);
         
         // 🚀 Padronizado para .m4a em todas as plataformas desktop/mobile
         final permanentPath = '${recordingsDir.path}/lesson_$clientId.m4a';
-        await File(tempPath).copy(permanentPath);
+        await io.File(tempPath).copy(permanentPath);
 
         // Salvar localmente no Drift imediatamente (Referência Local)
         final d = db.AppDatabase.instance;
@@ -447,7 +524,7 @@ class CanvasController extends ChangeNotifier {
 
         // 🚀 TENTAR UPLOAD (Se houver conexão e liveNotebookSid)
         if (liveNotebookSid != null && liveNotebookSid != 0) {
-          final bytes = await File(permanentPath).readAsBytes();
+          final bytes = await io.File(permanentPath).readAsBytes();
           final remoteUrl = await _repository.uploadLessonAudio(
             liveNotebookSid!, 
             'lesson_$clientId.m4a', 
@@ -557,6 +634,8 @@ class CanvasController extends ChangeNotifier {
         if (data['active'] == true) {
           authorityId = data['authority_id']?.toString();
           sessionTitle = data['alternative_title']?.toString();
+          sessionVoiceMode = data['voice_mode'] ?? 'open'; // 🚀
+          _isVoiceAuthorized = data['can_speak'] == true; // 🚀
           
           if (data['authorized_page_ids'] != null) {
             authorizedPageIds = Set<int>.from((data['authorized_page_ids'] as List).map((id) => int.parse(id.toString())));
@@ -723,13 +802,20 @@ class CanvasController extends ChangeNotifier {
     isLoading = true; currentNotebookId = notebookId; liveNotebookSid = notebookSid; liveLineType = lineType; currentPaperSize = paperSize; liveLineSpacing = lineSpacing ?? ((lineType == 'grid' || lineType == 'dots') ? 25.0 : 28.0); currentUserRole = role; 
     currentTemplateType = templateType ?? 'study';
     
-    // 🚀 INICIALIZAR POLÍTICAS A PARTIR DA PERSISTÊNCIA (Ex: "locked,colors")
+    // 🚀 INICIALIZAR POLÍTICAS A PARTIR DA PERSISTÊNCIA (Ex: "locked,colors,voice:authority_only")
     if (collaborationMode != null) {
       isSessionLocked = collaborationMode.contains('locked');
       isAuthorColorEnabled = collaborationMode.contains('colors');
+      if (collaborationMode.contains('voice:')) {
+        final parts = collaborationMode.split(',');
+        for (var p in parts) {
+          if (p.startsWith('voice:')) sessionVoiceMode = p.replaceFirst('voice:', '');
+        }
+      }
     } else {
       isSessionLocked = false;
       isAuthorColorEnabled = false;
+      sessionVoiceMode = 'open';
     }
 
     SyncService.activeNotebookId = notebookId; // 🚀 Notificar SyncService qual o caderno ativo
@@ -745,9 +831,15 @@ class CanvasController extends ChangeNotifier {
     if (userId != null && userId.isNotEmpty) { 
       myUserId = userId.toString().trim(); 
       debugPrint('[Identity] myUserId configurado como: $myUserId');
-      _realtimeService.listenToUserAccount(int.parse(myUserId), () {
-        _performCollectiveSync(); // 🚀 Reagir a pedido de sync global
-      }); 
+      
+      final parsedId = int.tryParse(myUserId);
+      if (parsedId != null) {
+        _realtimeService.listenToUserAccount(parsedId, () {
+          _performCollectiveSync(); // 🚀 Reagir a pedido de sync global
+        });
+      } else {
+        debugPrint('⚠️ [Identity] myUserId não é numérico ($myUserId). Sync de conta desativado.');
+      }
     } else {
       debugPrint('⚠️ [Identity] Alerta: userId nulo ou vazio no _initNotebookSubscriptions');
     }
@@ -759,6 +851,7 @@ class CanvasController extends ChangeNotifier {
       // 🚀 DETETAR DELEÇÃO OU REVOGAÇÃO VIA SYNC
       if (row == null || row.isDeleted == 1) {
          debugPrint('🚨 [Canvas] Caderno removido da base de dados local.');
+         _isNotebookDeleted = true;
          _notebookDeletedByOwnerController.add(null);
          return;
       }
@@ -860,6 +953,38 @@ class CanvasController extends ChangeNotifier {
       pendingInvite = d; 
       safeNotify();
     });
+
+    _voicePolicySubscription?.cancel();
+    _voicePolicySubscription = _realtimeService.onVoicePolicyUpdated.listen((d) {
+      if (_isDisposed) return;
+      final int? sNotebookId = d['notebook_id'];
+      if (sNotebookId != liveNotebookSid) return;
+
+      debugPrint('🎙️ [Session] Política de voz atualizada via servidor.');
+      
+      if (d['voice_mode'] != null) {
+        sessionVoiceMode = d['voice_mode'];
+      }
+
+      // Se for para mim especificamente
+      if (d['target_id'] != null && d['target_id'].toString() == myUserId) {
+         final bool canISpeakNow = d['can_speak'] == true;
+         if (canISpeakNow != _isVoiceAuthorized) {
+            _permissionAlertController.add(canISpeakNow ? 'O professor deu-te a palavra. Podes falar!' : 'O teu microfone foi desativado pelo professor.');
+         }
+         _isVoiceAuthorized = canISpeakNow;
+      }
+
+      // 🚀 Sincronizar lista de membros inscritos se estiver aberta
+      if (d['target_id'] != null && enrolledMembers.isNotEmpty) {
+        final idx = enrolledMembers.indexWhere((m) => m['id'].toString() == d['target_id'].toString());
+        if (idx != -1) {
+          enrolledMembers[idx]['can_speak'] = d['can_speak'];
+        }
+      }
+
+      safeNotify();
+    });
   }
 
   void _autoNavigateAfterDeletion() {
@@ -875,7 +1000,9 @@ class CanvasController extends ChangeNotifier {
     if (_statusListener != null) _realtimeService.statusNotifier.removeListener(_statusListener!);
     _usersSubscription?.cancel(); _strokesSubscription?.cancel(); _textSubscription?.cancel(); _imageSubscription?.cancel(); _viewportSubscription?.cancel(); _activitySubscription?.cancel(); _pointerSubscription?.cancel(); _chatSubscription?.cancel(); _audioMessageSubscription?.cancel(); _reactionSubscription?.cancel(); _collectiveSyncSubscription?.cancel(); _fullStateRequestSubscription?.cancel(); _fullStateReceivedSubscription?.cancel(); _fingerprintSubscription?.cancel(); _globalActionSubscription?.cancel(); _followSubscription?.cancel(); _pageEventSubscription?.cancel(); _pageUpdatedSubscription?.cancel(); _handSubscription?.cancel(); _uploadingSubscription?.cancel(); _voiceCallSubscription?.cancel(); _voiceStateSubscription?.cancel(); _roleUpdateSubscription?.cancel(); _audioLevelSubscription?.cancel();
     _sessionMetaSubscription?.cancel(); 
-    _notebookStructureSubscription?.cancel(); // 🚀
+    _notebookStructureSubscription?.cancel(); 
+    _voicePolicySubscription?.cancel(); // 🚀 Novo
+    _backgroundSyncTimer?.cancel(); // 🚀
   }
 
   Future<void> initRealtimeCollaboration({List<int>? pageIds, String? alternativeTitle, String? sharingType}) async {
@@ -888,6 +1015,7 @@ class CanvasController extends ChangeNotifier {
         _debounceRoomSync(); 
         _startHeartbeat(); 
         _startCleanupTimer(); 
+        _startBackgroundSync(); // 🚀 Iniciar sync resiliente em Angola
         
         // 🚀 AO LIGAR: Se for owner, anunciar políticas atuais
         if (currentUserRole == 'owner') {
@@ -911,6 +1039,38 @@ class CanvasController extends ChangeNotifier {
       if (d['is_locked'] != null) isSessionLocked = d['is_locked'] == true;
       if (d['is_colors_enabled'] != null) isAuthorColorEnabled = d['is_colors_enabled'] == true;
       _sessionMetaStreamController.add(d); // 🚀
+      safeNotify();
+    });
+
+    _voicePolicySubscription?.cancel();
+    _voicePolicySubscription = _realtimeService.onVoicePolicyUpdated.listen((d) {
+      if (_isDisposed) return;
+      final int? sNotebookId = d['notebook_id'];
+      if (sNotebookId != liveNotebookSid) return;
+
+      debugPrint('🎙️ [Session] Política de voz atualizada via servidor.');
+      
+      if (d['voice_mode'] != null) {
+        sessionVoiceMode = d['voice_mode'];
+      }
+
+      // Se for para mim especificamente
+      if (d['target_id'] != null && d['target_id'].toString() == myUserId) {
+         final bool canISpeakNow = d['can_speak'] == true;
+         if (canISpeakNow != _isVoiceAuthorized) {
+            _permissionAlertController.add(canISpeakNow ? 'O professor deu-te a palavra. Podes falar!' : 'O teu microfone foi desativado pelo professor.');
+         }
+         _isVoiceAuthorized = canISpeakNow;
+      }
+
+      // 🚀 Sincronizar lista de membros inscritos se estiver aberta
+      if (d['target_id'] != null && enrolledMembers.isNotEmpty) {
+        final idx = enrolledMembers.indexWhere((m) => m['id'].toString() == d['target_id'].toString());
+        if (idx != -1) {
+          enrolledMembers[idx]['can_speak'] = d['can_speak'];
+        }
+      }
+
       safeNotify();
     });
 
@@ -952,6 +1112,38 @@ class CanvasController extends ChangeNotifier {
       userAudioLevels[uid] = isTalking ? level : 0.0;
       final userIdx = onlineUsers.indexWhere((u) => u['id'].toString() == uid);
       if (userIdx != -1) { onlineUsers[userIdx]['isTalking'] = isTalking; onlineUsers[userIdx]['isInCall'] = isInCall; }
+      safeNotify();
+    });
+
+    _voicePolicySubscription?.cancel();
+    _voicePolicySubscription = _realtimeService.onVoicePolicyUpdated.listen((d) {
+      if (_isDisposed) return;
+      final int? sNotebookId = d['notebook_id'];
+      if (sNotebookId != liveNotebookSid) return;
+
+      debugPrint('🎙️ [Session] Política de voz atualizada via servidor.');
+      
+      if (d['voice_mode'] != null) {
+        sessionVoiceMode = d['voice_mode'];
+      }
+
+      // Se for para mim especificamente
+      if (d['target_id'] != null && d['target_id'].toString() == myUserId) {
+         final bool canISpeakNow = d['can_speak'] == true;
+         if (canISpeakNow != _isVoiceAuthorized) {
+            _permissionAlertController.add(canISpeakNow ? 'O professor deu-te a palavra. Podes falar!' : 'O teu microfone foi desativado pelo professor.');
+         }
+         _isVoiceAuthorized = canISpeakNow;
+      }
+
+      // 🚀 Sincronizar lista de membros inscritos se estiver aberta
+      if (d['target_id'] != null && enrolledMembers.isNotEmpty) {
+        final idx = enrolledMembers.indexWhere((m) => m['id'].toString() == d['target_id'].toString());
+        if (idx != -1) {
+          enrolledMembers[idx]['can_speak'] = d['can_speak'];
+        }
+      }
+
       safeNotify();
     });
 
@@ -1279,6 +1471,12 @@ class CanvasController extends ChangeNotifier {
     _globalActionSubscription = rt.onGlobalActionReceived.listen((d) {
       if (_isDisposed || d['sender_id'].toString() == myUserId) return;
       
+      // 🚀 SEGURANÇA: Limpar redo local se houver mudanças externas para evitar conflitos de árvore
+      if (_redoStack.isNotEmpty) {
+        _redoStack.clear();
+        safeNotify();
+      }
+
       if (d['type'] == 'sync_undo' || d['type'] == 'sync_redo') {
         final action = CanvasAction.fromMap(d['action_type'], d['data']);
         if (action != null) {
@@ -1481,6 +1679,7 @@ class CanvasController extends ChangeNotifier {
     _notebookDeletedSubscription = rt.onNotebookDeleted.listen((d) {
       if (_isDisposed) return;
       debugPrint('🚨 [Realtime] Caderno apagado pelo proprietário!');
+      _isNotebookDeleted = true;
       _notebookDeletedByOwnerController.add(null);
     });
 
@@ -1490,6 +1689,7 @@ class CanvasController extends ChangeNotifier {
       final int? sid = d['server_id'];
       if (sid == liveNotebookSid) {
         debugPrint('🚨 [Realtime] O teu acesso a este caderno foi revogado pelo dono.');
+        _isNotebookDeleted = true;
         _notebookDeletedByOwnerController.add(null);
       }
     });
@@ -1514,6 +1714,38 @@ class CanvasController extends ChangeNotifier {
       if (d['structure'] != null) {
         // 🚀 OTIMIZAÇÃO: Usar o mesmo sumário de fingerprints para alinhamento rápido
         _syncSmartByFingerprint(d['structure']);
+      }
+
+      safeNotify();
+    });
+
+    _voicePolicySubscription?.cancel();
+    _voicePolicySubscription = _realtimeService.onVoicePolicyUpdated.listen((d) {
+      if (_isDisposed) return;
+      final int? sNotebookId = d['notebook_id'];
+      if (sNotebookId != liveNotebookSid) return;
+
+      debugPrint('🎙️ [Session] Política de voz atualizada via servidor.');
+      
+      if (d['voice_mode'] != null) {
+        sessionVoiceMode = d['voice_mode'];
+      }
+
+      // Se for para mim especificamente
+      if (d['target_id'] != null && d['target_id'].toString() == myUserId) {
+         final bool canISpeakNow = d['can_speak'] == true;
+         if (canISpeakNow != _isVoiceAuthorized) {
+            _permissionAlertController.add(canISpeakNow ? 'O professor deu-te a palavra. Podes falar!' : 'O teu microfone foi desativado pelo professor.');
+         }
+         _isVoiceAuthorized = canISpeakNow;
+      }
+
+      // 🚀 Sincronizar lista de membros inscritos se estiver aberta
+      if (d['target_id'] != null && enrolledMembers.isNotEmpty) {
+        final idx = enrolledMembers.indexWhere((m) => m['id'].toString() == d['target_id'].toString());
+        if (idx != -1) {
+          enrolledMembers[idx]['can_speak'] = d['can_speak'];
+        }
       }
 
       safeNotify();
@@ -1568,6 +1800,38 @@ class CanvasController extends ChangeNotifier {
       }
 
       if (onlineUsers.length > prev && prev > 0 && isCollaborationEnabled) { _debounceRoomSync(); _realtimeService.requestCollectiveSync(myUserId: myUserId); }
+      safeNotify();
+    });
+
+    _voicePolicySubscription?.cancel();
+    _voicePolicySubscription = _realtimeService.onVoicePolicyUpdated.listen((d) {
+      if (_isDisposed) return;
+      final int? sNotebookId = d['notebook_id'];
+      if (sNotebookId != liveNotebookSid) return;
+
+      debugPrint('🎙️ [Session] Política de voz atualizada via servidor.');
+      
+      if (d['voice_mode'] != null) {
+        sessionVoiceMode = d['voice_mode'];
+      }
+
+      // Se for para mim especificamente
+      if (d['target_id'] != null && d['target_id'].toString() == myUserId) {
+         final bool canISpeakNow = d['can_speak'] == true;
+         if (canISpeakNow != _isVoiceAuthorized) {
+            _permissionAlertController.add(canISpeakNow ? 'O professor deu-te a palavra. Podes falar!' : 'O teu microfone foi desativado pelo professor.');
+         }
+         _isVoiceAuthorized = canISpeakNow;
+      }
+
+      // 🚀 Sincronizar lista de membros inscritos se estiver aberta
+      if (d['target_id'] != null && enrolledMembers.isNotEmpty) {
+        final idx = enrolledMembers.indexWhere((m) => m['id'].toString() == d['target_id'].toString());
+        if (idx != -1) {
+          enrolledMembers[idx]['can_speak'] = d['can_speak'];
+        }
+      }
+
       safeNotify();
     });
 
@@ -1703,8 +1967,8 @@ class CanvasController extends ChangeNotifier {
     final int requestedPageNumber = maxP + 1;
     final String clientId = const Uuid().v4();
 
-    // 🚀 SE ESTIVER ONLINE, VALIDAR NO SERVIDOR PRIMEIRO (CONSETIMENTO)
-    if (isRealtimeActive && liveNotebookSid != null) {
+    // 🚀 GESTÃO ESTRUTURAL EM COLABORAÇÃO (Server-Authoritative)
+    if (isCollaborationEnabled && liveNotebookSid != null) {
       isGlobalSyncing = true; safeNotify();
       try {
         final response = await _apiService.post('/notebooks/$liveNotebookSid/pages', {
@@ -1716,7 +1980,6 @@ class CanvasController extends ChangeNotifier {
 
         if (response.statusCode == 201 || response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          // O servidor pode ter atribuído um número diferente se houve conflito
           final int finalPageNumber = data['page_number'];
           final int serverId = data['id'];
 
@@ -1744,12 +2007,11 @@ class CanvasController extends ChangeNotifier {
               pageController.animateToPage(idx, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
             }
           }
-          debugPrint('✅ [Canvas] Página criada com consentimento do servidor: $finalPageNumber');
         } else {
-          _permissionAlertController.add('O servidor recusou a criação da folha.');
+          _permissionAlertController.add('O servidor recusou a criação da folha na sala colaborativa.');
         }
       } catch (e) {
-        _permissionAlertController.add('Erro ao contactar o servidor para criar folha.');
+        _permissionAlertController.add('Sem ligação ao servidor. Não é possível alterar a estrutura do caderno em modo colaboração.');
       } finally {
         isGlobalSyncing = false; safeNotify();
       }
@@ -1778,8 +2040,8 @@ class CanvasController extends ChangeNotifier {
   Future<void> deletePage(LocalPage pd) async {
     if (pd.id == null) return;
 
-    // 🚀 SE ESTIVER ONLINE, VALIDAR NO SERVIDOR (CONSETIMENTO)
-    if (isRealtimeActive && liveNotebookSid != null && pd.serverId != null) {
+    // 🚀 GESTÃO ESTRUTURAL EM COLABORAÇÃO (Server-Authoritative)
+    if (isCollaborationEnabled && liveNotebookSid != null && pd.serverId != null) {
       isGlobalSyncing = true; safeNotify();
       try {
         final response = await _apiService.post('/sync/pages/push', {
@@ -1793,8 +2055,6 @@ class CanvasController extends ChangeNotifier {
 
         if (response.statusCode == 200 || response.statusCode == 204) {
           debugPrint('✅ [Canvas] Página apagada com consentimento do servidor.');
-          // O SyncService remoto (via WebSocket) enviará o evento structural e o alinhamento
-          // Mas vamos apagar localmente já para feedback instantâneo se o servidor confirmou
           final database = db.AppDatabase.instance;
           await (database.delete(database.pages)..where((t) => t.id.equals(pd.id!))).go();
           await _repository.reindexPages(currentNotebookId);
@@ -1803,10 +2063,10 @@ class CanvasController extends ChangeNotifier {
           pages = fresh;
           _autoNavigateAfterDeletion();
         } else {
-          _permissionAlertController.add('O servidor recusou apagar a folha.');
+          _permissionAlertController.add('O servidor recusou apagar a folha na sala colaborativa.');
         }
       } catch (e) {
-        _permissionAlertController.add('Erro ao contactar o servidor para apagar folha.');
+        _permissionAlertController.add('Sem ligação ao servidor. Não é possível apagar a folha em modo colaboração.');
       } finally {
         isGlobalSyncing = false; safeNotify();
       }
@@ -1966,6 +2226,28 @@ class CanvasController extends ChangeNotifier {
     recordTextUpdate(pages[currentPageIndex], old, tb.clone()); safeNotify();
   }
 
+  void startEraserDrag(LocalPage page) {
+    _activeEraserBatch = DeleteAction(
+      pageClientId: page.clientId, 
+      pageNumber: page.pageNumber, 
+      strokes: [], 
+      texts: [], 
+      images: []
+    );
+  }
+
+  void endEraserDrag(LocalPage page) {
+    if (_activeEraserBatch != null) {
+      // Só executa/guarda se realmente apagou algo
+      if (_activeEraserBatch!.strokes.isNotEmpty || 
+          _activeEraserBatch!.texts.isNotEmpty || 
+          _activeEraserBatch!.images.isNotEmpty) {
+        _executeAction(_activeEraserBatch!, targetPage: page);
+      }
+      _activeEraserBatch = null;
+    }
+  }
+
   void eraseAtPosition(Offset pos, LocalPage page) {
     if (page.isFrozen) {
       _permissionAlertController.add('Esta página está congelada e não pode ser editada.');
@@ -1988,6 +2270,9 @@ class CanvasController extends ChangeNotifier {
 
     final sR = page.strokes.where((s) {
       if (s.isDeleted) return false;
+      // Se já estiver no batch atual, não processar novamente
+      if (_activeEraserBatch != null && _activeEraserBatch!.strokes.any((item) => item.id == s.id)) return false;
+
       final hit = s.points.any((pt) => (pt - pos).distance < 24.0);
       if (hit && !canDeleteAll && s.creatorId != myUserId) { deniedByPermission = true; return false; }
       return hit;
@@ -1995,6 +2280,8 @@ class CanvasController extends ChangeNotifier {
         
     final tR = page.textBlocks.where((tb) {
       if (tb.isDeleted) return false;
+      if (_activeEraserBatch != null && _activeEraserBatch!.texts.any((item) => item.id == tb.id)) return false;
+
       final hit = (Rect.fromLTWH(tb.position.dx, tb.position.dy, 150, tb.fontSize * 1.5).contains(pos) || (tb.position - pos).distance < 24.0);
       if (hit && !canDeleteAll && tb.creatorId != myUserId) { deniedByPermission = true; return false; }
       return hit;
@@ -2002,6 +2289,8 @@ class CanvasController extends ChangeNotifier {
         
     final iR = page.imageBlocks.where((img) {
       if (img.isDeleted) return false;
+      if (_activeEraserBatch != null && _activeEraserBatch!.images.any((item) => item.id == img.id)) return false;
+
       final hit = Rect.fromLTWH(img.position.dx, img.position.dy, img.width, img.height).contains(pos);
       if (hit && !canDeleteAll && img.creatorId != myUserId) { deniedByPermission = true; return false; }
       return hit;
@@ -2028,7 +2317,21 @@ class CanvasController extends ChangeNotifier {
       for (var s in sR) { s.isDeleted = true; s.deletedInSession = inS; s.updatedAt = now; }
       for (var t in tR) { t.isDeleted = true; t.deletedInSession = inS; t.updatedAt = now; }
       for (var img in iR) { img.isDeleted = true; img.deletedInSession = inS; img.updatedAt = now; }
-      _executeAction(DeleteAction(pageClientId: page.clientId, pageNumber: page.pageNumber, strokes: sR.map((s)=>s.clone()).toList(), texts: tR.map((t)=>t.clone()).toList(), images: iR.map((i)=>i.clone()).toList()));
+
+      if (_activeEraserBatch != null) {
+        _activeEraserBatch!.strokes.addAll(sR.map((s) => s.clone()));
+        _activeEraserBatch!.texts.addAll(tR.map((t) => t.clone()));
+        _activeEraserBatch!.images.addAll(iR.map((i) => i.clone()));
+        safeNotify();
+      } else {
+        _executeAction(DeleteAction(
+          pageClientId: page.clientId, 
+          pageNumber: page.pageNumber, 
+          strokes: sR.map((s)=>s.clone()).toList(), 
+          texts: tR.map((t)=>t.clone()).toList(), 
+          images: iR.map((i)=>i.clone()).toList()
+        ));
+      }
     }
   }
 
@@ -2553,6 +2856,48 @@ class CanvasController extends ChangeNotifier {
     safeNotify();
   }
 
+  Future<void> fetchEnrolledMembers() async {
+    if (liveNotebookSid == null || liveNotebookSid == 0) return;
+    try {
+      final response = await _apiService.get('/notebooks/$liveNotebookSid/collaborators');
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        enrolledMembers = data.map((e) => Map<String, dynamic>.from(e)).toList();
+        safeNotify();
+      }
+    } catch (e) {
+      debugPrint('🚨 [Session] Erro ao buscar membros inscritos: $e');
+    }
+  }
+
+  Future<void> setVoiceMode(String mode) async {
+    if (currentUserRole != 'owner' && currentUserRole != 'editor') return;
+    sessionVoiceMode = mode;
+    _persistSessionPolicies();
+    safeNotify();
+    
+    try {
+      await _apiService.post('/notebooks/$liveNotebookSid/session/update-settings', {
+        'voice_mode': mode,
+      });
+      _broadcastSessionPolicies();
+    } catch (e) {
+      debugPrint('🚨 [Session] Erro ao atualizar modo de voz: $e');
+    }
+  }
+
+  Future<void> toggleParticipantVoice(String userId, bool allowed) async {
+    if (currentUserRole != 'owner' && currentUserRole != 'editor') return;
+    try {
+      await _apiService.post('/notebooks/$liveNotebookSid/session/toggle-voice', {
+        'user_id': userId,
+        'allowed': allowed,
+      });
+    } catch (e) {
+      debugPrint('🚨 [Session] Erro ao alternar voz de participante: $e');
+    }
+  }
+
   void toggleHandRaise() { 
     isMyHandRaised = !isMyHandRaised; 
     safeNotify(); 
@@ -2566,6 +2911,7 @@ class CanvasController extends ChangeNotifier {
     final policies = <String>[];
     if (isSessionLocked) policies.add('locked');
     if (isAuthorColorEnabled) policies.add('colors');
+    policies.add('voice:$sessionVoiceMode'); // 🚀 Novo
     final policyString = policies.join(',');
 
     final d = db.AppDatabase.instance;
@@ -2579,6 +2925,7 @@ class CanvasController extends ChangeNotifier {
       _realtimeService.broadcastSessionMeta(notebookId: liveNotebookSid!, metaData: {
         'is_locked': isSessionLocked,
         'is_colors_enabled': isAuthorColorEnabled,
+        'voice_mode': sessionVoiceMode, // 🚀
       });
     }
   }
@@ -2814,6 +3161,26 @@ class CanvasController extends ChangeNotifier {
     });
   }
 
+  void _startBackgroundSync() {
+    _backgroundSyncTimer?.cancel();
+    _backgroundSyncTimer = Timer.periodic(const Duration(minutes: 2), (timer) async {
+      if (_isDisposed) { timer.cancel(); return; }
+      
+      // 🚀 TENTATIVA DE SYNC EM BACKGROUND (Estratégia Angola)
+      if (isRealtimeActive && liveNotebookSid != null && liveNotebookSid != 0) {
+        debugPrint('🔄 [Sync-Resilient] Ciclo de sincronização em background iniciado...');
+        try {
+          // Tentar empurrar páginas e gravações pendentes
+          await _syncService.pushPages(onlyNotebookId: currentNotebookId);
+          await _syncService.pushRecordings();
+          safeNotify(); // Atualiza UI (ícone de nuvem)
+        } catch (e) {
+          debugPrint('⚠️ [Sync-Resilient] Falha no ciclo automático: $e');
+        }
+      }
+    });
+  }
+
   // -------------------------------------------------------------------------
   // 🛡️ [ZONA PROTEGIDA] MÉTODOS DE CHAT E ÁUDIO LIVE 🛡️
   // -------------------------------------------------------------------------
@@ -2845,7 +3212,11 @@ class CanvasController extends ChangeNotifier {
         } 
         
         await _audioRecorder.start(_getRecordConfig(), path: path ?? ''); safeNotify(); 
-        if (isLive) { _segmentTimer = Timer.periodic(const Duration(seconds: 3), (timer) => _rotateRecordingSegment()); _startAmplitudeMonitoring(); }
+        if (isLive) { 
+          // 🚀 OTIMIZAÇÃO ANGOLA: Reduzido para 1.0s para latência de "voz instantânea"
+          _segmentTimer = Timer.periodic(const Duration(seconds: 1), (timer) => _rotateRecordingSegment()); 
+          _startAmplitudeMonitoring(); 
+        }
       } 
     } catch (e) { isRecording = false; _isRecordingLive = false; safeNotify(); } 
   }
@@ -2878,7 +3249,7 @@ class CanvasController extends ChangeNotifier {
       await _audioRecorder.start(_getRecordConfig(), path: next ?? ''); 
       if (stopPath != null) { 
         await Future.delayed(const Duration(milliseconds: 100)); 
-        _processAndSendSegment(stopPath, mid, idx, 3, isFinal: false, isLive: isLive); 
+        _processAndSendSegment(stopPath, mid, idx, 1, isFinal: false, isLive: isLive); 
       } 
     } catch (e) { debugPrint('🚨 [Audio] Erro na rotação de segmento: $e'); } 
   }
@@ -2890,11 +3261,17 @@ class CanvasController extends ChangeNotifier {
       final bool isLive = _isRecordingLive;
       final path = await _audioRecorder.stop(); await Future.delayed(const Duration(milliseconds: 150));
       isRecording = false; _isRecordingLive = false; _recordingStartTime = null; _activeStreamMessageId = null; safeNotify(); 
-      if (path != null) _processAndSendSegment(path, mid, idx, dur % 3 == 0 ? 3 : dur % 3, isFinal: true, isLive: isLive); 
+      if (path != null) _processAndSendSegment(path, mid, idx, dur % 1 == 0 ? 1 : dur % 1, isFinal: true, isLive: isLive); 
     } catch (e) { isRecording = false; _isRecordingLive = false; safeNotify(); } 
   }
   
-  void handleLiveAudioAction() => isRecording ? stopAndSendAudio() : startRecording(isLive: true);
+  void handleLiveAudioAction() {
+    if (!canSpeak) {
+      _permissionAlertController.add('Não tens permissão para falar nesta sala.');
+      return;
+    }
+    isRecording ? stopAndSendAudio() : startRecording(isLive: true);
+  }
   void toggleSpeaker() { isSpeakerOn = !isSpeakerOn; _audioPlayer.setVolume(isSpeakerOn ? 1.0 : 0.0); safeNotify(); }
 
   bool isStreamPlaying(String streamId) => _playingStreamIds.contains(streamId);
@@ -2963,10 +3340,16 @@ class CanvasController extends ChangeNotifier {
     safeNotify();
   }
 
-  void _processAndSendSegment(String path, String msgId, int index, int duration, {bool isFinal = false, bool isLive = false, int retryCount = 0}) async {
+  void _processAndSendSegment(String path, String msgId, int index, num duration, {bool isFinal = false, bool isLive = false, int retryCount = 0}) async {
     if (!isRealtimeActive || liveNotebookSid == null) return;
     try {
-      final bytes = await File(path).readAsBytes(); final url = await _repository.uploadAudio(liveNotebookSid!, 'segment_${msgId}_$index.m4a', bytes);
+      if (kIsWeb) return; // 🚀 Web usa outro mecanismo para stream
+      final file = io.File(path);
+      if (!await file.exists()) return;
+      
+      final bytes = await file.readAsBytes(); 
+      final url = await _repository.uploadAudio(liveNotebookSid!, 'segment_${msgId}_$index.m4a', bytes);
+      
       if (url != null) { 
         _realtimeService.broadcastAudioMessage(
           notebookId: liveNotebookSid!, 
@@ -2979,7 +3362,6 @@ class CanvasController extends ChangeNotifier {
           isFinal: isFinal
         ); 
         
-        // 🚀 ADICIONAR AO CHAT LOCAL (Para o proprietário ver a própria mensagem)
         if (index == 0 && !isLive) {
           _addChatMessage({
             'msg_id': msgId,
@@ -2993,11 +3375,23 @@ class CanvasController extends ChangeNotifier {
 
         if (_failedSegmentsQueue.isNotEmpty) { 
           final next = _failedSegmentsQueue.removeAt(0); 
-          _processAndSendSegment(next['path'], next['msgId'], next['index'], next['duration'], isFinal: next['isFinal'], isLive: next['isLive'] ?? false, retryCount: next['retryCount'] + 1); 
+          _processAndSendSegment(next['path'], next['msgId'], next['index'], next['duration'], isFinal: next['isFinal'], isLive: next['isLive'] ?? false, retryCount: 0); 
         } 
+      } else {
+        // 🚀 RETRY EXPONENCIAL PARA AMBIENTES INSTÁVEIS (ANGOLA)
+        if (retryCount < 5) {
+          final int delaySeconds = math.pow(2, retryCount).toInt();
+          debugPrint('⚠️ [Audio-Sync] Falha no upload do segmento $index. Tentando novamente em $delaySeconds segundos...');
+          Timer(Duration(seconds: delaySeconds), () {
+            _processAndSendSegment(path, msgId, index, duration, isFinal: isFinal, isLive: isLive, retryCount: retryCount + 1);
+          });
+        } else {
+          _failedSegmentsQueue.add({'path': path, 'msgId': msgId, 'index': index, 'duration': duration, 'isFinal': isFinal, 'isLive': isLive, 'retryCount': retryCount});
+        }
       }
-      else { if (retryCount < 3) _failedSegmentsQueue.add({'path': path, 'msgId': msgId, 'index': index, 'duration': duration, 'isFinal': isFinal, 'isLive': isLive, 'retryCount': retryCount}); }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('🚨 [Audio-Sync] Erro crítico no envio do segmento: $e');
+    }
   }
   // -------------------------------------------------------------------------
 
@@ -3122,36 +3516,56 @@ class CanvasController extends ChangeNotifier {
     }
   }
 
+  Future<int?> cloneNotebookToSubject(int targetSubjectId) async {
+    return await cloneCurrentStateToNewNotebook(targetSubjectId, "Cópia");
+  }
+
   Future<void> pickAndInsertImage(LocalPage p) async {
     final picker = ImagePicker(); 
     final pf = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     
     if (pf != null) {
       final String lid = const Uuid().v4(); 
-      // 🚀 Injetar dono ao criar
+      
+      String permanentPath = pf.path;
+
+      if (!kIsWeb) {
+        // 🚀 OFFLINE-FIRST: Copiar para pasta permanente da app imediatamente
+        final appDir = await getApplicationDocumentsDirectory();
+        final String fileName = 'img_${DateTime.now().millisecondsSinceEpoch}_${pf.name}';
+        permanentPath = '${appDir.path}/$fileName';
+        await io.File(pf.path).copy(permanentPath);
+      }
+
       final nib = ImageBlock(
-        id: lid, imagePath: pf.path, position: const Offset(100, 150), 
-        width: 300.0, height: 200.0, creatorId: myUserId
+        id: lid, 
+        imagePath: permanentPath, // Caminho local inicialmente
+        position: const Offset(100, 150), 
+        width: 300.0, height: 200.0, 
+        creatorId: myUserId
       );
       
       await _executeAction(AddImageAction(pageClientId: p.clientId, pageNumber: p.pageNumber, block: nib)); 
       selectedEditingImageId = lid; 
       safeNotify();
       
+      // Persistir localmente no Drift
+      if (p.id == null) await _repository.savePage(p, liveNotebookSid);
+      await _repository.saveSingleImageBlock(p.id!, nib);
+
+      // 🚀 TENTAR UPLOAD EM BACKGROUND (Se houver conexão)
       if (isRealtimeActive && liveNotebookSid != null) {
         uploadingImageIds.add(lid); 
         _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: true);
         
         try {
-          final url = await _repository.uploadImage(liveNotebookSid!, pf.name, await pf.readAsBytes());
+          final bytes = await (kIsWeb ? pf.readAsBytes() : io.File(permanentPath).readAsBytes());
+          final url = await _repository.uploadImage(liveNotebookSid!, kIsWeb ? pf.name : io.File(permanentPath).uri.pathSegments.last, bytes);
           uploadingImageIds.remove(lid); 
           _realtimeService.broadcastImageUploading(notebookId: liveNotebookSid!, myUserId: myUserId, isUploading: false);
           
           if (url != null) { 
             nib.imagePath = url; 
-            // 🛡️ GARANTIR QUE A PÁGINA TEM ID ANTES DE SALVAR BLOCO
-            if (p.id == null) await _repository.savePage(p, liveNotebookSid);
-            
             await _repository.saveSingleImageBlock(p.id!, nib); 
             broadcastImageBlockUpdate(p, nib, senderId: myUserId); 
             await triggerAutoSave(p); 

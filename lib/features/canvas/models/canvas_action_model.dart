@@ -159,14 +159,19 @@ class AddStrokeAction extends CanvasAction {
   @override void execute(LocalPage page) {
     stroke.isDeleted = false;
     stroke.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    if (!page.strokes.any((s) => s.id == stroke.id)) {
+    final idx = page.strokes.indexWhere((s) => s.id == stroke.id);
+    if (idx != -1) {
+      page.strokes[idx] = stroke;
+    } else {
       page.strokes.add(stroke);
     }
   }
   @override void undo(LocalPage page) {
-    stroke.isDeleted = true;
-    stroke.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    page.strokes.removeWhere((s) => s.id == stroke.id);
+    final idx = page.strokes.indexWhere((s) => s.id == stroke.id);
+    if (idx != -1) {
+      page.strokes[idx].isDeleted = true;
+      page.strokes[idx].updatedAt = DateTime.now().millisecondsSinceEpoch;
+    }
   }
 }
 
@@ -251,14 +256,19 @@ class AddTextAction extends CanvasAction {
   @override void execute(LocalPage page) {
     block.isDeleted = false;
     block.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    if (!page.textBlocks.any((t) => t.id == block.id)) {
+    final idx = page.textBlocks.indexWhere((t) => t.id == block.id);
+    if (idx != -1) {
+      page.textBlocks[idx] = block;
+    } else {
       page.textBlocks.add(block);
     }
   }
   @override void undo(LocalPage page) {
-    block.isDeleted = true;
-    block.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    page.textBlocks.removeWhere((t) => t.id == block.id);
+    final idx = page.textBlocks.indexWhere((t) => t.id == block.id);
+    if (idx != -1) {
+      page.textBlocks[idx].isDeleted = true;
+      page.textBlocks[idx].updatedAt = DateTime.now().millisecondsSinceEpoch;
+    }
   }
 }
 
@@ -277,14 +287,19 @@ class AddImageAction extends CanvasAction {
   @override void execute(LocalPage page) {
     block.isDeleted = false;
     block.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    if (!page.imageBlocks.any((img) => img.id == block.id)) {
+    final idx = page.imageBlocks.indexWhere((img) => img.id == block.id);
+    if (idx != -1) {
+      page.imageBlocks[idx] = block;
+    } else {
       page.imageBlocks.add(block);
     }
   }
   @override void undo(LocalPage page) {
-    block.isDeleted = true;
-    block.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    page.imageBlocks.removeWhere((img) => img.id == block.id);
+    final idx = page.imageBlocks.indexWhere((img) => img.id == block.id);
+    if (idx != -1) {
+      page.imageBlocks[idx].isDeleted = true;
+      page.imageBlocks[idx].updatedAt = DateTime.now().millisecondsSinceEpoch;
+    }
   }
 }
 

@@ -57,6 +57,18 @@ class Subject {
 
   // Receber do Laravel (JSON)
   factory Subject.fromJson(Map<String, dynamic> json) {
+    int? upAt;
+    if (json['updated_at_ms'] != null) {
+      upAt = (json['updated_at_ms'] as num).toInt();
+    } else if (json['updated_at'] != null) {
+      final val = json['updated_at'];
+      if (val is num) {
+        upAt = val.toInt();
+      } else if (val is String) {
+        upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
+      }
+    }
+
     return Subject(
       serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
       clientId: json['client_id'] ?? const Uuid().v4(), // Prioridade ao ID do cliente
@@ -65,8 +77,8 @@ class Subject {
       color: json['color'] ?? '#0F4C5C',
       icon: json['icon'],
       isDeleted: json['deleted_at'] != null ? 1 : 0,
-      syncedWithCloud: 1,
-      updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
+      syncedWithCloud: json['synced_with_cloud'] ?? 1,
+      updatedAt: upAt ?? 0,
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     );
   }

@@ -2676,6 +2676,28 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     requiredDuringInsert: false,
     defaultValue: const Constant('A4'),
   );
+  static const VerificationMeta _lineTypeMeta = const VerificationMeta(
+    'lineType',
+  );
+  @override
+  late final GeneratedColumn<String> lineType = GeneratedColumn<String>(
+    'line_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lineSpacingMeta = const VerificationMeta(
+    'lineSpacing',
+  );
+  @override
+  late final GeneratedColumn<double> lineSpacing = GeneratedColumn<double>(
+    'line_spacing',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _backgroundPdfPathMeta = const VerificationMeta(
     'backgroundPdfPath',
   );
@@ -2705,6 +2727,8 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     version,
     isFrozen,
     paperSize,
+    lineType,
+    lineSpacing,
     backgroundPdfPath,
   ];
   @override
@@ -2819,6 +2843,21 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         paperSize.isAcceptableOrUnknown(data['paper_size']!, _paperSizeMeta),
       );
     }
+    if (data.containsKey('line_type')) {
+      context.handle(
+        _lineTypeMeta,
+        lineType.isAcceptableOrUnknown(data['line_type']!, _lineTypeMeta),
+      );
+    }
+    if (data.containsKey('line_spacing')) {
+      context.handle(
+        _lineSpacingMeta,
+        lineSpacing.isAcceptableOrUnknown(
+          data['line_spacing']!,
+          _lineSpacingMeta,
+        ),
+      );
+    }
     if (data.containsKey('background_pdf_path')) {
       context.handle(
         _backgroundPdfPathMeta,
@@ -2897,6 +2936,14 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         DriftSqlType.string,
         data['${effectivePrefix}paper_size'],
       )!,
+      lineType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}line_type'],
+      ),
+      lineSpacing: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}line_spacing'],
+      ),
       backgroundPdfPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}background_pdf_path'],
@@ -2926,6 +2973,8 @@ class Page extends DataClass implements Insertable<Page> {
   final int version;
   final int isFrozen;
   final String paperSize;
+  final String? lineType;
+  final double? lineSpacing;
   final String? backgroundPdfPath;
   const Page({
     required this.id,
@@ -2943,6 +2992,8 @@ class Page extends DataClass implements Insertable<Page> {
     required this.version,
     required this.isFrozen,
     required this.paperSize,
+    this.lineType,
+    this.lineSpacing,
     this.backgroundPdfPath,
   });
   @override
@@ -2973,6 +3024,12 @@ class Page extends DataClass implements Insertable<Page> {
     map['version'] = Variable<int>(version);
     map['is_frozen'] = Variable<int>(isFrozen);
     map['paper_size'] = Variable<String>(paperSize);
+    if (!nullToAbsent || lineType != null) {
+      map['line_type'] = Variable<String>(lineType);
+    }
+    if (!nullToAbsent || lineSpacing != null) {
+      map['line_spacing'] = Variable<double>(lineSpacing);
+    }
     if (!nullToAbsent || backgroundPdfPath != null) {
       map['background_pdf_path'] = Variable<String>(backgroundPdfPath);
     }
@@ -3006,6 +3063,12 @@ class Page extends DataClass implements Insertable<Page> {
       version: Value(version),
       isFrozen: Value(isFrozen),
       paperSize: Value(paperSize),
+      lineType: lineType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lineType),
+      lineSpacing: lineSpacing == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lineSpacing),
       backgroundPdfPath: backgroundPdfPath == null && nullToAbsent
           ? const Value.absent()
           : Value(backgroundPdfPath),
@@ -3033,6 +3096,8 @@ class Page extends DataClass implements Insertable<Page> {
       version: serializer.fromJson<int>(json['version']),
       isFrozen: serializer.fromJson<int>(json['isFrozen']),
       paperSize: serializer.fromJson<String>(json['paperSize']),
+      lineType: serializer.fromJson<String?>(json['lineType']),
+      lineSpacing: serializer.fromJson<double?>(json['lineSpacing']),
       backgroundPdfPath: serializer.fromJson<String?>(
         json['backgroundPdfPath'],
       ),
@@ -3057,6 +3122,8 @@ class Page extends DataClass implements Insertable<Page> {
       'version': serializer.toJson<int>(version),
       'isFrozen': serializer.toJson<int>(isFrozen),
       'paperSize': serializer.toJson<String>(paperSize),
+      'lineType': serializer.toJson<String?>(lineType),
+      'lineSpacing': serializer.toJson<double?>(lineSpacing),
       'backgroundPdfPath': serializer.toJson<String?>(backgroundPdfPath),
     };
   }
@@ -3077,6 +3144,8 @@ class Page extends DataClass implements Insertable<Page> {
     int? version,
     int? isFrozen,
     String? paperSize,
+    Value<String?> lineType = const Value.absent(),
+    Value<double?> lineSpacing = const Value.absent(),
     Value<String?> backgroundPdfPath = const Value.absent(),
   }) => Page(
     id: id ?? this.id,
@@ -3096,6 +3165,8 @@ class Page extends DataClass implements Insertable<Page> {
     version: version ?? this.version,
     isFrozen: isFrozen ?? this.isFrozen,
     paperSize: paperSize ?? this.paperSize,
+    lineType: lineType.present ? lineType.value : this.lineType,
+    lineSpacing: lineSpacing.present ? lineSpacing.value : this.lineSpacing,
     backgroundPdfPath: backgroundPdfPath.present
         ? backgroundPdfPath.value
         : this.backgroundPdfPath,
@@ -3131,6 +3202,10 @@ class Page extends DataClass implements Insertable<Page> {
       version: data.version.present ? data.version.value : this.version,
       isFrozen: data.isFrozen.present ? data.isFrozen.value : this.isFrozen,
       paperSize: data.paperSize.present ? data.paperSize.value : this.paperSize,
+      lineType: data.lineType.present ? data.lineType.value : this.lineType,
+      lineSpacing: data.lineSpacing.present
+          ? data.lineSpacing.value
+          : this.lineSpacing,
       backgroundPdfPath: data.backgroundPdfPath.present
           ? data.backgroundPdfPath.value
           : this.backgroundPdfPath,
@@ -3155,6 +3230,8 @@ class Page extends DataClass implements Insertable<Page> {
           ..write('version: $version, ')
           ..write('isFrozen: $isFrozen, ')
           ..write('paperSize: $paperSize, ')
+          ..write('lineType: $lineType, ')
+          ..write('lineSpacing: $lineSpacing, ')
           ..write('backgroundPdfPath: $backgroundPdfPath')
           ..write(')'))
         .toString();
@@ -3177,6 +3254,8 @@ class Page extends DataClass implements Insertable<Page> {
     version,
     isFrozen,
     paperSize,
+    lineType,
+    lineSpacing,
     backgroundPdfPath,
   );
   @override
@@ -3198,6 +3277,8 @@ class Page extends DataClass implements Insertable<Page> {
           other.version == this.version &&
           other.isFrozen == this.isFrozen &&
           other.paperSize == this.paperSize &&
+          other.lineType == this.lineType &&
+          other.lineSpacing == this.lineSpacing &&
           other.backgroundPdfPath == this.backgroundPdfPath);
 }
 
@@ -3217,6 +3298,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
   final Value<int> version;
   final Value<int> isFrozen;
   final Value<String> paperSize;
+  final Value<String?> lineType;
+  final Value<double?> lineSpacing;
   final Value<String?> backgroundPdfPath;
   const PagesCompanion({
     this.id = const Value.absent(),
@@ -3234,6 +3317,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.version = const Value.absent(),
     this.isFrozen = const Value.absent(),
     this.paperSize = const Value.absent(),
+    this.lineType = const Value.absent(),
+    this.lineSpacing = const Value.absent(),
     this.backgroundPdfPath = const Value.absent(),
   });
   PagesCompanion.insert({
@@ -3252,6 +3337,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.version = const Value.absent(),
     this.isFrozen = const Value.absent(),
     this.paperSize = const Value.absent(),
+    this.lineType = const Value.absent(),
+    this.lineSpacing = const Value.absent(),
     this.backgroundPdfPath = const Value.absent(),
   }) : notebookId = Value(notebookId),
        pageNumber = Value(pageNumber);
@@ -3271,6 +3358,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Expression<int>? version,
     Expression<int>? isFrozen,
     Expression<String>? paperSize,
+    Expression<String>? lineType,
+    Expression<double>? lineSpacing,
     Expression<String>? backgroundPdfPath,
   }) {
     return RawValuesInsertable({
@@ -3289,6 +3378,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
       if (version != null) 'version': version,
       if (isFrozen != null) 'is_frozen': isFrozen,
       if (paperSize != null) 'paper_size': paperSize,
+      if (lineType != null) 'line_type': lineType,
+      if (lineSpacing != null) 'line_spacing': lineSpacing,
       if (backgroundPdfPath != null) 'background_pdf_path': backgroundPdfPath,
     });
   }
@@ -3309,6 +3400,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Value<int>? version,
     Value<int>? isFrozen,
     Value<String>? paperSize,
+    Value<String?>? lineType,
+    Value<double?>? lineSpacing,
     Value<String?>? backgroundPdfPath,
   }) {
     return PagesCompanion(
@@ -3327,6 +3420,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
       version: version ?? this.version,
       isFrozen: isFrozen ?? this.isFrozen,
       paperSize: paperSize ?? this.paperSize,
+      lineType: lineType ?? this.lineType,
+      lineSpacing: lineSpacing ?? this.lineSpacing,
       backgroundPdfPath: backgroundPdfPath ?? this.backgroundPdfPath,
     );
   }
@@ -3379,6 +3474,12 @@ class PagesCompanion extends UpdateCompanion<Page> {
     if (paperSize.present) {
       map['paper_size'] = Variable<String>(paperSize.value);
     }
+    if (lineType.present) {
+      map['line_type'] = Variable<String>(lineType.value);
+    }
+    if (lineSpacing.present) {
+      map['line_spacing'] = Variable<double>(lineSpacing.value);
+    }
     if (backgroundPdfPath.present) {
       map['background_pdf_path'] = Variable<String>(backgroundPdfPath.value);
     }
@@ -3403,6 +3504,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
           ..write('version: $version, ')
           ..write('isFrozen: $isFrozen, ')
           ..write('paperSize: $paperSize, ')
+          ..write('lineType: $lineType, ')
+          ..write('lineSpacing: $lineSpacing, ')
           ..write('backgroundPdfPath: $backgroundPdfPath')
           ..write(')'))
         .toString();
@@ -9587,6 +9690,8 @@ typedef $$PagesTableCreateCompanionBuilder =
       Value<int> version,
       Value<int> isFrozen,
       Value<String> paperSize,
+      Value<String?> lineType,
+      Value<double?> lineSpacing,
       Value<String?> backgroundPdfPath,
     });
 typedef $$PagesTableUpdateCompanionBuilder =
@@ -9606,6 +9711,8 @@ typedef $$PagesTableUpdateCompanionBuilder =
       Value<int> version,
       Value<int> isFrozen,
       Value<String> paperSize,
+      Value<String?> lineType,
+      Value<double?> lineSpacing,
       Value<String?> backgroundPdfPath,
     });
 
@@ -9765,6 +9872,16 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
 
   ColumnFilters<String> get paperSize => $composableBuilder(
     column: $table.paperSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lineType => $composableBuilder(
+    column: $table.lineType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get lineSpacing => $composableBuilder(
+    column: $table.lineSpacing,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9951,6 +10068,16 @@ class $$PagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get lineType => $composableBuilder(
+    column: $table.lineType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get lineSpacing => $composableBuilder(
+    column: $table.lineSpacing,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get backgroundPdfPath => $composableBuilder(
     column: $table.backgroundPdfPath,
     builder: (column) => ColumnOrderings(column),
@@ -10042,6 +10169,14 @@ class $$PagesTableAnnotationComposer
 
   GeneratedColumn<String> get paperSize =>
       $composableBuilder(column: $table.paperSize, builder: (column) => column);
+
+  GeneratedColumn<String> get lineType =>
+      $composableBuilder(column: $table.lineType, builder: (column) => column);
+
+  GeneratedColumn<double> get lineSpacing => $composableBuilder(
+    column: $table.lineSpacing,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get backgroundPdfPath => $composableBuilder(
     column: $table.backgroundPdfPath,
@@ -10196,6 +10331,8 @@ class $$PagesTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<int> isFrozen = const Value.absent(),
                 Value<String> paperSize = const Value.absent(),
+                Value<String?> lineType = const Value.absent(),
+                Value<double?> lineSpacing = const Value.absent(),
                 Value<String?> backgroundPdfPath = const Value.absent(),
               }) => PagesCompanion(
                 id: id,
@@ -10213,6 +10350,8 @@ class $$PagesTableTableManager
                 version: version,
                 isFrozen: isFrozen,
                 paperSize: paperSize,
+                lineType: lineType,
+                lineSpacing: lineSpacing,
                 backgroundPdfPath: backgroundPdfPath,
               ),
           createCompanionCallback:
@@ -10232,6 +10371,8 @@ class $$PagesTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<int> isFrozen = const Value.absent(),
                 Value<String> paperSize = const Value.absent(),
+                Value<String?> lineType = const Value.absent(),
+                Value<double?> lineSpacing = const Value.absent(),
                 Value<String?> backgroundPdfPath = const Value.absent(),
               }) => PagesCompanion.insert(
                 id: id,
@@ -10249,6 +10390,8 @@ class $$PagesTableTableManager
                 version: version,
                 isFrozen: isFrozen,
                 paperSize: paperSize,
+                lineType: lineType,
+                lineSpacing: lineSpacing,
                 backgroundPdfPath: backgroundPdfPath,
               ),
           withReferenceMapper: (p0) => p0

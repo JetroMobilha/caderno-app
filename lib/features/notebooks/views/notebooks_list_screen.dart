@@ -368,7 +368,6 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'study';
-                            selectedLineType = 'ruled';
                           });
                         },
                       ),
@@ -378,7 +377,6 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'technical';
-                            selectedLineType = 'grid';
                           });
                         },
                       ),
@@ -388,7 +386,6 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'formal';
-                            selectedLineType = 'blank';
                           });
                         },
                       ),
@@ -398,9 +395,34 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         onTap: () {
                           setModalState(() {
                             selectedTemplate = 'creative';
-                            selectedLineType = 'blank';
                           });
                         },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text('Tipo de Pauta Inicial:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: themeColor)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildLineTypeOption(
+                        context, Icons.view_headline_rounded, 'ruled', selectedLineType, themeColor,
+                        onTap: () => setModalState(() => selectedLineType = 'ruled'),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildLineTypeOption(
+                        context, Icons.grid_4x4_rounded, 'grid', selectedLineType, themeColor,
+                        onTap: () => setModalState(() => selectedLineType = 'grid'),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildLineTypeOption(
+                        context, Icons.more_horiz_rounded, 'dots', selectedLineType, themeColor,
+                        onTap: () => setModalState(() => selectedLineType = 'dots'),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildLineTypeOption(
+                        context, Icons.check_box_outline_blank_rounded, 'blank', selectedLineType, themeColor,
+                        onTap: () => setModalState(() => selectedLineType = 'blank'),
                       ),
                     ],
                   ),
@@ -497,6 +519,25 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
               Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? color : Colors.grey)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLineTypeOption(BuildContext context, IconData icon, String type, String selected, Color themeColor, {required VoidCallback onTap}) {
+    final isSelected = selected == type;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? themeColor.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? themeColor : Colors.grey.shade300, width: isSelected ? 2 : 1),
+          ),
+          child: Icon(icon, color: isSelected ? themeColor : Colors.grey, size: 20),
         ),
       ),
     );

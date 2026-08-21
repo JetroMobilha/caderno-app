@@ -510,6 +510,14 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
           as _i4.Stream<Map<String, dynamic>>);
 
   @override
+  _i4.Stream<Map<String, dynamic>> get onVoicePolicyUpdated =>
+      (super.noSuchMethod(
+            Invocation.getter(#onVoicePolicyUpdated),
+            returnValue: _i4.Stream<Map<String, dynamic>>.empty(),
+          )
+          as _i4.Stream<Map<String, dynamic>>);
+
+  @override
   bool get isConnected =>
       (super.noSuchMethod(Invocation.getter(#isConnected), returnValue: false)
           as bool);
@@ -818,7 +826,7 @@ class MockRealtimeService extends _i1.Mock implements _i10.RealtimeService {
     required int? notebookId,
     required String? myUserId,
     required String? audioUrl,
-    required int? duration,
+    required num? duration,
     bool? isLive = false,
     String? streamMsgId,
     int? segmentIndex,

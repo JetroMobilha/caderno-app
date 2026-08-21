@@ -43,6 +43,14 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // 🚀 LIMPEZA DE ERROS
+  void clearError() {
+    if (_authErrorMessage != null) {
+      _authErrorMessage = null;
+      notifyListeners();
+    }
+  }
+
   // =========================================================================
   // 🔌 O MOTOR DE WEBSOCKETS PRIVADOS (REVERB)
   // =========================================================================

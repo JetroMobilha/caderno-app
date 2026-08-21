@@ -19,6 +19,7 @@ import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/core/network/sync_service.dart';
 import 'package:caderno_digital_app/core/network/sync_provider.dart'; // 🚀 Novo
 import 'package:caderno_digital_app/core/network/api_service.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀 Novo
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
@@ -241,6 +242,7 @@ class CanvasController extends ChangeNotifier {
   bool isRealtimeActive = false;
   bool isCollaborationEnabled = false; 
   bool isFocusMode = false; 
+  bool isTransformMode = false; // 🚀 Ativa handles de redimensionamento
 
   String? sessionTitle; // 🚀 Título alternativo da sala
   Set<int>? authorizedPageIds; // 🚀 Whitelist de páginas (IDs reais do DB)
@@ -257,13 +259,19 @@ class CanvasController extends ChangeNotifier {
     safeNotify();
   }
 
+  void _markPageDirty(LocalPage page) {
+    page.syncedWithCloud = 0;
+    page.updatedAt = TimeService().nowMs();
+    page.version++;
+  }
+
   void togglePageFreeze(LocalPage page) {
     if (currentUserRole != 'owner') {
       _permissionAlertController.add('Apenas o proprietário pode (des)congelar páginas.');
       return;
     }
     page.isFrozen = !page.isFrozen;
-    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    _markPageDirty(page);
     safeNotify();
     triggerAutoSave(page);
     if (isRealtimeActive && liveNotebookSid != null) {
@@ -416,9 +424,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   Future<void> saveTextBlock(LocalPage page, TextBlock tb) async {
-    if (page.id != null) {
-      await _repository.saveSingleTextBlock(page.id!, tb);
-    }
+    await _repository.saveSingleTextBlock(page.clientId, tb);
     triggerAutoSave(page);
   }
 
@@ -924,7 +930,11 @@ class CanvasController extends ChangeNotifier {
       } 
       
       if (isLoading && pages.isNotEmpty) {
-        _resetZoomForPage(pages.first, pages.first.paperSize, screenSize: lastScreenSize);
+        // 🚀 Aplicar pauta da primeira página
+        final p = pages.first;
+        liveLineType = p.lineType ?? liveLineType;
+        liveLineSpacing = p.lineSpacing ?? liveLineSpacing;
+        _resetZoomForPage(p, p.paperSize, screenSize: lastScreenSize);
       }
       
       isLoading = false; 
@@ -1192,7 +1202,7 @@ class CanvasController extends ChangeNotifier {
               tp.strokes[exI].updatedAt = sm['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
               hasChanges = true;
             }
-            _repository.deleteSingleStroke(tp.id!, sid); 
+            _repository.deleteSingleStroke(sid); 
             continue; 
           }
           
@@ -1261,7 +1271,7 @@ class CanvasController extends ChangeNotifier {
             tp.updatedAt = remoteTs;
             hasChanges = true; 
             
-            _repository.saveSingleStroke(tp.id!, ns); 
+            _repository.saveSingleStroke(tp.clientId, ns); 
           } 
         } 
         
@@ -1962,10 +1972,13 @@ class CanvasController extends ChangeNotifier {
     safeNotify();
   }
 
-  Future<void> addNewPage(bool isLandscape, {String paperSize = 'A4'}) async {
+  Future<void> addNewPage(bool isLandscape, {String paperSize = 'A4', String? lineType, double? lineSpacing}) async {
     int maxP = 0; for (var p in pages) if (p.pageNumber > maxP) maxP = p.pageNumber;
     final int requestedPageNumber = maxP + 1;
     final String clientId = const Uuid().v4();
+
+    final String effectiveLineType = lineType ?? liveLineType;
+    final double effectiveLineSpacing = lineSpacing ?? ((effectiveLineType == 'grid' || effectiveLineType == 'dots') ? 25.0 : 28.0);
 
     // 🚀 GESTÃO ESTRUTURAL EM COLABORAÇÃO (Server-Authoritative)
     if (isCollaborationEnabled && liveNotebookSid != null) {
@@ -1976,6 +1989,8 @@ class CanvasController extends ChangeNotifier {
           'page_number': requestedPageNumber,
           'paper_size': paperSize,
           'is_landscape': isLandscape,
+          'line_type': effectiveLineType,
+          'line_spacing': effectiveLineSpacing,
         });
 
         if (response.statusCode == 201 || response.statusCode == 200) {
@@ -1984,18 +1999,22 @@ class CanvasController extends ChangeNotifier {
           final int serverId = data['id'];
 
           final np = LocalPage(
-            id: serverId,
-            serverId: serverId,
+            serverId: serverId, // 🆔 Apenas serverId
             notebookId: currentNotebookId, 
             pageNumber: finalPageNumber, 
             isLandscape: isLandscape, 
             paperSize: paperSize,
+            lineType: effectiveLineType,
+            lineSpacing: effectiveLineSpacing,
             clientId: clientId,
             syncedWithCloud: 1,
             updatedAt: DateTime.now().millisecondsSinceEpoch,
           );
 
-          await _repository.savePage(np, liveNotebookSid);
+          // 🚀 O repositório vai gerar o ID local e devolver
+          final int localId = await _repository.savePage(np, liveNotebookSid);
+          np.id = localId; // 🛡️ Atualizar com o ID real do SQLite
+          
           await _repository.reindexPages(currentNotebookId);
           
           final fresh = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
@@ -2019,8 +2038,22 @@ class CanvasController extends ChangeNotifier {
     }
 
     // --- LÓGICA OFFLINE (OTIMISTA) ---
-    final np = LocalPage(notebookId: currentNotebookId, pageNumber: requestedPageNumber, isLandscape: isLandscape, paperSize: paperSize, clientId: clientId);
-    final action = AddPageAction(pageClientId: np.clientId, pageNumber: np.pageNumber, isLandscape: isLandscape, paperSize: paperSize);
+    final np = LocalPage(
+      notebookId: currentNotebookId, 
+      pageNumber: requestedPageNumber, 
+      isLandscape: isLandscape, 
+      paperSize: paperSize, 
+      lineType: effectiveLineType,
+      lineSpacing: effectiveLineSpacing,
+      clientId: clientId
+    );
+    final action = AddPageAction(
+      pageClientId: np.clientId, 
+      pageNumber: np.pageNumber, 
+      isLandscape: isLandscape, 
+      paperSize: paperSize,
+      // 🚀 Adicionar pauta à ação (para Undo/Redo e Broadcast)
+    );
 
     if (!pages.any((p) => p.clientId == np.clientId)) {
       pages.add(np);
@@ -2135,6 +2168,13 @@ class CanvasController extends ChangeNotifier {
     selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear(); 
     currentPageIndex = i; 
     
+    // 🚀 ATUALIZAR PAUTA PARA A PÁGINA ATUAL
+    if (i < pages.length) {
+      final p = pages[i];
+      liveLineType = p.lineType ?? liveLineType;
+      liveLineSpacing = p.lineSpacing ?? liveLineSpacing;
+    }
+
     // 🚀 RESTAURAR ESTADO DE VISUALIZAÇÃO DA PÁGINA DESTINO
     if (_pageViewStates.containsKey(i)) {
       transformationController.value = _pageViewStates[i]!;
@@ -2179,7 +2219,7 @@ class CanvasController extends ChangeNotifier {
 
   void switchTool(ToolMode m) {
     if (m == ToolMode.eraser && (selectedStrokeIds.isNotEmpty || selectedTextIds.isNotEmpty || selectedImageIds.isNotEmpty)) { deleteSelection(pages[currentPageIndex]); return; }
-    currentTool = m; selectedEditingImageId = null;
+    currentTool = m; selectedEditingImageId = null; isTransformMode = false;
     if (m != ToolMode.select && m != ToolMode.eraser) { selectedStrokeIds.clear(); selectedTextIds.clear(); selectedImageIds.clear(); selectionRectStart = null; selectionRectEnd = null; isMovingStrokes = false; }
     
     // 🚀 NOTIFICAR COLEGAS SOBRE A NOVA FERRAMENTA (Broadcast Imediato)
@@ -2313,7 +2353,8 @@ class CanvasController extends ChangeNotifier {
     if (remoteChanged) remoteLiveStrokes.value = curM;
 
     if (sR.isNotEmpty || tR.isNotEmpty || iR.isNotEmpty) {
-      final inS = isRealtimeActive && liveNotebookSid != null; final now = DateTime.now().millisecondsSinceEpoch;
+      final inS = isRealtimeActive && liveNotebookSid != null; 
+      final now = TimeService().nowMs();
       for (var s in sR) { s.isDeleted = true; s.deletedInSession = inS; s.updatedAt = now; }
       for (var t in tR) { t.isDeleted = true; t.deletedInSession = inS; t.updatedAt = now; }
       for (var img in iR) { img.isDeleted = true; img.deletedInSession = inS; img.updatedAt = now; }
@@ -2453,6 +2494,107 @@ class CanvasController extends ChangeNotifier {
     safeNotify();
   }
 
+  void toggleTransformMode() {
+    isTransformMode = !isTransformMode;
+    safeNotify();
+  }
+
+  void scaleSelectedItems(LocalPage page, double scaleFactor, Offset center) {
+    if (page.isFrozen) return;
+    
+    final bool canEditAll = currentUserRole == 'owner' || (currentUserRole == 'editor' && currentTemplateType != 'formal');
+    final int now = TimeService().nowMs();
+
+    for (var id in selectedStrokeIds) {
+      final idx = page.strokes.indexWhere((s) => s.id == id);
+      if (idx != -1) {
+        final s = page.strokes[idx];
+        if (!canEditAll && s.creatorId != myUserId) continue;
+        for (int i = 0; i < s.points.length; i++) {
+          final offsetFromCenter = s.points[i] - center;
+          s.points[i] = center + (offsetFromCenter * scaleFactor);
+        }
+        s.updatedAt = now;
+      }
+    }
+
+    for (var id in selectedTextIds) {
+      final idx = page.textBlocks.indexWhere((t) => t.id == id);
+      if (idx != -1) {
+        final t = page.textBlocks[idx];
+        if (!canEditAll && t.creatorId != myUserId) continue;
+        final offsetFromCenter = t.position - center;
+        t.position = center + (offsetFromCenter * scaleFactor);
+        t.fontSize = (t.fontSize * scaleFactor).clamp(8.0, 100.0);
+        t.updatedAt = now;
+      }
+    }
+
+    for (var id in selectedImageIds) {
+      final idx = page.imageBlocks.indexWhere((img) => img.id == id);
+      if (idx != -1) {
+        final img = page.imageBlocks[idx];
+        if (!canEditAll && img.creatorId != myUserId) continue;
+        final offsetFromCenter = img.position - center;
+        img.position = center + (offsetFromCenter * scaleFactor);
+        img.width *= scaleFactor;
+        img.height *= scaleFactor;
+        img.updatedAt = now;
+      }
+    }
+
+    page.version++;
+    safeNotify();
+  }
+
+  void finalizeTransformation(LocalPage page) {
+    _markPageDirty(page);
+    _repository.savePage(page, liveNotebookSid);
+    
+    // 🚀 BROADCAST FINAL (Forçar atualização nos outros dispositivos)
+    if (isRealtimeActive && liveNotebookSid != null) {
+      _broadcastSelectionMovement(page, isFinal: true); 
+    }
+    
+    triggerAutoSave(page);
+    safeNotify();
+  }
+
+  Rect? getSelectionBounds(LocalPage page) {
+    if (selectedStrokeIds.isEmpty && selectedTextIds.isEmpty && selectedImageIds.isEmpty) return null;
+
+    double? minX, maxX, minY, maxY;
+
+    void updateBounds(double x, double y) {
+      if (minX == null || x < minX!) minX = x;
+      if (maxX == null || x > maxX!) maxX = x;
+      if (minY == null || y < minY!) minY = y;
+      if (maxY == null || y > maxY!) maxY = y;
+    }
+
+    for (var id in selectedStrokeIds) {
+      final stroke = page.strokes.firstWhere((s) => s.id == id);
+      for (var pt in stroke.points) {
+        updateBounds(pt.dx, pt.dy);
+      }
+    }
+
+    for (var id in selectedTextIds) {
+      final text = page.textBlocks.firstWhere((t) => t.id == id);
+      updateBounds(text.position.dx, text.position.dy);
+      updateBounds(text.position.dx + 200, text.position.dy + text.fontSize);
+    }
+
+    for (var id in selectedImageIds) {
+      final img = page.imageBlocks.firstWhere((i) => i.id == id);
+      updateBounds(img.position.dx, img.position.dy);
+      updateBounds(img.position.dx + img.width, img.position.dy + img.height);
+    }
+
+    if (minX == null) return null;
+    return Rect.fromLTRB(minX! - 10, minY! - 10, maxX! + 10, maxY! + 10);
+  }
+
   void finalizeSelectionMovement(LocalPage page) {
     if (isMovingStrokes && _totalSelectionDelta != Offset.zero) {
       // 🚀 Registrar o movimento final no sistema de ações (Undo/Redo)
@@ -2464,6 +2606,8 @@ class CanvasController extends ChangeNotifier {
         imageIds: List.from(selectedImageIds),
         delta: _totalSelectionDelta,
       );
+      
+      _markPageDirty(page);
       
       // Adicionar ao histórico local
       _undoStack.add(action);
@@ -2505,7 +2649,10 @@ class CanvasController extends ChangeNotifier {
     _executeAction(DeleteAction(pageClientId: page.clientId, pageNumber: page.pageNumber, strokes: [], texts: [], images: [img])); safeNotify();
   }
 
-  void setThickness(double t) { selectedThickness = t; safeNotify(); }
+  void setThickness(double t) { 
+    selectedThickness = t.clamp(1.0, 50.0); 
+    safeNotify(); 
+  }
   void setColor(String h) { selectedColorHex = h; safeNotify(); }
   void setTextColor(String h) { if (activeTextBlock != null) { final old = activeTextBlock!.clone(); activeTextBlock!.textColorHex = h; recordTextUpdate(pages[currentPageIndex], old, activeTextBlock!.clone()); safeNotify(); } }
   void toggleBold() { if (activeTextBlock != null) { final old = activeTextBlock!.clone(); activeTextBlock!.isBold = !activeTextBlock!.isBold; recordTextUpdate(pages[currentPageIndex], old, activeTextBlock!.clone()); safeNotify(); } }
@@ -2539,29 +2686,69 @@ class CanvasController extends ChangeNotifier {
     if (currentUserRole == 'viewer' && !isRemote) return;
     
     if (!isRemote) { 
-      target.version++; 
-      target.updatedAt = DateTime.now().millisecondsSinceEpoch; 
+      _markPageDirty(target);
     }
     
     action.execute(target);
     _undoStack.add(action); _redoStack.clear(); if (_undoStack.length > 50) _undoStack.removeAt(0);
     
-    // 🚀 LÓGICA ESPECIAL PARA ESTRUTURA
+    // 🚀 PERSISTÊNCIA INCREMENTAL: Salvar apenas o que mudou
     if (action is DeletePageAction || action is AddPageAction) {
        await _repository.savePage(target, liveNotebookSid);
        await _repository.reindexPages(currentNotebookId);
        
-       // 🚀 REFRESH LOCAL: Se foi deleção, precisamos atualizar a lista 'pages'
        if (action is DeletePageAction) {
           final fresh = await _repository.getPagesByNotebook(currentNotebookId, liveNotebookSid);
           pages = fresh;
        }
     } else {
-       await triggerAutoSave(target);
+       await _persistIncrementalAction(target, action);
     }
     
     if (!isRemote) _broadcastAction(action); 
     safeNotify();
+  }
+
+  Future<void> _persistIncrementalAction(LocalPage target, CanvasAction action) async {
+    // 🛡️ RESOLUÇÃO POR CLIENT_ID: Usamos o clientId (UUID) como chave de confiança
+    final String pageClientId = target.clientId;
+
+    if (action is AddStrokeAction) {
+      await _repository.saveSingleStroke(pageClientId, action.stroke);
+    } 
+    else if (action is AddTextAction) {
+      await _repository.saveSingleTextBlock(pageClientId, action.block);
+    }
+    else if (action is AddImageAction) {
+      await _repository.saveSingleImageBlock(pageClientId, action.block);
+    }
+    else if (action is UpdateTextAction) {
+      await _repository.saveSingleTextBlock(pageClientId, action.newState);
+    }
+    else if (action is UpdateImageAction) {
+      await _repository.saveSingleImageBlock(pageClientId, action.newState);
+    }
+    if (action is DeleteAction) {
+      for (var s in action.strokes) await _repository.deleteSingleStroke(s.id);
+      for (var t in action.texts) await _repository.deleteSingleTextBlock(t.id);
+      // Imagens continuam no save incremental para marcar is_deleted
+    }
+    else if (action is MoveAction) {
+      for (var id in action.strokeIds) {
+        final stroke = target.strokes.firstWhere((s) => s.id == id);
+        await _repository.saveSingleStroke(pageClientId, stroke);
+      }
+      for (var id in action.textIds) {
+        final text = target.textBlocks.firstWhere((t) => t.id == id);
+        await _repository.saveSingleTextBlock(pageClientId, text);
+      }
+      for (var id in action.imageIds) {
+        final img = target.imageBlocks.firstWhere((i) => i.id == id);
+        await _repository.saveSingleImageBlock(pageClientId, img);
+      }
+    }
+
+    triggerAutoSave(target);
   }
 
   void _broadcastAction(CanvasAction action) {
@@ -2637,7 +2824,7 @@ class CanvasController extends ChangeNotifier {
         'color': selectedColorHex, 
         'thickness': num.parse(selectedThickness.toStringAsFixed(1)), 
         'is_final': isFinal, 
-        'updated_at': DateTime.now().millisecondsSinceEpoch, // 🚀 Enviar timestamp
+        'updated_at': TimeService().nowMs(), // 🚀 Enviar timestamp sincronizado
         'points': pointsToSend.map((pt) => { 
           'x': num.parse(pt.dx.toStringAsFixed(1)), 
           'y': num.parse(pt.dy.toStringAsFixed(1)), 
@@ -2951,8 +3138,24 @@ class CanvasController extends ChangeNotifier {
     _smoothTimer = Timer.periodic(const Duration(milliseconds: 16), (t) { if (_targetMatrix == null) { t.cancel(); return; } final current = transformationController.value; final next = Matrix4.identity(); for (int i = 0; i < 16; i++) next.storage[i] = current.storage[i] + (_targetMatrix!.storage[i] - current.storage[i]) * 0.04; transformationController.value = next; safeNotify(); double diff = 0; for (int i = 0; i < 16; i++) diff += (next.storage[i] - _targetMatrix!.storage[i]).abs(); if (diff < 0.001) { transformationController.value = _targetMatrix!; _targetMatrix = null; t.cancel(); safeNotify(); } });
   }
 
-  void setLineType(String type, LocalPage page) { liveLineType = type; liveLineSpacing = (type == 'grid' || type == 'dots') ? 25.0 : 28.0; safeNotify(); broadcastPageMetadataUpdate(page); _repository.updateNotebookMetadata(currentNotebookId, liveLineType, liveLineSpacing); triggerAutoSave(page); }
-  void setLineSpacing(double s, LocalPage page) { liveLineSpacing = s; safeNotify(); broadcastThrottledPageMetadataUpdate(page); _repository.updateNotebookMetadata(currentNotebookId, liveLineType, liveLineSpacing); triggerAutoSave(page); }
+  void setLineType(String type, LocalPage page) { 
+    liveLineType = type; 
+    liveLineSpacing = (type == 'grid' || type == 'dots') ? 25.0 : 28.0; 
+    _markPageDirty(page);
+    safeNotify(); 
+    broadcastPageMetadataUpdate(page); 
+    _repository.updateNotebookMetadata(currentNotebookId, liveLineType, liveLineSpacing); 
+    triggerAutoSave(page); 
+  }
+  
+  void setLineSpacing(double s, LocalPage page) { 
+    liveLineSpacing = s; 
+    _markPageDirty(page);
+    safeNotify(); 
+    broadcastThrottledPageMetadataUpdate(page); 
+    _repository.updateNotebookMetadata(currentNotebookId, liveLineType, liveLineSpacing); 
+    triggerAutoSave(page); 
+  }
   void copyToClipboard(String text, BuildContext context) { if (text.isEmpty) return; Clipboard.setData(ClipboardData(text: text)).then((_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Texto copiado para a área de transferência!'), backgroundColor: Color(0xFF0F4C5C), duration: Duration(seconds: 2))); }); }
   void exportPageText(LocalPage page, BuildContext context) { StringBuffer ft = StringBuffer(); if (page.title.isNotEmpty) { ft.writeln('Título: ${page.title}'); ft.writeln('=' * 20); } if (page.extractedText != null && page.extractedText!.trim().isNotEmpty) { ft.writeln('Texto Escrito à Mão:'); ft.writeln(page.extractedText); ft.writeln('-' * 10); } if (page.textBlocks.isNotEmpty) { ft.writeln('Anotações Digitais:'); final sorted = List<TextBlock>.from(page.textBlocks)..sort((a, b) => a.position.dy.compareTo(b.position.dy)); for (var b in sorted) if (b.text.trim().isNotEmpty) ft.writeln(b.text); } final res = ft.toString().trim(); if (res.isNotEmpty) copyToClipboard(res, context); else if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não há texto nesta folha para exportar.'), backgroundColor: Colors.orangeAccent)); }
   Future<void> undo(LocalPage p) async { 
@@ -2960,8 +3163,7 @@ class CanvasController extends ChangeNotifier {
     final action = _undoStack.removeLast();
     final target = _getTargetPage(action.pageClientId);
     if (target != null) {
-      target.version++;
-      target.updatedAt = DateTime.now().millisecondsSinceEpoch;
+      _markPageDirty(target);
       action.undo(target);
       _redoStack.add(action);
       
@@ -2989,7 +3191,8 @@ class CanvasController extends ChangeNotifier {
       }
       
       if (!(action is DeletePageAction || action is AddPageAction)) {
-        triggerAutoSave(target);
+        // No Undo, o estado 'reverso' da ação precisa ser persistido
+        await _persistIncrementalAction(target, action); 
       }
     }
     safeNotify();
@@ -3000,8 +3203,7 @@ class CanvasController extends ChangeNotifier {
     final action = _redoStack.removeLast();
     final target = _getTargetPage(action.pageClientId);
     if (target != null) {
-      target.version++;
-      target.updatedAt = DateTime.now().millisecondsSinceEpoch;
+      _markPageDirty(target);
       action.execute(target);
       _undoStack.add(action);
       
@@ -3029,7 +3231,7 @@ class CanvasController extends ChangeNotifier {
       }
       
       if (!(action is DeletePageAction || action is AddPageAction)) {
-        triggerAutoSave(target);
+        await _persistIncrementalAction(target, action);
       }
     }
     safeNotify();
@@ -3094,7 +3296,13 @@ class CanvasController extends ChangeNotifier {
     }); 
   }
   Future<void> triggerAutoSave(LocalPage page) async { 
-    await _repository.savePage(page, liveNotebookSid); 
+    final int effectiveId = await _repository.savePage(page, liveNotebookSid); 
+    // 🚀 IDENTIDADE SINCRONIZADA: Se o repositório fundiu duplicados, atualizamos o ID em memória
+    if (page.id != effectiveId) {
+      debugPrint('🆔 [Canvas] Página remapeada em memória: ${page.id} -> $effectiveId');
+      page.id = effectiveId;
+    }
+
     if (isRealtimeActive && liveNotebookSid != null && liveNotebookSid != 0) { 
       _autoSyncPushTimer?.cancel(); 
       // 🚀 FAST SYNC: Debounce reduzido para 800ms pois o Redis no backend aguenta a carga
@@ -3550,8 +3758,7 @@ class CanvasController extends ChangeNotifier {
       safeNotify();
       
       // Persistir localmente no Drift
-      if (p.id == null) await _repository.savePage(p, liveNotebookSid);
-      await _repository.saveSingleImageBlock(p.id!, nib);
+      await _repository.saveSingleImageBlock(p.clientId, nib);
 
       // 🚀 TENTAR UPLOAD EM BACKGROUND (Se houver conexão)
       if (isRealtimeActive && liveNotebookSid != null) {
@@ -3566,7 +3773,7 @@ class CanvasController extends ChangeNotifier {
           
           if (url != null) { 
             nib.imagePath = url; 
-            await _repository.saveSingleImageBlock(p.id!, nib); 
+            await _repository.saveSingleImageBlock(p.clientId, nib); 
             broadcastImageBlockUpdate(p, nib, senderId: myUserId); 
             await triggerAutoSave(p); 
           } else {

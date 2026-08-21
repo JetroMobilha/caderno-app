@@ -77,6 +77,8 @@ class CanvasRepository {
         pageNumber: pRow.pageNumber,
         isLandscape: pRow.isLandscape == 1,
         paperSize: pRow.paperSize,
+        lineType: pRow.lineType,
+        lineSpacing: pRow.lineSpacing,
         clientId: pRow.clientId,
         title: LocalPage.parseMeta(pRow.headerData),
         footer: LocalPage.parseMeta(pRow.footerData),
@@ -107,6 +109,8 @@ class CanvasRepository {
           pageNumber: row.pageNumber,
           isLandscape: row.isLandscape == 1,
           paperSize: row.paperSize,
+          lineType: row.lineType,
+          lineSpacing: row.lineSpacing,
           clientId: row.clientId,
           title: LocalPage.parseMeta(row.headerData),
           footer: LocalPage.parseMeta(row.footerData),
@@ -135,73 +139,67 @@ class CanvasRepository {
 
     try {
       final id = await _db.transaction(() async {
-        // 🚀 LÓGICA ANTI-DUPLICADOS ROBUSTA
-        // 1. Procurar todos os registros que possam ser esta página
+        // 1. RESOLUÇÃO DE ID DO CADERNO: Garantir que usamos o ID local do SQLite
+        int? localNotebookId;
+        
+        if (notebookSid != null && notebookSid != 0) {
+          // Se temos o ID do servidor, buscamos o ID local correspondente
+          final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookSid))).getSingleOrNull();
+          if (nb != null) {
+            localNotebookId = nb.id;
+          }
+        }
+        
+        // Se não encontramos por serverId, usamos o notebookId que já vem no objeto (assumindo que é local)
+        localNotebookId ??= page.notebookId;
+
+        // 🛡️ BLINDAGEM EXTRA: Se o ID ainda parecer um ID de servidor (ex: > 100.000) 
+        // e não existir como ID local, tentamos uma última busca por server_id
+        if (localNotebookId > 50000) { 
+           final check = await (_db.select(_db.notebooks)..where((t) => t.id.equals(localNotebookId!))).getSingleOrNull();
+           if (check == null) {
+              final byServer = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(localNotebookId!))).getSingleOrNull();
+              if (byServer != null) localNotebookId = byServer.id;
+           }
+        }
+
+        // 2. LÓGICA ANTI-DUPLICADOS: Procurar por Client ID ou Server ID
         final query = _db.select(_db.pages)..where((t) {
           var expr = t.clientId.equals(page.clientId);
-          if (page.serverId != null) {
-            expr = expr | t.serverId.equals(page.serverId!);
-          }
-          if (page.id != null) {
-            expr = expr | t.id.equals(page.id!);
-          }
+          if (page.serverId != null) expr = expr | t.serverId.equals(page.serverId!);
           return expr;
         });
         
         final candidates = await query.get();
         int? effectiveId;
+        bool isUpdate = false;
         
-        if (candidates.isEmpty) {
-          // Novo registro total
-          effectiveId = null;
-        } else if (candidates.length == 1) {
-          // Caso ideal: encontrou exatamente um
-          effectiveId = candidates.first.id;
-        } else {
-          // 💣 CRISE: Múltiplos registros locais para a mesma página!
-          // Escolher o melhor sobrevivente (prioridade para quem tem serverId)
+        if (candidates.isNotEmpty) {
+          // Prioridade para o registro que já tem Server ID
           final survivor = candidates.firstWhere((c) => c.serverId != null, orElse: () => candidates.first);
           effectiveId = survivor.id;
+          isUpdate = true;
           
-          debugPrint('🧨 [Sync-Fix] Detectados ${candidates.length} duplicados para página ${page.pageNumber}. Fundindo no ID $effectiveId...');
-          
-          for (var cand in candidates) {
-            if (cand.id == effectiveId) continue;
-            
-            // 🛡️ LIMPEZA DE COLISÕES ANTES DA REATRIBUIÇÃO
-            // Se o sobrevivente já tem o mesmo stroke/text/image ID, removemos do duplicado
-            final strokesInSurvivor = await (_db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(effectiveId!))).get();
-            final survivorStrokeIds = strokesInSurvivor.map((s) => s.clientStrokeId).toSet();
-            await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(cand.id) & t.clientStrokeId.isIn(survivorStrokeIds))).go();
-
-            final textsInSurvivor = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(effectiveId!))).get();
-            final survivorTextIds = textsInSurvivor.map((t) => t.clientTextId).toSet();
-            await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(cand.id) & t.clientTextId.isIn(survivorTextIds))).go();
-
-            final imagesInSurvivor = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(effectiveId!))).get();
-            final survivorImageIds = imagesInSurvivor.map((i) => i.clientImageId).toSet();
-            await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(cand.id) & t.clientImageId.isIn(survivorImageIds))).go();
-
-            // Reatribuir dados dependentes remanescentes
-            await (_db.update(_db.canvasStrokes)..where((t) => t.pageId.equals(cand.id)))
-                .write(CanvasStrokesCompanion(pageId: Value(effectiveId!)));
-            
-            await (_db.update(_db.canvasTextBlocks)..where((t) => t.pageId.equals(cand.id)))
-                .write(CanvasTextBlocksCompanion(pageId: Value(effectiveId!)));
-                
-            await (_db.update(_db.canvasImageBlocks)..where((t) => t.pageId.equals(cand.id)))
-                .write(CanvasImageBlocksCompanion(pageId: Value(effectiveId!)));
-            
-            // Apagar o duplicado
-            await (_db.delete(_db.pages)..where((t) => t.id.equals(cand.id))).go();
+          if (candidates.length > 1) {
+            debugPrint('🧨 [Sync-Fix] Fundindo ${candidates.length} páginas no local ID $effectiveId...');
+            for (var cand in candidates) {
+              if (cand.id == effectiveId) continue;
+              await (_db.update(_db.canvasStrokes)..where((t) => t.pageId.equals(cand.id))).write(CanvasStrokesCompanion(pageId: Value(effectiveId!)));
+              await (_db.update(_db.canvasTextBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasTextBlocksCompanion(pageId: Value(effectiveId!)));
+              await (_db.update(_db.canvasImageBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasImageBlocksCompanion(pageId: Value(effectiveId!)));
+              await (_db.delete(_db.pages)..where((t) => t.id.equals(cand.id))).go();
+            }
           }
         }
 
+        debugPrint('💾 [CanvasRepo] Gravando página: ${isUpdate ? "UPDATE (id: $effectiveId)" : "INSERT"} | Notebook: $localNotebookId | ClientId: ${page.clientId}');
+
+        // 3. INSERIR OU ATUALIZAR
         final companion = PagesCompanion.insert(
           id: effectiveId != null ? Value(effectiveId) : const Value.absent(),
           serverId: Value(page.serverId),
           clientId: Value(page.clientId),
-          notebookId: page.notebookId,
+          notebookId: localNotebookId!, 
           pageNumber: page.pageNumber,
           isLandscape: Value(page.isLandscape ? 1 : 0),
           headerData: Value(LocalPage.encodeMeta(page.title)),
@@ -209,18 +207,20 @@ class CanvasRepository {
           extractedText: Value(page.extractedText),
           isFrozen: Value(page.isFrozen ? 1 : 0),
           paperSize: Value(page.paperSize),
+          lineType: Value(page.lineType),
+          lineSpacing: Value(page.lineSpacing),
           updatedAt: Value(page.updatedAt),
           syncedWithCloud: Value(page.syncedWithCloud),
         );
 
         final insertedId = await _db.into(_db.pages).insertOnConflictUpdate(companion);
-        
         page.id = insertedId;
         return insertedId;
       });
       completer.complete(id);
       return id;
     } catch (e) {
+      debugPrint('🚨 [CanvasRepo] Erro crítico ao salvar página: $e');
       completer.completeError(e);
       rethrow;
     } finally {
@@ -228,53 +228,74 @@ class CanvasRepository {
     }
   }
 
-  Future<void> saveSingleStroke(int pageId, Stroke s) async {
-    await _db.into(_db.canvasStrokes).insertOnConflictUpdate(CanvasStrokesCompanion.insert(
-      clientStrokeId: s.id,
-      pageId: pageId,
-      strokeData: jsonEncode(s.toJson()),
-      isDeleted: Value(s.isDeleted ? 1 : 0),
-      deletedInSession: Value(s.deletedInSession ? 1 : 0),
-      creatorId: Value(s.creatorId),
-      updatedAt: Value(s.updatedAt),
-    ));
+  Future<void> saveSingleStroke(String pageClientId, Stroke s) async {
+    // 🚀 RESOLUÇÃO DINÂMICA: Encontrar o ID local da página pelo ClientID (UUID)
+    final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+    if (page == null) {
+      debugPrint('⚠️ [CanvasRepo] Ignorando traço - página não encontrada: $pageClientId');
+      return;
+    }
+
+    try {
+      await _db.into(_db.canvasStrokes).insertOnConflictUpdate(CanvasStrokesCompanion.insert(
+        clientStrokeId: s.id,
+        pageId: page.id, // 🛡️ ID local resolvido de forma fresca
+        strokeData: jsonEncode(s.toJson()),
+        isDeleted: Value(s.isDeleted ? 1 : 0),
+        deletedInSession: Value(s.deletedInSession ? 1 : 0),
+        creatorId: Value(s.creatorId),
+        updatedAt: Value(s.updatedAt),
+      ));
+    } catch (e) {
+      debugPrint('🚨 [CanvasRepo] Falha ao salvar traço incremental: $e');
+    }
   }
 
-  Future<void> saveSingleTextBlock(int pageId, TextBlock t) async {
-    await _db.into(_db.canvasTextBlocks).insertOnConflictUpdate(CanvasTextBlocksCompanion.insert(
-      clientTextId: t.id,
-      pageId: pageId,
-      textData: jsonEncode(t.toJson()),
-      isDeleted: Value(t.isDeleted ? 1 : 0),
-      deletedInSession: Value(t.deletedInSession ? 1 : 0),
-      creatorId: Value(t.creatorId),
-      updatedAt: Value(t.updatedAt),
-    ));
+  Future<void> saveSingleTextBlock(String pageClientId, TextBlock t) async {
+    final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+    if (page == null) return;
+
+    try {
+      await _db.into(_db.canvasTextBlocks).insertOnConflictUpdate(CanvasTextBlocksCompanion.insert(
+        clientTextId: t.id,
+        pageId: page.id,
+        textData: jsonEncode(t.toJson()),
+        isDeleted: Value(t.isDeleted ? 1 : 0),
+        deletedInSession: Value(t.deletedInSession ? 1 : 0),
+        creatorId: Value(t.creatorId),
+        updatedAt: Value(t.updatedAt),
+      ));
+    } catch (e) {}
   }
 
-  Future<void> deleteSingleStroke(int pageId, String strokeId) async {
+  Future<void> saveSingleImageBlock(String pageClientId, ImageBlock i) async {
+    final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+    if (page == null) return;
+
+    try {
+      await _db.into(_db.canvasImageBlocks).insertOnConflictUpdate(CanvasImageBlocksCompanion.insert(
+        clientImageId: i.id,
+        pageId: page.id,
+        imagePath: i.imagePath,
+        posX: i.position.dx,
+        posY: i.position.dy,
+        width: i.width,
+        height: i.height,
+        rotation: i.rotation,
+        isDeleted: Value(i.isDeleted ? 1 : 0),
+        deletedInSession: Value(i.deletedInSession ? 1 : 0),
+        creatorId: Value(i.creatorId),
+        updatedAt: Value(i.updatedAt),
+      ));
+    } catch (e) {}
+  }
+
+  Future<void> deleteSingleStroke(String strokeId) async {
     await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(strokeId))).write(const CanvasStrokesCompanion(isDeleted: Value(1)));
   }
 
-  Future<void> deleteSingleTextBlock(int pageId, String textId) async {
+  Future<void> deleteSingleTextBlock(String textId) async {
     await (_db.update(_db.canvasTextBlocks)..where((t) => t.clientTextId.equals(textId))).write(const CanvasTextBlocksCompanion(isDeleted: Value(1)));
-  }
-
-  Future<void> saveSingleImageBlock(int pageId, ImageBlock i) async {
-    await _db.into(_db.canvasImageBlocks).insertOnConflictUpdate(CanvasImageBlocksCompanion.insert(
-      clientImageId: i.id,
-      pageId: pageId,
-      imagePath: i.imagePath,
-      posX: i.position.dx,
-      posY: i.position.dy,
-      width: i.width,
-      height: i.height,
-      rotation: i.rotation,
-      isDeleted: Value(i.isDeleted ? 1 : 0),
-      deletedInSession: Value(i.deletedInSession ? 1 : 0),
-      creatorId: Value(i.creatorId),
-      updatedAt: Value(i.updatedAt),
-    ));
   }
 
   Future<void> reindexPages(int notebookId) async {

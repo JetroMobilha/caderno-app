@@ -92,6 +92,16 @@ class CanvasToolbar extends StatelessWidget {
           _buildToolButton(Icons.auto_fix_high, ToolMode.eraser, 'Borracha'),
           _buildToolButton(Icons.text_fields, ToolMode.text, 'Texto'),
           _buildToolButton(Icons.highlight_alt, ToolMode.select, 'Selecionar Tinta'),
+          
+          // 🚀 BOTÃO DE TRANSFORMAÇÃO (DINÂMICO)
+          if (controller.selectedStrokeIds.isNotEmpty || controller.selectedTextIds.isNotEmpty || controller.selectedImageIds.isNotEmpty)
+            _buildCompactIconButton(
+              controller.isTransformMode ? Icons.check_circle_rounded : Icons.open_with_rounded, 
+              () => controller.toggleTransformMode(), 
+              controller.isTransformMode ? 'Concluir' : 'Redimensionar Seleção', 
+              controller.isTransformMode ? Colors.green : const Color(0xFFE67E22)
+            ),
+
           if (!isSmallScreen) _buildToolButton(Icons.pan_tool, ToolMode.pan, 'Mover Folha'),
           
           if (!isSmallScreen)

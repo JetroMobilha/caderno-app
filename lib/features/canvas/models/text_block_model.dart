@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀
 
 class TextBlock {
-  final String id;
+  String id; // 🆔 Alterado para não ser final para permitir clonagem profunda
   String text;
   Offset position;
   bool isBold;
@@ -36,7 +37,7 @@ class TextBlock {
     this.creatorId,
   }) : id = id ?? const Uuid().v4(),
        checkedLineIndices = checkedLineIndices ?? [],
-       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+       updatedAt = updatedAt ?? TimeService().nowMs(); // 🕒 Hora do servidor
 
   Map<String, dynamic> toJson() => {
     'id': id,

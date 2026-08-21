@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀
 import 'local_page_model.dart';
 import 'stroke_model.dart';
 import 'text_block_model.dart';
@@ -10,7 +11,7 @@ abstract class CanvasAction {
   final int timestamp; // 🚀 Crucial para LWW
   
   CanvasAction(this.pageClientId, this.pageNumber, {int? timestamp}) 
-    : timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch;
+    : timestamp = timestamp ?? TimeService().nowMs();
 
   void execute(LocalPage page);
   void undo(LocalPage page);
@@ -72,6 +73,8 @@ abstract class CanvasAction {
         pageNumber: pNum,
         isLandscape: data['isLandscape'] ?? false,
         paperSize: data['paperSize'] ?? 'A4',
+        lineType: data['lineType'],
+        lineSpacing: (data['lineSpacing'] as num?)?.toDouble(),
         timestamp: ts,
       );
     } else if (type == 'deletePage') {
@@ -118,7 +121,7 @@ class MoveAction extends CanvasAction {
   @override void undo(LocalPage page) => _applyDelta(page, -delta);
 
   void _applyDelta(LocalPage page, Offset d) {
-    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int now = TimeService().nowMs();
     for (var sid in strokeIds) {
       final idx = page.strokes.indexWhere((s) => s.id == sid);
       if (idx != -1) {
@@ -370,12 +373,16 @@ class UpdateTextAction extends CanvasAction {
 class AddPageAction extends CanvasAction {
   final bool isLandscape;
   final String paperSize;
+  final String? lineType;
+  final double? lineSpacing;
 
   AddPageAction({
     required String pageClientId, 
     required int pageNumber, 
     required this.isLandscape, 
     required this.paperSize,
+    this.lineType,
+    this.lineSpacing,
     int? timestamp,
   }) : super(pageClientId, pageNumber, timestamp: timestamp);
 
@@ -386,11 +393,15 @@ class AddPageAction extends CanvasAction {
     'timestamp': timestamp,
     'isLandscape': isLandscape,
     'paperSize': paperSize,
+    'lineType': lineType,
+    'lineSpacing': lineSpacing,
   };
 
   @override void execute(LocalPage page) {
     // A página em si é gerida pelo controlador, a ação apenas marca como ativa
     page.isDeleted = false;
+    if (lineType != null) page.lineType = lineType;
+    if (lineSpacing != null) page.lineSpacing = lineSpacing;
     page.updatedAt = DateTime.now().millisecondsSinceEpoch;
   }
 

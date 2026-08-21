@@ -149,6 +149,18 @@ class Notebook {
     String lineType = json['line_type'] ?? 'ruled';
     if (lineType == 'lines') lineType = 'ruled';
 
+    int? upAt;
+    if (json['updated_at_ms'] != null) {
+      upAt = (json['updated_at_ms'] as num).toInt();
+    } else if (json['updated_at'] != null) {
+      final val = json['updated_at'];
+      if (val is num) {
+        upAt = val.toInt();
+      } else if (val is String) {
+        upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
+      }
+    }
+
     return Notebook(
       serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
       clientId: json['client_id'] ?? const Uuid().v4(),
@@ -166,9 +178,9 @@ class Notebook {
       price: double.tryParse(json['price']?.toString() ?? '0.0') ?? 0.0,
       description: json['description'],
       authorName: json['author_name'],
-      syncedWithCloud: 1,
+      syncedWithCloud: json['synced_with_cloud'] ?? 1,
       isDeleted: json['deleted_at'] != null ? 1 : 0,
-      updatedAt: (json['updated_at'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      updatedAt: upAt ?? DateTime.now().millisecondsSinceEpoch,
       role: json['role'] ?? 'owner',
       alternativeTitle: json['alternative_title'],
       sharingType: json['sharing_type'] ?? 'full',

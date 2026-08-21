@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀
 import 'image_block_model.dart';
 import 'stroke_model.dart';
 import 'text_block_model.dart';
@@ -12,8 +13,10 @@ class LocalPage {
   final int notebookId;
   final int pageNumber;
   final bool isLandscape;
-  final String paperSize; // 🚀 Novo
-  bool isFrozen; // 🚀
+  final String paperSize;
+  String? lineType; // 🚀 Pauta específica por folha
+  double? lineSpacing; // 📏 Espaçamento por folha
+  bool isFrozen; 
   bool isDeleted; // 🚀
   bool isTearing = false; // 🚀 Feedback visual
 
@@ -40,6 +43,8 @@ class LocalPage {
     int? pageNumber,
     bool? isLandscape,
     String? paperSize,
+    String? lineType,
+    double? lineSpacing,
     bool? isFrozen,
     bool? isDeleted,
     String? title,
@@ -60,6 +65,8 @@ class LocalPage {
       pageNumber: pageNumber ?? this.pageNumber,
       isLandscape: isLandscape ?? this.isLandscape,
       paperSize: paperSize ?? this.paperSize,
+      lineType: lineType ?? this.lineType,
+      lineSpacing: lineSpacing ?? this.lineSpacing,
       isFrozen: isFrozen ?? this.isFrozen,
       isDeleted: isDeleted ?? this.isDeleted,
       title: title ?? this.title,
@@ -82,6 +89,8 @@ class LocalPage {
     required this.pageNumber,
     required this.isLandscape,
     this.paperSize = 'A4',
+    this.lineType,
+    this.lineSpacing,
     this.isFrozen = false,
     this.isDeleted = false,
     List<Stroke>? strokes,
@@ -98,7 +107,7 @@ class LocalPage {
        textBlocks = textBlocks ?? <TextBlock>[],
        imageBlocks = imageBlocks ?? <ImageBlock>[],
        redoHistory = [], // Inicializa a lista vazia
-       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+       updatedAt = updatedAt ?? TimeService().nowMs(); // 🕒 Hora do servidor
 
   // 🆔 Gera um "Fingerprint" da página para detectar divergências em tempo real
   String generateFingerprint() {
@@ -128,6 +137,8 @@ class LocalPage {
     // 4. Metadados Críticos
     components.add('f:${isFrozen ? 1 : 0}');
     components.add('ps:$paperSize');
+    components.add('lt:${lineType ?? 'ruled'}');
+    components.add('ls:${lineSpacing ?? '28'}');
 
     // Retorna uma string que representa o estado atual (ordenado para consistência)
     return components.join('|');
@@ -144,6 +155,8 @@ class LocalPage {
       'page_number': pageNumber,
       'is_landscape': isLandscape,
       'paper_size': paperSize,
+      'line_type': lineType,
+      'line_spacing': lineSpacing,
       'is_frozen': isFrozen ? 1 : 0,
       'is_deleted': isDeleted ? 1 : 0,
       'header_data': {'title': title},
@@ -170,6 +183,8 @@ class LocalPage {
       'page_number': pageNumber,
       'is_landscape': isLandscape,
       'paper_size': paperSize,
+      'line_type': lineType,
+      'line_spacing': lineSpacing,
       'is_frozen': isFrozen ? 1 : 0,
       'is_deleted': isDeleted ? 1 : 0,
       'header_data': {'title': title}, // 🚀 JSON estruturado para o MySQL
@@ -240,6 +255,8 @@ class LocalPage {
       pageNumber: int.tryParse(json['page_number']?.toString() ?? '0') ?? 0,
       isLandscape: json['is_landscape'] == true || json['is_landscape'] == 1,
       paperSize: json['paper_size']?.toString() ?? 'A4',
+      lineType: json['line_type']?.toString(),
+      lineSpacing: json['line_spacing'] != null ? double.tryParse(json['line_spacing'].toString()) : null,
       isFrozen: json['is_frozen'] == true || json['is_frozen'] == 1,
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
       title: parseMeta(json['header_data']),

@@ -48,16 +48,28 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
   final Map<String, Color> _colorPalette = {
     'Black': const Color(0xFF1A1A24),
+    'Dark Gray': const Color(0xFF455A64),
+    'Light Gray': const Color(0xFF90A4AE),
+    'Off White': const Color(0xFFECEFF1),
     'Dark Blue': const Color(0xFF0F4C5C),
-    'Forest Green': const Color(0xFF1B4332),
     'Royal Blue': const Color(0xFF1976D2),
+    'Sky Blue': const Color(0xFF4FC3F7),
     'Purple': const Color(0xFF6A1B9A),
+    'Lavender': const Color(0xFFB39DDB),
     'Deep Red': const Color(0xFF9B2226),
-    'Orange': const Color(0xFFE67E22),
-    'Vibrant Green': const Color(0xFF27AE60),
-    'Teal': const Color(0xFF00897B),
+    'Bright Red': const Color(0xFFE53935),
     'Pink': const Color(0xFFD81B60),
+    'Pastel Pink': const Color(0xFFF48FB1),
+    'Orange': const Color(0xFFE67E22),
+    'Amber': const Color(0xFFFFB300),
+    'Forest Green': const Color(0xFF1B4332),
+    'Vibrant Green': const Color(0xFF27AE60),
+    'Mint': const Color(0xFFA5D6A7),
+    'Teal': const Color(0xFF00897B),
+    'Brown': const Color(0xFF6D4C41),
   };
+
+  Color? _customColor; // 🌈 Cor criada pelo utilizador
 
   String? _liveStrokeId;
   DateTime _lastBroadcastTime = DateTime.now();
@@ -527,6 +539,60 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                                             ),
                                           ),
                                         ),
+                                        
+                                        // 🚀 CAMADA DE TRANSFORMAÇÃO (REDIMENSIONAR)
+                                        if (controller.isTransformMode) ...[
+                                          (() {
+                                            final Rect? bounds = controller.getSelectionBounds(page);
+                                            if (bounds == null) return const SizedBox.shrink();
+                                            
+                                            return Positioned.fromRect(
+                                              rect: bounds,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(color: const Color(0xFFE67E22), width: 2),
+                                                  color: const Color(0x19E67E22),
+                                                ),
+                                                child: Stack(
+                                                  clipBehavior: Clip.none,
+                                                  children: [
+                                                    // Puxador de Redimensionamento (Canto Inferior Direito)
+                                                    Positioned(
+                                                      right: -15, bottom: -15,
+                                                      child: GestureDetector(
+                                                        behavior: HitTestBehavior.opaque,
+                                                        onPanUpdate: (d) {
+                                                          final center = bounds.center;
+                                                          final double oldDist = (Offset(bounds.right, bounds.bottom) - center).distance;
+                                                          final double newDist = (Offset(bounds.right + d.delta.dx, bounds.bottom + d.delta.dy) - center).distance;
+                                                          
+                                                          if (oldDist > 0) {
+                                                            final double factor = newDist / oldDist;
+                                                            controller.scaleSelectedItems(page, factor, center);
+                                                          }
+                                                        },
+                                                        onPanEnd: (_) {
+                                                          controller.finalizeTransformation(page);
+                                                        },
+                                                        child: Container(
+                                                          width: 30, height: 30,
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.white,
+                                                            shape: BoxShape.circle,
+                                                            border: Border.all(color: const Color(0xFFE67E22), width: 2),
+                                                            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                                                          ),
+                                                          child: const Icon(Icons.aspect_ratio_rounded, size: 16, color: Color(0xFFE67E22)),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          })(),
+                                        ],
+
                                         ...page.imageBlocks.where((img) => !img.isDeleted).map((img) {
                                           final bool isSelected = img.id == controller.selectedEditingImageId;
                                           final bool isImageToolActive = controller.currentTool == ToolMode.imageEdit;
@@ -1304,33 +1370,56 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   void _showAddPageDialog(CanvasController controller) {
     bool isLand = false;
     String pSize = 'A4';
+    String lType = controller.liveLineType;
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: const Color(0xFFFDFBF7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Text('Nova Folha', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
-          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Tamanho do Papel:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54, fontSize: 13)),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Tamanho do Papel:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54, fontSize: 13)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: pSize,
+                decoration: InputDecoration(contentPadding: const EdgeInsets.symmetric(horizontal: 12), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                items: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (v) => setModalState(() => pSize = v!),
+              ),
+              const SizedBox(height: 20),
+            Text('Tipo de Pauta:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54, fontSize: 13)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              initialValue: pSize,
+              isExpanded: true,
+              value: lType,
               decoration: InputDecoration(contentPadding: const EdgeInsets.symmetric(horizontal: 12), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-              items: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-              onChanged: (v) => setModalState(() => pSize = v!),
+              items: [
+                {'id': 'ruled', 'label': 'Pautado'},
+                {'id': 'grid', 'label': 'Quadriculado'},
+                {'id': 'dots', 'label': 'Pontilhado'},
+                {'id': 'oblique', 'label': 'Oblíquo'},
+                {'id': 'blank', 'label': 'Liso'},
+              ].map((m) => DropdownMenuItem(value: m['id'], child: Text(m['label']!))).toList(),
+              onChanged: (v) => setModalState(() => lType = v!),
             ),
             const SizedBox(height: 20),
             Text('Orientação:', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.black54, fontSize: 13)),
-            const SizedBox(height: 8),
-            Row(children: [
-                Expanded(child: ChoiceChip(label: const Text('Retrato'), selected: !isLand, onSelected: (s) => setModalState(() => isLand = !s))),
-                const SizedBox(width: 8),
-                Expanded(child: ChoiceChip(label: const Text('Paisagem'), selected: isLand, onSelected: (s) => setModalState(() => isLand = s))),
+              const SizedBox(height: 8),
+              Row(children: [
+                  Expanded(child: ChoiceChip(label: const Text('Retrato'), selected: !isLand, onSelected: (s) => setModalState(() => isLand = !s))),
+                  const SizedBox(width: 8),
+                  Expanded(child: ChoiceChip(label: const Text('Paisagem'), selected: isLand, onSelected: (s) => setModalState(() => isLand = s))),
+              ]),
             ]),
-          ]),
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: Colors.black45))),
-            ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () { controller.addNewPage(isLand, paperSize: pSize); Navigator.pop(context); }, child: const Text('Criar Folha', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+            ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () { 
+              controller.addNewPage(isLand, paperSize: pSize, lineType: lType); 
+              Navigator.pop(context); 
+            }, child: const Text('Criar Folha', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
           ],
         ),
       ),
@@ -1344,37 +1433,122 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         backgroundColor: const Color(0xFFFDFBF7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(isForText ? 'Cor do Texto' : 'Paleta da Caneta', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C))),
         content: SizedBox(
-          width: 320,
-          child: Wrap(
-            spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
-            children: _colorPalette.entries.map((entry) {
-              final hex = '#${entry.value.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-              final bool isSelected = isForText ? controller.activeTextBlock?.textColorHex == hex : controller.selectedColorHex == hex;
-              return GestureDetector(
-                  onTap: () {
-                    if (isForText) {
-                      controller.setTextColor(hex);
-                    } else {
-                      controller.setColor(hex);
-                    }
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2), boxShadow: isSelected ? [BoxShadow(color: entry.value.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 2))] : null),
-                    child: CircleAvatar(radius: 16, backgroundColor: entry.value, child: isSelected ? Icon(Icons.check, size: 16, color: entry.value.computeLuminance() > 0.5 ? Colors.black : Colors.white) : null),
-                  )
-              );
-            }).toList(),
+          width: 340,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
+                children: [
+                  ..._colorPalette.entries.map((entry) {
+                    final hex = '#${entry.value.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+                    final bool isSelected = isForText ? controller.activeTextBlock?.textColorHex == hex : controller.selectedColorHex == hex;
+                    return GestureDetector(
+                      onTap: () {
+                        if (isForText) { controller.setTextColor(hex); } else { controller.setColor(hex); }
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent, width: 2)),
+                        child: CircleAvatar(radius: 16, backgroundColor: entry.value, child: isSelected ? Icon(Icons.check, size: 16, color: entry.value.computeLuminance() > 0.5 ? Colors.black : Colors.white) : null),
+                      )
+                    );
+                  }).toList(),
+                  
+                  // 🚀 BOTÃO DE COR PERSONALIZADA
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showCustomColorPicker(controller, isForText: isForText);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      child: CircleAvatar(
+                        radius: 16, 
+                        backgroundColor: Colors.grey.shade200,
+                        child: const Icon(Icons.add, color: Color(0xFF0F4C5C)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_customColor != null) ...[
+                 const SizedBox(height: 16),
+                 const Divider(),
+                 const SizedBox(height: 8),
+                 Text('Cor Personalizada Ativa:', style: GoogleFonts.inter(fontSize: 12, color: Colors.grey)),
+                 const SizedBox(height: 8),
+                 GestureDetector(
+                    onTap: () {
+                       final hex = '#${_customColor!.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+                       if (isForText) { controller.setTextColor(hex); } else { controller.setColor(hex); }
+                       Navigator.pop(context);
+                    },
+                    child: CircleAvatar(radius: 20, backgroundColor: _customColor, child: const Icon(Icons.history, color: Colors.white, size: 16)),
+                 )
+              ]
+            ],
           ),
         ),
       ),
     );
   }
 
+  void _showCustomColorPicker(CanvasController controller, {bool isForText = false}) {
+    Color picked = _customColor ?? const Color(0xFF0F4C5C);
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          title: Text('Criar Cor', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 80, width: double.infinity,
+                decoration: BoxDecoration(color: picked, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black12)),
+                child: Center(child: Text('#${picked.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}', style: TextStyle(color: picked.computeLuminance() > 0.5 ? Colors.black : Colors.white, fontWeight: FontWeight.bold))),
+              ),
+              const SizedBox(height: 20),
+              _buildColorSlider('Vermelho', picked.red, Colors.red, (v) => setModalState(() => picked = picked.withRed(v.toInt()))),
+              _buildColorSlider('Verde', picked.green, Colors.green, (v) => setModalState(() => picked = picked.withGreen(v.toInt()))),
+              _buildColorSlider('Azul', picked.blue, Colors.blue, (v) => setModalState(() => picked = picked.withBlue(v.toInt()))),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C5C)),
+              onPressed: () {
+                final hex = '#${picked.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+                setState(() => _customColor = picked);
+                if (isForText) { controller.setTextColor(hex); } else { controller.setColor(hex); }
+                Navigator.pop(context);
+              },
+              child: const Text('Usar Cor', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColorSlider(String label, int value, Color color, ValueChanged<double> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$label: $value', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
+        Slider(value: value.toDouble(), min: 0, max: 255, divisions: 255, activeColor: color, onChanged: onChanged),
+      ],
+    );
+  }
+
   void _showThicknessStudioDialog(CanvasController controller) {
     double tempThickness = controller.selectedThickness;
-    final List<double> quickPresets = [1.0, 3.0, 5.0, 8.0, 14.0];
+    final List<double> quickPresets = [2.0, 4.0, 8.0, 14.0, 25.0, 40.0];
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -1386,15 +1560,15 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [CircleAvatar(radius: (tempThickness / 1.5).clamp(1.5, 14.0), backgroundColor: currentColor), const SizedBox(width: 12), Text('${tempThickness.toInt()} px', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold))]),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [CircleAvatar(radius: (tempThickness / 2).clamp(2.0, 25.0), backgroundColor: currentColor), const SizedBox(width: 12), Text('${tempThickness.toInt()} px', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold))]),
                 const SizedBox(height: 12),
-                Slider(value: tempThickness, min: 1.0, max: 30.0, activeColor: const Color(0xFF0F4C5C), onChanged: (val) => setModalState(() => tempThickness = val)),
+                Slider(value: tempThickness.clamp(1.0, 50.0), min: 1.0, max: 50.0, divisions: 49, activeColor: const Color(0xFF0F4C5C), onChanged: (val) => setModalState(() => tempThickness = val)),
                 const SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: quickPresets.map((preset) {
+                Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: quickPresets.map((preset) {
                     final bool isSelected = tempThickness == preset;
                     return InkWell(
                       onTap: () => setModalState(() => tempThickness = preset),
-                      child: Container(width: 38, height: 34, alignment: Alignment.center, decoration: BoxDecoration(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(8)), child: Text('${preset.toInt()}', style: TextStyle(color: isSelected ? Colors.white : Colors.black87))),
+                      child: Container(width: 42, height: 36, alignment: Alignment.center, decoration: BoxDecoration(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(8)), child: Text('${preset.toInt()}', style: TextStyle(color: isSelected ? Colors.white : Colors.black87))),
                     );
                 }).toList()),
               ],

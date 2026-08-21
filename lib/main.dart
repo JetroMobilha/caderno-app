@@ -5,19 +5,18 @@ import 'package:caderno_digital_app/core/theme/app_theme.dart'; // 🚀 Importa 
 import 'package:caderno_digital_app/features/auth/views/splash_screen.dart';
 import 'package:caderno_digital_app/features/shared/widgets/notification_overlay.dart';
 import 'package:flutter/foundation.dart'; // 🚀 Para kIsWeb
-import 'dart:io';
+import 'package:caderno_digital_app/core/network/time_service.dart';
+import 'package:caderno_digital_app/core/network/http_overrides.dart' 
+    if (dart.library.html) 'package:caderno_digital_app/core/network/http_overrides_web.dart';
 
-class MyHttpOverrides extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-  }
-}
-
-void main() {
+void main() async { // 🚀 Adicionado async
   WidgetsFlutterBinding.ensureInitialized();
-  HttpOverrides.global = MyHttpOverrides();
+  
+  // 🛡️ Aplicar overrides de rede apenas em plataformas nativas
+  applyHttpOverrides();
+
+  // 🕒 OFFLINE-FIRST: Carregar relógio calibrado do disco
+  await TimeService().init();
 
   // 🛡️ OFFLINE-FIRST: Por padrão, o google_fonts tenta baixar fontes.
   // No Mobile, desativamos para evitar erros sem internet. 

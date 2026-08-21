@@ -10,6 +10,7 @@ import '../../features/notebooks/models/notebook_model.dart' as notebooks_model;
 import '../../features/canvas/models/local_page_model.dart' as pages_model;
 import '../../features/canvas/repositories/canvas_repository.dart';
 import '../database/app_database.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀
 import 'api_service.dart';
 
 class SyncService {
@@ -219,7 +220,9 @@ class SyncService {
                 
                 final companion = NotebooksCompanion.insert(
                   serverId: Value(sId), clientId: Value(cId ?? uniqid()), subjectId: Value(localSubId), title: net['title'] ?? '',
-                  coverType: net['cover_type'] ?? 'color', color: Value(net['color']), coverImage: Value(net['cover_image']),
+                  coverType: net['cover_type'] ?? 'color', 
+                  color: net['color'] != null ? Value(net['color']) : const Value.absent(), // 🚀 Proteger cor
+                  coverImage: Value(net['cover_image']),
                   lineType: Value(net['line_type'] ?? 'ruled'), lineSpacing: Value(net['line_spacing'] != null ? double.tryParse(net['line_spacing'].toString()) : null),
                   paperSize: Value(net['paper_size'] ?? 'A4'), templateType: Value(net['template_type'] ?? 'study'), collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
                   isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0), price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
@@ -245,7 +248,9 @@ class SyncService {
                   if (serverTime >= existing.updatedAt) {
                     await (_db.update(_db.notebooks)..where((t) => t.id.equals(existing.id))).write(
                       NotebooksCompanion(
-                        serverId: companion.serverId, subjectId: companion.subjectId, title: companion.title, coverType: companion.coverType, color: companion.color, coverImage: companion.coverImage, lineType: companion.lineType, lineSpacing: companion.lineSpacing, paperSize: companion.paperSize, templateType: companion.templateType, collaborationMode: companion.collaborationMode, isPublished: companion.isPublished, price: companion.price, description: companion.description, authorName: companion.authorName, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: companion.updatedAt, role: companion.role, alternativeTitle: companion.alternativeTitle, sharingType: companion.sharingType,
+                        serverId: companion.serverId, subjectId: companion.subjectId, title: companion.title, coverType: companion.coverType, 
+                        color: net['color'] != null ? Value(net['color']) : const Value.absent(), // 🚀 Proteger cor
+                        coverImage: companion.coverImage, lineType: companion.lineType, lineSpacing: companion.lineSpacing, paperSize: companion.paperSize, templateType: companion.templateType, collaborationMode: companion.collaborationMode, isPublished: companion.isPublished, price: companion.price, description: companion.description, authorName: companion.authorName, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: companion.updatedAt, role: companion.role, alternativeTitle: companion.alternativeTitle, sharingType: companion.sharingType,
                       )
                     );
                   }
@@ -330,13 +335,15 @@ class SyncService {
             pageMap = {'notebook_id': notebook.serverId, 'page_number': row.pageNumber, 'client_id': row.clientId, 'server_id': row.serverId, 'is_deleted': 1};
           } else {
             final allPages = await _canvasRepository.getPagesByNotebook(row.notebookId, null);
-            fullPage = allPages.firstWhere((p) => p.clientId == row.clientId, orElse: () => pages_model.LocalPage(notebookId: row.notebookId, pageNumber: row.pageNumber, isLandscape: row.isLandscape == 1, clientId: row.clientId));
+            fullPage = allPages.firstWhere((p) => p.clientId == row.clientId, orElse: () => pages_model.LocalPage(notebookId: row.notebookId, pageNumber: row.pageNumber, isLandscape: row.isLandscape == 1, clientId: row.clientId, lineType: row.lineType, lineSpacing: row.lineSpacing));
             int totalPts = fullPage.strokes.fold(0, (sum, s) => sum + s.points.length);
             if (totalPts > 1000) fullPage.strokes = fullPage.strokes.map((s) => s.simplify(epsilon: 0.5)).toList();
             else fullPage.strokes = fullPage.strokes.map((s) => s.simplify(epsilon: 0.2)).toList();
             pageMap = await fullPage.toJsonAsync();
             pageMap['notebook_id'] = notebook.serverId;
             pageMap['is_deleted'] = 0;
+
+            debugPrint('🛫 [Sync-Push] Enviando página ${row.pageNumber}: ${fullPage.strokes.length} traços, ${fullPage.textBlocks.length} textos, ${fullPage.imageBlocks.length} imagens.');
           }
           var response = await _apiService.post('/sync/pages/push', {'pages': [pageMap]});
           if (response.statusCode == 200 || response.statusCode == 201) {
@@ -391,10 +398,27 @@ class SyncService {
               final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
               if (notebook == null) continue;
               
-              final newPageData = pages_model.LocalPage.fromJson(sPage);
-              // 🚀 Sincronização via Repositório: Resolve duplicados automaticamente
+              // 🚀 LÓGICA LWW (Last-Write-Wins) PARA A PÁGINA
+              final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
+              final int serverTs = sPage['updated_at_ms'] ?? 0;
+
+              if (existingPage != null) {
+                // Se a página local é 'dirty' e mais recente que o servidor, não sobrescrever metadados
+                if (existingPage.syncedWithCloud == 0 && existingPage.updatedAt > serverTs) {
+                  debugPrint('⚠️ [Sync] PULL ignorado para folha ${existingPage.pageNumber} (Local Dirty & Newer).');
+                  // Mesmo ignorando o pull da linha da página, tentamos fundir o conteúdo (strokes etc)
+                  await _pullCanvasData(existingPage.id, sPage, serverTs: serverTs);
+                  continue;
+                }
+              }
+
+              // 🚀 REMAPEAMENTO DE ID: Garantir que a página aponta para o ID local do SQLite
+              final newPageData = pages_model.LocalPage.fromJson(sPage).copyWith(notebookId: notebook.id);
+              
+              // 🚀 SALVAR PÁGINA PRIMEIRO (FK PARENT)
               final localPageId = await _canvasRepository.savePage(newPageData, sNbId);
               
+              // 🚀 SÓ DEPOIS PUXAR OS DADOS DO CANVAS (CHILDREN)
               await _pullCanvasData(localPageId, sPage, serverTs: newPageData.updatedAt);
             }
           }
@@ -440,7 +464,9 @@ class SyncService {
           final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookServerId))).getSingleOrNull();
           if (notebook == null) return;
           
-          final newPageData = pages_model.LocalPage.fromJson(sPage);
+          // 🚀 REMAPEAMENTO DE ID: Garantir que a página aponta para o ID local do SQLite
+          final newPageData = pages_model.LocalPage.fromJson(sPage).copyWith(notebookId: notebook.id);
+          
           final localId = await _canvasRepository.savePage(newPageData, notebookServerId);
           await _pullCanvasData(localId, sPage, serverTs: (newPageData.updatedAt));
         }
@@ -467,7 +493,32 @@ class SyncService {
         final int serverTime = (st['updated_at'] as num?)?.toInt() ?? 0;
         final bool serverDeleted = st['is_deleted'] == true || st['is_deleted'] == 1;
         final local = localStrokeMap[id];
-        if (local == null || serverTime > local.updatedAt) batch.insert(_db.canvasStrokes, CanvasStrokesCompanion.insert(clientStrokeId: id, pageId: localPageId, strokeData: jsonEncode(st), isDeleted: Value(serverDeleted ? 1 : 0), deletedInSession: Value(st['deleted_in_session'] == true ? 1 : 0), syncedWithCloud: const Value(1), updatedAt: Value(serverTime > 0 ? serverTime : DateTime.now().millisecondsSinceEpoch)), mode: InsertMode.insertOrReplace);
+        
+        if (local == null) {
+          debugPrint('📥 [Sync-Merge] Novo traço detectado: $id');
+          batch.insert(_db.canvasStrokes, CanvasStrokesCompanion.insert(
+            clientStrokeId: id, 
+            pageId: localPageId, 
+            strokeData: jsonEncode(st), 
+            isDeleted: Value(serverDeleted ? 1 : 0), 
+            deletedInSession: Value(st['deleted_in_session'] == true ? 1 : 0), 
+            syncedWithCloud: const Value(1), 
+            updatedAt: Value(serverTime > 0 ? serverTime : TimeService().nowMs())
+          ), mode: InsertMode.insertOrReplace);
+        } else if (serverTime > local.updatedAt) {
+          debugPrint('🔄 [Sync-Merge] Atualizando traço $id (LWW): Server $serverTime > Local ${local.updatedAt}');
+          batch.insert(_db.canvasStrokes, CanvasStrokesCompanion.insert(
+            clientStrokeId: id, 
+            pageId: localPageId, 
+            strokeData: jsonEncode(st), 
+            isDeleted: Value(serverDeleted ? 1 : 0), 
+            deletedInSession: Value(st['deleted_in_session'] == true ? 1 : 0), 
+            syncedWithCloud: const Value(1), 
+            updatedAt: Value(serverTime)
+          ), mode: InsertMode.insertOrReplace);
+        } else {
+          debugPrint('🛡️ [Sync-Merge] Traço local $id é mais recente ou igual. Ignorando atualização do servidor.');
+        }
       }
       List textList = _parseJsonList(sPage['text_data']);
       for (var txt in textList) {
@@ -475,7 +526,29 @@ class SyncService {
         final int serverTime = (txt['updated_at'] as num?)?.toInt() ?? 0;
         final bool serverDeleted = txt['is_deleted'] == true || txt['is_deleted'] == 1;
         final local = localTextMap[id];
-        if (local == null || serverTime > local.updatedAt) batch.insert(_db.canvasTextBlocks, CanvasTextBlocksCompanion.insert(clientTextId: id, pageId: localPageId, textData: jsonEncode(txt), isDeleted: Value(serverDeleted ? 1 : 0), deletedInSession: Value(txt['deleted_in_session'] == true ? 1 : 0), syncedWithCloud: const Value(1), updatedAt: Value(serverTime > 0 ? serverTime : DateTime.now().millisecondsSinceEpoch)), mode: InsertMode.insertOrReplace);
+        if (local == null) {
+           debugPrint('📥 [Sync-Merge] Novo texto detectado: $id');
+           batch.insert(_db.canvasTextBlocks, CanvasTextBlocksCompanion.insert(
+            clientTextId: id, 
+            pageId: localPageId, 
+            textData: jsonEncode(txt), 
+            isDeleted: Value(serverDeleted ? 1 : 0), 
+            deletedInSession: Value(txt['deleted_in_session'] == true ? 1 : 0), 
+            syncedWithCloud: const Value(1), 
+            updatedAt: Value(serverTime > 0 ? serverTime : TimeService().nowMs())
+          ), mode: InsertMode.insertOrReplace);
+        } else if (serverTime > local.updatedAt) {
+          debugPrint('🔄 [Sync-Merge] Atualizando texto $id (LWW): Server $serverTime > Local ${local.updatedAt}');
+          batch.insert(_db.canvasTextBlocks, CanvasTextBlocksCompanion.insert(
+            clientTextId: id, 
+            pageId: localPageId, 
+            textData: jsonEncode(txt), 
+            isDeleted: Value(serverDeleted ? 1 : 0), 
+            deletedInSession: Value(txt['deleted_in_session'] == true ? 1 : 0), 
+            syncedWithCloud: const Value(1), 
+            updatedAt: Value(serverTime)
+          ), mode: InsertMode.insertOrReplace);
+        }
       }
       List imageList = _parseJsonList(sPage['image_data']);
       for (var img in imageList) {
@@ -483,16 +556,46 @@ class SyncService {
         final int serverTime = (img['updated_at'] as num?)?.toInt() ?? 0;
         final bool serverDeleted = img['is_deleted'] == true || img['is_deleted'] == 1;
         final local = localImageMap[id];
-        if (local == null || serverTime > local.updatedAt) batch.insert(_db.canvasImageBlocks, CanvasImageBlocksCompanion.insert(clientImageId: id, pageId: localPageId, imagePath: img['image_path']?.toString() ?? '', posX: (img['dx'] as num?)?.toDouble() ?? 0.0, posY: (img['dy'] as num?)?.toDouble() ?? 0.0, width: (img['width'] as num?)?.toDouble() ?? 300.0, height: (img['height'] as num?)?.toDouble() ?? 200.0, rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0, isDeleted: Value(serverDeleted ? 1 : 0), deletedInSession: Value(img['deleted_in_session'] == true ? 1 : 0), syncedWithCloud: const Value(1), updatedAt: Value(serverTime > 0 ? serverTime : DateTime.now().millisecondsSinceEpoch)), mode: InsertMode.insertOrReplace);
+        if (local == null) {
+           debugPrint('📥 [Sync-Merge] Nova imagem detectada: $id');
+           batch.insert(_db.canvasImageBlocks, CanvasImageBlocksCompanion.insert(
+            clientImageId: id, 
+            pageId: localPageId, 
+            imagePath: img['image_path']?.toString() ?? '', 
+            posX: (img['dx'] as num?)?.toDouble() ?? 0.0, 
+            posY: (img['dy'] as num?)?.toDouble() ?? 0.0, 
+            width: (img['width'] as num?)?.toDouble() ?? 300.0, 
+            height: (img['height'] as num?)?.toDouble() ?? 200.0, 
+            rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0, 
+            isDeleted: Value(serverDeleted ? 1 : 0), 
+            deletedInSession: Value(img['deleted_in_session'] == true ? 1 : 0), 
+            syncedWithCloud: const Value(1), 
+            updatedAt: Value(serverTime > 0 ? serverTime : TimeService().nowMs())
+          ), mode: InsertMode.insertOrReplace);
+        } else if (serverTime > local.updatedAt) {
+          debugPrint('🔄 [Sync-Merge] Atualizando imagem $id (LWW): Server $serverTime > Local ${local.updatedAt}');
+          batch.insert(_db.canvasImageBlocks, CanvasImageBlocksCompanion.insert(
+            clientImageId: id, 
+            pageId: localPageId, 
+            imagePath: img['image_path']?.toString() ?? '', 
+            posX: (img['dx'] as num?)?.toDouble() ?? 0.0, 
+            posY: (img['dy'] as num?)?.toDouble() ?? 0.0, 
+            width: (img['width'] as num?)?.toDouble() ?? 300.0, 
+            height: (img['height'] as num?)?.toDouble() ?? 200.0, 
+            rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0, 
+            isDeleted: Value(serverDeleted ? 1 : 0), 
+            deletedInSession: Value(img['deleted_in_session'] == true ? 1 : 0), 
+            syncedWithCloud: const Value(1), 
+            updatedAt: Value(serverTime)
+          ), mode: InsertMode.insertOrReplace);
+        }
       }
-      final serverStrokeIds = strokeList.map((s) => s['id']?.toString()).toSet();
-      for (var localId in localStrokeMap.keys) if (!serverStrokeIds.contains(localId) && localStrokeMap[localId]!.isDeleted == 0) batch.update(_db.canvasStrokes, const CanvasStrokesCompanion(isDeleted: Value(1), syncedWithCloud: Value(1)), where: (t) => t.clientStrokeId.equals(localId));
-      final serverTextIds = textList.map((t) => t['id']?.toString()).toSet();
-      for (var localId in localTextMap.keys) if (!serverTextIds.contains(localId) && localTextMap[localId]!.isDeleted == 0) batch.update(_db.canvasTextBlocks, const CanvasTextBlocksCompanion(isDeleted: Value(1), syncedWithCloud: Value(1)), where: (t) => t.clientTextId.equals(localId));
-      final serverImageIds = imageList.map((i) => i['id']?.toString()).toSet();
-      for (var localId in localImageMap.keys) if (!serverImageIds.contains(localId) && localImageMap[localId]!.isDeleted == 0) batch.update(_db.canvasImageBlocks, const CanvasImageBlocksCompanion(isDeleted: Value(1), syncedWithCloud: Value(1)), where: (t) => t.clientImageId.equals(localId));
+
+      // 🛡️ PROTEÇÃO OFFLINE-FIRST REFORÇADA: Removida deleção por ausência.
+      // Agora confiamos apenas no flag 'is_deleted' explícito que o servidor envia.
+      // Se um item local não estiver na resposta do servidor, ele é mantido como "novo/pendente".
     });
-    await (_db.update(_db.pages)..where((t) => t.id.equals(localPageId))).write(PagesCompanion(updatedAt: Value(serverTs ?? DateTime.now().millisecondsSinceEpoch)));
+    await (_db.update(_db.pages)..where((t) => t.id.equals(localPageId))).write(PagesCompanion(updatedAt: Value(serverTs ?? TimeService().nowMs())));
   }
 
   String? _extractNextUrl(Map<String, dynamic> responseData) {

@@ -6,7 +6,8 @@ import 'package:caderno_digital_app/features/notebooks/repositories/notebook_rep
 import 'package:caderno_digital_app/features/notebooks/repositories/shared_notebook_repository.dart';
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
-import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../auth/controllers/auth_controller.dart';
 import '../../subjects/controllers/subjects_controller.dart';
@@ -260,22 +261,64 @@ class NotebooksController extends Notifier<NotebooksState> {
       final int newId = await _repository.insertNotebook(newNotebook);
       newNotebook.id = newId;
 
-      // 2. Buscar páginas do original
-      // 🚀 PRIVACIDADE: Se não for o dono, o sistema de Sync já deve ter limpado o lixo local.
-      // Mas por segurança, o repositório local só retorna o que existe no SQLite.
+      // 2. Buscar páginas do original COM CONTEÚDO COMPLETO
+      // 🚀 Forçamos a leitura fresca do disco para garantir que strokes/textos estão presentes
       final sourcePages = await _canvasRepository.getPagesByNotebook(source.id!, source.serverId);
+      debugPrint('📋 [Duplicate] Iniciando cópia de ${sourcePages.length} páginas para o caderno $newId');
 
       // 3. Copiar cada página
       for (var page in sourcePages) {
-        final newPage = page.copyWith(
-          id: null,
-          serverId: null,
+        final String newPageClientId = Uuid().v4(); // 🆔 Nova identidade única para a folha
+        
+        // 🚀 CRIAÇÃO LIMPA: Criar instância sem carregar IDs locais do original
+        final newPage = LocalPage(
           notebookId: newId,
+          pageNumber: page.pageNumber,
+          isLandscape: page.isLandscape,
+          paperSize: page.paperSize,
+          lineType: page.lineType,
+          lineSpacing: page.lineSpacing,
+          title: page.title,
+          footer: page.footer,
+          extractedText: page.extractedText,
+          isFrozen: page.isFrozen,
+          clientId: newPageClientId,
           syncedWithCloud: 0,
         );
-        await _canvasRepository.savePage(newPage, null);
         
-        // 🚀 Opcional: Clonar traços e textos se necessário (o repositório savePage já lida com isso se passarmos o objeto completo)
+        // Salvar a folha primeiro (gera o ID local correto no SQLite)
+        final int newLocalPageId = await _canvasRepository.savePage(newPage, null);
+        debugPrint('📄 [Duplicate] Folha original (localId: ${page.id}) copiada para nova localId $newLocalPageId');
+        
+        // 🚀 CLONAGEM PROFUNDA: Copiar traços, textos e imagens com NOVOS UUIDs
+        int strokesCount = 0;
+        for (var stroke in page.strokes) {
+          final clonedStroke = stroke.clone()
+            ..id = Uuid().v4() // 🆔 Nova identidade única
+            ..updatedAt = DateTime.now().millisecondsSinceEpoch;
+          await _canvasRepository.saveSingleStroke(newPageClientId, clonedStroke);
+          strokesCount++;
+        }
+
+        int textsCount = 0;
+        for (var text in page.textBlocks) {
+          final clonedText = text.clone()
+            ..id = Uuid().v4() // 🆔 Nova identidade única
+            ..updatedAt = DateTime.now().millisecondsSinceEpoch;
+          await _canvasRepository.saveSingleTextBlock(newPageClientId, clonedText);
+          textsCount++;
+        }
+
+        int imagesCount = 0;
+        for (var img in page.imageBlocks) {
+          final clonedImg = img.clone()
+            ..id = Uuid().v4() // 🆔 Nova identidade única
+            ..updatedAt = DateTime.now().millisecondsSinceEpoch;
+          await _canvasRepository.saveSingleImageBlock(newPageClientId, clonedImg);
+          imagesCount++;
+        }
+        
+        debugPrint('✅ [Duplicate] Conteúdo da folha ${page.pageNumber} duplicado: $strokesCount traços, $textsCount textos, $imagesCount imagens');
       }
     } finally {
       state = state.copyWith(isLoading: false);

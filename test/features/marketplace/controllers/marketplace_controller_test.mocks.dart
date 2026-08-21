@@ -113,6 +113,12 @@ class MockAuthController extends _i1.Mock implements _i6.AuthController {
   );
 
   @override
+  void clearError() => super.noSuchMethod(
+    Invocation.method(#clearError, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i4.Future<bool> checkAuthStatus() =>
       (super.noSuchMethod(
             Invocation.method(#checkAuthStatus, []),

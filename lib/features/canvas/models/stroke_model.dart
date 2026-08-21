@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀
 import '../../../core/utils/geometry_utils.dart';
 
 class Stroke {
-  final String id; 
+  String id; // 🆔 Alterado para não ser final para permitir clonagem profunda
   String color;
   double thickness;
   List<Offset> points;
@@ -28,7 +29,7 @@ class Stroke {
     this.pageNumber,
     this.creatorId,
   }) : id = id ?? const Uuid().v4(),
-       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+       updatedAt = updatedAt ?? TimeService().nowMs(); // 🕒 Hora do servidor
 
   // =========================================================================
   // ☁️ COMUNICAÇÃO (JSON / Laravel / Drift)

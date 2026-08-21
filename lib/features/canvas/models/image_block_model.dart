@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 class ImageBlock {
-  final String id;
+  String id; // 🆔 Alterado para não ser final para permitir clonagem profunda
   String imagePath; // Pode ser path local, Blob (Web) ou URL remota
   Offset position;
   double width;

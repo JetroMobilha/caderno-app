@@ -28,6 +28,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // 🚀 UX INTERAÇÃO: Variável visual de olho mantida na View
   bool _obscurePassword = true;
 
+  void _clearForm() {
+    _emailController.clear();
+    _passwordController.clear();
+    ref.read(authProvider.notifier).clearError();
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -133,6 +139,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           keyboardType: TextInputType.emailAddress,
                           autocorrect: false,
                           style: GoogleFonts.inter(fontSize: 15),
+                          onChanged: (_) => ref.read(authProvider.notifier).clearError(),
                           decoration: InputDecoration(
                             hintText: 'exemplo@estudante.ao',
                             hintStyle: const TextStyle(color: Colors.black26),
@@ -159,6 +166,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           controller: _passwordController,
                           obscureText: _obscurePassword,
                           style: GoogleFonts.inter(fontSize: 15),
+                          onChanged: (_) => ref.read(authProvider.notifier).clearError(),
                           decoration: InputDecoration(
                             hintText: '••••••••••••',
                             hintStyle: const TextStyle(color: Colors.black26),
@@ -181,6 +189,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           },
                         ),
 
+                        const SizedBox(height: 12), // 🚀 Espaçamento entre senha e link
+
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
@@ -190,20 +200,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()));
+                              ref.read(authProvider.notifier).clearError(); // 🚀 Limpar erro ao mudar de ecrã
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                              ).then((_) => _clearForm());
                             },
                             child: Text('Esqueceu a palavra-passe?', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF0F4C5C))),
                           ),
                         ),
 
-                        // 🪄 ANIMAÇÃO FLUIDA DE ERRO (Lê a mensagem centralizada no Controller)
+                        const SizedBox(height: 24), // 🚀 Espaçamento antes do botão entrar
+
+                        // 🔘 BOTÃO DE LOGIN REATIVO
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0F4C5C),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: authController.isLoading ? null : _handleLogin,
+                            child: authController.isLoading
+                                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                : Text('Abrir Caderno', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+
+                        // 🪄 ANIMAÇÃO FLUIDA DE ERRO (Movida para o fundo para estabilidade visual)
                         AnimatedSize(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
                           child: authController.authErrorMessage == null
                               ? const SizedBox.shrink()
                               : Padding(
-                            padding: const EdgeInsets.only(top: 16.0),
+                            padding: const EdgeInsets.only(top: 20.0),
                             child: Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(12),
@@ -227,26 +261,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                         ),
-
-                        const SizedBox(height: 32),
-
-                        // 🔘 BOTÃO DE LOGIN REATIVO
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0F4C5C),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: authController.isLoading ? null : _handleLogin,
-                            child: authController.isLoading
-                                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                                : Text('Abrir Caderno', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -263,7 +277,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     InkWell(
                       borderRadius: BorderRadius.circular(4),
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen()));
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                        ).then((_) => _clearForm());
                       },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),

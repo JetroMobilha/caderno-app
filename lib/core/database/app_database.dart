@@ -72,6 +72,8 @@ class Pages extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
   IntColumn get isFrozen => integer().withDefault(const Constant(0))();
   TextColumn get paperSize => text().withDefault(const Constant('A4'))();
+  TextColumn get lineType => text().nullable()(); // 🚀 Novo: Pauta por folha
+  RealColumn get lineSpacing => real().nullable()(); // 🚀 Novo: Espaçamento por folha
   TextColumn get backgroundPdfPath => text().nullable()();
 }
 
@@ -241,12 +243,16 @@ class AppDatabase extends _$AppDatabase {
              print('⚠️ Migração versao 16 ignorada: $e');
            }
         }
+        if (from < 17) {
+          await m.addColumn(pages, pages.lineType);
+          await m.addColumn(pages, pages.lineSpacing);
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

@@ -6,11 +6,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:caderno_digital_app/core/network/api_config.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀 Novo
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
+
+  final TimeService _timeService = TimeService(); // 🚀
 
   static String get baseUrl {
     return ApiConfig.baseUrl;
@@ -67,6 +70,17 @@ class ApiService {
   // =========================================================================
   // 📡 MÉTODOS HTTP BLINDADOS
   // =========================================================================
+  void _processTimeMetadata(http.Response response) {
+     try {
+       final Map<String, dynamic> data = jsonDecode(response.body);
+       if (data.containsKey('meta') && data['meta'].containsKey('server_time')) {
+          _timeService.updateOffset(serverTimeIso: data['meta']['server_time']);
+       } else if (data.containsKey('server_time_ms')) {
+          _timeService.updateOffset(serverTimeMs: data['server_time_ms']);
+       }
+     } catch (_) {}
+  }
+
   Future<http.Response> post(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
@@ -82,6 +96,7 @@ class ApiService {
         .post(url, headers: headers, body: bodyStr)
         .timeout(const Duration(seconds: 15));
 
+    _processTimeMetadata(response); // 🕒 Calibrar relógio
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
   }
@@ -97,6 +112,7 @@ class ApiService {
         .get(url, headers: headers)
         .timeout(const Duration(seconds: 15));
 
+    _processTimeMetadata(response); // 🕒 Calibrar relógio
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
   }

@@ -59,7 +59,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     // Remove o teclado para a UI não dar saltos bruscos
     FocusScope.of(context).unfocus();
 
-    final bool success = await ref.read(authProvider).updateProfile(
+    final bool success = await ref.read(authProvider.notifier).updateProfile(
       name: _nameController.text.trim(),
       imageFile: _selectedImage,
     );

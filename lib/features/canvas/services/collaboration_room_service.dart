@@ -30,6 +30,12 @@ class CollaborationRoomService extends ChangeNotifier {
     this._repository,
   );
 
+  bool _isDisposed = false;
+  String? _myUserId;
+  int? _liveNotebookSid;
+  String? _currentUserRole;
+  int? _localNotebookId;
+
   // -------------------------------------------------------------------------
   // 🛡️ [STATE] PRESENCE & CURSORS
   // -------------------------------------------------------------------------
@@ -53,6 +59,10 @@ class CollaborationRoomService extends ChangeNotifier {
   // -------------------------------------------------------------------------
   // 🛡️ [STATE] SESSION POLICIES
   // -------------------------------------------------------------------------
+  bool isCollaborationEnabled = false;
+  bool isGlobalSyncing = false;
+  String currentTemplateType = 'study';
+
   bool isSessionLocked = false;
   bool isAuthorColorEnabled = false;
   String sessionVoiceMode = 'open';
@@ -62,6 +72,12 @@ class CollaborationRoomService extends ChangeNotifier {
   String? authorityId;
   String? sessionTitle;
   Set<int>? authorizedPageIds;
+
+  ValueNotifier<RealtimeStatus> get statusNotifier => _realtimeService.statusNotifier;
+  int? get liveNotebookSid => _liveNotebookSid;
+  String get myUserId => _myUserId ?? '';
+  String get currentUserRole => _currentUserRole ?? 'viewer';
+  bool get isSyncing => isGlobalSyncing; // Alias for UI consistency
 
   // -------------------------------------------------------------------------
   // 🛡️ [STATE] CHAT & COMUNICAÇÃO
@@ -136,10 +152,6 @@ class CollaborationRoomService extends ChangeNotifier {
   // -------------------------------------------------------------------------
   // 🕒 [INTERNOS] TIMERS & SUBSCRIPTIONS
   // -------------------------------------------------------------------------
-  bool _isDisposed = false;
-  String? _myUserId;
-  int? _liveNotebookSid;
-  String? _currentUserRole;
   
   StreamSubscription? _usersSubscription;
   StreamSubscription? _strokesSubscription;
@@ -233,6 +245,64 @@ class CollaborationRoomService extends ChangeNotifier {
     }
 
     _setupSubscriptions();
+  }
+
+  Future<void> toggleCollaboration(bool enable, {
+    int? localId,
+    int? remoteId,
+    String? userId,
+    String? role,
+    bool suppressBroadcast = false,
+    List<int>? pageIds,
+    String? alternativeTitle,
+    String? sharingType,
+  }) async {
+    if (isCollaborationEnabled == enable) return;
+
+    if (enable) {
+      isGlobalSyncing = true;
+      notifyListeners();
+      try {
+        await _syncService.pushNotebooks();
+        // Se tivermos os IDs, fazemos o push das páginas do caderno atual
+        final targetLocalId = localId ?? _localNotebookId;
+        final targetRemoteId = remoteId ?? _liveNotebookSid;
+        if (targetRemoteId != null && targetRemoteId != 0 && targetLocalId != null) {
+          await _syncService.pushPages(onlyNotebookId: targetLocalId);
+        }
+      } finally {
+        isGlobalSyncing = false;
+        notifyListeners();
+      }
+
+      isCollaborationEnabled = true;
+      SyncService.isCollaborationActive = true;
+
+      final targetRemoteId = remoteId ?? _liveNotebookSid;
+      final targetUserId = userId ?? _myUserId;
+      final targetRole = role ?? _currentUserRole ?? 'viewer';
+
+      if (targetRemoteId != null && targetRemoteId != 0 && targetUserId != null) {
+        _localNotebookId = localId ?? _localNotebookId;
+        await init(targetRemoteId, targetUserId, targetRole,
+            pageIds: pageIds, alternativeTitle: alternativeTitle, sharingType: sharingType);
+        
+        if (!suppressBroadcast) {
+          _realtimeService.broadcastLiveInvite(
+            notebookId: targetRemoteId,
+            myUserId: targetUserId,
+            senderName: "Um colega",
+            targetUserIds: [],
+          );
+        }
+      }
+    } else {
+      isCollaborationEnabled = false;
+      SyncService.isCollaborationActive = false;
+      isLiveSessionActive = false;
+      _realtimeService.disconnect();
+    }
+    notifyListeners();
   }
 
   void _setupSubscriptions() {
@@ -969,8 +1039,13 @@ class CollaborationRoomService extends ChangeNotifier {
     final idx = onlineUsers.indexWhere((u) => u['id'].toString() == userId);
     if (idx != -1) {
       onlineUsers[idx]['role'] = role;
-      notifyListeners();
     }
+    // Também atualizar no enrolledMembers se estiver lá
+    final enrolledIdx = enrolledMembers.indexWhere((m) => m['id'].toString() == userId);
+    if (enrolledIdx != -1) {
+      enrolledMembers[enrolledIdx]['role'] = role;
+    }
+    notifyListeners();
   }
 
   void toggleSessionLock() {

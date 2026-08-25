@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../controllers/canvas_controller.dart';
+import '../providers/collaboration_provider.dart';
+import '../providers/audio_session_provider.dart';
+import '../../canvas/services/audio_session_service.dart';
+import '../../canvas/services/collaboration_room_service.dart';
+import '../../../core/network/realtime_service.dart';
 import 'dart:async';
 
 class CollaborationChatWidget extends ConsumerStatefulWidget {
@@ -34,8 +38,10 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
 
   @override
   Widget build(BuildContext context) {
-    final controller = ref.watch(canvasProvider);
-    if (!controller.isCollaborationEnabled) return const SizedBox.shrink();
+    final collabService = ref.watch(collaborationProvider);
+    final audioService = ref.watch(audioSessionProvider);
+    
+    if (!collabService.isCollaborationEnabled) return const SizedBox.shrink();
 
     // 🚀 AUTO-SCROLL quando chegam novas mensagens
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -49,11 +55,11 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
-      width: controller.isChatOpen ? 300 : 56,
-      height: controller.isChatOpen ? chatHeight : 56,
+      width: collabService.isChatOpen ? 300 : 56,
+      height: collabService.isChatOpen ? chatHeight : 56,
       decoration: BoxDecoration(
-        color: controller.isChatOpen ? Colors.white : const Color(0xFF0F4C5C),
-        borderRadius: BorderRadius.circular(controller.isChatOpen ? 16 : 28),
+        color: collabService.isChatOpen ? Colors.white : const Color(0xFF0F4C5C),
+        borderRadius: BorderRadius.circular(collabService.isChatOpen ? 16 : 28),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.25),
@@ -63,30 +69,29 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(controller.isChatOpen ? 16 : 28),
-        child: controller.isChatOpen 
-            ? _buildFullChatWrapper(controller, chatHeight) 
-            : _buildChatIcon(controller),
+        borderRadius: BorderRadius.circular(collabService.isChatOpen ? 16 : 28),
+        child: collabService.isChatOpen 
+            ? _buildFullChatWrapper(collabService, audioService, chatHeight) 
+            : _buildChatIcon(collabService),
       ),
     );
   }
 
-  // 🚀 WRAPPER PARA EVITAR OVERFLOW: Garante que o chat "pensa" que tem o tamanho final
-  // mesmo durante a animação de crescimento do container pai.
-  Widget _buildFullChatWrapper(CanvasController controller, double height) {
+  // 🚀 WRAPPER PARA EVITAR OVERFLOW
+  Widget _buildFullChatWrapper(CollaborationRoomService collabService, AudioSessionService audioService, double height) {
     return OverflowBox(
       minWidth: 300, maxWidth: 300,
       minHeight: height, maxHeight: height,
       alignment: Alignment.topLeft,
-      child: _buildFullChat(controller, height),
+      child: _buildFullChat(collabService, audioService, height),
     );
   }
 
-  Widget _buildChatIcon(CanvasController controller) {
-    final bool isConnecting = !controller.isRealtimeActive;
+  Widget _buildChatIcon(CollaborationRoomService collabService) {
+    final bool isConnecting = collabService.statusNotifier.value != RealtimeStatus.connected;
 
     return InkWell(
-      onTap: () => controller.isChatOpen = true,
+      onTap: () => collabService.isChatOpen = true,
       borderRadius: BorderRadius.circular(28),
       child: Center( 
         child: Stack(
@@ -101,7 +106,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
             else
               const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 26),
             
-            if (controller.unreadChatCount > 0)
+            if (collabService.unreadChatCount > 0)
               Positioned(
                 top: -2,
                 right: -2,
@@ -114,7 +119,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                   ),
                   constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                   child: Text(
-                    '${controller.unreadChatCount}',
+                    '${collabService.unreadChatCount}',
                     style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
@@ -126,12 +131,12 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
     );
   }
 
-  Widget _buildFullChat(CanvasController controller, double height) {
+  Widget _buildFullChat(CollaborationRoomService collabService, AudioSessionService audioService, double height) {
     return Column(
       children: [
         // Header
         Container(
-          height: 50, // 🚀 Altura fixa para evitar pulos no layout
+          height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
             color: Color(0xFF0F4C5C),
@@ -148,7 +153,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                 ),
               ),
               IconButton(
-                onPressed: () => controller.isChatOpen = false,
+                onPressed: () => collabService.isChatOpen = false,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 22),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -163,13 +168,13 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
             child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.all(12),
-              itemCount: controller.chatMessages.length,
+              itemCount: collabService.chatMessages.length,
               itemBuilder: (context, index) {
-                final msg = controller.chatMessages[index];
-                final isMe = msg['sender_id'] == controller.myUserId;
+                final msg = collabService.chatMessages[index];
+                final isMe = msg['sender_id'] == collabService.myUserId;
                 final type = msg['type'] ?? 'text';
                 
-                final sender = controller.onlineUsers.firstWhere(
+                final sender = collabService.onlineUsers.firstWhere(
                   (u) => u['id'].toString() == msg['sender_id'],
                   orElse: () => {'name': 'Colega'},
                 );
@@ -229,11 +234,11 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
           ),
         ),
 
-        if (controller.isRecording)
-          _RecordingIndicator(controller: controller)
+        if (audioService.isRecording)
+          _RecordingIndicator(collabService: collabService, audioService: audioService)
         else
           Container(
-            height: 60, // 🚀 Altura fixa
+            height: 60,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -245,7 +250,11 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                   color: const Color(0xFF0F4C5C).withValues(alpha: 0.1),
                   shape: const CircleBorder(),
                   child: IconButton(
-                    onPressed: () => controller.startRecording(isLive: false),
+                    onPressed: () => audioService.startRecording(
+                      isLive: false,
+                      liveNotebookSid: collabService.liveNotebookSid,
+                      myUserId: collabService.myUserId,
+                    ),
                     icon: const Icon(Icons.mic_rounded, color: Color(0xFF0F4C5C), size: 20),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -262,11 +271,11 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                       isDense: true,
                     ),
                     style: GoogleFonts.inter(fontSize: 13),
-                    onSubmitted: (val) => _sendMessage(controller),
+                    onSubmitted: (val) => _sendMessage(collabService),
                   ),
                 ),
                 IconButton(
-                  onPressed: () => _sendMessage(controller),
+                  onPressed: () => _sendMessage(collabService),
                   icon: const Icon(Icons.send_rounded, color: Color(0xFF0F4C5C), size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -278,9 +287,9 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
     );
   }
 
-  void _sendMessage(CanvasController controller) {
+  void _sendMessage(CollaborationRoomService collabService) {
     if (_msgController.text.trim().isEmpty) return;
-    controller.sendChatMessage(_msgController.text.trim());
+    collabService.sendMessage(_msgController.text.trim());
     _msgController.clear();
   }
 }
@@ -293,10 +302,10 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(canvasProvider);
-    final bool isPlaying = controller.isStreamPlaying(streamId);
-    final bool isFinal = controller.isStreamFinalized(streamId);
-    final int segmentCount = controller.getStreamSegmentCount(streamId);
+    final audioService = ref.watch(audioSessionProvider);
+    final bool isPlaying = audioService.isStreamPlaying(streamId);
+    final bool isFinal = audioService.isStreamFinalized(streamId);
+    final int segmentCount = audioService.getStreamSegmentCount(streamId);
     
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -329,7 +338,7 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              onPressed: () => controller.playAudioStream(streamId),
+              onPressed: () => audioService.playAudioStream(streamId),
               icon: Icon(
                 isPlaying ? Icons.stop_circle_rounded : Icons.play_circle_filled_rounded, 
                 color: isMe ? Colors.white : const Color(0xFF0F4C5C),
@@ -386,8 +395,9 @@ class _BlinkingDotState extends State<_BlinkingDot> with SingleTickerProviderSta
 }
 
 class _RecordingIndicator extends StatelessWidget {
-  final CanvasController controller;
-  const _RecordingIndicator({required this.controller});
+  final CollaborationRoomService collabService;
+  final AudioSessionService audioService;
+  const _RecordingIndicator({required this.collabService, required this.audioService});
 
   @override
   Widget build(BuildContext context) {
@@ -403,7 +413,7 @@ class _RecordingIndicator extends StatelessWidget {
             child: StreamBuilder(
               stream: Stream.periodic(const Duration(seconds: 1)),
               builder: (context, snapshot) {
-                final dur = controller.recordingDuration;
+                final dur = audioService.recordingDuration;
                 return Text(
                   'GRAVANDO... ${dur.inMinutes}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}',
                   style: GoogleFonts.inter(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
@@ -412,7 +422,7 @@ class _RecordingIndicator extends StatelessWidget {
             ),
           ),
           ElevatedButton(
-            onPressed: () => controller.stopAndSendAudio(),
+            onPressed: () => audioService.stopAndSendAudio(collabService.liveNotebookSid, collabService.myUserId),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0F4C5C),
               foregroundColor: Colors.white,
@@ -443,9 +453,9 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
   
   @override
   Widget build(BuildContext context) {
-    final controller = ref.watch(canvasProvider);
-    final bool isPlaying = controller.currentlyPlayingAudioUrl == widget.url;
-    final double progress = isPlaying ? controller.audioPlaybackProgress : 0.0;
+    final audioService = ref.watch(audioSessionProvider);
+    final bool isPlaying = audioService.currentlyPlayingAudioUrl == widget.url;
+    final double progress = isPlaying ? audioService.audioPlaybackProgress : 0.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -465,13 +475,13 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
                 constraints: const BoxConstraints(),
                 onPressed: () async {
                   if (isPlaying) {
-                    await controller.playAudioMessage(widget.url);
+                    await audioService.playAudioMessage(widget.url);
                     return;
                   }
                   
                   setState(() => _isLoading = true);
                   try {
-                    await controller.playAudioMessage(widget.url);
+                    await audioService.playAudioMessage(widget.url);
                     if (mounted) setState(() => _isLoading = false);
                   } catch (e) {
                     if (mounted) setState(() => _isLoading = false);

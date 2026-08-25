@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
-import '../providers/canvas_tool_provider.dart';
-import '../providers/canvas_viewport_provider.dart';
+import '../providers/collaboration_provider.dart';
+import '../providers/audio_session_provider.dart';
 import '../providers/canvas_document_provider.dart';
+import '../providers/canvas_viewport_provider.dart';
+import '../providers/canvas_tool_provider.dart';
 import '../models/canvas_enums.dart';
-import '../controllers/canvas_controller.dart';
 import '../widgets/canvas_app_bar.dart';
 import '../widgets/canvas_page_drawer.dart';
 import '../widgets/canvas_toolbar.dart';
@@ -48,17 +49,19 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         templateType: widget.notebook.templateType,
       );
 
-      // 🚀 Inicializar Controller (Legado/Colaboração)
-      ref.read(canvasProvider).initNotebook(
-        widget.notebook.id ?? 0,
-        widget.notebook.serverId,
-        widget.notebook.lineType,
-        widget.notebook.paperSize,
+      // 🚀 Inicializar Serviços (Colaboração e Áudio)
+      final collabService = ref.read(collaborationProvider);
+      collabService.getPages = () => ref.read(canvasDocumentProvider).pages;
+      collabService.getCurrentPageIndex = () => ref.read(canvasViewportProvider).currentPageIndex;
+      collabService.getCurrentScale = () => ref.read(canvasViewportProvider.notifier).transformationController.value.getMaxScaleOnAxis();
+
+      collabService.init(
+        widget.notebook.serverId ?? 0,
+        user?.serverId?.toString() ?? '',
         widget.notebook.role,
-        user?.serverId?.toString(),
-        lineSpacing: widget.notebook.lineSpacing,
-        templateType: widget.notebook.templateType,
       );
+      
+      ref.read(audioSessionProvider).loadLessonRecordings(widget.notebook.id ?? 0);
     });
   }
 

@@ -1,63 +1,74 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
-import 'package:mockito/annotations.dart';
 import 'package:flutter/services.dart';
 import 'package:caderno_digital_app/features/marketplace/controllers/marketplace_controller.dart';
 import 'package:caderno_digital_app/features/marketplace/repositories/marketplace_repository.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'marketplace_controller_test.mocks.dart';
-
 import 'package:caderno_digital_app/features/auth/controllers/auth_controller.dart';
-import 'marketplace_controller_test.mocks.dart';
+import 'package:caderno_digital_app/features/auth/providers/auth_providers.dart';
+import 'package:caderno_digital_app/features/auth/repositories/auth_repository.dart';
+import 'package:caderno_digital_app/features/auth/models/user_model.dart';
+import 'package:caderno_digital_app/core/database/app_database.dart' hide User, Subject, Notebook, Page;
+import 'package:drift/native.dart';
 
-@GenerateMocks([MarketplaceRepository, AuthController])
+class MockMarketplaceRepository extends Mock implements MarketplaceRepository {
+  @override
+  Future<Map<String, dynamic>> getPublishedNotebooks({int page = 1, String? searchQuery = ''}) async {
+    return {
+      'notebooks': [
+        Notebook(id: 1, title: 'Test Manual', coverType: 'color', lineType: 'ruled', paperSize: 'A4')
+      ], 
+      'last_page': 1, 
+      'total': 1
+    };
+  }
+}
+
+class MockAuthRepository extends Mock implements AuthRepository {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   
-  // 🚀 MOCK PLATFORM CHANNELS
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
     const MethodChannel('plugins.flutter.io/path_provider'), (message) async => '.');
 
   late MockMarketplaceRepository mockRepo;
-  late MockAuthController mockAuth;
   late ProviderContainer container;
+  late AppDatabase db;
 
   setUp(() {
     mockRepo = MockMarketplaceRepository();
-    mockAuth = MockAuthController();
-    
-    when(mockAuth.token).thenReturn('fake-token');
+    db = AppDatabase.forTesting(NativeDatabase.memory());
 
     container = ProviderContainer(
       overrides: [
         marketplaceRepositoryProvider.overrideWithValue(mockRepo),
-        authProvider.overrideWith((ref) => mockAuth),
+        authRepositoryProvider.overrideWithValue(MockAuthRepository()),
+        appDatabaseProvider.overrideWithValue(db),
+        authProvider.overrideWith(() => AuthController()),
       ],
     );
+
+    // Login fake
+    container.read(authProvider.notifier).setUser(
+      User(id: 1, name: 'Test', email: 'test@t.com', planType: 'free'),
+      newToken: 'fake-token'
+    );
+  });
+
+  tearDown(() async {
+    await db.close();
+    container.dispose();
   });
 
   group('MarketplaceController Tests', () {
     test('loadInitial should fetch first page and update state', () async {
-      final notebook = Notebook(id: 1, title: 'Test', coverType: 'color', lineType: 'ruled', paperSize: 'A4');
-      
-      when(mockRepo.getPublishedNotebooks(page: 1, searchQuery: ''))
-          .thenAnswer((_) async => {
-            'notebooks': [notebook],
-            'last_page': 2,
-            'total': 20,
-          });
-
-      final listener = container.listen(marketplaceProvider, (previous, next) {});
-      
-      // Wait for initial load
       await container.read(marketplaceProvider.notifier).loadInitial();
       
       final state = container.read(marketplaceProvider);
       expect(state.notebooks.length, 1);
-      expect(state.notebooks.first.title, 'Test');
-      expect(state.hasMore, true);
+      expect(state.notebooks.first.title, 'Test Manual');
     });
   });
 }

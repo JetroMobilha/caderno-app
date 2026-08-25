@@ -32,14 +32,23 @@ class DrawingLayer extends ConsumerWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Camada de Traços Estáticos (Persistidos)
+          // 1. Camada de Fundo (Cacheada - Pauta/Grid)
           RepaintBoundary(
             child: CustomPaint(
               size: pageSize,
-              painter: StaticNotebookPainter(
-                strokes: page.strokes,
+              painter: BackgroundPainter(
                 lineType: page.lineType ?? 'ruled',
                 lineSpacing: page.lineSpacing ?? 28.0,
+              ),
+            ),
+          ),
+
+          // 2. Camada de Traços Estáticos (Persistidos)
+          RepaintBoundary(
+            child: CustomPaint(
+              size: pageSize,
+              painter: StrokesPainter(
+                strokes: page.strokes,
                 selectedStrokeIds: toolState.selectedStrokeIds,
                 selectionRect: toolState.selectionRectStart != null && toolState.selectionRectEnd != null
                     ? Rect.fromPoints(toolState.selectionRectStart!, toolState.selectionRectEnd!)
@@ -48,28 +57,26 @@ class DrawingLayer extends ConsumerWidget {
                 remoteMovingStrokeIds: collabService.remoteMovingStrokeIds,
                 userColors: collabService.userColorsMap,
                 isAuthorColorEnabled: collabService.isAuthorColorEnabled,
+                selectionDelta: toolState.totalSelectionDelta,
               ),
             ),
           ),
           
-          // 2. Camada de Traços Remotos (Live - Alta Frequência)
-          ValueListenableBuilder<Map<String, Stroke>>(
-            valueListenable: collabService.remoteLiveStrokes,
-            builder: (context, remoteMap, _) => CustomPaint(
-              size: pageSize, 
-              painter: RemoteLiveStrokesPainter(
-                liveStrokes: remoteMap, 
-                targetPageNumber: page.pageNumber,
-                userColors: collabService.userColorsMap,
-                isAuthorColorEnabled: collabService.isAuthorColorEnabled,
-              )
+          // 3. Camada de Traços Remotos (Live - Alta Frequência)
+          RepaintBoundary(
+            child: ValueListenableBuilder<Map<String, Stroke>>(
+              valueListenable: collabService.remoteLiveStrokes,
+              builder: (context, remoteMap, _) => CustomPaint(
+                size: pageSize, 
+                painter: RemoteLiveStrokesPainter(
+                  liveStrokes: remoteMap, 
+                  targetPageNumber: page.pageNumber,
+                  userColors: collabService.userColorsMap,
+                  isAuthorColorEnabled: collabService.isAuthorColorEnabled,
+                )
+              ),
             ),
           ),
-
-          // 3. Camada do Meu Traço Ativo (Local - Alta Frequência)
-          // Nota: O activePointsNotifier e activeDrawingPageNumber devem ser geridos
-          // por um provider de Drawing ou preservados na Viewport para evitar rebuilds do Doc.
-          // Por agora, usamos um ValueNotifier se disponível.
         ],
       ),
     );

@@ -37,7 +37,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     final String targetEmail = _emailController.text.trim();
 
     // Dispara a chamada segura no controller
-    final bool success = await ref.read(authProvider).sendRecoveryCode(targetEmail);
+    final bool success = await ref.read(authProvider.notifier).sendRecoveryCode(targetEmail);
 
     if (success && mounted) {
       Navigator.pushReplacement(

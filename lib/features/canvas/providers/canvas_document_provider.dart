@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' as io;
+import 'package:flutter/foundation.dart'; // 🚀 Adicionado para kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:caderno_digital_app/core/utils/rdp_simplifier.dart';
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
@@ -16,6 +19,7 @@ import '../../../core/network/sync_service.dart';
 import '../services/audio_session_service.dart';
 import '../services/collaboration_room_service.dart';
 import '../../../core/network/sync_provider.dart';
+import 'canvas_viewport_provider.dart';
 
 class CanvasDocumentState {
   final List<LocalPage> pages;
@@ -114,6 +118,19 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
 
     await _audioService.loadLessonRecordings(notebookId);
 
+    // 🚀 Configurar Callbacks de Colaboração
+    _collabService.onSyncRequested = () => _performCollectiveSync();
+    _collabService.onExecuteAction = (d) => _handleRemoteAction(d);
+    _collabService.onPageEvent = (d) => _handlePageEvent(d);
+    _collabService.onFullStateRequested = (d) => _handleFullStateRequest(d);
+    _collabService.onFullStateReceived = (d) => _handleFullStateReceived(d);
+    _collabService.onCloudSyncSignal = (d) => _syncService.pullSpecificPage(notebookSid!, d['page_number']);
+    _collabService.onSmoothTransition = (m) => _startSmoothTransition(m);
+    _collabService.onPageNavigationRequested = (i) => ref.read(canvasViewportProvider.notifier).jumpToPage(i);
+    _collabService.onAutoNavigateAfterDeletion = () => _autoNavigateAfterDeletion();
+
+    _audioService.onAudioMessageProcessed = (d) => _collabService.chatMessages.add(d);
+
     _pagesSubscription?.cancel();
     _pagesSubscription = _repository.watchPagesByNotebook(notebookId).listen((newPagesFromDb) {
       debugPrint('📄 [DocumentNotifier] Stream Drift emitiu ${newPagesFromDb.length} páginas');
@@ -174,14 +191,17 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   }
 
   Future<void> addStroke(LocalPage p, Stroke s) async {
+    // 🚀 OTIMIZAÇÃO: Simplificação de pontos antes de commitar
+    final simplifiedPoints = RdpSimplifier.simplify(s.points, 0.2);
+
     final ns = Stroke(
       id: s.id, 
       color: s.color, 
       thickness: s.thickness, 
-      points: s.points, 
+      points: simplifiedPoints, 
       creatorId: state.myUserId, 
       pageNumber: p.pageNumber,
-      isHighlighter: s.isHighlighter, // 🚀 Preservar flag
+      isHighlighter: s.isHighlighter,
     );
     
     final action = AddStrokeAction(pageClientId: p.clientId, pageNumber: p.pageNumber, stroke: ns);
@@ -215,6 +235,38 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     if (!isRemote) _broadcastAction(action);
   }
 
+  void broadcastLiveStroke({
+    required String pageClientId,
+    required int pageNumber,
+    required String strokeId,
+    required List<Offset> points,
+    required String color,
+    required double thickness,
+    required bool isHighlighter,
+    bool isFinal = false,
+  }) {
+    if (!state.isCollaborationEnabled || state.liveNotebookSid == null) return;
+
+    final data = {
+      'page_client_id': pageClientId,
+      'page_number': pageNumber,
+      'strokes': [{
+        'id': strokeId,
+        'color': color,
+        'thickness': thickness,
+        'is_final': isFinal,
+        'is_highlighter': isHighlighter ? 1 : 0,
+        'points': points.map((pt) => {'x': pt.dx, 'y': pt.dy}).toList()
+      }]
+    };
+
+    _realtimeService.broadcastStroke(
+      notebookId: state.liveNotebookSid!,
+      myUserId: state.myUserId,
+      strokeData: data,
+    );
+  }
+
   Future<void> _persistIncrementalAction(LocalPage target, CanvasAction action) async {
     final String cid = target.clientId;
     try {
@@ -238,9 +290,17 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     
     if (action is DeleteAction) {
       for (var s in action.strokes) _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: { 'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'strokes': [{'id': s.id, 'is_deleted': true}] });
+      for (var t in action.texts) _realtimeService.broadcastTextBlock(notebookId: state.liveNotebookSid!, textData: { 'sender_id': state.myUserId, 'page_number': action.pageNumber, 'block': t.toJson(), 'is_deleted': true });
+      for (var i in action.images) _realtimeService.broadcastImageBlock(notebookId: state.liveNotebookSid!, imageData: { 'sender_id': state.myUserId, 'page_number': action.pageNumber, 'block': i.toJson(), 'is_deleted': true });
     } else if (action is AddStrokeAction) {
       final s = action.stroke;
       _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: { 'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'strokes': [s.toJson()] });
+    } else if (action is AddTextAction) {
+      _realtimeService.broadcastTextBlock(notebookId: state.liveNotebookSid!, textData: { 'sender_id': state.myUserId, 'page_number': action.pageNumber, 'block': action.block.toJson(), 'is_editing': false });
+    } else if (action is UpdateTextAction) {
+      _realtimeService.broadcastTextBlock(notebookId: state.liveNotebookSid!, textData: { 'sender_id': state.myUserId, 'page_number': action.pageNumber, 'block': action.newState.toJson(), 'is_editing': false });
+    } else if (action is AddImageAction) {
+      _realtimeService.broadcastImageBlock(notebookId: state.liveNotebookSid!, imageData: { 'sender_id': state.myUserId, 'page_number': action.pageNumber, 'block': action.block.toJson(), 'is_deleted': false });
     }
   }
 
@@ -308,12 +368,62 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     // UI atualiza via stream do Drift
   }
 
+  Future<void> deleteSelection(LocalPage page, {
+    required Set<String> strokeIds,
+    required Set<String> textIds,
+    required Set<String> imageIds,
+  }) async {
+    if (page.isFrozen) return;
+
+    final sR = page.strokes.where((s) => !s.isDeleted && strokeIds.contains(s.id)).toList();
+    final tR = page.textBlocks.where((t) => !t.isDeleted && textIds.contains(t.id)).toList();
+    final iR = page.imageBlocks.where((i) => !i.isDeleted && imageIds.contains(i.id)).toList();
+
+    if (sR.isEmpty && tR.isEmpty && iR.isEmpty) return;
+
+    final action = DeleteAction(
+      pageClientId: page.clientId,
+      pageNumber: page.pageNumber,
+      strokes: sR.map((s) => s.clone()).toList(),
+      texts: tR.map((t) => t.clone()).toList(),
+      images: iR.map((i) => i.clone()).toList(),
+    );
+
+    await _executeAction(action, targetPage: page);
+  }
+
+  Future<void> moveSelection(LocalPage page, {
+    required List<String> strokeIds,
+    required List<String> textIds,
+    required List<String> imageIds,
+    required Offset delta,
+  }) async {
+    if (page.isFrozen || delta == Offset.zero) return;
+
+    final action = MoveAction(
+      pageClientId: page.clientId,
+      pageNumber: page.pageNumber,
+      strokeIds: strokeIds,
+      textIds: textIds,
+      imageIds: imageIds,
+      delta: delta,
+    );
+
+    await _executeAction(action, targetPage: page);
+  }
+
   Future<void> pickAndInsertImage(LocalPage page) async {
     final pf = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (pf != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final String path = '${appDir.path}/img_${DateTime.now().millisecondsSinceEpoch}';
-      await io.File(pf.path).copy(path);
+      String path = pf.path;
+      
+      // 🚀 COMPATIBILIDADE WEB: Não usar io.File nem caminhos locais
+      if (!kIsWeb) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final String newPath = '${appDir.path}/img_${DateTime.now().millisecondsSinceEpoch}';
+        await io.File(pf.path).copy(newPath);
+        path = newPath;
+      }
       
       final nib = ImageBlock(
         id: const Uuid().v4(), 
@@ -327,6 +437,106 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       final action = AddImageAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: nib);
       await _executeAction(action, targetPage: page);
     }
+  }
+
+  void reset() {
+    _pagesSubscription?.cancel();
+    _collabService.leaveSession();
+    state = CanvasDocumentState();
+  }
+
+  // -------------------------------------------------------------------------
+  // 🛡️ [COLLABORATION HANDLERS]
+  // -------------------------------------------------------------------------
+
+  Future<void> _performCollectiveSync() async {
+    if (state.isGlobalSyncing) return;
+    state = state.copyWith(isGlobalSyncing: true);
+    try {
+      if (state.currentUserRole == 'owner' || state.currentUserRole == 'editor') {
+        await _syncService.pushPages(onlyNotebookId: state.currentNotebookId);
+      }
+      await _syncService.pullPages(forceFull: true, onlyNotebookId: state.liveNotebookSid);
+      // O stream do Drift atualizará o estado
+    } finally {
+      state = state.copyWith(isGlobalSyncing: false);
+    }
+  }
+
+  Future<void> _handleRemoteAction(Map<String, dynamic> d) async {
+    final action = CanvasAction.fromMap(d['action_type'] ?? d['type'], d['data']);
+    if (action != null) {
+      final target = state.pages.cast<LocalPage?>().firstWhere(
+        (p) => p?.clientId == action.pageClientId, 
+        orElse: () => null
+      );
+      if (target != null) {
+        if (d['type'] == 'sync_undo') action.undo(target); 
+        else action.execute(target);
+        target.version++;
+        state = state.copyWith(pages: List.from(state.pages));
+      }
+    }
+  }
+
+  Future<void> _handlePageEvent(Map<String, dynamic> d) async {
+    if (d['action'] == 'add' || d['action'] == 'delete') {
+      await _performCollectiveSync();
+    }
+  }
+
+  Future<void> _handleFullStateRequest(Map<String, dynamic> d) async {
+    final idx = state.pages.indexWhere((p) => p.pageNumber == d['page_number']);
+    if (idx != -1 && state.liveNotebookSid != null) {
+      _realtimeService.deliverFullState(
+        notebookId: state.liveNotebookSid!, 
+        targetUserId: d['sender_id'].toString(), 
+        pageData: state.pages[idx].toJson()
+      );
+    }
+  }
+
+  Future<void> _handleFullStateReceived(Map<String, dynamic> d) async {
+    final Map<String, dynamic> pageData = d['page_data'];
+    final idx = state.pages.indexWhere((p) => p.pageNumber == pageData['page_number']);
+    if (idx != -1) {
+      final np = LocalPage.fromJson(pageData);
+      np.id = state.pages[idx].id;
+      final updatedPages = List<LocalPage>.from(state.pages);
+      updatedPages[idx] = np;
+      await _repository.savePage(np, state.liveNotebookSid);
+      state = state.copyWith(pages: updatedPages);
+    }
+  }
+
+  void _startSmoothTransition(Matrix4 target) {
+    final controller = ref.read(canvasViewportProvider.notifier).transformationController;
+    Timer.periodic(const Duration(milliseconds: 16), (t) {
+      final current = controller.value;
+      final next = Matrix4.identity();
+      for (int i = 0; i < 16; i++) {
+        next.storage[i] = current.storage[i] + (target.storage[i] - current.storage[i]) * 0.04;
+      }
+      controller.value = next;
+      
+      double diff = 0;
+      for (int i = 0; i < 16; i++) {
+        diff += (next.storage[i] - target.storage[i]).abs();
+      }
+      if (diff < 0.001) {
+        controller.value = target;
+        t.cancel();
+      }
+    });
+  }
+
+  void _autoNavigateAfterDeletion() {
+    if (state.pages.isEmpty) return;
+    final viewportNotifier = ref.read(canvasViewportProvider.notifier);
+    final currentIndex = ref.read(canvasViewportProvider).currentPageIndex;
+    
+    int targetIndex = (currentIndex >= state.pages.length) ? state.pages.length - 1 : currentIndex;
+    viewportNotifier.jumpToPage(targetIndex < 0 ? 0 : targetIndex);
   }
 }
 

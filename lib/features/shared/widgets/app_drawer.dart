@@ -78,8 +78,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
                 onPressed: isLoading ? null : () async {
                   final rootNavigator = Navigator.of(context, rootNavigator: true);
-                  final authCtrl = ref.read(authProvider);
-                  await authCtrl.logout();
+                  await ref.read(authProvider.notifier).logout();
                   rootNavigator.pushAndRemoveUntil(
                     MaterialPageRoute(builder: (_) => const LoginScreen()),
                     (route) => false

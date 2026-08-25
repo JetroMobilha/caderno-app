@@ -17,6 +17,7 @@ class CanvasToolState {
   final Offset? selectionRectEnd;
   final bool isTransformMode;
   final bool isHighlighter;
+  final Offset totalSelectionDelta;
   final String? selectedEditingImageId;
 
   CanvasToolState({
@@ -32,6 +33,7 @@ class CanvasToolState {
     this.selectionRectEnd,
     this.isTransformMode = false,
     this.isHighlighter = false,
+    this.totalSelectionDelta = Offset.zero,
     this.selectedEditingImageId,
   });
 
@@ -48,6 +50,7 @@ class CanvasToolState {
     Offset? selectionRectEnd,
     bool? isTransformMode,
     bool? isHighlighter,
+    Offset? totalSelectionDelta,
     String? selectedEditingImageId,
   }) {
     return CanvasToolState(
@@ -63,6 +66,7 @@ class CanvasToolState {
       selectionRectEnd: selectionRectEnd ?? this.selectionRectEnd,
       isTransformMode: isTransformMode ?? this.isTransformMode,
       isHighlighter: isHighlighter ?? this.isHighlighter,
+      totalSelectionDelta: totalSelectionDelta ?? this.totalSelectionDelta,
       selectedEditingImageId: selectedEditingImageId ?? this.selectedEditingImageId,
     );
   }
@@ -146,7 +150,16 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       selectionRectStart: null,
       selectionRectEnd: null,
       isTransformMode: false,
+      totalSelectionDelta: Offset.zero,
     );
+  }
+
+  void updateSelectionDelta(Offset delta) {
+    state = state.copyWith(totalSelectionDelta: state.totalSelectionDelta + delta);
+  }
+
+  void resetSelectionDelta() {
+    state = state.copyWith(totalSelectionDelta: Offset.zero);
   }
 
   void selectIds({

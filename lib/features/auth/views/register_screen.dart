@@ -39,7 +39,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     // 🚀 Consome diretamente a função do teu controlador!
-    final bool success = await ref.read(authProvider).register(
+    final bool success = await ref.read(authProvider.notifier).register(
       _nameController.text.trim(),
       _emailController.text.trim(),
       _passwordController.text,

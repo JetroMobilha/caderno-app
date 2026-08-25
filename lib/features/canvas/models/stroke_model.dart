@@ -43,6 +43,7 @@ class Stroke {
       'is_deleted': isDeleted,
       'deleted_in_session': deletedInSession,
       'updated_at': updatedAt,
+      'version': version,
       'creator_id': creatorId,
       'synced_with_cloud': syncedWithCloud ? 1 : 0,
       'is_highlighter': isHighlighter ? 1 : 0, // 🚀

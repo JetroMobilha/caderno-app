@@ -26,7 +26,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     if (!mounted) return;
 
     // 🚀 Lemos o estado silenciosamente (ref.read)
-    final loggedIn = await ref.read(authProvider).checkAuthStatus();
+    final loggedIn = await ref.read(authProvider.notifier).checkAuthStatus();
 
     if (!mounted) return;
 

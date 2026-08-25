@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
+import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
+import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
+import 'package:caderno_digital_app/features/canvas/providers/canvas_document_provider.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 
 class NotebookDeletedDialog extends ConsumerStatefulWidget {
-  final CanvasController controller;
+  final Notebook notebook;
 
-  const NotebookDeletedDialog({super.key, required this.controller});
+  const NotebookDeletedDialog({super.key, required this.notebook});
 
   @override
   ConsumerState<NotebookDeletedDialog> createState() => _NotebookDeletedDialogState();
@@ -73,7 +75,7 @@ class _NotebookDeletedDialogState extends ConsumerState<NotebookDeletedDialog> {
         actions: [
           TextButton(
             onPressed: () {
-              widget.controller.exitNotebook();
+              ref.read(canvasDocumentProvider.notifier).reset();
               Navigator.pop(context);
               Navigator.pop(context);
             },
@@ -88,8 +90,9 @@ class _NotebookDeletedDialogState extends ConsumerState<NotebookDeletedDialog> {
                 finalSubId = added?.id;
               }
               if (finalSubId != null) {
-                await widget.controller.saveCopyOfNotebook(finalSubId);
+                await ref.read(notebooksProvider.notifier).duplicateNotebook(widget.notebook, finalSubId);
                 if (!context.mounted) return;
+                ref.read(canvasDocumentProvider.notifier).reset();
                 Navigator.pop(context);
                 Navigator.pop(context);
               }

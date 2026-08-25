@@ -29,7 +29,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   Future<void> _handleReset() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final bool success = await ref.read(authProvider).resetPassword(
+    final bool success = await ref.read(authProvider.notifier).resetPassword(
       email: widget.email,
       code: _codeController.text.trim(),
       newPassword: _passwordController.text,

@@ -6,7 +6,6 @@ import '../../notebooks/controllers/notebooks_controller.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../canvas/models/local_page_model.dart';
 import '../../canvas/repositories/canvas_repository.dart';
-import '../../canvas/controllers/canvas_controller.dart';
 import 'start_collaboration_sheet.dart';
 
 class ShareNotebookBottomSheet extends ConsumerStatefulWidget {

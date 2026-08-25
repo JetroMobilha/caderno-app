@@ -1,13 +1,21 @@
-- [ ] **Rendering Optimization**
-    - [ ] Split `StaticNotebookPainter` into `BackgroundPainter` and `StrokesPainter` in `canvas_painter.dart`
-    - [ ] Update `DrawingLayer` with multiple `RepaintBoundary` for isolation
-    - [ ] Implement local `ValueNotifier` isolation in `InteractionLayer`
-- [ ] **State Management Refactor (Riverpod 2.0)**
-    - [ ] Create `AuthState` class and convert `AuthController` to `Notifier`
-    - [ ] Update `main.dart` and login/profile screens for new `authProvider`
-    - [ ] Migrate missing logic from `CanvasController` to `CanvasDocumentNotifier` or `CanvasViewportNotifier`
-    - [ ] Delete legacy `CanvasController.dart`
-- [ ] **Performance & Utilities**
-    - [ ] Implement Ramer-Douglas-Peucker (RDP) point simplification
-    - [ ] Ensure heavy persistence operations run in background
-- [ ] Final Verification & Profile Testing
+- [x] Create `lib/features/shared/widgets/drawer/` directory
+- [x] Implement `DrawerUtils` in `drawer_utils.dart`
+- [x] Implement `DrawerHeaderWidget` in `drawer_header.dart`
+- [x] Implement `DrawerSubjectsList` in `drawer_subjects_list.dart`
+- [x] Implement `SubjectDialogs` in `subject_dialogs.dart`
+- [x] Refactor `AppDrawer` in `app_drawer.dart` to use new modules
+- [x] Verify drawer functionality and sync/logout flows
+- [x] Modularize Subjects Feature
+- [x] Modularize Notebooks Feature
+- [x] **Rendering Optimization**
+- [x] **State Management Refactor (Riverpod 2.0)**
+- [x] **Web Compatibility Fixes**
+- [x] **Fix Test Suite**
+    - [x] Enhance `AuthController` testability via dependency injection
+    - [x] Fix compilation errors in `auth_controller_test.dart`
+    - [x] Fix compilation errors in `subjects_controller_test.dart`
+    - [x] Fix compilation errors and logic in `marketplace_controller_test.dart`
+    - [x] Fix `Notebook` and `Stroke` model JSON mapping for `version` field
+    - [x] Create and fix `canvas_document_test.dart`
+    - [x] Delete legacy tests for `CanvasController`
+    - [x] Verify all tests pass with `flutter test`

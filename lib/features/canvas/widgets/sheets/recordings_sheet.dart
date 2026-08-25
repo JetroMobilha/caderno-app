@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
+import '../../services/audio_session_service.dart';
 
 class RecordingsSheet extends StatelessWidget {
-  final CanvasController controller;
+  final AudioSessionService audioService;
 
-  const RecordingsSheet({super.key, required this.controller});
+  const RecordingsSheet({super.key, required this.audioService});
 
   @override
   Widget build(BuildContext context) {
@@ -35,14 +35,14 @@ class RecordingsSheet extends StatelessWidget {
           ),
           Expanded(
             child: ListView.builder(
-              itemCount: controller.lessonRecordings.length,
+              itemCount: audioService.lessonRecordings.length,
               itemBuilder: (context, index) {
-                final rec = controller.lessonRecordings[index];
+                final rec = audioService.lessonRecordings[index];
                 return ListTile(
                   title: Text(rec.title),
                   trailing: IconButton(
                     icon: const Icon(Icons.play_circle),
-                    onPressed: () => controller.playRecording(rec),
+                    onPressed: () => audioService.playRecording(rec),
                   ),
                 );
               },

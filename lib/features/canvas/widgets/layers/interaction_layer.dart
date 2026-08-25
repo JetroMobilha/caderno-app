@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -29,11 +30,29 @@ class InteractionLayer extends ConsumerStatefulWidget {
 class _InteractionLayerState extends ConsumerState<InteractionLayer> {
   String? _liveStrokeId;
   final ValueNotifier<List<Offset>> _activePoints = ValueNotifier([]);
+  Timer? _broadcastThrottle;
 
   @override
   void dispose() {
     _activePoints.dispose();
+    _broadcastThrottle?.cancel();
     super.dispose();
+  }
+
+  void _throttledBroadcast(String strokeId, List<Offset> points, CanvasToolState toolState) {
+    if (_broadcastThrottle?.isActive ?? false) return;
+    
+    _broadcastThrottle = Timer(const Duration(milliseconds: 50), () {
+      ref.read(canvasDocumentProvider.notifier).broadcastLiveStroke(
+        pageClientId: widget.page.clientId,
+        pageNumber: widget.page.pageNumber,
+        strokeId: strokeId,
+        points: points,
+        color: toolState.selectedColorHex,
+        thickness: toolState.selectedThickness,
+        isHighlighter: toolState.isHighlighter,
+      );
+    });
   }
 
   @override
@@ -62,7 +81,7 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
               onPanStart: !widget.isBlocked
                   ? (d) {
                       if (toolState.currentTool == ToolMode.draw) {
-                        toolNotifier.selectIds(textIds: {});
+                        toolNotifier.selectIds(strokeIds: {}, textIds: {}, imageIds: {});
                         _liveStrokeId = const Uuid().v4();
                         _activePoints.value = [d.localPosition];
                       } else if (toolState.currentTool == ToolMode.select) {
@@ -74,9 +93,17 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                   ? (d) {
                       if (toolState.currentTool == ToolMode.draw) {
                         _activePoints.value = [..._activePoints.value, d.localPosition];
-                        // TODO: Enviar update remoto (throttle)
+                        if (_liveStrokeId != null) {
+                          _throttledBroadcast(_liveStrokeId!, _activePoints.value, toolState);
+                        }
                       } else if (toolState.currentTool == ToolMode.select) {
-                        toolNotifier.setSelectionRect(toolState.selectionRectStart, d.localPosition, widget.page);
+                        if (toolState.selectedStrokeIds.isNotEmpty || 
+                            toolState.selectedTextIds.isNotEmpty || 
+                            toolState.selectedImageIds.isNotEmpty) {
+                          toolNotifier.updateSelectionDelta(d.delta);
+                        } else {
+                          toolNotifier.setSelectionRect(toolState.selectionRectStart, d.localPosition, widget.page);
+                        }
                       }
                     }
                   : null,
@@ -94,28 +121,53 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                               isHighlighter: toolState.isHighlighter,
                             ),
                           );
+                          // Envio final para garantir sincronia
+                          docNotifier.broadcastLiveStroke(
+                            pageClientId: widget.page.clientId,
+                            pageNumber: widget.page.pageNumber,
+                            strokeId: _liveStrokeId!,
+                            points: _activePoints.value,
+                            color: toolState.selectedColorHex,
+                            thickness: toolState.selectedThickness,
+                            isHighlighter: toolState.isHighlighter,
+                            isFinal: true,
+                          );
                         }
                         _activePoints.value = [];
                         _liveStrokeId = null;
+                        _broadcastThrottle?.cancel();
+                      } else if (toolState.currentTool == ToolMode.select) {
+                        if (toolState.totalSelectionDelta != Offset.zero) {
+                          docNotifier.moveSelection(
+                            widget.page,
+                            strokeIds: toolState.selectedStrokeIds.toList(),
+                            textIds: toolState.selectedTextIds.toList(),
+                            imageIds: toolState.selectedImageIds.toList(),
+                            delta: toolState.totalSelectionDelta,
+                          );
+                          toolNotifier.resetSelectionDelta();
+                        }
                       }
                     }
                   : null,
             ),
-            // Renderização do traço ativo em alta frequência
-            ValueListenableBuilder<List<Offset>>(
-              valueListenable: _activePoints,
-              builder: (context, points, _) {
-                if (points.isEmpty) return const SizedBox.shrink();
-                return CustomPaint(
-                  size: Size.infinite,
-                  painter: ActiveStrokePainter(
-                    currentPoints: points,
-                    visualColor: Color(int.parse(toolState.selectedColorHex.replaceFirst('#', '0xFF'))),
-                    currentThickness: toolState.selectedThickness,
-                    isHighlighter: toolState.isHighlighter,
-                  ),
-                );
-              }
+            // Renderização do traço ativo em alta frequência (ISOLADA)
+            RepaintBoundary(
+              child: ValueListenableBuilder<List<Offset>>(
+                valueListenable: _activePoints,
+                builder: (context, points, _) {
+                  if (points.isEmpty) return const SizedBox.shrink();
+                  return CustomPaint(
+                    size: Size.infinite,
+                    painter: ActiveStrokePainter(
+                      currentPoints: points,
+                      visualColor: Color(int.parse(toolState.selectedColorHex.replaceFirst('#', '0xFF'))),
+                      currentThickness: toolState.selectedThickness,
+                      isHighlighter: toolState.isHighlighter,
+                    ),
+                  );
+                }
+              ),
             ),
           ],
         ),

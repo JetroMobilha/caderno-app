@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
-import 'package:caderno_digital_app/features/canvas/controllers/canvas_controller.dart';
+import 'package:caderno_digital_app/features/auth/controllers/auth_controller.dart';
+import 'package:caderno_digital_app/features/canvas/providers/collaboration_provider.dart';
+import 'package:caderno_digital_app/features/canvas/services/collaboration_room_service.dart';
 import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet.dart';
 import 'package:caderno_digital_app/features/canvas/widgets/start_collaboration_sheet.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
@@ -21,14 +23,14 @@ class CollaborationCenterSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(canvasProvider);
+    final collaboration = ref.watch(collaborationProvider);
     final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
     final themeColor = const Color(0xFF0F4C5C);
 
     // 🚀 Carregar membros inscritos ao abrir
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (controller.enrolledMembers.isEmpty && controller.liveNotebookSid != null) {
-        controller.fetchEnrolledMembers();
+      if (collaboration.enrolledMembers.isEmpty && collaboration.liveNotebookSid != null) {
+        collaboration.fetchEnrolledMembers();
       }
     });
 
@@ -59,7 +61,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                     IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                   ],
                 ),
-                if (controller.isCollaborationEnabled)
+                if (collaboration.isCollaborationEnabled)
                   ValueListenableBuilder<RealtimeStatus>(
                     valueListenable: realtimeStatus,
                     builder: (context, status, _) => Center(child: _buildStatusIndicator(status)),
@@ -67,21 +69,21 @@ class CollaborationCenterSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 24),
-            if (controller.incomingVoiceCall != null) ...[
-              _buildInternalVoiceInvite(controller),
+            if (collaboration.incomingVoiceCall != null) ...[
+              _buildInternalVoiceInvite(collaboration),
               const SizedBox(height: 16),
             ],
-            _buildOnlineToggle(controller),
+            _buildOnlineToggle(collaboration, ref),
             const SizedBox(height: 16),
             // 🚀 Dinâmica de Sessão (Apenas para o Dono)
-            if (controller.currentUserRole == 'owner' && controller.currentTemplateType == 'study' && controller.isCollaborationEnabled) ...[
+            if (collaboration.currentUserRole == 'owner' && collaboration.currentTemplateType == 'study' && collaboration.isCollaborationEnabled) ...[
               const Divider(height: 32),
               Text(
                 'Dinâmica da Sessão:',
                 style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: themeColor),
               ),
               const SizedBox(height: 12),
-              _buildDynamicsSelector(controller),
+              _buildDynamicsSelector(collaboration),
               const SizedBox(height: 16),
             ],
 
@@ -93,40 +95,40 @@ class CollaborationCenterSheet extends ConsumerWidget {
                   'Membros Inscritos:',
                   style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54),
                 ),
-                if (controller.currentUserRole == 'owner')
+                if (collaboration.currentUserRole == 'owner')
                   IconButton(
                     icon: const Icon(Icons.refresh, size: 18, color: Colors.black38),
-                    onPressed: () => controller.fetchEnrolledMembers(),
+                    onPressed: () => collaboration.fetchEnrolledMembers(),
                   ),
               ],
             ),
             const SizedBox(height: 12),
-            _buildEnrolledMembersList(controller, context, ref),
+            _buildEnrolledMembersList(collaboration, context, ref),
             
             const SizedBox(height: 32),
             ValueListenableBuilder<RealtimeStatus>(
               valueListenable: realtimeStatus,
               builder: (context, status, _) {
-                if (!controller.isCollaborationEnabled || status != RealtimeStatus.connected) {
+                if (!collaboration.isCollaborationEnabled || status != RealtimeStatus.connected) {
                   return const SizedBox.shrink();
                 }
                 return Column(
-                  key: ValueKey(controller.onlineUsers.length), // 🚀 Forçar rebuild
+                  key: ValueKey(collaboration.onlineUsers.length), // 🚀 Forçar rebuild
                   children: [
                     Row(
                       children: [
-                        Expanded(child: _buildVoiceButton(controller, context)),
+                        Expanded(child: _buildVoiceButton(collaboration, context)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildActionButton(
-                            icon: controller.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off,
-                            label: controller.isBroadcastingViewport ? 'Parar Visão' : 'Transmitir Visão',
-                            color: controller.isBroadcastingViewport ? Colors.redAccent : themeColor,
+                            icon: collaboration.isBroadcastingViewport ? Icons.sensors : Icons.sensors_off,
+                            label: collaboration.isBroadcastingViewport ? 'Parar Visão' : 'Transmitir Visão',
+                            color: collaboration.isBroadcastingViewport ? Colors.redAccent : themeColor,
                             onTap: () {
-                              if (controller.isBroadcastingViewport) {
-                                controller.stopViewportBroadcasting();
+                              if (collaboration.isBroadcastingViewport) {
+                                collaboration.stopViewportBroadcasting();
                               } else {
-                                controller.startViewportBroadcasting();
+                                collaboration.startViewportBroadcasting();
                               }
                               Navigator.pop(context);
                             },
@@ -140,7 +142,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
               },
             ),
             // 🚀 Gestão de Acessos (Apenas para o Dono)
-            if (controller.currentUserRole == 'owner') ...[
+            if (collaboration.currentUserRole == 'owner') ...[
               const Divider(height: 32),
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -170,17 +172,17 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildOnlineToggle(CanvasController controller) {
+  Widget _buildOnlineToggle(CollaborationRoomService collaboration, WidgetRef ref) {
     return ValueListenableBuilder<RealtimeStatus>(
-      valueListenable: controller.statusNotifier,
+      valueListenable: collaboration.statusNotifier,
       builder: (context, status, _) {
-        final bool isSyncing = controller.isGlobalSyncing;
+        final bool isSyncing = collaboration.isGlobalSyncing;
         final bool isConnecting = status == RealtimeStatus.connecting;
-        final bool isLoading = isSyncing || (controller.isCollaborationEnabled && isConnecting);
+        final bool isLoading = isSyncing || (collaboration.isCollaborationEnabled && isConnecting);
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: controller.isCollaborationEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+            color: collaboration.isCollaborationEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -192,19 +194,19 @@ class CollaborationCenterSheet extends ConsumerWidget {
                     const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F4C5C)))
                   else
                     Icon(
-                      controller.isCollaborationEnabled ? Icons.wifi_tethering : Icons.wifi_tethering_off,
-                      color: controller.isCollaborationEnabled ? Colors.green : Colors.grey,
+                      collaboration.isCollaborationEnabled ? Icons.wifi_tethering : Icons.wifi_tethering_off,
+                      color: collaboration.isCollaborationEnabled ? Colors.green : Colors.grey,
                     ),
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isLoading ? (isSyncing ? 'A preparar dados...' : 'A ligar ao servidor...') : (controller.isCollaborationEnabled ? 'Modo Online Ativo' : 'Modo Offline'),
+                        isLoading ? (isSyncing ? 'A preparar dados...' : 'A ligar ao servidor...') : (collaboration.isCollaborationEnabled ? 'Modo Online Ativo' : 'Modo Offline'),
                         style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
                       Text(
-                        isLoading ? 'Por favor aguarda um momento' : (controller.isCollaborationEnabled ? 'Outros podem ver o teu progresso' : 'Privacidade total garantida'),
+                        isLoading ? 'Por favor aguarda um momento' : (collaboration.isCollaborationEnabled ? 'Outros podem ver o teu progresso' : 'Privacidade total garantida'),
                         style: GoogleFonts.inter(fontSize: 11, color: Colors.black45),
                       ),
                     ],
@@ -213,10 +215,20 @@ class CollaborationCenterSheet extends ConsumerWidget {
               ),
               if (!isLoading)
                 Switch(
-                  value: controller.isCollaborationEnabled,
+                  value: collaboration.isCollaborationEnabled,
                   activeThumbColor: Colors.green,
                   activeTrackColor: Colors.green.withValues(alpha: 0.5),
-                  onChanged: (val) => controller.toggleCollaboration(val),
+                  onChanged: (val) {
+                    final currentUser = ref.read(authProvider).currentUser;
+                    final String myUserId = currentUser?.id.toString() ?? '';
+                    
+                    collaboration.toggleCollaboration(val, 
+                      localId: notebook.id, 
+                      remoteId: notebook.serverId,
+                      userId: myUserId,
+                      role: notebook.role,
+                    );
+                  },
                 ),
             ],
           ),
@@ -248,26 +260,26 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildEnrolledMembersList(CanvasController controller, BuildContext context, WidgetRef ref) {
-    if (controller.enrolledMembers.isEmpty) return _buildEmptyState('Nenhum membro inscrito.');
+  Widget _buildEnrolledMembersList(CollaborationRoomService collaboration, BuildContext context, WidgetRef ref) {
+    if (collaboration.enrolledMembers.isEmpty) return _buildEmptyState('Nenhum membro inscrito.');
     
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: controller.enrolledMembers.length,
+      itemCount: collaboration.enrolledMembers.length,
       separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        final m = controller.enrolledMembers[index];
+        final m = collaboration.enrolledMembers[index];
         final String mId = m['id'].toString();
         
         // 🚀 Detetar se o membro está online na sessão atual
-        final onlineUser = controller.onlineUsers.firstWhere(
+        final onlineUser = collaboration.onlineUsers.firstWhere(
           (u) => u['id'].toString() == mId, 
           orElse: () => {},
         );
         final bool isOnline = onlineUser.isNotEmpty;
-        final bool isMe = mId == controller.myUserId;
-        final bool isFollowing = controller.followingUserId == mId;
+        final bool isMe = mId == collaboration.myUserId;
+        final bool isFollowing = collaboration.followingUserId == mId;
         final bool isTalking = onlineUser['isTalking'] == true;
         final bool isHandRaised = onlineUser['isHandRaised'] == true;
 
@@ -327,7 +339,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                             Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
                         ],
                       ),
-                      if (controller.currentUserRole == 'owner')
+                      if (collaboration.currentUserRole == 'owner')
                         _buildRolePicker(context, ref, m, notebook.serverId!)
                       else
                         _buildRoleBadge(m['role'] ?? 'student', isSmall: true),
@@ -338,7 +350,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 if (isOnline && !isMe)
                   ElevatedButton(
                     onPressed: () {
-                      controller.toggleFollowUser(mId, controller.myUserId);
+                      collaboration.toggleFollowUser(mId);
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
@@ -351,11 +363,11 @@ class CollaborationCenterSheet extends ConsumerWidget {
                     ),
                     child: Text(isFollowing ? 'Parar' : 'Assistir', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   )
-                else if (controller.currentUserRole == 'owner' && !isMe)
+                else if (collaboration.currentUserRole == 'owner' && !isMe)
                    IconButton(
                     icon: const Icon(Icons.mic_none_rounded, size: 18),
                     color: m['can_speak'] == true ? Colors.green : Colors.grey,
-                    onPressed: () => controller.toggleParticipantVoice(mId, !(m['can_speak'] == true)),
+                    onPressed: () => collaboration.toggleParticipantVoice(mId, !(m['can_speak'] == true)),
                   ),
               ],
             ),
@@ -442,7 +454,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
             );
         if (success && context.mounted) {
           // 🚀 Feedback imediato no controlador
-          ref.read(canvasProvider).updateUserRoleLocally(user['id'].toString(), newRole);
+          ref.read(collaborationProvider).updateUserRoleLocally(user['id'].toString(), newRole);
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Papel de ${user['name']} alterado para $newRole! 🎭')));
         }
       },
@@ -455,34 +467,34 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildDynamicsSelector(CanvasController controller) => Column(
+  Widget _buildDynamicsSelector(CollaborationRoomService collaboration) => Column(
         children: [
           _buildDynamicPolicyToggle(
-            controller,
-            controller.isSessionLocked,
+            collaboration,
+            collaboration.isSessionLocked,
             'Bloquear Edição Coletiva',
             'Impedir que outros desenhem enquanto explicas.',
             Icons.lock_person_rounded,
             const Color(0xFFE74C3C),
-            onTap: () => controller.toggleSessionLock(),
+            onTap: () => collaboration.toggleSessionLock(),
           ),
           const SizedBox(height: 12),
           _buildDynamicPolicyToggle(
-            controller,
-            controller.isAuthorColorEnabled,
+            collaboration,
+            collaboration.isAuthorColorEnabled,
             'Identificar Autores por Cor',
             'Cada utilizador terá uma cor única (Tutoria).',
             Icons.palette_rounded,
             const Color(0xFF0F4C5C),
-            onTap: () => controller.toggleAuthorColors(),
+            onTap: () => collaboration.toggleAuthorColors(),
           ),
           const SizedBox(height: 12),
           // 🚀 NOVO: Selector de Modo de Voz
-          _buildVoiceModeSelector(controller),
+          _buildVoiceModeSelector(collaboration),
         ],
       );
 
-  Widget _buildVoiceModeSelector(CanvasController controller) {
+  Widget _buildVoiceModeSelector(CollaborationRoomService collaboration) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -506,11 +518,11 @@ class CollaborationCenterSheet extends ConsumerWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildModeOption(controller, 'open', 'Livre', Icons.people_outline),
+              _buildModeOption(collaboration, 'open', 'Livre', Icons.people_outline),
               const SizedBox(width: 8),
-              _buildModeOption(controller, 'authority_only', 'Moderada', Icons.record_voice_over),
+              _buildModeOption(collaboration, 'authority_only', 'Moderada', Icons.record_voice_over),
               const SizedBox(width: 8),
-              _buildModeOption(controller, 'muted', 'Muda', Icons.mic_off_outlined),
+              _buildModeOption(collaboration, 'muted', 'Muda', Icons.mic_off_outlined),
             ],
           ),
         ],
@@ -518,11 +530,11 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildModeOption(CanvasController controller, String mode, String label, IconData icon) {
-    final bool isSelected = controller.sessionVoiceMode == mode;
+  Widget _buildModeOption(CollaborationRoomService collaboration, String mode, String label, IconData icon) {
+    final bool isSelected = collaboration.sessionVoiceMode == mode;
     return Expanded(
       child: InkWell(
-        onTap: () => controller.setVoiceMode(mode),
+        onTap: () => collaboration.setVoiceMode(mode),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
@@ -542,7 +554,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildDynamicPolicyToggle(CanvasController controller, bool value, String title, String subtitle, IconData icon, Color color, {required VoidCallback onTap}) => InkWell(
+  Widget _buildDynamicPolicyToggle(CollaborationRoomService collaboration, bool value, String title, String subtitle, IconData icon, Color color, {required VoidCallback onTap}) => InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
@@ -581,17 +593,17 @@ class CollaborationCenterSheet extends ConsumerWidget {
         ),
       );
 
-  Widget _buildVoiceButton(CanvasController controller, BuildContext context) {
-    final bool isModerator = controller.currentUserRole == 'owner' || controller.currentUserRole == 'editor';
+  Widget _buildVoiceButton(CollaborationRoomService collaboration, BuildContext context) {
+    final bool isModerator = collaboration.currentUserRole == 'owner' || collaboration.currentUserRole == 'editor';
     String label = 'Iniciar Estudo Live';
     IconData icon = Icons.podcasts;
     Color color = const Color(0xFF0F4C5C);
-    VoidCallback? action = () => controller.toggleVoiceCall(controller.myUserId);
-    if (controller.isLiveSessionActive) {
+    VoidCallback? action = () => collaboration.toggleVoiceCall(collaboration.myUserId);
+    if (collaboration.isLiveSessionActive) {
       label = 'Sair do Estudo Live';
       icon = Icons.stop_screen_share;
       color = Colors.redAccent;
-    } else if (controller.isRemoteVoiceCallActive) {
+    } else if (collaboration.isRemoteVoiceCallActive) {
       label = 'Entrar no Estudo Live';
       icon = Icons.record_voice_over;
       color = const Color(0xFF27AE60);
@@ -604,8 +616,8 @@ class CollaborationCenterSheet extends ConsumerWidget {
     return _buildActionButton(icon: icon, label: label, color: color, onTap: action != null ? () { action!(); Navigator.pop(context); } : null);
   }
 
-  Widget _buildInternalVoiceInvite(CanvasController controller) {
-    final call = controller.incomingVoiceCall!;
+  Widget _buildInternalVoiceInvite(CollaborationRoomService collaboration) {
+    final call = collaboration.incomingVoiceCall!;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -635,7 +647,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => controller.dismissVoiceCall(),
+                  onPressed: () => collaboration.dismissVoiceCall(),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.redAccent,
                     side: const BorderSide(color: Colors.redAccent),
@@ -647,7 +659,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () => controller.acceptVoiceCall(),
+                  onPressed: () => collaboration.acceptVoiceCall(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF27AE60),
                     foregroundColor: Colors.white,

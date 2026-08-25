@@ -22,43 +22,35 @@ Path buildPath(List<Offset> points) {
   return path;
 }
 
-class StaticNotebookPainter extends CustomPainter {
-  final List<Stroke> strokes;
+class BackgroundPainter extends CustomPainter {
   final String lineType;
-  final double lineSpacing; 
-  final Set<String> selectedStrokeIds;
-  final Rect? selectionRect;
-  final int pageVersion; 
-  final Set<String> remoteMovingStrokeIds; 
-  final Set<String>? visibleAuthorIds; 
-  final bool isAuthorColorEnabled; 
-  final Map<String, Color> userColors; 
+  final double lineSpacing;
 
-  StaticNotebookPainter({
-    required this.strokes,
-    required this.lineType,
-    required this.lineSpacing,
-    required this.selectedStrokeIds,
-    required this.selectionRect,
-    required this.pageVersion,
-    this.remoteMovingStrokeIds = const {},
-    this.visibleAuthorIds,
-    this.isAuthorColorEnabled = false,
-    this.userColors = const {},
-  });
+  BackgroundPainter({required this.lineType, required this.lineSpacing});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bgPaint = Paint()..color = const Color(0xFF1B365D).withValues(alpha: 0.18)..strokeWidth = 1.0;
+    final bgPaint = Paint()
+      ..color = const Color(0xFF1B365D).withValues(alpha: 0.18)
+      ..strokeWidth = 1.0;
 
     if (lineType == 'ruled') {
-      canvas.drawLine(const Offset(60, 0), Offset(60, size.height), Paint()..color = Colors.redAccent.withValues(alpha: 0.4)..strokeWidth = 1.5);
+      canvas.drawLine(
+          const Offset(60, 0),
+          Offset(60, size.height),
+          Paint()
+            ..color = Colors.redAccent.withValues(alpha: 0.4)
+            ..strokeWidth = 1.5);
       for (double y = 90; y < size.height - 60; y += lineSpacing) {
         canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
       }
     } else if (lineType == 'grid') {
-      for (double y = 90; y < size.height - 60; y += lineSpacing) canvas.drawLine(Offset(marginCalculate(size), y), Offset(size.width - 20, y), bgPaint);
-      for (double x = 20; x < size.width - 20; x += lineSpacing) canvas.drawLine(Offset(x, 90), Offset(x, size.height - 60), bgPaint);
+      for (double y = 90; y < size.height - 60; y += lineSpacing) {
+        canvas.drawLine(Offset(20, y), Offset(size.width - 20, y), bgPaint);
+      }
+      for (double x = 20; x < size.width - 20; x += lineSpacing) {
+        canvas.drawLine(Offset(x, 90), Offset(x, size.height - 60), bgPaint);
+      }
     } else if (lineType == 'dots') {
       for (double y = 90; y < size.height - 60; y += lineSpacing) {
         for (double x = 20; x < size.width - 20; x += lineSpacing) {
@@ -66,25 +58,63 @@ class StaticNotebookPainter extends CustomPainter {
         }
       }
     } else if (lineType == 'oblique') {
-      canvas.drawLine(const Offset(60, 0), Offset(60, size.height), Paint()..color = Colors.redAccent.withValues(alpha: 0.4)..strokeWidth = 1.5);
+      canvas.drawLine(
+          const Offset(60, 0),
+          Offset(60, size.height),
+          Paint()
+            ..color = Colors.redAccent.withValues(alpha: 0.4)
+            ..strokeWidth = 1.5);
       for (double y = 90; y < size.height - 60; y += lineSpacing) {
         canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
       }
-      final slantPaint = Paint()..color = const Color(0xFF1B365D).withValues(alpha: 0.08)..strokeWidth = 1.0;
+      final slantPaint = Paint()
+        ..color = const Color(0xFF1B365D).withValues(alpha: 0.08)
+        ..strokeWidth = 1.0;
       for (double x = -400; x < size.width; x += lineSpacing * 1.6) {
         canvas.drawLine(Offset(x, 0), Offset(x + size.height * 0.35, size.height), slantPaint);
       }
     }
+  }
 
+  @override
+  bool shouldRepaint(BackgroundPainter oldDelegate) =>
+      oldDelegate.lineType != lineType || oldDelegate.lineSpacing != lineSpacing;
+}
+
+class StrokesPainter extends CustomPainter {
+  final List<Stroke> strokes;
+  final Set<String> selectedStrokeIds;
+  final Rect? selectionRect;
+  final int pageVersion;
+  final Set<String> remoteMovingStrokeIds;
+  final Set<String>? visibleAuthorIds;
+  final bool isAuthorColorEnabled;
+  final Map<String, Color> userColors;
+  final Offset selectionDelta;
+
+  StrokesPainter({
+    required this.strokes,
+    required this.selectedStrokeIds,
+    required this.selectionRect,
+    required this.pageVersion,
+    this.remoteMovingStrokeIds = const {},
+    this.visibleAuthorIds,
+    this.isAuthorColorEnabled = false,
+    this.userColors = const {},
+    this.selectionDelta = Offset.zero,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
     for (final stroke in strokes) {
-      if (stroke.isDeleted || remoteMovingStrokeIds.contains(stroke.id)) continue; 
-      
+      if (stroke.isDeleted || remoteMovingStrokeIds.contains(stroke.id)) continue;
+
       if (visibleAuthorIds != null && stroke.creatorId != null) {
         if (!visibleAuthorIds!.contains(stroke.creatorId)) continue;
       }
 
       final bool isSelected = selectedStrokeIds.contains(stroke.id);
-      
+
       Color strokeColor = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')));
       if (isAuthorColorEnabled && stroke.creatorId != null && userColors.containsKey(stroke.creatorId)) {
         strokeColor = userColors[stroke.creatorId]!;
@@ -98,39 +128,54 @@ class StaticNotebookPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round
         ..blendMode = stroke.isHighlighter ? BlendMode.multiply : BlendMode.srcOver;
 
+      canvas.save();
+      if (isSelected && selectionDelta != Offset.zero) {
+        canvas.translate(selectionDelta.dx, selectionDelta.dy);
+      }
+
       if (isSelected && stroke.points.isNotEmpty) {
         double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
         double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
         for (var pt in stroke.points) {
-          if (pt.dx < minX) minX = pt.dx; if (pt.dx > maxX) maxX = pt.dx;
-          if (pt.dy < minY) minY = pt.dy; if (pt.dy > maxY) maxY = pt.dy;
+          if (pt.dx < minX) minX = pt.dx;
+          if (pt.dx > maxX) maxX = pt.dx;
+          if (pt.dy < minY) minY = pt.dy;
+          if (pt.dy > maxY) maxY = pt.dy;
         }
         final Rect bounds = Rect.fromLTRB(minX - 6, minY - 6, maxX + 6, maxY + 6);
         canvas.drawRect(bounds, Paint()..color = const Color(0x1F1976D2)..style = PaintingStyle.fill);
-        canvas.drawRect(bounds, Paint()..color = const Color(0xFF1976D2)..style = PaintingStyle.stroke..strokeWidth = 1.0);
+        canvas.drawRect(
+            bounds,
+            Paint()
+              ..color = const Color(0xFF1976D2)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.0);
       }
 
       canvas.drawPath(buildPath(stroke.points), paint);
+      canvas.restore();
     }
 
     if (selectionRect != null) {
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
-      canvas.drawRect(selectionRect!, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+      canvas.drawRect(
+          selectionRect!,
+          Paint()
+            ..color = const Color(0xFF0F4C5C)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5);
     }
   }
 
-  double marginCalculate(Size size) => 20.0;
-
   @override
-  bool shouldRepaint(StaticNotebookPainter oldDelegate) {
-    return oldDelegate.pageVersion != pageVersion || 
-           oldDelegate.lineType != lineType ||
-           oldDelegate.lineSpacing != lineSpacing ||
-           oldDelegate.selectionRect != selectionRect ||
-           !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) ||
-           !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) || 
-           !setEquals(oldDelegate.selectedStrokeIds, selectedStrokeIds) ||
-           !listEquals(oldDelegate.strokes, strokes);
+  bool shouldRepaint(StrokesPainter oldDelegate) {
+    return oldDelegate.pageVersion != pageVersion ||
+        oldDelegate.selectionRect != selectionRect ||
+        oldDelegate.selectionDelta != selectionDelta ||
+        !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) ||
+        !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) ||
+        !setEquals(oldDelegate.selectedStrokeIds, selectedStrokeIds) ||
+        !listEquals(oldDelegate.strokes, strokes);
   }
 }
 

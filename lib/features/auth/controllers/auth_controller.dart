@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:drift/drift.dart' hide Column;
@@ -5,329 +6,163 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:caderno_digital_app/core/network/sync_provider.dart'; // 🚀 Novo
+import 'package:caderno_digital_app/core/network/sync_provider.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/features/auth/models/user_model.dart';
 import 'package:caderno_digital_app/features/auth/repositories/auth_repository.dart';
 import 'package:caderno_digital_app/core/network/api_service.dart';
 import 'package:caderno_digital_app/core/database/app_database.dart' hide User;
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
+import '../providers/auth_providers.dart';
+import 'auth_state.dart';
 
-class AuthController extends ChangeNotifier {
-  final AuthRepository _authRepository;
+class AuthController extends Notifier<AuthState> {
+  late AuthRepository _authRepository;
   final ApiService _apiService = ApiService();
-  final AppDatabase _db;
+  late AppDatabase _db;
 
-  User? _currentUser;
-  String? _token;
-  bool _isLoading = false;
-  String? _authErrorMessage;
-
-  User? get currentUser => _currentUser;
-  String? get token => _token;
-  bool get isLoading => _isLoading;
-  String? get authErrorMessage => _authErrorMessage;
-  bool get isAuthenticated => _token != null;
-
-  // Usa o Ref para avisar outros Providers
-  final Ref ref;
-
-  AuthController(this.ref, {AuthRepository? repository, AppDatabase? database}) 
-      : _authRepository = repository ?? AuthRepository(),
-        _db = database ?? AppDatabase.instance;
-
-  void setUser(User user, {String? newToken}) {
-    _currentUser = user;
-    if (newToken != null) _token = newToken;
-    _authErrorMessage = null;
-    notifyListeners();
+  @override
+  AuthState build() {
+    _authRepository = ref.watch(authRepositoryProvider);
+    _db = ref.watch(appDatabaseProvider);
+    return AuthState();
   }
 
-  // 🚀 LIMPEZA DE ERROS
+  void setUser(User user, {String? newToken}) {
+    state = state.copyWith(
+      currentUser: user,
+      token: newToken,
+      clearError: true,
+    );
+  }
+
   void clearError() {
-    if (_authErrorMessage != null) {
-      _authErrorMessage = null;
-      notifyListeners();
+    if (state.authErrorMessage != null) {
+      state = state.copyWith(clearError: true);
     }
   }
 
-  // =========================================================================
-  // 🔌 O MOTOR DE WEBSOCKETS PRIVADOS (REVERB)
-  // =========================================================================
   void _connectToPrivateRadar(int userId) {
-    // Mal o login é feito, ele liga a antena da conta do utilizador!
     ref.read(realtimeServiceProvider).listenToUserAccount(userId, () {
       debugPrint('⚡ [Auth] A tua conta mudou noutro ecrã! A disparar Sync...');
       ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
     });
   }
 
-  // =========================================================================
-  // 💾 ARRANQUE: VERIFICAR SESSÃO
-  // =========================================================================
   Future<bool> checkAuthStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('sanctum_token');
-
+    final String? token = prefs.getString('sanctum_token');
     final String? cachedUser = prefs.getString('cached_user');
-    if (cachedUser != null && _token != null) {
-      _currentUser = User.fromJson(jsonDecode(cachedUser));
 
-      // 🚀 A app abriu e já tinha sessão? Liga os WebSockets imediatamente!
-      if (_currentUser?.id != null) {
-        _connectToPrivateRadar(_currentUser!.id!);
+    if (cachedUser != null && token != null) {
+      final user = User.fromJson(jsonDecode(cachedUser));
+      state = state.copyWith(currentUser: user, token: token);
+
+      if (user.id != null) {
+        _connectToPrivateRadar(user.id!);
       }
+      return true;
     }
-
-    notifyListeners();
-    return isAuthenticated;
+    return false;
   }
 
-  // =========================================================================
-  // 🚪 LOGIN
-  // =========================================================================
   Future<bool> login(String email, String password) async {
-    _isLoading = true;
-    _authErrorMessage = null;
-    notifyListeners();
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      debugPrint('🛫 [Auth] Tentativa de login para: $email');
       final response = await _authRepository.login(email, password);
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        debugPrint('✅ [Auth] Resposta 200 OK. Token recebido.');
-        _token = responseData['access_token'];
-
+        final String token = responseData['access_token'];
         final Map<String, dynamic> userMap = responseData['user'];
-
-        debugPrint('💾 [Auth] A sincronizar utilizador para SQLite...');
-        _currentUser = await _syncUserToSqlite(userMap);
+        final user = await _syncUserToSqlite(userMap);
 
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('sanctum_token', _token!);
-        await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));
+        await prefs.setString('sanctum_token', token);
+        await prefs.setString('cached_user', jsonEncode(user.toJson()));
 
-        // 🚀 O utilizador acabou de entrar, liga os WebSockets Pessoais!
-        if (_currentUser?.id != null) {
-          _connectToPrivateRadar(_currentUser!.id!);
+        if (user.id != null) {
+          _connectToPrivateRadar(user.id!);
         }
 
-        debugPrint('🔄 [Auth] A iniciar sincronização de metadados pós-login...');
-        await ref.read(appSyncServiceProvider).syncAll(metadataOnly: true);
-
-        _isLoading = false;
-        notifyListeners();
+        state = state.copyWith(currentUser: user, token: token, isLoading: false);
+        
+        // Sync em background
+        unawaited(ref.read(appSyncServiceProvider).syncAll(metadataOnly: true));
         return true;
-      } else if (response.statusCode == 422) {
-        final Map<String, dynamic> errors = responseData['errors'] ?? {};
-        _authErrorMessage = errors.values.isNotEmpty ? errors.values.first[0] : 'Credenciais inválidas.';
       } else {
-        _authErrorMessage = responseData['message'] ?? 'Credenciais inválidas.';
+        final String error = responseData['message'] ?? 'Credenciais inválidas.';
+        state = state.copyWith(authErrorMessage: error, isLoading: false);
       }
-    } catch (e, stackTrace) {
-      debugPrint('🚨 [Auth Error] Falha crítica no processo de login: $e');
-      debugPrint('$stackTrace');
-      _authErrorMessage = 'Erro de sistema: Falha ao comunicar com o servidor.';
+    } catch (e) {
+      state = state.copyWith(authErrorMessage: 'Erro de sistema: Falha ao comunicar com o servidor.', isLoading: false);
     }
-
-    _isLoading = false;
-    notifyListeners();
     return false;
   }
 
-  // =========================================================================
-  // 🚪 REGISTO
-  // =========================================================================
   Future<bool> register(String name, String email, String password) async {
-    _isLoading = true;
-    _authErrorMessage = null;
-    notifyListeners();
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       final response = await _authRepository.register(name, email, password);
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        _token = responseData['token']?.toString() ?? responseData['access_token']?.toString();
-
+        final String token = responseData['token']?.toString() ?? responseData['access_token']?.toString() ?? '';
         final Map<String, dynamic> userMap = responseData['user'] ?? {};
-
-        _currentUser = await _syncUserToSqlite(userMap);
+        final user = await _syncUserToSqlite(userMap);
 
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('sanctum_token', _token!);
-        await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));
+        await prefs.setString('sanctum_token', token);
+        await prefs.setString('cached_user', jsonEncode(user.toJson()));
 
-        // 🚀 O utilizador acabou de se registar, liga os WebSockets!
-        if (_currentUser?.id != null) {
-          _connectToPrivateRadar(_currentUser!.id!);
+        if (user.id != null) {
+          _connectToPrivateRadar(user.id!);
         }
 
-        debugPrint('🔄 [Auth] A iniciar sincronização de metadados pós-registo...');
-        await ref.read(appSyncServiceProvider).syncAll(metadataOnly: true);
-
-        _isLoading = false;
-        notifyListeners();
+        state = state.copyWith(currentUser: user, token: token, isLoading: false);
+        unawaited(ref.read(appSyncServiceProvider).syncAll(metadataOnly: true));
         return true;
-      } else if (response.statusCode == 422) {
-        final Map<String, dynamic> errors = responseData['errors'] ?? {};
-        _authErrorMessage = errors.values.isNotEmpty ? errors.values.first[0] : 'E-mail ou dados inválidos.';
       } else {
-        _authErrorMessage = responseData['message'] ?? 'Erro ao criar conta no servidor.';
+        final String error = responseData['message'] ?? 'Erro ao criar conta.';
+        state = state.copyWith(authErrorMessage: error, isLoading: false);
       }
     } catch (e) {
-      _authErrorMessage = 'Erro de sistema: Não foi possível registar.';
+      state = state.copyWith(authErrorMessage: 'Erro de sistema.', isLoading: false);
     }
-
-    _isLoading = false;
-    notifyListeners();
     return false;
   }
 
-  // =========================================================================
-  // 👤 ATUALIZAR PERFIL
-  // =========================================================================
-  Future<bool> updateProfile({required String name, required dynamic imageFile}) async {
-    _isLoading = true;
-    _authErrorMessage = null;
-    notifyListeners();
-
-    try {
-      final response = await _apiService.updateProfile(name: name, imageFile: imageFile);
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> userMap = responseData['user'];
-
-        _currentUser = await _syncUserToSqlite(userMap);
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('cached_user', jsonEncode(_currentUser!.toJson()));
-
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      } else {
-        _authErrorMessage = responseData['message'] ?? 'Erro ao atualizar perfil.';
-      }
-    } catch (e, stackTrace) {
-      debugPrint('🚨 [CONTROLLER ERRO NO UPDATE]: $e');
-      _authErrorMessage = 'Falha no motor interno ou perda de ligação à rede.';
-    }
-
-    _isLoading = false;
-    notifyListeners();
-    return false;
-  }
-
-  Future<bool> sendRecoveryCode(String email) async {
-    _isLoading = true;
-    _authErrorMessage = null;
-    notifyListeners();
-
-    try {
-      final response = await _apiService.forgotPassword(email);
-      if (response.statusCode == 200) {
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      } else {
-        _authErrorMessage = 'Não encontrámos nenhuma conta com este e-mail.';
-      }
-    } catch (e) {
-      _authErrorMessage = 'Falha ao contactar o servidor.';
-    }
-
-    _isLoading = false;
-    notifyListeners();
-    return false;
-  }
-
-  Future<bool> resetPassword({required String email, required String code, required String newPassword}) async {
-    _isLoading = true;
-    _authErrorMessage = null;
-    notifyListeners();
-
-    try {
-      final response = await _apiService.resetPassword(email: email, code: code, newPassword: newPassword);
-
-      if (response.statusCode == 200) {
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      } else {
-        _authErrorMessage = 'Código PIN inválido ou expirado.';
-      }
-    } catch (e) {
-      _authErrorMessage = 'Erro ao comunicar com o servidor.';
-    }
-
-    _isLoading = false;
-    notifyListeners();
-    return false;
-  }
-
-  // =========================================================================
-  // 🛑 LOGOUT
-  // =========================================================================
   Future<void> logout() async {
-    _isLoading = true;
-    notifyListeners();
+    state = state.copyWith(isLoading: true);
 
-    // 🚀 0. SINCRONIZAÇÃO FORÇADA DE SEGURANÇA
     try {
-      debugPrint('🔄 [Auth] A iniciar sincronização final antes do logout...');
       await ref.read(appSyncServiceProvider).syncAll(forced: true, metadataOnly: false);
-      debugPrint('✅ [Auth] Sincronização final concluída.');
     } catch (e) {
-      debugPrint('🚨 [Auth] Erro na sincronização final (prosseguindo logout): $e');
+      debugPrint('🚨 [Auth] Erro na sincronização final: $e');
     }
 
     try {
       await _authRepository.logout();
-    } catch (e) {
-      debugPrint('⚠️ Falha ao efetuar logout remoto, a forçar limpeza local...');
-    }
+    } catch (_) {}
 
-    // 🚀 1. DESLIGAR MOTORES REALTIME
     ref.read(realtimeServiceProvider).disconnect();
 
-    // 🚀 2. LIMPAR CACHE DE FICHEIROS (Apenas Mobile/Desktop)
     if (!kIsWeb) {
       try {
         final tempDir = Directory.systemTemp;
-        final List<FileSystemEntity> files = tempDir.listSync();
-        for (var file in files) {
-          if (file is File && file.path.contains('sync_img_')) {
-            file.deleteSync();
-          }
-        }
-        debugPrint('🧹 [Auth] Imagens temporárias eliminadas.');
-      } catch (e) {
-        debugPrint('⚠️ Erro ao limpar ficheiros temporários: $e');
-      }
+        tempDir.listSync().forEach((file) {
+          if (file is File && file.path.contains('sync_img_')) file.deleteSync();
+        });
+      } catch (_) {}
     }
 
-    // 🚀 3. LIMPAR PREFERÊNCIAS E TOKEN
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    _token = null;
-    _currentUser = null;
-    _authErrorMessage = null;
+    await _db.clearAllData();
 
-    // 🚀 4. LIMPAR BASE DE DADOS SQLITE
-    try {
-      await _db.clearAllData();
-      debugPrint('🗄️ [Auth] Base de dados local limpa.');
-    } catch (e) {
-      debugPrint('🚨 [Segurança]: Erro ao tentar limpar a Base de Dados local: $e');
-    }
-
-    // 🚀 5. NOTIFICAR REATIVIDADE (PROVIDERS VÃO REAGIR AO USER=NULL)
-    _isLoading = false;
-    notifyListeners();
+    state = AuthState(); // Reset completo
   }
 
   Future<User> _syncUserToSqlite(Map<String, dynamic> userJson) async {
@@ -340,7 +175,6 @@ class AuthController extends ChangeNotifier {
     final existing = await (_db.select(_db.users)..where((t) => t.email.equals(email))).getSingleOrNull();
 
     int localId;
-
     if (existing != null) {
       localId = existing.id;
       await (_db.update(_db.users)..where((t) => t.id.equals(localId))).write(
@@ -365,18 +199,67 @@ class AuthController extends ChangeNotifier {
           );
     }
 
-    return User(
-      id: localId,
-      serverId: sId,
-      name: name,
-      email: email,
-      avatar: avatar,
-      planType: plan,
-    );
+    return User(id: localId, serverId: sId, name: name, email: email, avatar: avatar, planType: plan);
+  }
+
+  Future<bool> sendRecoveryCode(String email) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _apiService.forgotPassword(email);
+      if (response.statusCode == 200) {
+        state = state.copyWith(isLoading: false);
+        return true;
+      } else {
+        state = state.copyWith(authErrorMessage: 'Não encontrámos nenhuma conta com este e-mail.', isLoading: false);
+      }
+    } catch (e) {
+      state = state.copyWith(authErrorMessage: 'Falha ao contactar o servidor.', isLoading: false);
+    }
+    return false;
+  }
+
+  Future<bool> resetPassword({required String email, required String code, required String newPassword}) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _apiService.resetPassword(email: email, code: code, newPassword: newPassword);
+      if (response.statusCode == 200) {
+        state = state.copyWith(isLoading: false);
+        return true;
+      } else {
+        final data = jsonDecode(response.body);
+        state = state.copyWith(authErrorMessage: data['message'] ?? 'Código PIN inválido ou expirado.', isLoading: false);
+      }
+    } catch (e) {
+      state = state.copyWith(authErrorMessage: 'Erro ao comunicar com o servidor.', isLoading: false);
+    }
+    return false;
+  }
+
+  Future<bool> updateProfile({required String name, required dynamic imageFile}) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _apiService.updateProfile(name: name, imageFile: imageFile);
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> userMap = responseData['user'];
+        final user = await _syncUserToSqlite(userMap);
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('cached_user', jsonEncode(user.toJson()));
+
+        state = state.copyWith(currentUser: user, isLoading: false);
+        return true;
+      } else {
+        state = state.copyWith(authErrorMessage: responseData['message'] ?? 'Erro ao atualizar perfil.', isLoading: false);
+      }
+    } catch (e) {
+      state = state.copyWith(authErrorMessage: 'Falha no motor interno ou perda de ligação à rede.', isLoading: false);
+    }
+    return false;
   }
 }
 
-// Passamos o 'ref' para dentro do provider para que ele possa aceder ao subjectsProvider e fazer a ponte!
-final authProvider = ChangeNotifierProvider<AuthController>((ref) {
-  return AuthController(ref);
+final authProvider = NotifierProvider<AuthController, AuthState>(() {
+  return AuthController();
 });

@@ -1,0 +1,61 @@
+Esta é uma excelente abordagem. Delegar as refatorações pesadas para o agente de IA é a forma mais inteligente de ganhar tempo, especialmente numa base de código tão extensa.
+
+Ao inserires estas instruções no assistente do teu VS Code ou Android Studio, o segredo é **não pedir tudo de uma vez**. Pede ao agente para executar uma fase de cada vez, garantindo que o código continua a compilar entre cada passo.
+
+Aqui estão os *prompts* estruturados que podes copiar e colar diretamente para o teu agente de IA:
+
+### Fase 1: Desacoplar a Lógica (Serviços e Domínios)
+
+*Começa por limpar a classe principal, movendo as lógicas que não são estritamente de desenho para serviços externos.*
+
+> **Prompt para o Agente:**
+> "Atua como um engenheiro de software sénior em Flutter. O ficheiro `canvas_controller.dart` tornou-se uma 'God Class'. A tua primeira tarefa é extrair a lógica.
+> 1. Cria um novo ficheiro chamado `audio_session_service.dart`. Move toda a lógica, variáveis e métodos relacionados com a gravação e reprodução de áudio (pacotes `record` e `audioplayers`, métodos como `startRecording`, `playAudioStream`, etc.) para esta nova classe.
+> 2. Cria um novo ficheiro chamado `collaboration_room_service.dart`. Move toda a lógica de gestão de presença, permissões, WebSockets, heartbeat e chat de texto para aqui.
+> 3. No `CanvasController` atual, substitui as implementações diretas por instâncias injetadas destes dois novos serviços. O objetivo é manter a lógica intacta, mas modularizada."
+>
+>
+
+---
+
+### Fase 2: Granularidade de Estado (Riverpod)
+
+*Depois de teres os serviços separados, pede ao agente para modernizar a gestão de estado para evitar que a tela inteira pisque a cada traço.*
+
+> **Prompt para o Agente:**
+> "Agora vamos otimizar a gestão de estado. O projeto utiliza Riverpod, mas o `CanvasController` está a usar um `ChangeNotifier` massivo, causando re-renders excessivos.
+> Refatora o estado para a arquitetura do Riverpod 2.0 (utilizando classes `Notifier` ou a anotação `@riverpod`). Divide o estado atual nos seguintes Notifiers independentes:
+> 1. `CanvasToolNotifier`: Gere apenas a ferramenta ativa (`ToolMode`), cores, espessura e estado do apagador.
+> 2. `CanvasViewportNotifier`: Gere estritamente o zoom, pan, e a `TransformationController`.
+> 3. `CanvasDocumentNotifier`: Gere a lista de páginas, traços, textos e imagens.
+> Fornece o código refatorado e garante que os métodos de mutação (ex: `addStroke`, `switchTool`) ficam dentro dos respetivos Notifiers."
+>
+>
+
+---
+
+### Fase 3: Otimização de UI e Renderização (60 FPS)
+
+*Com o estado limpo, foca o agente em isolar os componentes da interface e blindar o motor de desenho.*
+
+> **Prompt para o Agente:**
+> "No ficheiro `canvas_screen.dart`, o método `build` tem centenas de linhas e um `Stack` muito complexo. Precisamos de otimizar a árvore de widgets para garantir 60 FPS na renderização à mão livre.
+> 1. Extrai os componentes de UI estáticos ou de sobreposição (ex: `CanvasToolbar`, `CollaborationChatWidget`, `LiveVoiceCockpit`, painéis de botões e *badges*) para *StatelessWidgets* independentes em ficheiros separados, forçando o uso de construtores `const`.
+> 2. Na área do `CustomPaint` onde ocorre o desenho ativo (`ActiveStrokePainter`), garante que o widget está devidamente isolado num `RepaintBoundary`.
+> 3. Remove quaisquer chamadas diretas a `setState` soltas dentro dos callbacks de toque (`onPointerDown`, `onPanUpdate`), garantindo que o estado flui exclusivamente através dos novos Notifiers do Riverpod."
+>
+>
+
+---
+
+### Fase 4: Desempenho de Rede (Isolates)
+
+*Por fim, resolve os engasgos causados pelo processamento de grandes ficheiros JSON quando muitos traços são sincronizados.*
+
+> **Prompt para o Agente:**
+> "A aplicação recebe payloads JSON pesados via WebSockets (ex: métodos como `_syncSmartByFingerprint`, processamento do handshake inicial e eventos de `onFullStateReceived`).
+> Refatora as funções que fazem `jsonDecode` de grandes arrays de traços e a conversão para os modelos de dados (como `Stroke`, `LocalPage`). Move este processamento para fora da Main UI Thread utilizando `Isolate.run()` ou `compute()`. Retorna as entidades já formatadas para o Notifier, garantindo que o parsing não bloqueia os frames da animação de desenho."
+
+---
+
+Ao fazeres isto fase a fase e testares (commit no Git entre cada passo), vais conseguir uma base de código imensamente mais sustentável e rápida.

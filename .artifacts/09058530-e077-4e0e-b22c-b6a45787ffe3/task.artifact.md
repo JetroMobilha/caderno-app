@@ -1,0 +1,13 @@
+- [ ] **Rendering Optimization**
+    - [ ] Split `StaticNotebookPainter` into `BackgroundPainter` and `StrokesPainter` in `canvas_painter.dart`
+    - [ ] Update `DrawingLayer` with multiple `RepaintBoundary` for isolation
+    - [ ] Implement local `ValueNotifier` isolation in `InteractionLayer`
+- [ ] **State Management Refactor (Riverpod 2.0)**
+    - [ ] Create `AuthState` class and convert `AuthController` to `Notifier`
+    - [ ] Update `main.dart` and login/profile screens for new `authProvider`
+    - [ ] Migrate missing logic from `CanvasController` to `CanvasDocumentNotifier` or `CanvasViewportNotifier`
+    - [ ] Delete legacy `CanvasController.dart`
+- [ ] **Performance & Utilities**
+    - [ ] Implement Ramer-Douglas-Peucker (RDP) point simplification
+    - [ ] Ensure heavy persistence operations run in background
+- [ ] Final Verification & Profile Testing

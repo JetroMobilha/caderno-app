@@ -8,6 +8,10 @@ import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/core/network/sync_service.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/services/audio_session_service.dart';
+import 'package:caderno_digital_app/features/canvas/services/collaboration_room_service.dart';
+import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
+import 'package:caderno_digital_app/core/database/app_database.dart' as db;
 
 import 'canvas_controller_test.mocks.dart';
 
@@ -18,6 +22,30 @@ class MockSyncService extends Mock implements SyncService {
   Future<bool> pushPages({int? onlyNotebookId}) async => true;
   @override
   Future<bool> pullPages({bool forceFull = false, int? onlyNotebookId}) async => true;
+}
+
+class MockAudioSessionService extends Mock implements AudioSessionService {
+  @override List<db.LessonRecording> get lessonRecordings => [];
+}
+
+class MockCollaborationRoomService extends Mock implements CollaborationRoomService {
+  @override final ValueNotifier<Map<String, dynamic>> remotePointers = ValueNotifier({});
+  @override final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier({});
+  @override final Set<String> usersInLiveSession = {};
+  @override final Map<String, double> userAudioLevels = {};
+  @override final List<Map<String, dynamic>> onlineUsers = [];
+  @override final Map<String, String?> userReactions = {};
+  @override final Set<String> whoIsWatchingMe = {};
+  @override final Set<String> remoteMovingStrokeIds = {};
+  @override final Set<String> tearingPageClientIds = {};
+  @override final List<Map<String, dynamic>> chatMessages = [];
+  @override final Map<int, String> remoteEditingTitles = {};
+  @override final List<Map<String, dynamic>> enrolledMembers = [];
+  @override Stream<Map<String, dynamic>> get onNewMessageAlert => const Stream.empty();
+  @override Stream<String> get onPermissionAlert => const Stream.empty();
+  @override Stream<void> get onNotebookDeletedByOwner => const Stream.empty();
+  @override Stream<Map<String, dynamic>> get onSessionMetaReceived => const Stream.empty();
+  @override final Map<String, Color> userColorsMap = {};
 }
 
 void main() {
@@ -59,7 +87,10 @@ void main() {
     when(mockRealtime.onNotebookStructureUpdated).thenAnswer((_) => const Stream.empty());
     when(mockRealtime.statusNotifier).thenReturn(ValueNotifier(RealtimeStatus.disconnected));
 
-    controller = CanvasController(mockRealtime, mockSync, repository: mockRepo);
+    final mockAudio = MockAudioSessionService();
+    final mockCollab = MockCollaborationRoomService();
+
+    controller = CanvasController(mockRealtime, mockSync, mockAudio, mockCollab, repository: mockRepo);
     controller.currentUserRole = 'owner';
   });
 

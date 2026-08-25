@@ -61,4 +61,36 @@ class GeometryUtils {
 
     return sqrt(pow(p.dx - closestPoint.dx, 2) + pow(p.dy - closestPoint.dy, 2));
   }
+
+  /// 🚀 Gera uma versão suavizada da lista de pontos usando o algoritmo de Chaikin.
+  /// Dobra a densidade de pontos e arredonda as quinas.
+  static List<Offset> generateSmoothPoints(List<Offset> points, {int iterations = 1}) {
+    if (points.length < 3) return points;
+
+    // 🛡️ PASSO 1: Simplificar antes de suavizar para remover ruído e redundância.
+    // Isso torna a suavização muito mais elegante e evita explosão de pontos.
+    List<Offset> result = simplifyPoints(points, epsilon: 0.2);
+
+    for (int i = 0; i < iterations; i++) {
+      List<Offset> next = [];
+      
+      // Chaikin's algorithm
+      next.add(result.first);
+      for (int j = 0; j < result.length - 1; j++) {
+        final p0 = result[j];
+        final p1 = result[j + 1];
+
+        // Pontos de corte em 1/4 e 3/4 da linha (Corta as quinas)
+        final q = Offset(p0.dx * 0.75 + p1.dx * 0.25, p0.dy * 0.75 + p1.dy * 0.25);
+        final r = Offset(p0.dx * 0.25 + p1.dx * 0.75, p0.dy * 0.25 + p1.dy * 0.75);
+
+        next.add(q);
+        next.add(r);
+      }
+      next.add(result.last);
+      result = next;
+    }
+
+    return result;
+  }
 }

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_config.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/network/time_service.dart'; // 🚀
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
@@ -19,8 +20,87 @@ class CanvasRepository {
 
   CanvasRepository(this._db);
 
+  AppDatabase get db => _db;
+
   // 🔒 Mutex em memória para serializar operações na mesma página (evita Unique Constraint Race)
   final Map<String, Completer<int>> _pageLocks = {};
+
+  // =========================================================================
+  // 📖 LER FOLHA ÚNICA (Otimizado para Sync)
+  // =========================================================================
+  Future<LocalPage?> getPageByClientId(String clientId, {bool onlyUnsynced = false}) async {
+    final pRow = await (_db.select(_db.pages)..where((t) => t.clientId.equals(clientId))).getSingleOrNull();
+    if (pRow == null) return null;
+
+    final int pageId = pRow.id;
+    
+    // 🚀 OTIMIZAÇÃO: Filtrar por syncedWithCloud se solicitado
+    final strokeQuery = _db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) strokeQuery.where((t) => t.syncedWithCloud.equals(0));
+    final strokeRows = await strokeQuery.get();
+
+    final strokes = strokeRows.map((s) => Stroke.fromJson({
+      ...jsonDecode(s.strokeData),
+      'updated_at': s.updatedAt,
+      'is_deleted': s.isDeleted == 1,
+      'deleted_in_session': s.deletedInSession == 1,
+      'creator_id': s.creatorId,
+      'synced_with_cloud': s.syncedWithCloud == 1,
+    })).toList();
+
+    final textQuery = _db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) textQuery.where((t) => t.syncedWithCloud.equals(0));
+    final textRows = await textQuery.get();
+
+    final textBlocks = textRows.map((t) => TextBlock.fromJson({
+      ...jsonDecode(t.textData),
+      'updated_at': t.updatedAt,
+      'is_deleted': t.isDeleted == 1,
+      'deleted_in_session': t.deletedInSession == 1,
+      'creator_id': t.creatorId,
+      'synced_with_cloud': t.syncedWithCloud == 1,
+    })).toList();
+
+    final imageQuery = _db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) imageQuery.where((t) => t.syncedWithCloud.equals(0));
+    final imgRows = await imageQuery.get();
+
+    final imageBlocks = imgRows.map((i) => ImageBlock.fromJson({
+      'id': i.clientImageId,
+      'image_path': i.imagePath,
+      'dx': i.posX,
+      'dy': i.posY,
+      'width': i.width,
+      'height': i.height,
+      'rotation': i.rotation,
+      'updated_at': i.updatedAt,
+      'is_deleted': i.isDeleted == 1,
+      'deleted_in_session': i.deletedInSession == 1,
+      'creator_id': i.creatorId,
+      'synced_with_cloud': i.syncedWithCloud == 1,
+    })).toList();
+
+    return LocalPage(
+      id: pRow.id,
+      serverId: pRow.serverId,
+      notebookId: pRow.notebookId,
+      pageNumber: pRow.pageNumber,
+      isLandscape: pRow.isLandscape == 1,
+      paperSize: pRow.paperSize,
+      lineType: pRow.lineType,
+      lineSpacing: pRow.lineSpacing,
+      clientId: pRow.clientId,
+      title: LocalPage.parseMeta(pRow.headerData),
+      footer: LocalPage.parseMeta(pRow.footerData),
+      extractedText: pRow.extractedText,
+      isFrozen: pRow.isFrozen == 1,
+      strokes: strokes,
+      textBlocks: textBlocks,
+      imageBlocks: imageBlocks,
+      syncedWithCloud: pRow.syncedWithCloud,
+      updatedAt: pRow.updatedAt,
+    );
+  }
 
   // =========================================================================
   // 📖 LER FOLHAS DO CADERNO
@@ -44,6 +124,7 @@ class CanvasRepository {
         'is_deleted': s.isDeleted == 1,
         'deleted_in_session': s.deletedInSession == 1,
         'creator_id': s.creatorId,
+        'synced_with_cloud': s.syncedWithCloud == 1,
       })).toList();
 
       final textRows = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId))).get();
@@ -53,6 +134,7 @@ class CanvasRepository {
         'is_deleted': t.isDeleted == 1,
         'deleted_in_session': t.deletedInSession == 1,
         'creator_id': t.creatorId,
+        'synced_with_cloud': t.syncedWithCloud == 1,
       })).toList();
 
       final imgRows = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).get();
@@ -68,6 +150,7 @@ class CanvasRepository {
         'is_deleted': i.isDeleted == 1,
         'deleted_in_session': i.deletedInSession == 1,
         'creator_id': i.creatorId,
+        'synced_with_cloud': i.syncedWithCloud == 1,
       })).toList();
 
       pages.add(LocalPage(
@@ -95,159 +178,175 @@ class CanvasRepository {
   }
 
   Stream<List<LocalPage>> watchPagesByNotebook(int notebookId) {
-    return (_db.select(_db.pages)..where((t) => t.notebookId.equals(notebookId))).watch().asyncMap((rows) async {
-      List<LocalPage> list = [];
-      for (var row in rows) {
-        final strokes = await (_db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(row.id))).get();
-        final textBlocks = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(row.id))).get();
-        final imageBlocks = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(row.id))).get();
-
-        list.add(LocalPage(
-          id: row.id,
-          serverId: row.serverId,
-          notebookId: row.notebookId,
-          pageNumber: row.pageNumber,
-          isLandscape: row.isLandscape == 1,
-          paperSize: row.paperSize,
-          lineType: row.lineType,
-          lineSpacing: row.lineSpacing,
-          clientId: row.clientId,
-          title: LocalPage.parseMeta(row.headerData),
-          footer: LocalPage.parseMeta(row.footerData),
-          extractedText: row.extractedText,
-          isFrozen: row.isFrozen == 1,
-          isDeleted: row.isDeleted == 1,
-          strokes: strokes.map((s) => Stroke.fromJson({...jsonDecode(s.strokeData), 'updated_at': s.updatedAt, 'is_deleted': s.isDeleted == 1, 'deleted_in_session': s.deletedInSession == 1, 'creator_id': s.creatorId})).toList(),
-          textBlocks: textBlocks.map((t) => TextBlock.fromJson({...jsonDecode(t.textData), 'updated_at': t.updatedAt, 'is_deleted': t.isDeleted == 1, 'deleted_in_session': t.deletedInSession == 1, 'creator_id': t.creatorId})).toList(),
-          imageBlocks: imageBlocks.map((i) => ImageBlock.fromJson({'id': i.clientImageId, 'image_path': i.imagePath, 'dx': i.posX, 'dy': i.posY, 'width': i.width, 'height': i.height, 'rotation': i.rotation, 'updated_at': i.updatedAt, 'is_deleted': i.isDeleted == 1, 'deleted_in_session': i.deletedInSession == 1, 'creator_id': i.creatorId})).toList(),
-          syncedWithCloud: row.syncedWithCloud,
-          updatedAt: row.updatedAt,
-        ));
-      }
-      return list;
+    return (_db.select(_db.pages)..where((t) => t.notebookId.equals(notebookId))).watch().map((rows) {
+      return rows.map((row) => LocalPage(
+        id: row.id,
+        serverId: row.serverId,
+        notebookId: row.notebookId,
+        pageNumber: row.pageNumber,
+        isLandscape: row.isLandscape == 1,
+        paperSize: row.paperSize,
+        lineType: row.lineType,
+        lineSpacing: row.lineSpacing,
+        clientId: row.clientId,
+        title: LocalPage.parseMeta(row.headerData),
+        footer: LocalPage.parseMeta(row.footerData),
+        extractedText: row.extractedText,
+        isFrozen: row.isFrozen == 1,
+        isDeleted: row.isDeleted == 1,
+        strokes: [], // Lazy loaded
+        textBlocks: [], // Lazy loaded
+        imageBlocks: [], // Lazy loaded
+        syncedWithCloud: row.syncedWithCloud,
+        updatedAt: row.updatedAt,
+      )).toList();
     });
   }
 
+  /// 🚀 CARREGAMENTO SOB DEMANDA: Busca o conteúdo pesado de uma página
+  Future<Map<String, dynamic>> loadPageContent(int pageId) async {
+    final strokeRows = await (_db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId))).get();
+    final textRows = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId))).get();
+    final imgRows = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).get();
+
+    final strokes = strokeRows.map((s) => Stroke.fromJson({
+      ...jsonDecode(s.strokeData),
+      'updated_at': s.updatedAt,
+      'is_deleted': s.isDeleted == 1,
+      'deleted_in_session': s.deletedInSession == 1,
+      'creator_id': s.creatorId,
+      'synced_with_cloud': s.syncedWithCloud == 1,
+    })).toList();
+
+    final textBlocks = textRows.map((t) => TextBlock.fromJson({
+      ...jsonDecode(t.textData),
+      'updated_at': t.updatedAt,
+      'is_deleted': t.isDeleted == 1,
+      'deleted_in_session': t.deletedInSession == 1,
+      'creator_id': t.creatorId,
+      'synced_with_cloud': t.syncedWithCloud == 1,
+    })).toList();
+
+    final imageBlocks = imgRows.map((i) => ImageBlock.fromJson({
+      'id': i.clientImageId,
+      'image_path': i.imagePath,
+      'dx': i.posX,
+      'dy': i.posY,
+      'width': i.width,
+      'height': i.height,
+      'rotation': i.rotation,
+      'updated_at': i.updatedAt,
+      'is_deleted': i.isDeleted == 1,
+      'deleted_in_session': i.deletedInSession == 1,
+      'creator_id': i.creatorId,
+      'synced_with_cloud': i.syncedWithCloud == 1,
+    })).toList();
+
+    return {
+      'strokes': strokes,
+      'textBlocks': textBlocks,
+      'imageBlocks': imageBlocks,
+    };
+  }
+
   Future<int> savePage(LocalPage page, int? notebookSid) async {
-    final lockKey = page.clientId;
-    if (_pageLocks.containsKey(lockKey)) {
-      return await _pageLocks[lockKey]!.future;
+    return await savePageFromMap(page.toJson(), notebookSid);
+  }
+
+  /// 🚀 GRAVAÇÃO OTIMIZADA: Confiança total no servidor
+  Future<int> savePageFromMap(Map<String, dynamic> pageData, int? notebookSid) async {
+    final String clientId = pageData['client_id'];
+    final int? serverId = pageData['id'] != null ? int.tryParse(pageData['id'].toString()) : null;
+    
+    // 1. RESOLUÇÃO DE ID DO CADERNO
+    int? localNotebookId;
+    if (notebookSid != null && notebookSid != 0) {
+      final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookSid))).getSingleOrNull();
+      if (nb != null) localNotebookId = nb.id;
+    }
+    localNotebookId ??= pageData['notebook_id'];
+
+    // 2. BUSCAR REGISTO EXISTENTE POR CLIENT_ID OU SERVER_ID (Limpeza de Duplicados)
+    final query = _db.select(_db.pages)..where((t) {
+      var expr = t.clientId.equals(clientId);
+      if (serverId != null) expr = expr | t.serverId.equals(serverId);
+      return expr;
+    });
+    
+    final candidates = await query.get();
+    int? effectiveId;
+    
+    if (candidates.isNotEmpty) {
+      // Se houver mais do que um, manter o que tem serverId ou o primeiro
+      final survivor = candidates.firstWhere((c) => c.serverId != null, orElse: () => candidates.first);
+      effectiveId = survivor.id;
+      
+      // Limpar duplicados indesejados
+      if (candidates.length > 1) {
+        debugPrint('🧹 [CanvasRepo] Limpando ${candidates.length - 1} duplicados para $clientId');
+        for (var cand in candidates) {
+          if (cand.id == effectiveId) continue;
+          // Migrar elementos para o sobrevivente antes de apagar (Segurança Máxima)
+          await (_db.update(_db.canvasStrokes)..where((t) => t.pageId.equals(cand.id))).write(CanvasStrokesCompanion(pageId: Value(effectiveId!)));
+          await (_db.update(_db.canvasTextBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasTextBlocksCompanion(pageId: Value(effectiveId!)));
+          await (_db.update(_db.canvasImageBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasImageBlocksCompanion(pageId: Value(effectiveId!)));
+          await (_db.delete(_db.pages)..where((t) => t.id.equals(cand.id))).go();
+        }
+      }
     }
 
-    final completer = Completer<int>();
-    _pageLocks[lockKey] = completer;
+    // 3. INSERIR OU ATUALIZAR (METADADOS APENAS)
+    final companion = PagesCompanion.insert(
+      id: effectiveId != null ? Value(effectiveId) : const Value.absent(),
+      serverId: Value(serverId),
+      clientId: Value(clientId),
+      notebookId: localNotebookId!, 
+      pageNumber: int.tryParse(pageData['page_number']?.toString() ?? '1') ?? 1,
+      isLandscape: Value((pageData['is_landscape'] == true || pageData['is_landscape'] == 1 || pageData['is_landscape'] == "1") ? 1 : 0),
+      headerData: Value(jsonEncode(pageData['header_data'] ?? {'title': ''})),
+      footerData: Value(jsonEncode(pageData['footer_data'] ?? {'title': ''})),
+      extractedText: Value(pageData['extracted_text']),
+      isFrozen: Value((pageData['is_frozen'] == true || pageData['is_frozen'] == 1 || pageData['is_frozen'] == "1") ? 1 : 0),
+      paperSize: Value(pageData['paper_size'] ?? 'A4'),
+      lineType: Value(pageData['line_type']?.toString()),
+      lineSpacing: Value(pageData['line_spacing'] != null ? double.tryParse(pageData['line_spacing'].toString()) : null),
+      updatedAt: Value(_parseSafeInt(pageData['updated_at_ms']) ?? _parseSafeInt(pageData['updated_at']) ?? TimeService().nowMs()),
+      syncedWithCloud: Value(pageData['synced_with_cloud'] == 0 || pageData['synced_with_cloud'] == false ? 0 : 1),
+    );
 
-    try {
-      final id = await _db.transaction(() async {
-        // 1. RESOLUÇÃO DE ID DO CADERNO: Garantir que usamos o ID local do SQLite
-        int? localNotebookId;
-        
-        if (notebookSid != null && notebookSid != 0) {
-          // Se temos o ID do servidor, buscamos o ID local correspondente
-          final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookSid))).getSingleOrNull();
-          if (nb != null) {
-            localNotebookId = nb.id;
-          }
-        }
-        
-        // Se não encontramos por serverId, usamos o notebookId que já vem no objeto (assumindo que é local)
-        localNotebookId ??= page.notebookId;
-
-        // 🛡️ BLINDAGEM EXTRA: Se o ID ainda parecer um ID de servidor (ex: > 100.000) 
-        // e não existir como ID local, tentamos uma última busca por server_id
-        if (localNotebookId > 50000) { 
-           final check = await (_db.select(_db.notebooks)..where((t) => t.id.equals(localNotebookId!))).getSingleOrNull();
-           if (check == null) {
-              final byServer = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(localNotebookId!))).getSingleOrNull();
-              if (byServer != null) localNotebookId = byServer.id;
-           }
-        }
-
-        // 2. LÓGICA ANTI-DUPLICADOS: Procurar por Client ID ou Server ID
-        final query = _db.select(_db.pages)..where((t) {
-          var expr = t.clientId.equals(page.clientId);
-          if (page.serverId != null) expr = expr | t.serverId.equals(page.serverId!);
-          return expr;
-        });
-        
-        final candidates = await query.get();
-        int? effectiveId;
-        bool isUpdate = false;
-        
-        if (candidates.isNotEmpty) {
-          // Prioridade para o registro que já tem Server ID
-          final survivor = candidates.firstWhere((c) => c.serverId != null, orElse: () => candidates.first);
-          effectiveId = survivor.id;
-          isUpdate = true;
-          
-          if (candidates.length > 1) {
-            debugPrint('🧨 [Sync-Fix] Fundindo ${candidates.length} páginas no local ID $effectiveId...');
-            for (var cand in candidates) {
-              if (cand.id == effectiveId) continue;
-              await (_db.update(_db.canvasStrokes)..where((t) => t.pageId.equals(cand.id))).write(CanvasStrokesCompanion(pageId: Value(effectiveId!)));
-              await (_db.update(_db.canvasTextBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasTextBlocksCompanion(pageId: Value(effectiveId!)));
-              await (_db.update(_db.canvasImageBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasImageBlocksCompanion(pageId: Value(effectiveId!)));
-              await (_db.delete(_db.pages)..where((t) => t.id.equals(cand.id))).go();
-            }
-          }
-        }
-
-        debugPrint('💾 [CanvasRepo] Gravando página: ${isUpdate ? "UPDATE (id: $effectiveId)" : "INSERT"} | Notebook: $localNotebookId | ClientId: ${page.clientId}');
-
-        // 3. INSERIR OU ATUALIZAR
-        final companion = PagesCompanion.insert(
-          id: effectiveId != null ? Value(effectiveId) : const Value.absent(),
-          serverId: Value(page.serverId),
-          clientId: Value(page.clientId),
-          notebookId: localNotebookId!, 
-          pageNumber: page.pageNumber,
-          isLandscape: Value(page.isLandscape ? 1 : 0),
-          headerData: Value(LocalPage.encodeMeta(page.title)),
-          footerData: Value(LocalPage.encodeMeta(page.footer)),
-          extractedText: Value(page.extractedText),
-          isFrozen: Value(page.isFrozen ? 1 : 0),
-          paperSize: Value(page.paperSize),
-          lineType: Value(page.lineType),
-          lineSpacing: Value(page.lineSpacing),
-          updatedAt: Value(page.updatedAt),
-          syncedWithCloud: Value(page.syncedWithCloud),
-        );
-
-        final insertedId = await _db.into(_db.pages).insertOnConflictUpdate(companion);
-        page.id = insertedId;
-        return insertedId;
-      });
-      completer.complete(id);
-      return id;
-    } catch (e) {
-      debugPrint('🚨 [CanvasRepo] Erro crítico ao salvar página: $e');
-      completer.completeError(e);
-      rethrow;
-    } finally {
-      _pageLocks.remove(lockKey);
+    int finalId = await _db.into(_db.pages).insertOnConflictUpdate(companion);
+    
+    // 🚀 CORREÇÃO CRÍTICA: Garantir que nunca retornamos ID 0 (Erro 787 no Android)
+    if (finalId == 0 && effectiveId != null) {
+      finalId = effectiveId;
     }
+    
+    debugPrint('💾 [CanvasRepo] Página salva: ID $finalId, ClientId $clientId, Synced: ${companion.syncedWithCloud.value}');
+    return finalId;
   }
 
   Future<void> saveSingleStroke(String pageClientId, Stroke s) async {
-    // 🚀 RESOLUÇÃO DINÂMICA: Encontrar o ID local da página pelo ClientID (UUID)
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
-    if (page == null) {
-      debugPrint('⚠️ [CanvasRepo] Ignorando traço - página não encontrada: $pageClientId');
-      return;
-    }
+    if (page == null) return;
 
     try {
       await _db.into(_db.canvasStrokes).insertOnConflictUpdate(CanvasStrokesCompanion.insert(
         clientStrokeId: s.id,
-        pageId: page.id, // 🛡️ ID local resolvido de forma fresca
+        pageId: page.id,
         strokeData: jsonEncode(s.toJson()),
         isDeleted: Value(s.isDeleted ? 1 : 0),
         deletedInSession: Value(s.deletedInSession ? 1 : 0),
         creatorId: Value(s.creatorId),
         updatedAt: Value(s.updatedAt),
+        syncedWithCloud: Value(s.syncedWithCloud ? 1 : 0),
       ));
+      
+      // 🚀 GATILHO DE SYNC: Marcar a página como não sincronizada para o SyncService detectá-la
+      if (!s.syncedWithCloud) {
+        await markPageAsUnsynced(pageClientId);
+      }
     } catch (e) {
-      debugPrint('🚨 [CanvasRepo] Falha ao salvar traço incremental: $e');
+      debugPrint('🚨 [CanvasRepo] Falha ao salvar traço: $e');
     }
   }
 
@@ -264,7 +363,12 @@ class CanvasRepository {
         deletedInSession: Value(t.deletedInSession ? 1 : 0),
         creatorId: Value(t.creatorId),
         updatedAt: Value(t.updatedAt),
+        syncedWithCloud: Value(t.syncedWithCloud ? 1 : 0),
       ));
+
+      if (!t.syncedWithCloud) {
+        await markPageAsUnsynced(pageClientId);
+      }
     } catch (e) {}
   }
 
@@ -286,8 +390,22 @@ class CanvasRepository {
         deletedInSession: Value(i.deletedInSession ? 1 : 0),
         creatorId: Value(i.creatorId),
         updatedAt: Value(i.updatedAt),
+        syncedWithCloud: Value(i.syncedWithCloud ? 1 : 0),
       ));
+
+      if (!i.syncedWithCloud) {
+        await markPageAsUnsynced(pageClientId);
+      }
     } catch (e) {}
+  }
+
+  Future<void> markPageAsUnsynced(String pageClientId) async {
+    debugPrint('🚩 [CanvasRepo] Marcando página como SUJA: $pageClientId');
+    await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId)))
+        .write(PagesCompanion(
+          syncedWithCloud: const Value(0),
+          updatedAt: Value(TimeService().nowMs()),
+        ));
   }
 
   Future<void> deleteSingleStroke(String strokeId) async {
@@ -360,6 +478,19 @@ class CanvasRepository {
 
   Future<void> updateNotebookMetadata(int notebookId, String lineType, double lineSpacing) async {
     await (_db.update(_db.notebooks)..where((t) => t.id.equals(notebookId))).write(NotebooksCompanion(lineType: Value(lineType), lineSpacing: Value(lineSpacing)));
+  }
+
+  int? _parseSafeInt(dynamic val) {
+    if (val == null) return null;
+    if (val is int) return val;
+    if (val is double) return val.toInt();
+    if (val is String) {
+      // Tentar ISO Date
+      final date = DateTime.tryParse(val);
+      if (date != null) return date.millisecondsSinceEpoch;
+      return int.tryParse(val);
+    }
+    return null;
   }
 
   Future<void> savePageToCloud(LocalPage page, int notebookSid, String myUserId) async {

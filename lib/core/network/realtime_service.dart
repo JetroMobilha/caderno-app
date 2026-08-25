@@ -398,8 +398,27 @@ class RealtimeService {
 
   Future<bool> broadcastVoiceCallStarted({required int notebookId, required String myUserId, required String senderName}) async {
     if (_notebookChannel == null) return false;
-    final data = {'notebook_id': notebookId, 'sender_id': myUserId, 'sender_name': senderName};
+    final data = {'sender_id': myUserId, 'sender_name': senderName, 'timestamp': DateTime.now().toIso8601String()};
     _notebookChannel!.trigger(eventName: 'client-voice-call-started', data: jsonEncode(data));
+    return true;
+  }
+
+  void startVoiceCall({required int notebookId, required String myUserId}) {
+    if (_notebookChannel == null) return;
+    final data = {'sender_id': myUserId, 'is_in_call': true};
+    _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
+  }
+
+  void stopVoiceCall({required int notebookId, required String myUserId}) {
+    if (_notebookChannel == null) return;
+    final data = {'sender_id': myUserId, 'is_in_call': false};
+    _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
+  }
+
+  Future<bool> broadcastVoicePolicy({required int notebookId, required String targetId, required bool canSpeak}) async {
+    if (_notebookChannel == null) return false;
+    final data = {'notebook_id': notebookId, 'target_id': targetId, 'can_speak': canSpeak};
+    _notebookChannel!.trigger(eventName: 'client-voice-policy-updated', data: jsonEncode(data));
     return true;
   }
 

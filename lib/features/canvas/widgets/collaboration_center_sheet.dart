@@ -126,7 +126,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                               if (controller.isBroadcastingViewport) {
                                 controller.stopViewportBroadcasting();
                               } else {
-                                controller.startViewportBroadcasting(controller.myUserId);
+                                controller.startViewportBroadcasting();
                               }
                               Navigator.pop(context);
                             },

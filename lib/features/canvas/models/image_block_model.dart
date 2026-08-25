@@ -6,19 +6,20 @@ import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 class ImageBlock {
-  String id; // 🆔 Alterado para não ser final para permitir clonagem profunda
-  String imagePath; // Pode ser path local, Blob (Web) ou URL remota
+  String id;
+  String imagePath;
   Offset position;
   double width;
   double height;
   double rotation;
   double baseScale = 1.0;
   double baseRotation = 0.0;
-  bool isDeleted; // 🚀 Suporte a Soft Delete
-  bool deletedInSession; // 🚀 Novo: Contexto de deleção
-  int updatedAt; // 🚀 Novo: Timestamp Last-Write-Wins
-  int version; // 🔄 UI Only
-  final String? creatorId; // 🚀 Dono da imagem
+  bool isDeleted;
+  bool deletedInSession;
+  int updatedAt;
+  int version;
+  final String? creatorId;
+  bool syncedWithCloud;
 
   ImageBlock({
     String? id,
@@ -32,12 +33,10 @@ class ImageBlock {
     int? updatedAt,
     this.version = 1,
     this.creatorId,
+    this.syncedWithCloud = false, // 🚀 Começa como falso
   }) : id = id ?? const Uuid().v4(),
        updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
-  // =========================================================================
-  // ⚡ MAPA LEVE: Usado para Realtime (WebSocket) e Drift
-  // =========================================================================
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -51,35 +50,25 @@ class ImageBlock {
       'deleted_in_session': deletedInSession,
       'updated_at': updatedAt,
       'creator_id': creatorId,
+      'synced_with_cloud': syncedWithCloud ? 1 : 0,
     };
   }
 
-  // =========================================================================
-  // ☁️ MAPA COMPLETO: Usado pelo SyncService para persistência na Nuvem
-  // =========================================================================
   Future<Map<String, dynamic>> toJsonAsync() async {
     String? base64Image;
-    
-    // Se o caminho for local (não for HTTP), precisamos de enviar os bytes para a nuvem
     if (!imagePath.startsWith('http')) {
       try {
         if (kIsWeb) {
           if (imagePath.startsWith('blob:')) {
-            // Na Web, usamos o pacote http para ler o conteúdo do Blob URL
             final response = await http.get(Uri.parse(imagePath));
-            if (response.statusCode == 200) {
-              base64Image = base64Encode(response.bodyBytes);
-            }
+            if (response.statusCode == 200) base64Image = base64Encode(response.bodyBytes);
           }
         } else {
           final bytes = await io.File(imagePath).readAsBytes();
           base64Image = base64Encode(bytes);
         }
-      } catch (e) {
-        debugPrint('⚠️ Erro ao preparar imagem para sync: $e');
-      }
+      } catch (e) { debugPrint('⚠️ Erro imagem sync: $e'); }
     }
-
     final map = toJson();
     map['image_base64'] = base64Image;
     return map;
@@ -87,8 +76,6 @@ class ImageBlock {
 
   factory ImageBlock.fromJson(Map<String, dynamic> json) {
     String path = json['image_path']?.toString() ?? '';
-
-    // Se a Nuvem enviou binário (Base64) e estamos no Mobile, salvamos localmente
     if (!kIsWeb && json['image_base64'] != null && json['image_base64'].toString().isNotEmpty) {
       try {
         final Uint8List bytes = base64Decode(json['image_base64']);
@@ -96,11 +83,8 @@ class ImageBlock {
         final io.File file = io.File('${tempDir.path}/sync_img_${json['id']}.png');
         file.writeAsBytesSync(bytes);
         path = file.path;
-      } catch (e) {
-        debugPrint('⚠️ Erro ao reconstruir imagem sync: $e');
-      }
+      } catch (e) {}
     }
-
     return ImageBlock(
       id: json['id']?.toString() ?? const Uuid().v4(),
       imagePath: path,
@@ -116,6 +100,7 @@ class ImageBlock {
       updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
       creatorId: json['creator_id']?.toString(),
+      syncedWithCloud: json['synced_with_cloud'] == null ? true : (json['synced_with_cloud'] == true || json['synced_with_cloud'] == 1),
     );
   }
 

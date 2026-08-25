@@ -83,45 +83,45 @@ class MockCanvasRepository extends _i1.Mock implements _i3.CanvasRepository {
           as _i4.Future<int>);
 
   @override
-  _i4.Future<void> saveSingleStroke(int? pageId, _i6.Stroke? s) =>
+  _i4.Future<void> saveSingleStroke(String pageClientId, _i6.Stroke s) =>
       (super.noSuchMethod(
-            Invocation.method(#saveSingleStroke, [pageId, s]),
+            Invocation.method(#saveSingleStroke, [pageClientId, s]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
           as _i4.Future<void>);
 
   @override
-  _i4.Future<void> saveSingleTextBlock(int? pageId, _i7.TextBlock? t) =>
+  _i4.Future<void> saveSingleTextBlock(String pageClientId, _i7.TextBlock t) =>
       (super.noSuchMethod(
-            Invocation.method(#saveSingleTextBlock, [pageId, t]),
+            Invocation.method(#saveSingleTextBlock, [pageClientId, t]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
           as _i4.Future<void>);
 
   @override
-  _i4.Future<void> deleteSingleStroke(int? pageId, String? strokeId) =>
+  _i4.Future<void> deleteSingleStroke(String strokeId) =>
       (super.noSuchMethod(
-            Invocation.method(#deleteSingleStroke, [pageId, strokeId]),
+            Invocation.method(#deleteSingleStroke, [strokeId]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
           as _i4.Future<void>);
 
   @override
-  _i4.Future<void> deleteSingleTextBlock(int? pageId, String? textId) =>
+  _i4.Future<void> deleteSingleTextBlock(String textId) =>
       (super.noSuchMethod(
-            Invocation.method(#deleteSingleTextBlock, [pageId, textId]),
+            Invocation.method(#deleteSingleTextBlock, [textId]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
           as _i4.Future<void>);
 
   @override
-  _i4.Future<void> saveSingleImageBlock(int? pageId, _i8.ImageBlock? i) =>
+  _i4.Future<void> saveSingleImageBlock(String pageClientId, _i8.ImageBlock i) =>
       (super.noSuchMethod(
-            Invocation.method(#saveSingleImageBlock, [pageId, i]),
+            Invocation.method(#saveSingleImageBlock, [pageClientId, i]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )

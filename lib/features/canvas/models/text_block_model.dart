@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀
+import 'package:caderno_digital_app/core/network/time_service.dart';
 
 class TextBlock {
-  String id; // 🆔 Alterado para não ser final para permitir clonagem profunda
+  String id;
   String text;
   Offset position;
   bool isBold;
@@ -11,13 +11,14 @@ class TextBlock {
   bool isUnderline;
   String textColorHex;
   double fontSize;
-  bool isDeleted; // 🚀 Suporte a Soft Delete
-  bool deletedInSession; // 🚀 Novo: Contexto de deleção
-  int updatedAt; // 🚀 Novo: Timestamp Last-Write-Wins
-  int version; // 🔄 UI Only
-  bool isChecklist; // 📝 Modo lista de tarefas
-  List<int> checkedLineIndices; // ✅ Índices das linhas marcadas
-  final String? creatorId; // 🚀 Dono do texto
+  bool isDeleted;
+  bool deletedInSession;
+  int updatedAt;
+  int version;
+  bool isChecklist;
+  List<int> checkedLineIndices;
+  final String? creatorId;
+  bool syncedWithCloud;
 
   TextBlock({
     String? id,
@@ -35,9 +36,10 @@ class TextBlock {
     int? updatedAt,
     this.version = 1,
     this.creatorId,
+    this.syncedWithCloud = false, // 🚀 Começa como falso para novos locais
   }) : id = id ?? const Uuid().v4(),
        checkedLineIndices = checkedLineIndices ?? [],
-       updatedAt = updatedAt ?? TimeService().nowMs(); // 🕒 Hora do servidor
+       updatedAt = updatedAt ?? TimeService().nowMs();
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -55,6 +57,7 @@ class TextBlock {
     'is_checklist': isChecklist,
     'checked_line_indices': checkedLineIndices,
     'creator_id': creatorId,
+    'synced_with_cloud': syncedWithCloud ? 1 : 0,
   };
 
   factory TextBlock.fromJson(Map<String, dynamic> json) => TextBlock(
@@ -76,6 +79,7 @@ class TextBlock {
     updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
     version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     creatorId: json['creator_id']?.toString(),
+    syncedWithCloud: json['synced_with_cloud'] == null ? true : (json['synced_with_cloud'] == true || json['synced_with_cloud'] == 1),
   );
 
   TextBlock clone() => TextBlock.fromJson(toJson());

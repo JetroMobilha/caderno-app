@@ -94,7 +94,7 @@ class ApiService {
 
     final response = await http
         .post(url, headers: headers, body: bodyStr)
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 30));
 
     _processTimeMetadata(response); // 🕒 Calibrar relógio
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
@@ -110,7 +110,7 @@ class ApiService {
 
     final response = await http
         .get(url, headers: headers)
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 30));
 
     _processTimeMetadata(response); // 🕒 Calibrar relógio
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
@@ -135,8 +135,9 @@ class ApiService {
 
     final response = await http
         .put(url, headers: headers, body: bodyStr)
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 30));
 
+    _processTimeMetadata(response);
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
   }
@@ -149,7 +150,9 @@ class ApiService {
 
     final response = await http
         .delete(url, headers: headers)
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 30));
+
+    _processTimeMetadata(response);
     return response;
   }
 
@@ -168,8 +171,10 @@ class ApiService {
     request.headers.addAll(headers);
     request.body = bodyStr;
 
-    final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
     final response = await http.Response.fromStream(streamedResponse);
+    
+    _processTimeMetadata(response);
     debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
     return response;
   }

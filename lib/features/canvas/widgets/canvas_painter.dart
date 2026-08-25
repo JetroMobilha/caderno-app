@@ -2,36 +2,22 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/stroke_model.dart';
 
-Path buildSmoothPath(List<Offset> points) {
+Path buildPath(List<Offset> points) {
   final path = Path();
   if (points.isEmpty) return path;
   
-  if (points.length < 3) {
-    path.moveTo(points.first.dx, points.first.dy);
-    for (var i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
-    }
-    if (points.length == 1) {
-      path.addOval(Rect.fromCircle(center: points.first, radius: 0.1));
-    }
+  path.moveTo(points.first.dx, points.first.dy);
+  
+  if (points.length == 1) {
+    path.addOval(Rect.fromCircle(center: points.first, radius: 0.1));
     return path;
   }
 
-  path.moveTo(points[0].dx, points[0].dy);
-
-  // 🚀 INTERPOLAÇÃO POR CURVAS QUADRÁTICAS (Bézier)
-  for (int i = 1; i < points.length - 2; i++) {
-    final xc = (points[i].dx + points[i + 1].dx) / 2;
-    final yc = (points[i].dy + points[i + 1].dy) / 2;
-    path.quadraticBezierTo(points[i].dx, points[i].dy, xc, yc);
+  // 🚀 ALTA FIDELIDADE: Usar lineTo para preservar a escrita original do autor.
+  // Isto também é muito mais performático para traços com muitos pontos.
+  for (int i = 1; i < points.length; i++) {
+    path.lineTo(points[i].dx, points[i].dy);
   }
-
-  path.quadraticBezierTo(
-    points[points.length - 2].dx,
-    points[points.length - 2].dy,
-    points[points.length - 1].dx,
-    points[points.length - 1].dy,
-  );
 
   return path;
 }
@@ -45,7 +31,7 @@ class StaticNotebookPainter extends CustomPainter {
   final int pageVersion; 
   final Set<String> remoteMovingStrokeIds; 
   final Set<String>? visibleAuthorIds; 
-  final bool isAuthorColorEnabled; // 🚀 Alterado
+  final bool isAuthorColorEnabled; 
   final Map<String, Color> userColors; 
 
   StaticNotebookPainter({
@@ -93,25 +79,24 @@ class StaticNotebookPainter extends CustomPainter {
     for (final stroke in strokes) {
       if (stroke.isDeleted || remoteMovingStrokeIds.contains(stroke.id)) continue; 
       
-      // 🚀 FILTRO DE CAMADA (Por Autor)
       if (visibleAuthorIds != null && stroke.creatorId != null) {
         if (!visibleAuthorIds!.contains(stroke.creatorId)) continue;
       }
 
       final bool isSelected = selectedStrokeIds.contains(stroke.id);
       
-      // 🚀 CORES DIFERENCIADAS (Controle do Dono)
       Color strokeColor = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')));
       if (isAuthorColorEnabled && stroke.creatorId != null && userColors.containsKey(stroke.creatorId)) {
         strokeColor = userColors[stroke.creatorId]!;
       }
 
       final paint = Paint()
-        ..color = strokeColor
+        ..color = stroke.isHighlighter ? strokeColor.withValues(alpha: 0.4) : strokeColor
         ..strokeWidth = stroke.thickness
         ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
+        ..strokeCap = stroke.isHighlighter ? StrokeCap.square : StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..blendMode = stroke.isHighlighter ? BlendMode.multiply : BlendMode.srcOver;
 
       if (isSelected && stroke.points.isNotEmpty) {
         double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
@@ -125,7 +110,7 @@ class StaticNotebookPainter extends CustomPainter {
         canvas.drawRect(bounds, Paint()..color = const Color(0xFF1976D2)..style = PaintingStyle.stroke..strokeWidth = 1.0);
       }
 
-      canvas.drawPath(buildSmoothPath(stroke.points), paint);
+      canvas.drawPath(buildPath(stroke.points), paint);
     }
 
     if (selectionRect != null) {
@@ -142,7 +127,7 @@ class StaticNotebookPainter extends CustomPainter {
            oldDelegate.lineType != lineType ||
            oldDelegate.lineSpacing != lineSpacing ||
            oldDelegate.selectionRect != selectionRect ||
-           !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) || // 🚀
+           !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) ||
            !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) || 
            !setEquals(oldDelegate.selectedStrokeIds, selectedStrokeIds) ||
            !listEquals(oldDelegate.strokes, strokes);
@@ -151,21 +136,23 @@ class StaticNotebookPainter extends CustomPainter {
 
 class ActiveStrokePainter extends CustomPainter {
   final List<Offset> currentPoints;
-  final Color visualColor; // 🚀 Alterado para usar cor final calculada
+  final Color visualColor; 
   final double currentThickness;
+  final bool isHighlighter; // 🚀
 
-  ActiveStrokePainter({required this.currentPoints, required this.visualColor, required this.currentThickness});
+  ActiveStrokePainter({required this.currentPoints, required this.visualColor, required this.currentThickness, this.isHighlighter = false});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (currentPoints.isEmpty) return;
     final paint = Paint()
-      ..color = visualColor
+      ..color = isHighlighter ? visualColor.withValues(alpha: 0.4) : visualColor
       ..strokeWidth = currentThickness
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(buildSmoothPath(currentPoints), paint);
+      ..strokeCap = isHighlighter ? StrokeCap.square : StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..blendMode = isHighlighter ? BlendMode.multiply : BlendMode.srcOver;
+    canvas.drawPath(buildPath(currentPoints), paint);
   }
 
   @override
@@ -178,9 +165,9 @@ class ActiveStrokePainter extends CustomPainter {
 
 class RemoteLiveStrokesPainter extends CustomPainter {
   final Map<String, Stroke> liveStrokes;
-  final int targetPageNumber; // 🚀 Vincular desenho à página
-  final bool isAuthorColorEnabled; // 🚀
-  final Map<String, Color> userColors; // 🚀
+  final int targetPageNumber; 
+  final bool isAuthorColorEnabled; 
+  final Map<String, Color> userColors; 
 
   RemoteLiveStrokesPainter({
     required this.liveStrokes, 
@@ -193,8 +180,7 @@ class RemoteLiveStrokesPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (liveStrokes.isEmpty) return;
     for (final stroke in liveStrokes.values) {
-      if (stroke.isDeleted || (stroke.points.isEmpty && stroke.liveOffset == null)) continue;
-      // 🛡️ Segurança: Só desenhar se pertencer a esta página
+      if (stroke.isDeleted || (stroke.points.isEmpty && stroke.liveOffset == Offset.zero)) continue;
       if (stroke.pageNumber != null && stroke.pageNumber != targetPageNumber) continue;
 
       Color strokeColor = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')));
@@ -203,17 +189,18 @@ class RemoteLiveStrokesPainter extends CustomPainter {
       }
 
       final paint = Paint()
-        ..color = strokeColor.withValues(alpha: 0.8)
+        ..color = stroke.isHighlighter ? strokeColor.withValues(alpha: 0.32) : strokeColor.withValues(alpha: 0.8)
         ..strokeWidth = stroke.thickness
         ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
+        ..strokeCap = stroke.isHighlighter ? StrokeCap.square : StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..blendMode = stroke.isHighlighter ? BlendMode.multiply : BlendMode.srcOver;
 
       canvas.save();
       if (stroke.liveOffset != Offset.zero) {
         canvas.translate(stroke.liveOffset.dx, stroke.liveOffset.dy);
       }
-      canvas.drawPath(buildSmoothPath(stroke.points), paint);
+      canvas.drawPath(buildPath(stroke.points), paint);
       canvas.restore();
     }
   }
@@ -225,11 +212,10 @@ class RemoteLiveStrokesPainter extends CustomPainter {
   }
 }
 
-// 🚀 PINTOR PARA CURSORES REMOTOS (GHOST CURSORS)
 class RemotePointersPainter extends CustomPainter {
   final Map<String, dynamic> pointers;
   final List<Map<String, dynamic>> onlineUsers;
-  final int targetPageNumber; // 🚀 Filtrar por página
+  final int targetPageNumber; 
 
   RemotePointersPainter({required this.pointers, required this.onlineUsers, required this.targetPageNumber});
 
@@ -259,7 +245,6 @@ class RemotePointersPainter extends CustomPainter {
       final String label = user['name'] ?? 'Colega';
       final String? tool = data['tool'];
 
-      // 1. Configurar o Texto do Nome
       final textPainter = TextPainter(
         text: TextSpan(
           text: label,
@@ -269,11 +254,8 @@ class RemotePointersPainter extends CustomPainter {
       );
       textPainter.layout();
 
-      // 2. Configurar o Ícone da Ferramenta
       IconData? toolIcon;
-      if (tool != null) {
-        toolIcon = _getToolIcon(tool);
-      }
+      if (tool != null) toolIcon = _getToolIcon(tool);
 
       final iconPainter = toolIcon != null ? TextPainter(
         text: TextSpan(
@@ -289,7 +271,6 @@ class RemotePointersPainter extends CustomPainter {
       ) : null;
       iconPainter?.layout();
 
-      // 3. Calcular dimensões do balão
       final double iconWidth = iconPainter != null ? iconPainter.width + 4 : 0;
       final double totalWidth = textPainter.width + iconWidth + 12;
       final double totalHeight = textPainter.height + 6;
@@ -297,10 +278,7 @@ class RemotePointersPainter extends CustomPainter {
       final rect = Rect.fromLTWH(pos.dx + 14, pos.dy + 14, totalWidth, totalHeight);
       canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), paint);
 
-      // 4. Pintar Ícone e Texto
-      if (iconPainter != null) {
-        iconPainter.paint(canvas, pos + const Offset(18, 16));
-      }
+      if (iconPainter != null) iconPainter.paint(canvas, pos + const Offset(18, 16));
       textPainter.paint(canvas, pos + Offset(18 + iconWidth, 17));
     });
   }

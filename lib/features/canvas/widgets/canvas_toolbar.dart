@@ -6,6 +6,8 @@ import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
 import '../models/local_page_model.dart';
 import '../models/canvas_enums.dart';
+import '../../explanations/controllers/explanation_controller.dart'; // 🚀 Novo
+import '../../explanations/models/explanation_model.dart'; // 🚀 Novo
 
 class CanvasToolbar extends ConsumerWidget {
   final LocalPage currentPage;
@@ -80,6 +82,24 @@ class CanvasToolbar extends ConsumerWidget {
             _buildCompactIconButton(Icons.psychology_outlined, onAiAssistantTap, 'Assistente IA', const Color(0xFF0F4C5C)),
 
           if (!isSmallScreen)
+            _buildCompactIconButton(
+              Icons.settings_suggest_rounded, 
+              () {
+                // Adicionar uma Engrenagem de exemplo
+                ref.read(explanationProvider.notifier).addExplanation(
+                  EngineeringExplanation(
+                    position: const Offset(450, 200),
+                    radius: 50.0,
+                    toothCount: 18,
+                    angularVelocity: 0.5,
+                  ),
+                );
+              }, 
+              'Adicionar Engrenagem', 
+              Colors.blueGrey
+            ),
+
+          if (!isSmallScreen)
             _buildCompactIconButton(Icons.add_photo_alternate_outlined, onAddImageTap, 'Adicionar Imagem', const Color(0xFF1A1A24)),
           
           if (isSmallScreen) ...[
@@ -88,7 +108,7 @@ class CanvasToolbar extends ConsumerWidget {
           ],
 
           if (isSmallScreen)
-            _buildMoreMenu(context, toolNotifier, viewportNotifier, onAddImageTap)
+            _buildMoreMenu(context, ref, toolNotifier, viewportNotifier, onAddImageTap)
           else ...[
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
             _buildCompactIconButton(Icons.grid_on, onChangePaperTap, 'Mudar Pauta', const Color(0xFF0F4C5C)),
@@ -171,7 +191,7 @@ class CanvasToolbar extends ConsumerWidget {
     return IconButton(iconSize: 20, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, icon: Icon(icon, color: color), onPressed: onPressed, tooltip: tooltip);
   }
 
-  Widget _buildMoreMenu(BuildContext context, CanvasToolNotifier toolNotifier, CanvasViewportNotifier viewportNotifier, VoidCallback? onAddImage) {
+  Widget _buildMoreMenu(BuildContext context, WidgetRef ref, CanvasToolNotifier toolNotifier, CanvasViewportNotifier viewportNotifier, VoidCallback? onAddImage) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: Color(0xFF1A1A24)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -179,11 +199,13 @@ class CanvasToolbar extends ConsumerWidget {
         if (val == 'zoom_in') viewportNotifier.zoom(1.2);
         if (val == 'zoom_out') viewportNotifier.zoom(0.8);
         if (val == 'add_image') onAddImage?.call();
+        if (val == 'clear_explanations') ref.read(explanationProvider.notifier).clearPage();
       },
       itemBuilder: (context) => [
         const PopupMenuItem(value: 'zoom_in', child: Text('Aproximar (+)')),
         const PopupMenuItem(value: 'zoom_out', child: Text('Afastar (-)')),
         const PopupMenuItem(value: 'add_image', child: Text('Adicionar Imagem')),
+        const PopupMenuItem(value: 'clear_explanations', child: Text('Limpar Animações')),
       ],
     );
   }

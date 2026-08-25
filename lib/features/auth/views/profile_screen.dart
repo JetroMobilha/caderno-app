@@ -18,6 +18,10 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _nameController = TextEditingController();
+  final _bioController = TextEditingController();
+  final _institutionController = TextEditingController();
+  final _specialtiesController = TextEditingController();
+  String? _selectedColorHex;
   XFile? _selectedImage;
 
   @override
@@ -27,6 +31,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final currentUser = ref.read(authProvider).currentUser;
       if (currentUser != null) {
         _nameController.text = currentUser.name;
+        _bioController.text = currentUser.bio ?? '';
+        _institutionController.text = currentUser.institution ?? '';
+        _specialtiesController.text = currentUser.specialties ?? '';
+        _selectedColorHex = currentUser.preferredColor;
       }
     });
   }
@@ -34,6 +42,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _bioController.dispose();
+    _institutionController.dispose();
+    _specialtiesController.dispose();
     super.dispose();
   }
 
@@ -56,12 +67,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) return;
 
-    // Remove o teclado para a UI não dar saltos bruscos
     FocusScope.of(context).unfocus();
 
     final bool success = await ref.read(authProvider.notifier).updateProfile(
       name: _nameController.text.trim(),
       imageFile: _selectedImage,
+      bio: _bioController.text.trim(),
+      institution: _institutionController.text.trim(),
+      preferredColor: _selectedColorHex,
+      specialties: _specialtiesController.text.trim(),
     );
 
     if (success && mounted) {
@@ -80,12 +94,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final authController = ref.watch(authProvider);
     final currentUser = authController.currentUser;
-    final themeColor = Theme.of(context).colorScheme.primary; // Adicionado para coesão do tema!
+    final themeColor = _selectedColorHex != null 
+        ? Color(int.parse(_selectedColorHex!.replaceFirst('#', '0xFF')))
+        : Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
-        title: Text('Meu Perfil', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 20)), // 🚀 Inter!
+        title: Text('Meu Perfil', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 20)),
         backgroundColor: themeColor,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -166,143 +182,69 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     Center(
                       child: Text(
                         currentUser?.name ?? 'Estudante',
-                        style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50)), // 🚀 Inter!
+                        style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF2C3E50)),
                       ),
                     ),
                     const SizedBox(height: 32),
 
-                    Text('Credencial de Acesso', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45)),
+                    _buildSectionTitle('Credencial de Acesso'),
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.black.withOpacity(0.04)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                            child: const Icon(Icons.email_outlined, size: 20, color: Colors.black54),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('E-mail Institucional', style: GoogleFonts.inter(fontSize: 11, color: Colors.black45)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  currentUser?.email ?? 'A carregar...',
-                                  style: GoogleFonts.inter(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.lock_outline, size: 16, color: Colors.black26),
-                        ],
-                      ),
+                    _buildDisabledField(
+                      icon: Icons.email_outlined,
+                      label: 'E-mail Institucional',
+                      value: currentUser?.email ?? 'A carregar...',
                     ),
 
                     const SizedBox(height: 24),
 
-                    Text('Informações Pessoais', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45)),
+                    _buildSectionTitle('Informações do Perfil'),
                     const SizedBox(height: 8),
-                    TextFormField(
+                    _buildTextField(
                       controller: _nameController,
-                      style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500, color: const Color(0xFF2C3E50)),
-                      decoration: InputDecoration(
-                        labelText: 'Nome Completo',
-                        labelStyle: const TextStyle(color: Colors.black45),
-                        prefixIcon: const Icon(Icons.person_outline_rounded, color: Colors.black45),
-                        filled: true,
-                        fillColor: Colors.white,
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: themeColor, width: 1.5),
-                        ),
-                      ),
+                      label: 'Nome Completo',
+                      icon: Icons.person_outline_rounded,
+                      themeColor: themeColor,
                     ),
-
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      child: authController.authErrorMessage == null
-                          ? const SizedBox.shrink()
-                          : Padding(
-                        padding: const EdgeInsets.only(top: 20.0),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline_rounded, size: 16, color: Colors.redAccent),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(authController.authErrorMessage!, style: GoogleFonts.inter(fontSize: 13, color: Colors.red[800], fontWeight: FontWeight.w600))),
-                            ],
-                          ),
-                        ),
-                      ),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      controller: _bioController,
+                      label: 'Bio / Frase de Status',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      themeColor: themeColor,
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      controller: _institutionController,
+                      label: 'Instituição / Universidade',
+                      icon: Icons.account_balance_rounded,
+                      themeColor: themeColor,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      controller: _specialtiesController,
+                      label: 'Especialidades (ex: Cálculo, Direito)',
+                      icon: Icons.star_outline_rounded,
+                      themeColor: themeColor,
                     ),
 
                     const SizedBox(height: 24),
 
-                    Text('Personalização Académica', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45)),
+                    _buildSectionTitle('Preferências Visuais'),
                     const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.black.withOpacity(0.08)),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: ListTile(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const HandwritingTrainingScreen()),
-                            );
-                          },
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle),
-                            child: Icon(Icons.gesture_rounded, color: themeColor, size: 20),
-                          ),
-                          title: Text('Treinar Caligrafia Pessoal', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF2C3E50))),
-                          subtitle: Text('Digitaliza a tua letra para síntese de texto', style: GoogleFonts.inter(fontSize: 11, color: Colors.black45)),
-                          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.black26),
-                        ),
-                      ),
-                    ),
+                    Text('Cor Favorita da Aplicação', style: GoogleFonts.inter(fontSize: 13, color: Colors.black54)),
+                    const SizedBox(height: 12),
+                    _buildColorSelector(),
+
+                    const SizedBox(height: 24),
+
+                    _buildSectionTitle('Personalização Académica'),
+                    const SizedBox(height: 8),
+                    _buildTrainingCard(themeColor),
 
                     const SizedBox(height: 40),
 
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: themeColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 4,
-                          shadowColor: themeColor.withOpacity(0.4),
-                        ),
-                        onPressed: authController.isLoading ? null : _saveProfile,
-                        child: authController.isLoading
-                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                            : Text('Guardar Alterações', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
+                    _buildSaveButton(authController.isLoading, themeColor),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -310,6 +252,153 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(title, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black45));
+  }
+
+  Widget _buildDisabledField({required IconData icon, required String label, required String value}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, size: 20, color: Colors.black54),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: GoogleFonts.inter(fontSize: 11, color: Colors.black45)),
+                const SizedBox(height: 2),
+                Text(value, style: GoogleFonts.inter(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const Icon(Icons.lock_outline, size: 16, color: Colors.black26),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required Color themeColor,
+    int maxLines = 1,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500, color: const Color(0xFF2C3E50)),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.black45),
+        prefixIcon: Icon(icon, color: Colors.black45),
+        filled: true,
+        fillColor: Colors.white,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: themeColor, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColorSelector() {
+    final colors = [
+      '#0F4C5C', '#2C3E50', '#1B365D', '#D35400', '#16A085', '#8E44AD', '#C0392B'
+    ];
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: colors.map((hex) {
+        final color = Color(int.parse(hex.replaceFirst('#', '0xFF')));
+        final isSelected = _selectedColorHex == hex;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedColorHex = hex),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected ? Colors.black : Colors.transparent,
+                width: 2,
+              ),
+              boxShadow: [
+                if (isSelected) BoxShadow(color: color.withOpacity(0.4), blurRadius: 8, spreadRadius: 2)
+              ],
+            ),
+            child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTrainingCard(Color themeColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.08)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const HandwritingTrainingScreen()));
+          },
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle),
+            child: Icon(Icons.gesture_rounded, color: themeColor, size: 20),
+          ),
+          title: Text('Treinar Caligrafia Pessoal', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF2C3E50))),
+          subtitle: Text('Digitaliza a tua letra para síntese de texto', style: GoogleFonts.inter(fontSize: 11, color: Colors.black45)),
+          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.black26),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton(bool isLoading, Color themeColor) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: themeColor,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 4,
+          shadowColor: themeColor.withOpacity(0.4),
+        ),
+        onPressed: isLoading ? null : _saveProfile,
+        child: isLoading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+            : Text('Guardar Alterações', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
     );
   }

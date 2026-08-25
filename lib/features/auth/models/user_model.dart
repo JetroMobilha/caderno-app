@@ -5,6 +5,11 @@ class User {
   final String email;
   final String? avatar;
   final String planType;
+  final String? bio;
+  final String? institution;
+  final String? preferredColor;
+  final String? preferredFont;
+  final String? specialties; // Armazenado como string separada por vírgulas ou JSON
   final int syncedWithCloud;
   final int updatedAt;
 
@@ -15,6 +20,11 @@ class User {
     required this.email,
     this.avatar,
     this.planType = 'free',
+    this.bio,
+    this.institution,
+    this.preferredColor,
+    this.preferredFont,
+    this.specialties,
     this.syncedWithCloud = 0,
     this.updatedAt = 0,
   });
@@ -42,6 +52,11 @@ class User {
       email: json['email'] ?? '',
       avatar: json['avatar'],
       planType: json['plan_type'] ?? 'free',
+      bio: json['bio'],
+      institution: json['institution'],
+      preferredColor: json['preferred_color'] ?? json['preferredColor'],
+      preferredFont: json['preferred_font'] ?? json['preferredFont'],
+      specialties: json['specialties'],
       syncedWithCloud: json['synced_with_cloud'] ?? (json['server_id'] != null ? 1 : 0),
       updatedAt: upAt ?? 0,
     );
@@ -55,6 +70,11 @@ class User {
       'email': email,
       'avatar': avatar,
       'plan_type': planType,
+      'bio': bio,
+      'institution': institution,
+      'preferred_color': preferredColor,
+      'preferred_font': preferredFont,
+      'specialties': specialties,
       'synced_with_cloud': syncedWithCloud,
       'updated_at': updatedAt,
     };

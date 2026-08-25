@@ -10,6 +10,7 @@ import 'sync_service.dart';
 class SyncNotifier extends StateNotifier<SyncState> {
   final Ref ref;
   Timer? _syncTimer;
+  Timer? _connectivityDebouncer; // 🚀 Debouncer de rede
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   final SyncService _syncService;
 
@@ -20,8 +21,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
     // 2. Ouvir mudanças de rede para sincronização inteligente (Quando ficar online)
     _listenToConnectivity();
 
-    // 3. 🚀 CÓPIA FURTIVA: Tentar sincronizar imediatamente ao abrir a App
-    Future.microtask(() => performSync());
+    // 🚀 REMOVIDO: Future.microtask(() => performSync());
+    // O sincronismo agora é disparado pelo Login ou pela Deteção de Rede estável.
   }
 
   void _startAutoSync() {
@@ -42,11 +43,14 @@ class SyncNotifier extends StateNotifier<SyncState> {
       final bool isConnected = results.any((r) => r != ConnectivityResult.none);
       
       if (isConnected) {
-        final auth = ref.read(authProvider);
-        if (auth.isAuthenticated) {
-          debugPrint('🌐 [Sync] Ligação detectada. Disparando sincronização automática...');
-          await performSync();
-        }
+        _connectivityDebouncer?.cancel();
+        _connectivityDebouncer = Timer(const Duration(seconds: 2), () async {
+          final auth = ref.read(authProvider);
+          if (auth.isAuthenticated) {
+            debugPrint('🌐 [Sync] Ligação estável detectada. Disparando sincronização...');
+            await performSync();
+          }
+        });
       }
     });
   }

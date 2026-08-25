@@ -10,6 +10,11 @@ class Users extends Table {
   TextColumn get email => text().unique()();
   TextColumn get avatar => text().nullable()();
   TextColumn get planType => text().withDefault(const Constant('free'))();
+  TextColumn get bio => text().nullable()();
+  TextColumn get institution => text().nullable()();
+  TextColumn get preferredColor => text().nullable()();
+  TextColumn get preferredFont => text().nullable()();
+  TextColumn get specialties => text().nullable()();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
@@ -247,12 +252,20 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(pages, pages.lineType);
           await m.addColumn(pages, pages.lineSpacing);
         }
+        if (from < 18) {
+          // 🛡️ CORREÇÃO: Usar colunas específicas geradas pelo Drift para migrações manuais
+          await m.addColumn(users, users.bio);
+          await m.addColumn(users, users.institution);
+          await m.addColumn(users, users.preferredColor);
+          await m.addColumn(users, users.preferredFont);
+          await m.addColumn(users, users.specialties);
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

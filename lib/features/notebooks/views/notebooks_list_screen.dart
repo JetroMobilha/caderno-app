@@ -18,7 +18,6 @@ class NotebooksListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final activeSubject = ref.watch(activeSubjectProvider);
     final notebooksState = ref.watch(notebooksProvider);
-    final activeProfile = ref.watch(appProfileProvider);
     final notebooks = notebooksState.notebooks;
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
@@ -30,7 +29,7 @@ class NotebooksListScreen extends ConsumerWidget {
       drawer: const AppDrawer(),
       appBar: AppBar(
         title: Text(
-          activeSubject?.name ?? (activeProfile == AppProfile.academico ? 'Meus Cadernos' : 'Minhas Agendas'),
+          activeSubject?.name ?? 'Meus Cadernos',
           style: GoogleFonts.lora(fontWeight: FontWeight.bold),
         ),
         actions: [

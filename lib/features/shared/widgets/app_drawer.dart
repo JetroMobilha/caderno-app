@@ -100,7 +100,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final user = ref.watch(authProvider).currentUser;
     final subjectsList = ref.watch(subjectsProvider);
     final activeSubject = ref.watch(activeSubjectProvider);
-    final activeProfile = ref.watch(appProfileProvider);
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
     return Drawer(
@@ -111,28 +110,16 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           DrawerHeaderWidget(
             user: user,
             themeColor: dynamicColor,
-            activeProfile: activeProfile,
             isSyncing: _isSyncing,
             onSync: _handleManualSync,
             onProfileOpen: () {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
-            onProfileChanged: (profile) {
-              ref.read(appProfileProvider.notifier).changeProfile(profile);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Modo "${profile.name}" ativado! ✨'),
-                  duration: const Duration(seconds: 1),
-                  behavior: SnackBarBehavior.floating,
-                )
-              );
-            },
           ),
           DrawerSubjectsList(
             subjects: subjectsList,
             activeSubject: activeSubject,
-            activeProfile: activeProfile,
             dynamicColor: dynamicColor,
             onSubjectTap: (sub) {
               ref.read(activeSubjectProvider.notifier).setSubject(sub);

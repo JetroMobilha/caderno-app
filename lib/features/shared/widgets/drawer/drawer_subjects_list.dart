@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/theme/app_colors.dart';
-import 'package:caderno_digital_app/core/theme/app_profile.dart';
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/subjects/utils/subject_utils.dart';
 
 class DrawerSubjectsList extends StatelessWidget {
   final List<Subject> subjects;
   final Subject? activeSubject;
-  final AppProfile activeProfile;
   final Color dynamicColor;
   final Function(Subject) onSubjectTap;
   final Function(Subject) onSubjectEdit;
@@ -22,7 +20,6 @@ class DrawerSubjectsList extends StatelessWidget {
     super.key,
     required this.subjects,
     required this.activeSubject,
-    required this.activeProfile,
     required this.dynamicColor,
     required this.onSubjectTap,
     required this.onSubjectEdit,
@@ -46,7 +43,7 @@ class DrawerSubjectsList extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  activeProfile == AppProfile.academico ? 'AS MINHAS DISCIPLINAS' : 'OS MEUS PROJETOS', 
+                  'AS MINHAS DISCIPLINAS', 
                   style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted, letterSpacing: 1.2)
                 ),
                 Tooltip(
@@ -139,12 +136,11 @@ class DrawerSubjectsList extends StatelessWidget {
           const Divider(height: 1, color: Colors.black12),
 
           // Productivity Hub
-          if (activeProfile == AppProfile.agenda || activeProfile == AppProfile.corporativo)
-            ListTile(
-              leading: const Icon(Icons.calendar_today_rounded, color: Color(0xFF0F4C5C)),
-              title: Text('Agenda & Notas Rápidas', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-              onTap: onAgendaTap,
-            ),
+          ListTile(
+            leading: const Icon(Icons.calendar_today_rounded, color: Color(0xFF0F4C5C)),
+            title: Text('Agenda & Notas Rápidas', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            onTap: onAgendaTap,
+          ),
 
           // Partilhados Comigo
           Padding(

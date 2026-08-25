@@ -73,6 +73,59 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     requiredDuringInsert: false,
     defaultValue: const Constant('free'),
   );
+  static const VerificationMeta _bioMeta = const VerificationMeta('bio');
+  @override
+  late final GeneratedColumn<String> bio = GeneratedColumn<String>(
+    'bio',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _institutionMeta = const VerificationMeta(
+    'institution',
+  );
+  @override
+  late final GeneratedColumn<String> institution = GeneratedColumn<String>(
+    'institution',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _preferredColorMeta = const VerificationMeta(
+    'preferredColor',
+  );
+  @override
+  late final GeneratedColumn<String> preferredColor = GeneratedColumn<String>(
+    'preferred_color',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _preferredFontMeta = const VerificationMeta(
+    'preferredFont',
+  );
+  @override
+  late final GeneratedColumn<String> preferredFont = GeneratedColumn<String>(
+    'preferred_font',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _specialtiesMeta = const VerificationMeta(
+    'specialties',
+  );
+  @override
+  late final GeneratedColumn<String> specialties = GeneratedColumn<String>(
+    'specialties',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
     'syncedWithCloud',
   );
@@ -117,6 +170,11 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     email,
     avatar,
     planType,
+    bio,
+    institution,
+    preferredColor,
+    preferredFont,
+    specialties,
     syncedWithCloud,
     updatedAt,
     version,
@@ -168,6 +226,48 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
       context.handle(
         _planTypeMeta,
         planType.isAcceptableOrUnknown(data['plan_type']!, _planTypeMeta),
+      );
+    }
+    if (data.containsKey('bio')) {
+      context.handle(
+        _bioMeta,
+        bio.isAcceptableOrUnknown(data['bio']!, _bioMeta),
+      );
+    }
+    if (data.containsKey('institution')) {
+      context.handle(
+        _institutionMeta,
+        institution.isAcceptableOrUnknown(
+          data['institution']!,
+          _institutionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('preferred_color')) {
+      context.handle(
+        _preferredColorMeta,
+        preferredColor.isAcceptableOrUnknown(
+          data['preferred_color']!,
+          _preferredColorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('preferred_font')) {
+      context.handle(
+        _preferredFontMeta,
+        preferredFont.isAcceptableOrUnknown(
+          data['preferred_font']!,
+          _preferredFontMeta,
+        ),
+      );
+    }
+    if (data.containsKey('specialties')) {
+      context.handle(
+        _specialtiesMeta,
+        specialties.isAcceptableOrUnknown(
+          data['specialties']!,
+          _specialtiesMeta,
+        ),
       );
     }
     if (data.containsKey('synced_with_cloud')) {
@@ -224,6 +324,26 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         DriftSqlType.string,
         data['${effectivePrefix}plan_type'],
       )!,
+      bio: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bio'],
+      ),
+      institution: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}institution'],
+      ),
+      preferredColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preferred_color'],
+      ),
+      preferredFont: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preferred_font'],
+      ),
+      specialties: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}specialties'],
+      ),
       syncedWithCloud: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
@@ -252,6 +372,11 @@ class User extends DataClass implements Insertable<User> {
   final String email;
   final String? avatar;
   final String planType;
+  final String? bio;
+  final String? institution;
+  final String? preferredColor;
+  final String? preferredFont;
+  final String? specialties;
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
@@ -262,6 +387,11 @@ class User extends DataClass implements Insertable<User> {
     required this.email,
     this.avatar,
     required this.planType,
+    this.bio,
+    this.institution,
+    this.preferredColor,
+    this.preferredFont,
+    this.specialties,
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
@@ -279,6 +409,21 @@ class User extends DataClass implements Insertable<User> {
       map['avatar'] = Variable<String>(avatar);
     }
     map['plan_type'] = Variable<String>(planType);
+    if (!nullToAbsent || bio != null) {
+      map['bio'] = Variable<String>(bio);
+    }
+    if (!nullToAbsent || institution != null) {
+      map['institution'] = Variable<String>(institution);
+    }
+    if (!nullToAbsent || preferredColor != null) {
+      map['preferred_color'] = Variable<String>(preferredColor);
+    }
+    if (!nullToAbsent || preferredFont != null) {
+      map['preferred_font'] = Variable<String>(preferredFont);
+    }
+    if (!nullToAbsent || specialties != null) {
+      map['specialties'] = Variable<String>(specialties);
+    }
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
@@ -297,6 +442,19 @@ class User extends DataClass implements Insertable<User> {
           ? const Value.absent()
           : Value(avatar),
       planType: Value(planType),
+      bio: bio == null && nullToAbsent ? const Value.absent() : Value(bio),
+      institution: institution == null && nullToAbsent
+          ? const Value.absent()
+          : Value(institution),
+      preferredColor: preferredColor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(preferredColor),
+      preferredFont: preferredFont == null && nullToAbsent
+          ? const Value.absent()
+          : Value(preferredFont),
+      specialties: specialties == null && nullToAbsent
+          ? const Value.absent()
+          : Value(specialties),
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
@@ -315,6 +473,11 @@ class User extends DataClass implements Insertable<User> {
       email: serializer.fromJson<String>(json['email']),
       avatar: serializer.fromJson<String?>(json['avatar']),
       planType: serializer.fromJson<String>(json['planType']),
+      bio: serializer.fromJson<String?>(json['bio']),
+      institution: serializer.fromJson<String?>(json['institution']),
+      preferredColor: serializer.fromJson<String?>(json['preferredColor']),
+      preferredFont: serializer.fromJson<String?>(json['preferredFont']),
+      specialties: serializer.fromJson<String?>(json['specialties']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
@@ -330,6 +493,11 @@ class User extends DataClass implements Insertable<User> {
       'email': serializer.toJson<String>(email),
       'avatar': serializer.toJson<String?>(avatar),
       'planType': serializer.toJson<String>(planType),
+      'bio': serializer.toJson<String?>(bio),
+      'institution': serializer.toJson<String?>(institution),
+      'preferredColor': serializer.toJson<String?>(preferredColor),
+      'preferredFont': serializer.toJson<String?>(preferredFont),
+      'specialties': serializer.toJson<String?>(specialties),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
@@ -343,6 +511,11 @@ class User extends DataClass implements Insertable<User> {
     String? email,
     Value<String?> avatar = const Value.absent(),
     String? planType,
+    Value<String?> bio = const Value.absent(),
+    Value<String?> institution = const Value.absent(),
+    Value<String?> preferredColor = const Value.absent(),
+    Value<String?> preferredFont = const Value.absent(),
+    Value<String?> specialties = const Value.absent(),
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
@@ -353,6 +526,15 @@ class User extends DataClass implements Insertable<User> {
     email: email ?? this.email,
     avatar: avatar.present ? avatar.value : this.avatar,
     planType: planType ?? this.planType,
+    bio: bio.present ? bio.value : this.bio,
+    institution: institution.present ? institution.value : this.institution,
+    preferredColor: preferredColor.present
+        ? preferredColor.value
+        : this.preferredColor,
+    preferredFont: preferredFont.present
+        ? preferredFont.value
+        : this.preferredFont,
+    specialties: specialties.present ? specialties.value : this.specialties,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
@@ -365,6 +547,19 @@ class User extends DataClass implements Insertable<User> {
       email: data.email.present ? data.email.value : this.email,
       avatar: data.avatar.present ? data.avatar.value : this.avatar,
       planType: data.planType.present ? data.planType.value : this.planType,
+      bio: data.bio.present ? data.bio.value : this.bio,
+      institution: data.institution.present
+          ? data.institution.value
+          : this.institution,
+      preferredColor: data.preferredColor.present
+          ? data.preferredColor.value
+          : this.preferredColor,
+      preferredFont: data.preferredFont.present
+          ? data.preferredFont.value
+          : this.preferredFont,
+      specialties: data.specialties.present
+          ? data.specialties.value
+          : this.specialties,
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
@@ -382,6 +577,11 @@ class User extends DataClass implements Insertable<User> {
           ..write('email: $email, ')
           ..write('avatar: $avatar, ')
           ..write('planType: $planType, ')
+          ..write('bio: $bio, ')
+          ..write('institution: $institution, ')
+          ..write('preferredColor: $preferredColor, ')
+          ..write('preferredFont: $preferredFont, ')
+          ..write('specialties: $specialties, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version')
@@ -397,6 +597,11 @@ class User extends DataClass implements Insertable<User> {
     email,
     avatar,
     planType,
+    bio,
+    institution,
+    preferredColor,
+    preferredFont,
+    specialties,
     syncedWithCloud,
     updatedAt,
     version,
@@ -411,6 +616,11 @@ class User extends DataClass implements Insertable<User> {
           other.email == this.email &&
           other.avatar == this.avatar &&
           other.planType == this.planType &&
+          other.bio == this.bio &&
+          other.institution == this.institution &&
+          other.preferredColor == this.preferredColor &&
+          other.preferredFont == this.preferredFont &&
+          other.specialties == this.specialties &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version);
@@ -423,6 +633,11 @@ class UsersCompanion extends UpdateCompanion<User> {
   final Value<String> email;
   final Value<String?> avatar;
   final Value<String> planType;
+  final Value<String?> bio;
+  final Value<String?> institution;
+  final Value<String?> preferredColor;
+  final Value<String?> preferredFont;
+  final Value<String?> specialties;
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
@@ -433,6 +648,11 @@ class UsersCompanion extends UpdateCompanion<User> {
     this.email = const Value.absent(),
     this.avatar = const Value.absent(),
     this.planType = const Value.absent(),
+    this.bio = const Value.absent(),
+    this.institution = const Value.absent(),
+    this.preferredColor = const Value.absent(),
+    this.preferredFont = const Value.absent(),
+    this.specialties = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
@@ -444,6 +664,11 @@ class UsersCompanion extends UpdateCompanion<User> {
     required String email,
     this.avatar = const Value.absent(),
     this.planType = const Value.absent(),
+    this.bio = const Value.absent(),
+    this.institution = const Value.absent(),
+    this.preferredColor = const Value.absent(),
+    this.preferredFont = const Value.absent(),
+    this.specialties = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
@@ -456,6 +681,11 @@ class UsersCompanion extends UpdateCompanion<User> {
     Expression<String>? email,
     Expression<String>? avatar,
     Expression<String>? planType,
+    Expression<String>? bio,
+    Expression<String>? institution,
+    Expression<String>? preferredColor,
+    Expression<String>? preferredFont,
+    Expression<String>? specialties,
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
@@ -467,6 +697,11 @@ class UsersCompanion extends UpdateCompanion<User> {
       if (email != null) 'email': email,
       if (avatar != null) 'avatar': avatar,
       if (planType != null) 'plan_type': planType,
+      if (bio != null) 'bio': bio,
+      if (institution != null) 'institution': institution,
+      if (preferredColor != null) 'preferred_color': preferredColor,
+      if (preferredFont != null) 'preferred_font': preferredFont,
+      if (specialties != null) 'specialties': specialties,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
@@ -480,6 +715,11 @@ class UsersCompanion extends UpdateCompanion<User> {
     Value<String>? email,
     Value<String?>? avatar,
     Value<String>? planType,
+    Value<String?>? bio,
+    Value<String?>? institution,
+    Value<String?>? preferredColor,
+    Value<String?>? preferredFont,
+    Value<String?>? specialties,
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
@@ -491,6 +731,11 @@ class UsersCompanion extends UpdateCompanion<User> {
       email: email ?? this.email,
       avatar: avatar ?? this.avatar,
       planType: planType ?? this.planType,
+      bio: bio ?? this.bio,
+      institution: institution ?? this.institution,
+      preferredColor: preferredColor ?? this.preferredColor,
+      preferredFont: preferredFont ?? this.preferredFont,
+      specialties: specialties ?? this.specialties,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
@@ -518,6 +763,21 @@ class UsersCompanion extends UpdateCompanion<User> {
     if (planType.present) {
       map['plan_type'] = Variable<String>(planType.value);
     }
+    if (bio.present) {
+      map['bio'] = Variable<String>(bio.value);
+    }
+    if (institution.present) {
+      map['institution'] = Variable<String>(institution.value);
+    }
+    if (preferredColor.present) {
+      map['preferred_color'] = Variable<String>(preferredColor.value);
+    }
+    if (preferredFont.present) {
+      map['preferred_font'] = Variable<String>(preferredFont.value);
+    }
+    if (specialties.present) {
+      map['specialties'] = Variable<String>(specialties.value);
+    }
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
@@ -539,6 +799,11 @@ class UsersCompanion extends UpdateCompanion<User> {
           ..write('email: $email, ')
           ..write('avatar: $avatar, ')
           ..write('planType: $planType, ')
+          ..write('bio: $bio, ')
+          ..write('institution: $institution, ')
+          ..write('preferredColor: $preferredColor, ')
+          ..write('preferredFont: $preferredFont, ')
+          ..write('specialties: $specialties, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version')
@@ -7623,6 +7888,11 @@ typedef $$UsersTableCreateCompanionBuilder =
       required String email,
       Value<String?> avatar,
       Value<String> planType,
+      Value<String?> bio,
+      Value<String?> institution,
+      Value<String?> preferredColor,
+      Value<String?> preferredFont,
+      Value<String?> specialties,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
@@ -7635,6 +7905,11 @@ typedef $$UsersTableUpdateCompanionBuilder =
       Value<String> email,
       Value<String?> avatar,
       Value<String> planType,
+      Value<String?> bio,
+      Value<String?> institution,
+      Value<String?> preferredColor,
+      Value<String?> preferredFont,
+      Value<String?> specialties,
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
@@ -7736,6 +8011,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
 
   ColumnFilters<String> get planType => $composableBuilder(
     column: $table.planType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bio => $composableBuilder(
+    column: $table.bio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get institution => $composableBuilder(
+    column: $table.institution,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get preferredColor => $composableBuilder(
+    column: $table.preferredColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get preferredFont => $composableBuilder(
+    column: $table.preferredFont,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get specialties => $composableBuilder(
+    column: $table.specialties,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7869,6 +8169,31 @@ class $$UsersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get bio => $composableBuilder(
+    column: $table.bio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get institution => $composableBuilder(
+    column: $table.institution,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get preferredColor => $composableBuilder(
+    column: $table.preferredColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get preferredFont => $composableBuilder(
+    column: $table.preferredFont,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get specialties => $composableBuilder(
+    column: $table.specialties,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
     builder: (column) => ColumnOrderings(column),
@@ -7911,6 +8236,29 @@ class $$UsersTableAnnotationComposer
 
   GeneratedColumn<String> get planType =>
       $composableBuilder(column: $table.planType, builder: (column) => column);
+
+  GeneratedColumn<String> get bio =>
+      $composableBuilder(column: $table.bio, builder: (column) => column);
+
+  GeneratedColumn<String> get institution => $composableBuilder(
+    column: $table.institution,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get preferredColor => $composableBuilder(
+    column: $table.preferredColor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get preferredFont => $composableBuilder(
+    column: $table.preferredFont,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get specialties => $composableBuilder(
+    column: $table.specialties,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
@@ -8037,6 +8385,11 @@ class $$UsersTableTableManager
                 Value<String> email = const Value.absent(),
                 Value<String?> avatar = const Value.absent(),
                 Value<String> planType = const Value.absent(),
+                Value<String?> bio = const Value.absent(),
+                Value<String?> institution = const Value.absent(),
+                Value<String?> preferredColor = const Value.absent(),
+                Value<String?> preferredFont = const Value.absent(),
+                Value<String?> specialties = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
@@ -8047,6 +8400,11 @@ class $$UsersTableTableManager
                 email: email,
                 avatar: avatar,
                 planType: planType,
+                bio: bio,
+                institution: institution,
+                preferredColor: preferredColor,
+                preferredFont: preferredFont,
+                specialties: specialties,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
@@ -8059,6 +8417,11 @@ class $$UsersTableTableManager
                 required String email,
                 Value<String?> avatar = const Value.absent(),
                 Value<String> planType = const Value.absent(),
+                Value<String?> bio = const Value.absent(),
+                Value<String?> institution = const Value.absent(),
+                Value<String?> preferredColor = const Value.absent(),
+                Value<String?> preferredFont = const Value.absent(),
+                Value<String?> specialties = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
@@ -8069,6 +8432,11 @@ class $$UsersTableTableManager
                 email: email,
                 avatar: avatar,
                 planType: planType,
+                bio: bio,
+                institution: institution,
+                preferredColor: preferredColor,
+                preferredFont: preferredFont,
+                specialties: specialties,
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,

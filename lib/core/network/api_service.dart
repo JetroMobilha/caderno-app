@@ -207,7 +207,14 @@ class ApiService {
     );
   }
 
-  Future<http.Response> updateProfile({required String name, dynamic imageFile}) async {
+  Future<http.Response> updateProfile({
+    required String name,
+    dynamic imageFile,
+    String? bio,
+    String? institution,
+    String? preferredColor,
+    String? specialties,
+  }) async {
     final String? token = await getToken();
     final Uri url = Uri.parse('$baseUrl/user/update');
     final request = http.MultipartRequest('POST', url);
@@ -218,6 +225,10 @@ class ApiService {
     });
 
     request.fields['name'] = name;
+    if (bio != null) request.fields['bio'] = bio;
+    if (institution != null) request.fields['institution'] = institution;
+    if (preferredColor != null) request.fields['preferred_color'] = preferredColor;
+    if (specialties != null) request.fields['specialties'] = specialties;
 
     if (imageFile != null) {
       if (kIsWeb) {

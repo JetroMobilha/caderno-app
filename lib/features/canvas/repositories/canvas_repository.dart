@@ -266,74 +266,78 @@ class CanvasRepository {
     }
     localNotebookId ??= pageData['notebook_id'];
 
-    // 2. BUSCAR REGISTO EXISTENTE POR CLIENT_ID OU SERVER_ID (Limpeza de Duplicados)
-    final query = _db.select(_db.pages)..where((t) {
+    // 2. BUSCAR REGISTO EXISTENTE POR CLIENT_ID OU SERVER_ID
+    final candidates = await (_db.select(_db.pages)..where((t) {
       var expr = t.clientId.equals(clientId);
       if (serverId != null) expr = expr | t.serverId.equals(serverId);
       return expr;
-    });
+    })).get();
     
-    final candidates = await query.get();
     int? effectiveId;
-    
     if (candidates.isNotEmpty) {
-      // Se houver mais do que um, manter o que tem serverId ou o primeiro
-      final survivor = candidates.firstWhere((c) => c.serverId != null, orElse: () => candidates.first);
+      // Priorizar o que já tem ServerID ou o que corresponde ao ClientID atual
+      final survivor = candidates.firstWhere((c) => c.clientId == clientId, orElse: () => candidates.first);
       effectiveId = survivor.id;
-      
-      // Limpar duplicados indesejados
+
+      // Limpar duplicados (se houver colisão de serverId com outro clientId local)
       if (candidates.length > 1) {
-        debugPrint('🧹 [CanvasRepo] Limpando ${candidates.length - 1} duplicados para $clientId');
         for (var cand in candidates) {
           if (cand.id == effectiveId) continue;
-          // Migrar elementos para o sobrevivente antes de apagar (Segurança Máxima)
-          await (_db.update(_db.canvasStrokes)..where((t) => t.pageId.equals(cand.id))).write(CanvasStrokesCompanion(pageId: Value(effectiveId!)));
-          await (_db.update(_db.canvasTextBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasTextBlocksCompanion(pageId: Value(effectiveId!)));
-          await (_db.update(_db.canvasImageBlocks)..where((t) => t.pageId.equals(cand.id))).write(CanvasImageBlocksCompanion(pageId: Value(effectiveId!)));
           await (_db.delete(_db.pages)..where((t) => t.id.equals(cand.id))).go();
         }
       }
     }
 
-    // 3. INSERIR OU ATUALIZAR (METADADOS APENAS)
+    // 3. INSERIR OU ATUALIZAR
     final companion = PagesCompanion.insert(
       id: effectiveId != null ? Value(effectiveId) : const Value.absent(),
       serverId: Value(serverId),
       clientId: Value(clientId),
       notebookId: localNotebookId!, 
       pageNumber: int.tryParse(pageData['page_number']?.toString() ?? '1') ?? 1,
-      isLandscape: Value((pageData['is_landscape'] == true || pageData['is_landscape'] == 1 || pageData['is_landscape'] == "1") ? 1 : 0),
-      headerData: Value(jsonEncode(pageData['header_data'] ?? {'title': ''})),
-      footerData: Value(jsonEncode(pageData['footer_data'] ?? {'title': ''})),
+      isLandscape: Value((pageData['is_landscape'] == true || pageData['is_landscape'] == 1) ? 1 : 0),
+      headerData: Value(jsonEncode(pageData['header_data'] ?? {'title': null})),
+      footerData: Value(jsonEncode(pageData['footer_data'] ?? {'title': null})),
       extractedText: Value(pageData['extracted_text']),
-      isFrozen: Value((pageData['is_frozen'] == true || pageData['is_frozen'] == 1 || pageData['is_frozen'] == "1") ? 1 : 0),
       paperSize: Value(pageData['paper_size'] ?? 'A4'),
       lineType: Value(pageData['line_type']?.toString()),
       lineSpacing: Value(pageData['line_spacing'] != null ? double.tryParse(pageData['line_spacing'].toString()) : null),
       updatedAt: Value(_parseSafeInt(pageData['updated_at_ms']) ?? _parseSafeInt(pageData['updated_at']) ?? TimeService().nowMs()),
-      syncedWithCloud: Value(pageData['synced_with_cloud'] == 0 || pageData['synced_with_cloud'] == false ? 0 : 1),
+      syncedWithCloud: const Value(1),
     );
 
     int finalId = await _db.into(_db.pages).insertOnConflictUpdate(companion);
     
-    // 🚀 CORREÇÃO CRÍTICA: Garantir que nunca retornamos ID 0 (Erro 787 no Android)
-    if (finalId == 0 && effectiveId != null) {
-      finalId = effectiveId;
+    // 🚀 RECUPERAÇÃO DE ID: Se o insert retornar 0 (já existia), buscamos o ID real.
+    if (finalId <= 0) {
+      final row = await (_db.select(_db.pages)..where((t) => t.clientId.equals(clientId))).getSingleOrNull();
+      finalId = row?.id ?? 0;
     }
     
-    debugPrint('💾 [CanvasRepo] Página salva: ID $finalId, ClientId $clientId, Synced: ${companion.syncedWithCloud.value}');
+    if (finalId == 0) {
+      debugPrint('🚨 [CanvasRepo] FATAL: Falha ao obter ID da página para $clientId');
+    } else {
+      debugPrint('💾 [CanvasRepo] Página salva: ID $finalId, ClientId $clientId');
+    }
     return finalId;
   }
 
-  Future<void> saveSingleStroke(String pageClientId, Stroke s) async {
-    final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
-    if (page == null) return;
+  Future<void> saveSingleStroke(String pageClientId, Stroke s, {int? pageId}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
 
     try {
+      // 🚀 CONSISTÊNCIA: Garantir que o strokeData JSON reflete o estado syncedWithCloud correto antes de salvar
+      final strokeMap = s.toJson();
+      
       await _db.into(_db.canvasStrokes).insertOnConflictUpdate(CanvasStrokesCompanion.insert(
         clientStrokeId: s.id,
-        pageId: page.id,
-        strokeData: jsonEncode(s.toJson()),
+        pageId: targetPageId,
+        strokeData: jsonEncode(strokeMap),
         isDeleted: Value(s.isDeleted ? 1 : 0),
         deletedInSession: Value(s.deletedInSession ? 1 : 0),
         creatorId: Value(s.creatorId),
@@ -350,15 +354,21 @@ class CanvasRepository {
     }
   }
 
-  Future<void> saveSingleTextBlock(String pageClientId, TextBlock t) async {
-    final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
-    if (page == null) return;
+  Future<void> saveSingleTextBlock(String pageClientId, TextBlock t, {int? pageId}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
 
     try {
+      final textMap = t.toJson();
+
       await _db.into(_db.canvasTextBlocks).insertOnConflictUpdate(CanvasTextBlocksCompanion.insert(
         clientTextId: t.id,
-        pageId: page.id,
-        textData: jsonEncode(t.toJson()),
+        pageId: targetPageId,
+        textData: jsonEncode(textMap),
         isDeleted: Value(t.isDeleted ? 1 : 0),
         deletedInSession: Value(t.deletedInSession ? 1 : 0),
         creatorId: Value(t.creatorId),
@@ -372,14 +382,18 @@ class CanvasRepository {
     } catch (e) {}
   }
 
-  Future<void> saveSingleImageBlock(String pageClientId, ImageBlock i) async {
-    final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
-    if (page == null) return;
+  Future<void> saveSingleImageBlock(String pageClientId, ImageBlock i, {int? pageId}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
 
     try {
       await _db.into(_db.canvasImageBlocks).insertOnConflictUpdate(CanvasImageBlocksCompanion.insert(
         clientImageId: i.id,
-        pageId: page.id,
+        pageId: targetPageId,
         imagePath: i.imagePath,
         posX: i.position.dx,
         posY: i.position.dy,
@@ -400,6 +414,9 @@ class CanvasRepository {
   }
 
   Future<void> markPageAsUnsynced(String pageClientId) async {
+    final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+    if (page == null || page.syncedWithCloud == 0) return; // 🚀 Evitar loops: já está suja!
+
     debugPrint('🚩 [CanvasRepo] Marcando página como SUJA: $pageClientId');
     await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId)))
         .write(PagesCompanion(

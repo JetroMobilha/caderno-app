@@ -1,26 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/features/auth/models/user_model.dart';
-import 'package:caderno_digital_app/core/theme/app_profile.dart';
 
 class DrawerHeaderWidget extends StatelessWidget {
   final User? user;
   final Color themeColor;
-  final AppProfile activeProfile;
   final bool isSyncing;
   final VoidCallback onSync;
   final VoidCallback onProfileOpen;
-  final Function(AppProfile) onProfileChanged;
 
   const DrawerHeaderWidget({
     super.key,
     required this.user,
     required this.themeColor,
-    required this.activeProfile,
     required this.isSyncing,
     required this.onSync,
     required this.onProfileOpen,
-    required this.onProfileChanged,
   });
 
   @override
@@ -52,7 +47,17 @@ class DrawerHeaderWidget extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildProfileSwitcher(context, activeProfile),
+              // 🌟 LOGOTIPO / TÍTULO DA APP NA GAVETA
+              Row(
+                children: [
+                  const Icon(Icons.menu_book_rounded, color: Colors.white, size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Caderno Digital',
+                    style: GoogleFonts.lora(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
               Row(
                 children: [
                   _buildHeaderActionButton(
@@ -74,10 +79,10 @@ class DrawerHeaderWidget extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            user?.name ?? (activeProfile == AppProfile.academico ? 'Estudante' : 'Profissional'),
+            user?.name ?? 'Estudante',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.lora(
+            style: GoogleFonts.inter(
               fontWeight: FontWeight.bold,
               fontSize: 19,
               color: Colors.white,
@@ -105,43 +110,6 @@ class DrawerHeaderWidget extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildProfileSwitcher(BuildContext context, AppProfile active) {
-    return PopupMenuButton<AppProfile>(
-      offset: const Offset(0, 45),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      onSelected: onProfileChanged,
-      itemBuilder: (context) => AppProfile.values.map((p) => PopupMenuItem(
-        value: p,
-        child: Row(
-          children: [
-            Icon(p.icon, size: 20, color: p == active ? Theme.of(context).primaryColor : Colors.grey),
-            const SizedBox(width: 12),
-            Text(p.name, style: TextStyle(fontWeight: p == active ? FontWeight.bold : FontWeight.normal)),
-          ],
-        ),
-      )).toList(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Icon(active.icon, color: Colors.white, size: 16),
-            const SizedBox(width: 8),
-            Text(
-              active.name.split(' ').first,
-              style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
-          ],
-        ),
       ),
     );
   }

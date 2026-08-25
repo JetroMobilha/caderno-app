@@ -87,9 +87,6 @@ class AuthController extends Notifier<AuthState> {
         }
 
         state = state.copyWith(currentUser: user, token: token, isLoading: false);
-        
-        // Sync em background
-        unawaited(ref.read(appSyncServiceProvider).syncAll(metadataOnly: true));
         return true;
       } else {
         final String error = responseData['message'] ?? 'Credenciais inválidas.';
@@ -135,10 +132,12 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
+    debugPrint('🛑 [AuthController] Logout solicitado. StackTrace:\n${StackTrace.current}');
     state = state.copyWith(isLoading: true);
 
     try {
-      await ref.read(appSyncServiceProvider).syncAll(forced: true, metadataOnly: false);
+      debugPrint('🔄 [Auth] A iniciar sincronização final (PUSH apenas) antes do logout...');
+      await ref.read(appSyncServiceProvider).syncAll(forced: true, metadataOnly: false, pushOnly: true);
     } catch (e) {
       debugPrint('🚨 [Auth] Erro na sincronização final: $e');
     }
@@ -171,6 +170,10 @@ class AuthController extends Notifier<AuthState> {
     final String name = userJson['name'] ?? '';
     final String? avatar = userJson['avatar'];
     final String plan = userJson['plan_type'] ?? 'free';
+    final String? bio = userJson['bio'];
+    final String? institution = userJson['institution'];
+    final String? preferredColor = userJson['preferred_color'] ?? userJson['preferredColor'];
+    final String? specialties = userJson['specialties'];
 
     final existing = await (_db.select(_db.users)..where((t) => t.email.equals(email))).getSingleOrNull();
 
@@ -183,6 +186,10 @@ class AuthController extends Notifier<AuthState> {
           name: Value(name),
           avatar: Value(avatar),
           planType: Value(plan),
+          bio: Value(bio),
+          institution: Value(institution),
+          preferredColor: Value(preferredColor),
+          specialties: Value(specialties),
           syncedWithCloud: const Value(1),
         ),
       );
@@ -194,12 +201,27 @@ class AuthController extends Notifier<AuthState> {
               email: email,
               avatar: Value(avatar),
               planType: Value(plan),
+              bio: Value(bio),
+              institution: Value(institution),
+              preferredColor: Value(preferredColor),
+              specialties: Value(specialties),
               syncedWithCloud: const Value(1),
             ),
           );
     }
 
-    return User(id: localId, serverId: sId, name: name, email: email, avatar: avatar, planType: plan);
+    return User(
+      id: localId,
+      serverId: sId,
+      name: name,
+      email: email,
+      avatar: avatar,
+      planType: plan,
+      bio: bio,
+      institution: institution,
+      preferredColor: preferredColor,
+      specialties: specialties,
+    );
   }
 
   Future<bool> sendRecoveryCode(String email) async {
@@ -235,10 +257,24 @@ class AuthController extends Notifier<AuthState> {
     return false;
   }
 
-  Future<bool> updateProfile({required String name, required dynamic imageFile}) async {
+  Future<bool> updateProfile({
+    required String name,
+    required dynamic imageFile,
+    String? bio,
+    String? institution,
+    String? preferredColor,
+    String? specialties,
+  }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final response = await _apiService.updateProfile(name: name, imageFile: imageFile);
+      final response = await _apiService.updateProfile(
+        name: name,
+        imageFile: imageFile,
+        bio: bio,
+        institution: institution,
+        preferredColor: preferredColor,
+        specialties: specialties,
+      );
       final responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -254,7 +290,7 @@ class AuthController extends Notifier<AuthState> {
         state = state.copyWith(authErrorMessage: responseData['message'] ?? 'Erro ao atualizar perfil.', isLoading: false);
       }
     } catch (e) {
-      state = state.copyWith(authErrorMessage: 'Falha no motor interno ou perda de ligação à rede.', isLoading: false);
+      state = state.copyWith(authErrorMessage: 'Falha ao comunicar com o servidor.', isLoading: false);
     }
     return false;
   }

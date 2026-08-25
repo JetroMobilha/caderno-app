@@ -132,26 +132,47 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     _audioService.onAudioMessageProcessed = (d) => _collabService.chatMessages.add(d);
 
     _pagesSubscription?.cancel();
-    _pagesSubscription = _repository.watchPagesByNotebook(notebookId).listen((newPagesFromDb) {
+    _pagesSubscription = _repository.watchPagesByNotebook(notebookId).listen((newPagesFromDb) async {
       debugPrint('📄 [DocumentNotifier] Stream Drift emitiu ${newPagesFromDb.length} páginas');
       final activePages = newPagesFromDb.where((p) => !p.isDeleted).toList();
       activePages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
       
       final bool wasEmpty = state.pages.isEmpty;
 
-      // 🚀 LÓGICA DE MERGE (Drift -> Memória)
+      // 🚀 ON-DEMAND SYNC: Se entramos num caderno e ele está vazio localmente,
+      // disparamos o download das páginas da nuvem.
+      if (activePages.isEmpty && notebookSid != null && !state.isGlobalSyncing) {
+        debugPrint('☁️ [DocumentNotifier] Caderno vazio localmente. Iniciando Pull da Cloud...');
+        // Marcamos como syncing para a UI saber e não mostrar "Nenhuma página" prematuramente
+        state = state.copyWith(isGlobalSyncing: true);
+        try {
+          await _syncService.pullPages(onlyNotebookId: notebookSid);
+        } finally {
+          state = state.copyWith(isGlobalSyncing: false);
+        }
+        return; // O stream voltará a emitir assim que o pull inserir no banco
+      }
+
+      // 🚀 LÓGICA DE MERGE (Drift -> Memória) OTIMIZADA
+      final Map<String, LocalPage> existingPagesMap = {
+        for (var p in state.pages) p.clientId: p
+      };
+
       for (var i = 0; i < activePages.length; i++) {
-        final existingPageInState = state.pages.cast<LocalPage?>().firstWhere(
-          (p) => p?.clientId == activePages[i].clientId, 
-          orElse: () => null
-        );
+        final existing = existingPagesMap[activePages[i].clientId];
         
-        if (existingPageInState != null && existingPageInState.isContentLoaded) {
-          activePages[i].strokes = existingPageInState.strokes;
-          activePages[i].textBlocks = existingPageInState.textBlocks;
-          activePages[i].imageBlocks = existingPageInState.imageBlocks;
+        if (existing != null && existing.isContentLoaded) {
+          activePages[i].strokes = existing.strokes;
+          activePages[i].textBlocks = existing.textBlocks;
+          activePages[i].imageBlocks = existing.imageBlocks;
           activePages[i].isContentLoaded = true;
-          activePages[i].version = existingPageInState.version;
+          activePages[i].version = existing.version;
+          
+          if (activePages[i].syncedWithCloud == 1 && existing.syncedWithCloud == 0) {
+             for (var s in activePages[i].strokes) s.syncedWithCloud = true;
+             for (var t in activePages[i].textBlocks) t.syncedWithCloud = true;
+             for (var img in activePages[i].imageBlocks) img.syncedWithCloud = true;
+          }
         }
       }
 
@@ -269,16 +290,17 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
 
   Future<void> _persistIncrementalAction(LocalPage target, CanvasAction action) async {
     final String cid = target.clientId;
+    final int? pid = target.id;
     try {
-      if (action is AddStrokeAction) await _repository.saveSingleStroke(cid, action.stroke);
-      else if (action is AddTextAction) await _repository.saveSingleTextBlock(cid, action.block);
-      else if (action is AddImageAction) await _repository.saveSingleImageBlock(cid, action.block);
-      else if (action is UpdateTextAction) await _repository.saveSingleTextBlock(cid, action.newState);
-      else if (action is UpdateImageAction) await _repository.saveSingleImageBlock(cid, action.newState);
+      if (action is AddStrokeAction) await _repository.saveSingleStroke(cid, action.stroke, pageId: pid);
+      else if (action is AddTextAction) await _repository.saveSingleTextBlock(cid, action.block, pageId: pid);
+      else if (action is AddImageAction) await _repository.saveSingleImageBlock(cid, action.block, pageId: pid);
+      else if (action is UpdateTextAction) await _repository.saveSingleTextBlock(cid, action.newState, pageId: pid);
+      else if (action is UpdateImageAction) await _repository.saveSingleImageBlock(cid, action.newState, pageId: pid);
       if (action is DeleteAction) { 
         for (var s in action.strokes) await _repository.deleteSingleStroke(s.id); 
         for (var t in action.texts) await _repository.deleteSingleTextBlock(t.id); 
-        for (var i in action.images) await _repository.saveSingleImageBlock(cid, i); 
+        for (var i in action.images) await _repository.saveSingleImageBlock(cid, i, pageId: pid); 
       }
     } catch (e) {
       debugPrint('🚨 [DocumentNotifier] Erro ao persistir ação: $e');

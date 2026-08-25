@@ -260,11 +260,19 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
   _i4.Future<_i2.Response> updateProfile({
     required String? name,
     dynamic imageFile,
+    String? bio,
+    String? institution,
+    String? preferredColor,
+    String? specialties,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#updateProfile, [], {
               #name: name,
               #imageFile: imageFile,
+              #bio: bio,
+              #institution: institution,
+              #preferredColor: preferredColor,
+              #specialties: specialties,
             }),
             returnValue: _i4.Future<_i2.Response>.value(
               _FakeResponse_0(
@@ -272,6 +280,10 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
                 Invocation.method(#updateProfile, [], {
                   #name: name,
                   #imageFile: imageFile,
+                  #bio: bio,
+                  #institution: institution,
+                  #preferredColor: preferredColor,
+                  #specialties: specialties,
                 }),
               ),
             ),

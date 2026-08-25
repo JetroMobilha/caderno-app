@@ -18,6 +18,8 @@ class SyncService {
   final AppDatabase _db = AppDatabase.instance;
   final ApiService _apiService;
   final CanvasRepository _canvasRepository;
+  
+  bool _isGlobalSyncing = false; // 🚀 Semáforo interno
 
   SyncService(this._apiService, this._canvasRepository);
 
@@ -38,29 +40,46 @@ class SyncService {
 
   String uniqid() => DateTime.now().microsecondsSinceEpoch.toString();
 
+  String? _parseMetaTime(dynamic meta) {
+    if (meta == null) return null;
+    // Tenta server_time (ISO String) primeiro, depois server_time_ms
+    if (meta['server_time'] != null) return meta['server_time'].toString();
+    if (meta['server_time_ms'] != null) return meta['server_time_ms'].toString();
+    return null;
+  }
+
   // =========================================================================
   // 1. SINCRONIZAÇÃO TOTAL
   // =========================================================================
-  Future<void> syncAll({bool forced = false, bool metadataOnly = false}) async {
+  Future<void> syncAll({bool forced = false, bool metadataOnly = false, bool pushOnly = false}) async {
+    if (_isGlobalSyncing && !forced) {
+      debugPrint('⏳ [Sync] Ignorado: Já existe um ciclo em curso.');
+      return;
+    }
+    
     if (isCollaborationActive && !forced) return;
-    debugPrint('🔄 [Sync] Sincronização híbrida iniciada...');
+    
+    _isGlobalSyncing = true;
+    debugPrint('🔄 [Sync] Sincronização híbrida iniciada... ${pushOnly ? "(Apenas PUSH)" : ""}');
 
     try {
       // 1. Tentar Enviar Novidades (E receber deltas rápidos no retorno)
-      final bool hasMoreSubjects = await pushOfflineSubjects();
-      final bool hasMoreNotebooks = await pushNotebooks();
+      final bool hasMoreSubjects = await pushOfflineSubjects(pushOnly: pushOnly);
+      final bool hasMoreNotebooks = await pushNotebooks(pushOnly: pushOnly);
 
       // 2. Recuperação de Lotes (Apenas se PUSH indicou que há muito mais dados)
-      if (hasMoreSubjects || forced) await pullSubjects();
-      if (hasMoreNotebooks || forced) await pullNotebooks();
+      if (!pushOnly) {
+        if (hasMoreSubjects || forced) await pullSubjects();
+        if (hasMoreNotebooks || forced) await pullNotebooks();
+      }
 
       if (!metadataOnly) {
-        final bool hasMorePages = await pushPages();
-        if (hasMorePages || forced) {
+        final bool hasMorePages = await pushPages(pushOnly: pushOnly);
+        if (!pushOnly && (hasMorePages || forced)) {
           await pullPages(); // 🚀 Só ativa o pull pesado se detectado grande volume
         }
-        final bool hasMoreRecs = await pushRecordings();
-        if (hasMoreRecs || forced) {
+        final bool hasMoreRecs = await pushRecordings(pushOnly: pushOnly);
+        if (!pushOnly && (hasMoreRecs || forced)) {
           await pullRecordings();
         }
       }
@@ -68,13 +87,15 @@ class SyncService {
     } catch (e) {
       debugPrint('🚨 [Sync General] Falha: $e');
       rethrow;
+    } finally {
+      _isGlobalSyncing = false; // 🚀 Libertar semáforo
     }
   }
 
   // =========================================================================
   // 2. DISCIPLINAS (SUBJECTS)
   // =========================================================================
-  Future<bool> pushOfflineSubjects() async {
+  Future<bool> pushOfflineSubjects({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
     final String? lastSynced = prefs.getString('last_subjects_sync');
 
@@ -113,14 +134,17 @@ class SyncService {
           );
         }
 
-        // 2. Processar novidades do PULL rápido
-        final List updates = data['server_updates'] ?? [];
-        if (updates.isNotEmpty) {
-           await _applySubjectUpdates(updates);
-        }
+        // 2. Processar novidades do PULL rápido (Pular se pushOnly)
+        if (!pushOnly) {
+          final List updates = data['server_updates'] ?? [];
+          if (updates.isNotEmpty) {
+             await _applySubjectUpdates(updates);
+          }
 
-        if (data['meta'] != null && data['meta']['server_time'] != null) {
-           await prefs.setString('last_subjects_sync', data['meta']['server_time']);
+          final String? serverTime = _parseMetaTime(data['meta']);
+          if (serverTime != null) {
+             await prefs.setString('last_subjects_sync', serverTime);
+          }
         }
         
         return data['has_more'] == true; // 🚀 Avisar se deve rodar o pull total
@@ -174,8 +198,8 @@ class SyncService {
         if (response.statusCode == 200) {
           final Map<String, dynamic> responseData = await compute<String, Map<String, dynamic>>((jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>, response.body);
           final List serverSubjects = responseData['data'] ?? responseData['subjects'] ?? [];
-          final Map<String, dynamic> meta = responseData['meta'] ?? {};
-          if (meta['server_time'] != null) await prefs.setString('last_subjects_sync', meta['server_time']);
+        final String? serverTime = _parseMetaTime(responseData['meta']);
+        if (serverTime != null) await prefs.setString('last_subjects_sync', serverTime);
           if (serverSubjects.isNotEmpty) {
             anyChanges = true;
             final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
@@ -218,7 +242,7 @@ class SyncService {
   // =========================================================================
   // 3. CADERNOS (NOTEBOOKS)
   // =========================================================================
-  Future<bool> pushNotebooks() async {
+  Future<bool> pushNotebooks({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
     final String? lastSynced = prefs.getString('last_notebooks_sync');
 
@@ -265,14 +289,17 @@ class SyncService {
           }
         }
 
-        // 2. Updates do Servidor
-        final List updates = data['server_updates'] ?? [];
-        if (updates.isNotEmpty) {
-           await _applyNotebookUpdates(updates);
-        }
+        // 2. Updates do Servidor (Pular se pushOnly)
+        if (!pushOnly) {
+          final List updates = data['server_updates'] ?? [];
+          if (updates.isNotEmpty) {
+             await _applyNotebookUpdates(updates);
+          }
 
-        if (data['meta'] != null && data['meta']['server_time'] != null) {
-           await prefs.setString('last_notebooks_sync', data['meta']['server_time']);
+          final String? serverTime = _parseMetaTime(data['meta']);
+          if (serverTime != null) {
+             await prefs.setString('last_notebooks_sync', serverTime);
+          }
         }
 
         return data['has_more'] == true;
@@ -333,8 +360,8 @@ class SyncService {
         if (response.statusCode == 200) {
           final Map<String, dynamic> responseData = await compute<String, Map<String, dynamic>>((jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>, response.body);
           final List serverNotebooks = responseData['data'] ?? responseData['notebooks'] ?? [];
-          final Map<String, dynamic> meta = responseData['meta'] ?? {};
-          if (meta['server_time'] != null) await prefs.setString('last_notebooks_sync', meta['server_time']);
+        final String? serverTime = _parseMetaTime(responseData['meta']);
+        if (serverTime != null) await prefs.setString('last_notebooks_sync', serverTime);
           if (serverNotebooks.isNotEmpty) {
             anyChanges = true;
             final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
@@ -436,7 +463,7 @@ class SyncService {
   // =========================================================================
   // 4. PÁGINAS E CANVAS
   // =========================================================================
-  Future<bool> pushPages({int? onlyNotebookId}) async {
+  Future<bool> pushPages({int? onlyNotebookId, bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
     final String? lastSynced = prefs.getString('last_pages_sync');
 
@@ -506,6 +533,18 @@ class SyncService {
               final int? sNbId = syncedPageMap['notebook_id'];
 
               if (cId == null) continue;
+              
+              // No logout (pushOnly), não precisamos de puxar dados ignorados ou deltas do servidor
+              if (pushOnly) {
+                 // Apenas marcamos como sincronizado localmente se o servidor confirmou
+                 final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                 if (localPage != null) {
+                    await _markPageItemsAsSynced(localPage.id);
+                    await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                 }
+                 continue;
+              }
+
               if (status == 'ignored_old' && sNbId != null) {
                 await pullSpecificPage(sNbId, syncedPageMap['page_number'] ?? 0, clientId: cId);
                 continue;
@@ -521,21 +560,24 @@ class SyncService {
               await (_db.update(_db.pages)..where((t) => t.id.equals(localId))).write(const PagesCompanion(syncedWithCloud: Value(1)));
             }
 
-            // 2. Processar Novidades do Servidor (Resultados do PULL)
-            final List updates = data['server_updates'] ?? [];
-            for (var updMap in updates) {
-               final int sNbId = updMap['notebook_id'] is int ? updMap['notebook_id'] : int.parse(updMap['notebook_id'].toString());
-               final localId = await _canvasRepository.savePageFromMap(updMap, sNbId);
-               localIdsToPull.add(localId);
-               serverDataForPull[localId] = updMap;
-            }
+            // 2. Processar Novidades do Servidor (Resultados do PULL) - Pular se pushOnly
+            if (!pushOnly) {
+              final List updates = data['server_updates'] ?? [];
+              for (var updMap in updates) {
+                 final int sNbId = updMap['notebook_id'] is int ? updMap['notebook_id'] : int.parse(updMap['notebook_id'].toString());
+                 final localId = await _canvasRepository.savePageFromMap(updMap, sNbId);
+                 localIdsToPull.add(localId);
+                 serverDataForPull[localId] = updMap;
+              }
 
-            if (localIdsToPull.isNotEmpty) {
-              await _pullCanvasDataBatch(localIdsToPull, serverDataForPull);
-            }
-            
-            if (data['meta'] != null && data['meta']['server_time'] != null) {
-               await prefs.setString('last_pages_sync', data['meta']['server_time']);
+              if (localIdsToPull.isNotEmpty) {
+                await _pullCanvasDataBatch(localIdsToPull, serverDataForPull);
+              }
+              
+              final String? serverTime = _parseMetaTime(data['meta']);
+              if (serverTime != null) {
+                 await prefs.setString('last_pages_sync', serverTime);
+              }
             }
             
             debugPrint('✅ [Sync-Push-Batch] Lote processado. Mais dados no servidor: $serverHasMore');
@@ -553,31 +595,45 @@ class SyncService {
   }
 
   Future<void> _markPageItemsAsSynced(int localPageId) async {
+    // 🚀 OTIMIZAÇÃO: Apenas atualizamos a coluna de sincronismo. 
+    // O repository já ignora o valor interno do JSON ao carregar, priorizando a coluna.
     await _db.batch((batch) {
-      batch.update(_db.canvasStrokes, const CanvasStrokesCompanion(syncedWithCloud: Value(1)), where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasTextBlocks, const CanvasTextBlocksCompanion(syncedWithCloud: Value(1)), where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasImageBlocks, const CanvasImageBlocksCompanion(syncedWithCloud: Value(1)), where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasStrokes, const CanvasStrokesCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasTextBlocks, const CanvasTextBlocksCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasImageBlocks, const CanvasImageBlocksCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
     });
   }
 
   Future<bool> pullPages({bool forceFull = false, int? onlyNotebookId}) async {
     final prefs = await SharedPreferences.getInstance();
-    final localCount = await _db.pages.count().getSingle();
-    final String? lastSynced = (localCount > 0 && !forceFull) ? prefs.getString('last_pages_sync') : null;
+    
+    // 🚀 OTIMIZAÇÃO: Se for pull de um caderno específico, não usamos o timestamp global
+    // para garantir que trazemos tudo o que falta para esse caderno.
+    final String? lastSynced = (onlyNotebookId == null && !forceFull) ? prefs.getString('last_pages_sync') : null;
+    
     try {
       String? baseUrl = '/sync/pages/pull';
       if (lastSynced != null) baseUrl += '?last_synced_at=$lastSynced';
       if (onlyNotebookId != null) baseUrl += (lastSynced != null ? '&' : '?') + 'notebook_id=$onlyNotebookId';
+      
       String? nextUrl = baseUrl;
       bool anyChanges = false;
       final Set<String> serverClientIds = {};
+      
       while (nextUrl != null) {
         final response = await _apiService.get(nextUrl);
         if (response.statusCode == 200) {
           final Map<String, dynamic> responseData = await compute<String, Map<String, dynamic>>((jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>, response.body);
           final List serverPages = responseData['data'] ?? responseData['pages'] ?? [];
-          final Map<String, dynamic> meta = responseData['meta'] ?? {};
-          if (meta['server_time'] != null) await prefs.setString('last_pages_sync', meta['server_time']);
+          final String? serverTime = _parseMetaTime(responseData['meta']);
+          
+          // 🚀 SÓ ATUALIZAMOS O MARCADOR GLOBAL se for um pull completo (sem filtro de caderno)
+          if (onlyNotebookId == null && serverTime != null) {
+            await prefs.setString('last_pages_sync', serverTime);
+          }
           if (serverPages.isNotEmpty) {
             anyChanges = true;
             final List<int> localPageIdsForBatch = [];
@@ -647,20 +703,29 @@ class SyncService {
 
   Future<void> _pullCanvasDataBatch(List<int> localPageIds, Map<int, Map<String, dynamic>> serverPageDataMap) async {
     try {
+      // 🚀 LIMPEZA: Filtrar IDs inválidos (0) que podem ter vindo de falhas no repositório
+      final validPageIds = localPageIds.where((id) => id > 0).toList();
+      if (validPageIds.isEmpty) return;
+
       final List<Map<String, dynamic>> serverPagesList = [];
-      for (var id in localPageIds) {
+      for (var id in validPageIds) {
         final data = serverPageDataMap[id];
         if (data != null) serverPagesList.add({...data, '_localPageId': id});
       }
+      
       final int currentTime = TimeService().nowMs();
       List<CanvasStrokesCompanion> strokes = [];
       List<CanvasTextBlocksCompanion> texts = [];
       List<CanvasImageBlocksCompanion> images = [];
+
       if (kIsWeb) {
         for (var sPage in serverPagesList) {
           final int localPageId = sPage['_localPageId'];
           final List strokeList = sPage['stroke_data'] ?? [];
-          for (var st in strokeList) { strokes.add(SyncIsolates.mapStrokeToCompanion(st, localPageId, currentTime)); if (strokes.length % 100 == 0) await Future.delayed(Duration.zero); }
+          for (var st in strokeList) { 
+            strokes.add(SyncIsolates.mapStrokeToCompanion(st, localPageId, currentTime)); 
+            if (strokes.length % 100 == 0) await Future.delayed(Duration.zero); 
+          }
           final List textList = sPage['text_data'] ?? [];
           for (var txt in textList) { texts.add(SyncIsolates.mapTextToCompanion(txt, localPageId, currentTime)); }
           final List imageList = sPage['image_data'] ?? [];
@@ -669,19 +734,34 @@ class SyncService {
         }
       } else {
         final List<dynamic> results = await compute(SyncIsolates.processCanvasDataBatch, {'serverPages': serverPagesList, 'currentTime': currentTime});
-        strokes = results[0]; texts = results[1]; images = results[2];
+        strokes = results[0];
+        texts = results[1];
+        images = results[2];
       }
+
       await _db.batch((batch) {
-        batch.deleteWhere(_db.canvasStrokes, (t) => t.pageId.isIn(localPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasTextBlocks, (t) => t.pageId.isIn(localPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasImageBlocks, (t) => t.pageId.isIn(localPageIds) & t.syncedWithCloud.equals(1));
-        for (var s in strokes) batch.insert(_db.canvasStrokes, s, mode: InsertMode.insertOrReplace);
-        for (var t in texts) batch.insert(_db.canvasTextBlocks, t, mode: InsertMode.insertOrReplace);
-        for (var i in images) batch.insert(_db.canvasImageBlocks, i, mode: InsertMode.insertOrReplace);
-        for (var id in localPageIds) batch.update(_db.pages, PagesCompanion(updatedAt: Value(TimeService().nowMs())), where: (t) => t.id.equals(id));
+        batch.deleteWhere(_db.canvasStrokes, (t) => t.pageId.isIn(validPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasTextBlocks, (t) => t.pageId.isIn(validPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasImageBlocks, (t) => t.pageId.isIn(validPageIds) & t.syncedWithCloud.equals(1));
+        
+        for (var s in strokes) {
+          if (s.pageId.value > 0) batch.insert(_db.canvasStrokes, s, mode: InsertMode.insertOrReplace);
+        }
+        for (var t in texts) {
+          if (t.pageId.value > 0) batch.insert(_db.canvasTextBlocks, t, mode: InsertMode.insertOrReplace);
+        }
+        for (var i in images) {
+          if (i.pageId.value > 0) batch.insert(_db.canvasImageBlocks, i, mode: InsertMode.insertOrReplace);
+        }
+
+        for (var id in validPageIds) {
+           batch.update(_db.pages, PagesCompanion(updatedAt: Value(TimeService().nowMs()), syncedWithCloud: const Value(1)), where: (t) => t.id.equals(id));
+        }
       });
-      debugPrint('✅ [Sync-Batch] Sincronizados ${strokes.length} elementos.');
-    } catch (e) { debugPrint('🚨 [Sync-Batch] Falha: $e'); }
+      debugPrint('✅ [Sync-Batch] Sincronizados ${strokes.length} elementos em ${validPageIds.length} páginas.');
+    } catch (e) { 
+      debugPrint('🚨 [Sync-Batch] Falha crítica: $e'); 
+    }
   }
 
   Future<void> _pullCanvasData(int localPageId, Map<String, dynamic> sPage) async {
@@ -695,7 +775,7 @@ class SyncService {
     return responseData['next_page_url']?.toString();
   }
 
-  Future<bool> pushRecordings() async {
+  Future<bool> pushRecordings({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
     final String? lastSynced = prefs.getString('last_recordings_sync');
 
@@ -738,14 +818,16 @@ class SyncService {
           );
         }
 
-        // 2. Updates do Servidor
-        final List updates = data['server_updates'] ?? [];
-        if (updates.isNotEmpty) {
-           await _applyRecordingUpdates(updates);
-        }
+        // 2. Updates do Servidor (Pular se pushOnly)
+        if (!pushOnly) {
+          final List updates = data['server_updates'] ?? [];
+          if (updates.isNotEmpty) {
+             await _applyRecordingUpdates(updates);
+          }
 
-        if (data['meta'] != null && data['meta']['server_time'] != null) {
-           await prefs.setString('last_recordings_sync', data['meta']['server_time']);
+          if (data['meta'] != null && data['meta']['server_time'] != null) {
+             await prefs.setString('last_recordings_sync', data['meta']['server_time']);
+          }
         }
         return data['has_more'] == true;
       }

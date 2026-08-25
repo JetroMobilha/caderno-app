@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import '../providers/collaboration_provider.dart';
 import '../providers/audio_session_provider.dart';
@@ -14,6 +15,7 @@ import '../widgets/layers/drawing_layer.dart';
 import '../widgets/layers/interaction_layer.dart';
 import '../widgets/layers/text_layer.dart';
 import '../widgets/layers/image_layer.dart';
+import '../../explanations/widgets/explanation_layer.dart'; // 🚀 Novo
 import '../widgets/dialogs/color_studio_dialog.dart';
 import '../widgets/dialogs/thickness_studio_dialog.dart';
 import '../widgets/dialogs/paper_style_dialog.dart';
@@ -87,8 +89,23 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
       }
     });
 
-    if (docState.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF0F4C5C))));
+    if (docState.isLoading || (docState.pages.isEmpty && docState.isGlobalSyncing)) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFD6D6D6),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Color(0xFF0F4C5C)),
+              const SizedBox(height: 20),
+              Text(
+                docState.isGlobalSyncing ? 'A descarregar folhas do caderno...' : 'A abrir a secretária...',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w500, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final bool hasPages = docState.pages.isNotEmpty;
@@ -146,6 +163,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                           child: Stack(
                             children: [
                               ImageLayer(page: page),
+                              ExplanationLayer(pageSize: const Size(595, 842)), // 🚀 Motor de Animação
                               InteractionLayer(
                               page: page,
                               isBlocked: page.isFrozen,

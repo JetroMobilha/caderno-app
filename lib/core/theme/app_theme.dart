@@ -4,31 +4,39 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:caderno_digital_app/core/theme/app_colors.dart';
-import 'package:caderno_digital_app/core/theme/app_profile.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
+import 'package:caderno_digital_app/features/auth/controllers/auth_controller.dart';
 
 final appThemeProvider = Provider<ThemeData>((ref) {
   // 🛡️ Garantia extra de modo offline (Permitido em Web)
   GoogleFonts.config.allowRuntimeFetching = true;
 
-  final activeProfile = ref.watch(appProfileProvider);
+  final authState = ref.watch(authProvider);
   final activeSubject = ref.watch(activeSubjectProvider);
 
-  Color primaryColor = activeProfile.primaryColor;
+  // 1. Determinar Cor Primária
+  // Prioridade: Disciplina Ativa > Preferência do Utilizador > Padrão (Azul Petróleo)
+  Color primaryColor = const Color(0xFF0F4C5C);
 
   if (activeSubject != null) {
     try {
       primaryColor = Color(int.parse(activeSubject.color.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      primaryColor = activeProfile.primaryColor;
-    }
+    } catch (_) {}
+  } else if (authState.currentUser?.preferredColor != null) {
+    try {
+      primaryColor = Color(int.parse(authState.currentUser!.preferredColor!.replaceFirst('#', '0xFF')));
+    } catch (_) {}
   }
+
+  // 2. Determinar Fonte
+  // Prioridade: Preferência do Utilizador > Padrão (Inter)
+  String fontFamily = authState.currentUser?.preferredFont ?? 'Inter';
 
   // 🚀 Lógica de tipografia robusta (Offline-Safe)
   TextTheme baseTextTheme;
   try {
     baseTextTheme = GoogleFonts.getTextTheme(
-      activeProfile.fontFamilyName,
+      fontFamily,
       ThemeData.light().textTheme,
     );
   } catch (e) {
@@ -60,16 +68,12 @@ final appThemeProvider = Provider<ThemeData>((ref) {
       foregroundColor: AppColors.textLight,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: () {
-        try {
-          return activeProfile.titleStyle.copyWith(
-            fontSize: 20,
-            color: AppColors.textLight,
-          );
-        } catch (_) {
-          return const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white);
-        }
-      }(),
+      titleTextStyle: GoogleFonts.getFont(
+        fontFamily,
+        fontWeight: FontWeight.bold,
+        fontSize: 20,
+        color: AppColors.textLight,
+      ),
     ),
 
     floatingActionButtonTheme: FloatingActionButtonThemeData(

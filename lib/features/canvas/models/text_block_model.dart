@@ -17,6 +17,7 @@ class TextBlock {
   int version;
   bool isChecklist;
   List<int> checkedLineIndices;
+  final int? pageNumber; // 🚀 Adicionado para contexto de página
   final String? creatorId;
   bool syncedWithCloud;
 
@@ -33,10 +34,11 @@ class TextBlock {
     this.deletedInSession = false,
     this.isChecklist = false,
     List<int>? checkedLineIndices,
+    this.pageNumber, // 🚀
     int? updatedAt,
     this.version = 1,
     this.creatorId,
-    this.syncedWithCloud = false, // 🚀 Começa como falso para novos locais
+    this.syncedWithCloud = false,
   }) : id = id ?? const Uuid().v4(),
        checkedLineIndices = checkedLineIndices ?? [],
        updatedAt = updatedAt ?? TimeService().nowMs();
@@ -56,6 +58,7 @@ class TextBlock {
     'updated_at': updatedAt,
     'is_checklist': isChecklist,
     'checked_line_indices': checkedLineIndices,
+    'page_number': pageNumber, // 🚀
     'creator_id': creatorId,
     'synced_with_cloud': syncedWithCloud ? 1 : 0,
   };
@@ -76,11 +79,32 @@ class TextBlock {
     deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
     isChecklist: json['is_checklist'] == true || json['is_checklist'] == 1,
     checkedLineIndices: (json['checked_line_indices'] as List<dynamic>?)?.map((e) => e as int).toList(),
+    pageNumber: json['page_number'] as int?, // 🚀
     updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
     version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     creatorId: json['creator_id']?.toString(),
     syncedWithCloud: json['synced_with_cloud'] == null ? true : (json['synced_with_cloud'] == true || json['synced_with_cloud'] == 1),
   );
 
-  TextBlock clone() => TextBlock.fromJson(toJson());
+  TextBlock clone({String? newId, int? newPageNumber}) {
+    return TextBlock(
+      id: newId ?? const Uuid().v4(),
+      text: text,
+      position: position,
+      isBold: isBold,
+      isItalic: isItalic,
+      isUnderline: isUnderline,
+      textColorHex: textColorHex,
+      fontSize: fontSize,
+      isDeleted: isDeleted,
+      deletedInSession: deletedInSession,
+      isChecklist: isChecklist,
+      checkedLineIndices: List.from(checkedLineIndices),
+      pageNumber: newPageNumber ?? pageNumber,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      creatorId: creatorId,
+      syncedWithCloud: false,
+    );
+  }
 }

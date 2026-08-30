@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/theme/app_colors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/subjects/utils/subject_utils.dart';
+import 'package:caderno_digital_app/features/subjects/views/subjects_list_screen.dart';
+import 'package:caderno_digital_app/features/trash/views/trash_screen.dart';
 
-class DrawerSubjectsList extends StatelessWidget {
+class DrawerSubjectsList extends ConsumerWidget {
   final List<Subject> subjects;
   final Subject? activeSubject;
   final Color dynamicColor;
@@ -13,7 +17,6 @@ class DrawerSubjectsList extends StatelessWidget {
   final Function(Subject) onSubjectDelete;
   final VoidCallback onAddSubject;
   final VoidCallback onMarketplaceTap;
-  final VoidCallback onAgendaTap;
   final VoidCallback onSharedTap;
 
   const DrawerSubjectsList({
@@ -26,12 +29,14 @@ class DrawerSubjectsList extends StatelessWidget {
     required this.onSubjectDelete,
     required this.onAddSubject,
     required this.onMarketplaceTap,
-    required this.onAgendaTap,
     required this.onSharedTap,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final uiSettings = ref.watch(subjectsUiProvider);
+    final showArchived = uiSettings.showArchivedInDrawer;
+
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -43,20 +48,66 @@ class DrawerSubjectsList extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'AS MINHAS DISCIPLINAS', 
-                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted, letterSpacing: 1.2)
+                  showArchived ? 'PASTAS ARQUIVADAS' : 'AS MINHAS PASTAS', 
+                  style: GoogleFonts.inter(
+                    fontSize: 11, 
+                    fontWeight: FontWeight.bold, 
+                    color: showArchived ? Colors.brown : AppColors.textMuted, 
+                    letterSpacing: 1.2
+                  )
                 ),
-                Tooltip(
-                  message: 'Criar Nova Disciplina',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: onAddSubject,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(color: dynamicColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                      child: Icon(Icons.add_rounded, color: dynamicColor, size: 18),
+                Row(
+                  children: [
+                    Tooltip(
+                      message: 'Ver Lixeira',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => TrashScreen(initialTabIndex: 0)));
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: showArchived ? 'Ver Pastas Ativas' : 'Ver Pastas Arquivadas',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => ref.read(subjectsUiProvider.notifier).toggleDrawerArchive(),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: showArchived ? Colors.brown.withOpacity(0.12) : Colors.blueGrey.withOpacity(0.08), 
+                            borderRadius: BorderRadius.circular(8)
+                          ),
+                          child: Icon(
+                            showArchived ? Icons.inventory_2_rounded : Icons.archive_outlined, 
+                            color: showArchived ? Colors.brown : Colors.blueGrey, 
+                            size: 18
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (!showArchived)
+                      Tooltip(
+                        message: 'Criar Nova Pasta',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: onAddSubject,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(color: dynamicColor.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                            child: Icon(Icons.add_rounded, color: dynamicColor, size: 18),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -64,83 +115,10 @@ class DrawerSubjectsList extends StatelessWidget {
 
           // Lista Principal
           Expanded(
-            child: subjects.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Nenhuma disciplina criada.\nClica no (+) em cima para começares!',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13),
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(top: 4),
-                    itemCount: subjects.length,
-                    itemBuilder: (context, index) {
-                      final sub = subjects[index];
-                      final bool isSelected = activeSubject?.id == sub.id && sub.id != null;
-                      Color subColor = AppColors.primary;
-                      try { subColor = Color(int.parse(sub.color.replaceFirst('#', '0xFF'))); } catch (_) {}
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: ListTile(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: isSelected ? BorderSide(color: subColor.withOpacity(0.4), width: 1.5) : BorderSide.none,
-                            ),
-                            tileColor: isSelected ? subColor.withOpacity(0.12) : null,
-                            leading: CircleAvatar(
-                              radius: 16,
-                              backgroundColor: subColor.withOpacity(0.2),
-                              child: Icon(SubjectUtils.getSubjectIcon(sub.icon), color: subColor, size: 18),
-                            ),
-                            title: Text(
-                              sub.name,
-                              style: GoogleFonts.inter(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: isSelected ? subColor : AppColors.textDark),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (isSelected) Icon(Icons.check_circle_rounded, color: subColor, size: 18),
-                                PopupMenuButton<String>(
-                                  icon: const Icon(Icons.more_vert_rounded, size: 18, color: AppColors.textMuted),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  color: AppColors.paper,
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      onSubjectEdit(sub);
-                                    } else if (value == 'delete') {
-                                      onSubjectDelete(sub);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), Text('Editar', style: GoogleFonts.inter(fontSize: 13))])),
-                                    PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent))])),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            onTap: () => onSubjectTap(sub),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+            child: _buildList(context, ref, showArchived),
           ),
 
           const Divider(height: 1, color: Colors.black12),
-
-          // Productivity Hub
-          ListTile(
-            leading: const Icon(Icons.calendar_today_rounded, color: Color(0xFF0F4C5C)),
-            title: Text('Agenda & Notas Rápidas', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-            onTap: onAgendaTap,
-          ),
 
           // Partilhados Comigo
           Padding(
@@ -174,6 +152,119 @@ class DrawerSubjectsList extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildList(BuildContext context, WidgetRef ref, bool showArchived) {
+    final filteredSubjects = subjects.where((s) => s.isArchived == showArchived).toList();
+    filteredSubjects.sort((a, b) => a.name.compareTo(b.name));
+
+    if (filteredSubjects.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            showArchived 
+                ? 'Nenhuma pasta arquivada.' 
+                : 'Nenhuma pasta ativa.\nClica no (+) em cima para começares!',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 4),
+      itemCount: filteredSubjects.length,
+      itemBuilder: (context, index) {
+        final sub = filteredSubjects[index];
+        final bool isSelected = activeSubject?.id == sub.id && sub.id != null;
+        Color subColor = AppColors.primary;
+        try {
+          subColor = Color(int.parse(sub.color.replaceFirst('#', '0xFF')));
+        } catch (_) {}
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Material(
+            color: Colors.transparent,
+            child: ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: isSelected ? BorderSide(color: subColor.withOpacity(0.4), width: 1.5) : BorderSide.none,
+              ),
+              tileColor: isSelected ? subColor.withOpacity(0.12) : null,
+              leading: CircleAvatar(
+                radius: 16,
+                backgroundColor: subColor.withOpacity(0.2),
+                child: Icon(SubjectUtils.getSubjectIcon(sub.icon), color: subColor, size: 18),
+              ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      sub.name,
+                      style: GoogleFonts.inter(fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: isSelected ? subColor : AppColors.textDark),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              trailing: PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, size: 18, color: AppColors.textMuted),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                color: AppColors.paper,
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    onSubjectEdit(sub);
+                  } else if (value == 'delete') {
+                    onSubjectDelete(sub);
+                  } else if (value == 'clone') {
+                    await ref.read(subjectsProvider.notifier).duplicateSubject(sub);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Pasta e cadernos clonados com sucesso! 📑')),
+                      );
+                    }
+                  } else if (value == 'archive') {
+                    await ref.read(subjectsProvider.notifier).updateSubject(sub.copyWith(isArchived: !sub.isArchived));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(sub.isArchived ? 'Pasta desarquivada! 📂' : 'Pasta enviada para o arquivo! 📥')),
+                      );
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit', 
+                    child: Row(children: [Icon(Icons.edit, size: 18, color: dynamicColor), const SizedBox(width: 8), const Text('Editar', style: TextStyle(fontSize: 13))])
+                  ),
+                  PopupMenuItem(
+                    value: 'clone', 
+                    child: Row(children: [const Icon(Icons.copy_rounded, size: 18, color: Colors.teal), const SizedBox(width: 8), const Text('Clonar', style: TextStyle(fontSize: 13))])
+                  ),
+                  PopupMenuItem(
+                    value: 'archive', 
+                    child: Row(children: [
+                      Icon(sub.isArchived ? Icons.unarchive_outlined : Icons.archive_outlined, size: 18, color: Colors.brown), 
+                      const SizedBox(width: 8), 
+                      Text(sub.isArchived ? 'Desarquivar' : 'Enviar para o arquivo', style: const TextStyle(fontSize: 13))
+                    ])
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'delete', 
+                    child: Row(children: [const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 8), Text('Apagar', style: TextStyle(fontSize: 13, color: Colors.redAccent))])
+                  ),
+                ],
+              ),
+              onTap: () => onSubjectTap(sub),
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -119,7 +119,6 @@ class AuthController extends Notifier<AuthState> {
         }
 
         state = state.copyWith(currentUser: user, token: token, isLoading: false);
-        unawaited(ref.read(appSyncServiceProvider).syncAll(metadataOnly: true));
         return true;
       } else {
         final String error = responseData['message'] ?? 'Erro ao criar conta.';

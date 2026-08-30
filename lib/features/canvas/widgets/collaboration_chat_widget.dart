@@ -62,7 +62,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
         borderRadius: BorderRadius.circular(collabService.isChatOpen ? 16 : 28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
+            color: Colors.black.withOpacity(0.25),
             blurRadius: 12,
             offset: const Offset(0, 6),
           )
@@ -193,7 +193,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                         bottomRight: Radius.circular(isMe ? 0 : 14),
                       ),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))
+                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
                       ],
                     ),
                     child: Column(
@@ -242,12 +242,12 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
+              border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.2))),
             ),
             child: Row(
               children: [
                 Material(
-                  color: const Color(0xFF0F4C5C).withValues(alpha: 0.1),
+                  color: const Color(0xFF0F4C5C).withOpacity(0.1),
                   shape: const CircleBorder(),
                   child: IconButton(
                     onPressed: () => audioService.startRecording(
@@ -316,9 +316,9 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withValues(alpha: 0.1),
+              color: Colors.redAccent.withOpacity(0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -404,7 +404,7 @@ class _RecordingIndicator extends StatelessWidget {
     return Container(
       height: 60,
       padding: const EdgeInsets.all(12),
-      color: Colors.red.withValues(alpha: 0.05),
+      color: Colors.red.withOpacity(0.05),
       child: Row(
         children: [
           const Icon(Icons.fiber_manual_record, color: Colors.red, size: 16),

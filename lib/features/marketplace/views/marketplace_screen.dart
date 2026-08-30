@@ -55,7 +55,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Pesquisar por matéria, autor ou título...',
+                    hintText: 'Pesquisar por pasta, autor ou título...',
                     filled: true,
                     fillColor: AppColors.paper,
                     prefixIcon: const Icon(Icons.search),

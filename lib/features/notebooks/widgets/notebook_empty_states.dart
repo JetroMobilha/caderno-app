@@ -20,7 +20,7 @@ class NoSubjectState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Abre o menu superior esquerdo (☰)\npara selecionares ou criares a tua primeira disciplina.',
+            'Abre o menu superior esquerdo (☰)\npara selecionares ou criares a tua primeira pasta.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(color: Colors.black54, fontSize: 14),
           ),

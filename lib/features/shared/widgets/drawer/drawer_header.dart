@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:caderno_digital_app/core/network/api_service.dart';
 import 'package:caderno_digital_app/features/auth/models/user_model.dart';
 
 class DrawerHeaderWidget extends StatelessWidget {
@@ -8,6 +9,7 @@ class DrawerHeaderWidget extends StatelessWidget {
   final bool isSyncing;
   final VoidCallback onSync;
   final VoidCallback onProfileOpen;
+  final VoidCallback onLogout; // 🚀 Nova ação
 
   const DrawerHeaderWidget({
     super.key,
@@ -16,6 +18,7 @@ class DrawerHeaderWidget extends StatelessWidget {
     required this.isSyncing,
     required this.onSync,
     required this.onProfileOpen,
+    required this.onLogout,
   });
 
   @override
@@ -47,16 +50,28 @@ class DrawerHeaderWidget extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 🌟 LOGOTIPO / TÍTULO DA APP NA GAVETA
-              Row(
-                children: [
-                  const Icon(Icons.menu_book_rounded, color: Colors.white, size: 24),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Caderno Digital',
-                    style: GoogleFonts.lora(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              // 👤 IMAGEM DE PERFIL EM DESTAQUE (Substitui Logótipo/Nome da App)
+              GestureDetector(
+                onTap: onProfileOpen,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2)),
+                    ],
                   ),
-                ],
+                  child: CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.white24,
+                    backgroundImage: user?.avatar != null
+                        ? NetworkImage("${ApiService.baseUrlImagem}${user!.avatar!}")
+                        : null,
+                    child: user?.avatar == null
+                        ? const Icon(Icons.person_rounded, color: Colors.white, size: 28)
+                        : null,
+                  ),
+                ),
               ),
               Row(
                 children: [
@@ -72,6 +87,13 @@ class DrawerHeaderWidget extends StatelessWidget {
                     tooltip: 'Meu Perfil e Dados',
                     customChild: const Icon(Icons.manage_accounts_rounded, color: Colors.white, size: 20),
                     onTap: onProfileOpen,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildHeaderActionButton(
+                    tooltip: 'Terminar Sessão',
+                    customChild: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+                    onTap: onLogout,
+                    isDestructive: true,
                   ),
                 ],
               ),
@@ -114,11 +136,11 @@ class DrawerHeaderWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderActionButton({required String tooltip, required Widget customChild, VoidCallback? onTap}) {
+  Widget _buildHeaderActionButton({required String tooltip, required Widget customChild, VoidCallback? onTap, bool isDestructive = false}) {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.white.withOpacity(0.2),
+        color: isDestructive ? Colors.redAccent.withOpacity(0.4) : Colors.white.withOpacity(0.2),
         shape: const CircleBorder(),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

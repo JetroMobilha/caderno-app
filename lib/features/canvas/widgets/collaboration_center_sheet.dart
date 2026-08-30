@@ -182,7 +182,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: collaboration.isCollaborationEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+            color: collaboration.isCollaborationEnabled ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -217,7 +217,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 Switch(
                   value: collaboration.isCollaborationEnabled,
                   activeThumbColor: Colors.green,
-                  activeTrackColor: Colors.green.withValues(alpha: 0.5),
+                  activeTrackColor: Colors.green.withOpacity(0.5),
                   onChanged: (val) {
                     final currentUser = ref.read(authProvider).currentUser;
                     final String myUserId = currentUser?.id.toString() ?? '';
@@ -288,9 +288,9 @@ class CollaborationCenterSheet extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isFollowing ? Colors.blue.withValues(alpha: 0.05) : Colors.grey.shade50,
+              color: isFollowing ? Colors.blue.withOpacity(0.05) : Colors.grey.shade50,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isFollowing ? Colors.blue.withValues(alpha: 0.3) : Colors.transparent),
+              border: Border.all(color: isFollowing ? Colors.blue.withOpacity(0.3) : Colors.transparent),
             ),
             child: Row(
               children: [
@@ -380,7 +380,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
   Widget _buildEmptyState(String message) => Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(color: Colors.grey.withOpacity(0.05), borderRadius: BorderRadius.circular(16)),
         child: Center(
           child: Text(
             message,
@@ -397,7 +397,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
-          disabledBackgroundColor: color.withValues(alpha: 0.3),
+          disabledBackgroundColor: color.withOpacity(0.3),
           disabledForegroundColor: Colors.white70,
         ),
         onPressed: onTap,
@@ -424,9 +424,9 @@ class CollaborationCenterSheet extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: isSmall ? 6 : 10, vertical: isSmall ? 1 : 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.5),
+        border: Border.all(color: color.withOpacity(0.5), width: 0.5),
       ),
       child: Text(
         label,
@@ -560,7 +560,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: value ? color.withValues(alpha: 0.1) : Colors.transparent,
+            color: value ? color.withOpacity(0.1) : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: value ? color : Colors.grey.shade200, width: 2),
           ),
@@ -621,7 +621,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF27AE60).withValues(alpha: 0.1),
+        color: const Color(0xFF27AE60).withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF27AE60), width: 1.5),
       ),

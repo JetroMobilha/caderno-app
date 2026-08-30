@@ -5,6 +5,8 @@ import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dar
 import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
 
+import '../views/page_overview_screen.dart';
+
 class CanvasAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final Notebook notebook;
   final VoidCallback onCollaborationTap;
@@ -44,7 +46,7 @@ class CanvasAppBar extends ConsumerWidget implements PreferredSizeWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A24).withValues(alpha: 0.05),
+                    color: const Color(0xFF1A1A24).withOpacity(0.05),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(

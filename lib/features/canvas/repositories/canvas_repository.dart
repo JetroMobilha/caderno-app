@@ -4,9 +4,7 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
-import '../../../core/network/api_config.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/time_service.dart'; // 🚀
 import '../models/local_page_model.dart';
@@ -21,9 +19,6 @@ class CanvasRepository {
   CanvasRepository(this._db);
 
   AppDatabase get db => _db;
-
-  // 🔒 Mutex em memória para serializar operações na mesma página (evita Unique Constraint Race)
-  final Map<String, Completer<int>> _pageLocks = {};
 
   // =========================================================================
   // 📖 LER FOLHA ÚNICA (Otimizado para Sync)
@@ -46,6 +41,7 @@ class CanvasRepository {
       'deleted_in_session': s.deletedInSession == 1,
       'creator_id': s.creatorId,
       'synced_with_cloud': s.syncedWithCloud == 1,
+      'page_number': pRow.pageNumber,
     })).toList();
 
     final textQuery = _db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId));
@@ -59,6 +55,7 @@ class CanvasRepository {
       'deleted_in_session': t.deletedInSession == 1,
       'creator_id': t.creatorId,
       'synced_with_cloud': t.syncedWithCloud == 1,
+      'page_number': pRow.pageNumber,
     })).toList();
 
     final imageQuery = _db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId));
@@ -78,6 +75,7 @@ class CanvasRepository {
       'deleted_in_session': i.deletedInSession == 1,
       'creator_id': i.creatorId,
       'synced_with_cloud': i.syncedWithCloud == 1,
+      'page_number': pRow.pageNumber,
     })).toList();
 
     return LocalPage(
@@ -91,9 +89,12 @@ class CanvasRepository {
       lineSpacing: pRow.lineSpacing,
       clientId: pRow.clientId,
       title: LocalPage.parseMeta(pRow.headerData),
+      sectionTitle: LocalPage.parseSection(pRow.headerData),
+      sectionColor: LocalPage.parseSectionColor(pRow.headerData),
       footer: LocalPage.parseMeta(pRow.footerData),
       extractedText: pRow.extractedText,
       isFrozen: pRow.isFrozen == 1,
+      isFavorite: pRow.isFavorite == 1,
       strokes: strokes,
       textBlocks: textBlocks,
       imageBlocks: imageBlocks,
@@ -125,6 +126,7 @@ class CanvasRepository {
         'deleted_in_session': s.deletedInSession == 1,
         'creator_id': s.creatorId,
         'synced_with_cloud': s.syncedWithCloud == 1,
+        'page_number': pRow.pageNumber,
       })).toList();
 
       final textRows = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId))).get();
@@ -135,6 +137,7 @@ class CanvasRepository {
         'deleted_in_session': t.deletedInSession == 1,
         'creator_id': t.creatorId,
         'synced_with_cloud': t.syncedWithCloud == 1,
+        'page_number': pRow.pageNumber,
       })).toList();
 
       final imgRows = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).get();
@@ -151,6 +154,7 @@ class CanvasRepository {
         'deleted_in_session': i.deletedInSession == 1,
         'creator_id': i.creatorId,
         'synced_with_cloud': i.syncedWithCloud == 1,
+        'page_number': pRow.pageNumber,
       })).toList();
 
       pages.add(LocalPage(
@@ -164,9 +168,12 @@ class CanvasRepository {
         lineSpacing: pRow.lineSpacing,
         clientId: pRow.clientId,
         title: LocalPage.parseMeta(pRow.headerData),
+        sectionTitle: LocalPage.parseSection(pRow.headerData),
+        sectionColor: LocalPage.parseSectionColor(pRow.headerData),
         footer: LocalPage.parseMeta(pRow.footerData),
         extractedText: pRow.extractedText,
         isFrozen: pRow.isFrozen == 1,
+        isFavorite: pRow.isFavorite == 1,
         strokes: strokes,
         textBlocks: textBlocks,
         imageBlocks: imageBlocks,
@@ -177,8 +184,11 @@ class CanvasRepository {
     return pages;
   }
 
-  Stream<List<LocalPage>> watchPagesByNotebook(int notebookId) {
-    return (_db.select(_db.pages)..where((t) => t.notebookId.equals(notebookId))).watch().map((rows) {
+  Stream<List<LocalPage>> watchPagesByNotebook(int notebookId, {bool includeDeleted = false}) {
+    final query = _db.select(_db.pages)..where((t) => t.notebookId.equals(notebookId));
+    if (!includeDeleted) query.where((t) => t.isDeleted.equals(0));
+    
+    return query.watch().map((rows) {
       return rows.map((row) => LocalPage(
         id: row.id,
         serverId: row.serverId,
@@ -190,9 +200,12 @@ class CanvasRepository {
         lineSpacing: row.lineSpacing,
         clientId: row.clientId,
         title: LocalPage.parseMeta(row.headerData),
+        sectionTitle: LocalPage.parseSection(row.headerData),
+        sectionColor: LocalPage.parseSectionColor(row.headerData),
         footer: LocalPage.parseMeta(row.footerData),
         extractedText: row.extractedText,
         isFrozen: row.isFrozen == 1,
+        isFavorite: row.isFavorite == 1,
         isDeleted: row.isDeleted == 1,
         strokes: [], // Lazy loaded
         textBlocks: [], // Lazy loaded
@@ -203,8 +216,61 @@ class CanvasRepository {
     });
   }
 
+  Future<List<LocalPage>> getDeletedPages(int notebookId) async {
+    final rows = await (_db.select(_db.pages)
+          ..where((t) => t.notebookId.equals(notebookId) & t.isDeleted.equals(1))
+          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
+        .get();
+
+    return rows.map((row) => LocalPage(
+      id: row.id,
+      serverId: row.serverId,
+      notebookId: row.notebookId,
+      pageNumber: row.pageNumber,
+      isLandscape: row.isLandscape == 1,
+      paperSize: row.paperSize,
+      lineType: row.lineType,
+      lineSpacing: row.lineSpacing,
+      clientId: row.clientId,
+      title: LocalPage.parseMeta(row.headerData),
+      sectionTitle: LocalPage.parseSection(row.headerData),
+      sectionColor: LocalPage.parseSectionColor(row.headerData),
+      footer: LocalPage.parseMeta(row.footerData),
+      extractedText: row.extractedText,
+      isFrozen: row.isFrozen == 1,
+      isFavorite: row.isFavorite == 1,
+      isDeleted: true,
+      strokes: [],
+      textBlocks: [],
+      imageBlocks: [],
+      syncedWithCloud: row.syncedWithCloud,
+      updatedAt: row.updatedAt,
+    )).toList();
+  }
+
+  Future<void> restorePage(String clientId) async {
+    await (_db.update(_db.pages)..where((t) => t.clientId.equals(clientId))).write(
+      PagesCompanion(
+        isDeleted: const Value(0),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(TimeService().nowMs()),
+      ),
+    );
+  }
+
+  Future<void> movePageToNotebook(String clientId, int targetNotebookId, int newPageNumber) async {
+    await (_db.update(_db.pages)..where((t) => t.clientId.equals(clientId))).write(
+      PagesCompanion(
+        notebookId: Value(targetNotebookId),
+        pageNumber: Value(newPageNumber),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(TimeService().nowMs()),
+      ),
+    );
+  }
+
   /// 🚀 CARREGAMENTO SOB DEMANDA: Busca o conteúdo pesado de uma página
-  Future<Map<String, dynamic>> loadPageContent(int pageId) async {
+  Future<Map<String, dynamic>> loadPageContent(int pageId, {int? pageNumber}) async {
     final strokeRows = await (_db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId))).get();
     final textRows = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId))).get();
     final imgRows = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).get();
@@ -216,6 +282,7 @@ class CanvasRepository {
       'deleted_in_session': s.deletedInSession == 1,
       'creator_id': s.creatorId,
       'synced_with_cloud': s.syncedWithCloud == 1,
+      'page_number': pageNumber,
     })).toList();
 
     final textBlocks = textRows.map((t) => TextBlock.fromJson({
@@ -225,6 +292,7 @@ class CanvasRepository {
       'deleted_in_session': t.deletedInSession == 1,
       'creator_id': t.creatorId,
       'synced_with_cloud': t.syncedWithCloud == 1,
+      'page_number': pageNumber,
     })).toList();
 
     final imageBlocks = imgRows.map((i) => ImageBlock.fromJson({
@@ -240,6 +308,7 @@ class CanvasRepository {
       'deleted_in_session': i.deletedInSession == 1,
       'creator_id': i.creatorId,
       'synced_with_cloud': i.syncedWithCloud == 1,
+      'page_number': pageNumber,
     })).toList();
 
     return {
@@ -254,39 +323,27 @@ class CanvasRepository {
   }
 
   /// 🚀 GRAVAÇÃO OTIMIZADA: Confiança total no servidor
-  Future<int> savePageFromMap(Map<String, dynamic> pageData, int? notebookSid) async {
+  Future<int> savePageFromMap(Map<String, dynamic> pageData, int? notebookSid, {bool isLocalEdit = false}) async {
     final String clientId = pageData['client_id'];
     final int? serverId = pageData['id'] != null ? int.tryParse(pageData['id'].toString()) : null;
     
-    // 1. RESOLUÇÃO DE ID DO CADERNO
+    // 1. BUSCAR REGISTO EXISTENTE (Âncora Única: clientId)
+    final existingByClient = await (_db.select(_db.pages)..where((t) => t.clientId.equals(clientId))).getSingleOrNull();
+
+    // 2. RESOLUÇÃO DE ID DO CADERNO
     int? localNotebookId;
     if (notebookSid != null && notebookSid != 0) {
       final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookSid))).getSingleOrNull();
       if (nb != null) localNotebookId = nb.id;
     }
-    localNotebookId ??= pageData['notebook_id'];
+    localNotebookId ??= pageData['notebook_id'] ?? existingByClient?.notebookId;
 
-    // 2. BUSCAR REGISTO EXISTENTE POR CLIENT_ID OU SERVER_ID
-    final candidates = await (_db.select(_db.pages)..where((t) {
-      var expr = t.clientId.equals(clientId);
-      if (serverId != null) expr = expr | t.serverId.equals(serverId);
-      return expr;
-    })).get();
-    
-    int? effectiveId;
-    if (candidates.isNotEmpty) {
-      // Priorizar o que já tem ServerID ou o que corresponde ao ClientID atual
-      final survivor = candidates.firstWhere((c) => c.clientId == clientId, orElse: () => candidates.first);
-      effectiveId = survivor.id;
-
-      // Limpar duplicados (se houver colisão de serverId com outro clientId local)
-      if (candidates.length > 1) {
-        for (var cand in candidates) {
-          if (cand.id == effectiveId) continue;
-          await (_db.delete(_db.pages)..where((t) => t.id.equals(cand.id))).go();
-        }
-      }
+    if (localNotebookId == null) {
+      debugPrint('⚠️ [CanvasRepo] notebook_id ausente para ClientId $clientId. Abortando gravação.');
+      return existingByClient?.id ?? 0;
     }
+
+    final int? effectiveId = existingByClient?.id;
 
     // 3. INSERIR OU ATUALIZAR
     final companion = PagesCompanion.insert(
@@ -302,8 +359,11 @@ class CanvasRepository {
       paperSize: Value(pageData['paper_size'] ?? 'A4'),
       lineType: Value(pageData['line_type']?.toString()),
       lineSpacing: Value(pageData['line_spacing'] != null ? double.tryParse(pageData['line_spacing'].toString()) : null),
+      isFrozen: Value((pageData['is_frozen'] == true || pageData['is_frozen'] == 1) ? 1 : 0),
+      isFavorite: Value((pageData['is_favorite'] == true || pageData['is_favorite'] == 1) ? 1 : 0),
+      isDeleted: Value((pageData['is_deleted'] == true || pageData['is_deleted'] == 1) ? 1 : 0),
       updatedAt: Value(_parseSafeInt(pageData['updated_at_ms']) ?? _parseSafeInt(pageData['updated_at']) ?? TimeService().nowMs()),
-      syncedWithCloud: const Value(1),
+      syncedWithCloud: Value(isLocalEdit ? 0 : 1), // 🚀 CONTROLO DE SYNC
     );
 
     int finalId = await _db.into(_db.pages).insertOnConflictUpdate(companion);
@@ -491,10 +551,6 @@ class CanvasRepository {
       }
     } catch (e) { debugPrint('🚨 Erro upload aula: $e'); }
     return null;
-  }
-
-  Future<void> updateNotebookMetadata(int notebookId, String lineType, double lineSpacing) async {
-    await (_db.update(_db.notebooks)..where((t) => t.id.equals(notebookId))).write(NotebooksCompanion(lineType: Value(lineType), lineSpacing: Value(lineSpacing)));
   }
 
   int? _parseSafeInt(dynamic val) {

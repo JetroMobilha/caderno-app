@@ -45,12 +45,12 @@ class _NotebookDeletedDialogState extends ConsumerState<NotebookDeletedDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('O proprietário removeu este caderno. Podes salvar uma cópia local nas tuas disciplinas.'),
+              const Text('O proprietário removeu este caderno. Podes salvar uma cópia local nas tuas pastas.'),
               const SizedBox(height: 20),
               if (!isCreatingSubject) ...[
                 DropdownButton<int>(
                   isExpanded: true,
-                  hint: const Text('Selecionar Disciplina'),
+                  hint: const Text('Selecionar Pasta'),
                   value: selectedSubjectId,
                   items: subjects.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
                   onChanged: (val) => setState(() => selectedSubjectId = val),

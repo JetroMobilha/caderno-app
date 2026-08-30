@@ -8,6 +8,7 @@ import '../../features/canvas/models/local_page_model.dart';
 import '../../features/canvas/models/stroke_model.dart';
 import '../../features/canvas/models/text_block_model.dart';
 import '../database/app_database.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart';
 
 class LocalDatabaseService {
   final AppDatabase _db = AppDatabase.instance;
@@ -31,7 +32,7 @@ class LocalDatabaseService {
         PagesCompanion(
           serverId: Value(officialServerId),
           syncedWithCloud: const Value(0),
-          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+          updatedAt: Value(TimeService().nowMs()),
           headerData: Value(page.title),
           footerData: Value(page.footer),
           // Outros campos se necessário
@@ -95,7 +96,7 @@ class LocalDatabaseService {
         rotation: img.rotation,
         isDeleted: const Value(0),
         syncedWithCloud: const Value(0),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        updatedAt: Value(TimeService().nowMs()),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:caderno_digital_app/features/notebooks/repositories/shared_noteb
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../auth/controllers/auth_controller.dart';
@@ -158,6 +159,24 @@ class NotebooksController extends Notifier<NotebooksState> {
     await _repository.deleteNotebook(notebook);
   }
 
+  Future<void> restoreNotebook(Notebook notebook) async {
+    if (notebook.id == null) return;
+    await _repository.restoreNotebook(notebook.id!);
+    // 🚀 O sync cuidará de avisar o servidor
+    ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
+  }
+
+  Future<List<Notebook>> getTrashItems() async {
+    return await _repository.getDeletedNotebooks();
+  }
+
+  Future<void> emptyTrash() async {
+    final deleted = await _repository.getDeletedNotebooks();
+    for (var nb in deleted) {
+      if (nb.id != null) await _repository.hardDeleteNotebook(nb.id!);
+    }
+  }
+
   Future<void> moveNotebook(Notebook notebook, int targetSubjectId) async {
     final updated = notebook.copyWith(subjectId: targetSubjectId);
     await _repository.updateNotebook(updated);
@@ -243,20 +262,14 @@ class NotebooksController extends Notifier<NotebooksState> {
   Future<void> duplicateNotebook(Notebook source, int targetSubjectId) async {
     state = state.copyWith(isLoading: true);
     try {
-      // 1. Criar o novo caderno local
-      final newNotebook = Notebook(
-        subjectId: targetSubjectId,
-        title: source.role == 'owner' ? '${source.title} (Cópia)' : '${source.title} (Minha Cópia)',
-        coverType: source.coverType,
-        color: source.color,
-        coverImage: source.coverImage,
-        lineType: source.lineType,
-        paperSize: source.paperSize,
-        lineSpacing: source.lineSpacing,
-        templateType: source.templateType,
-        authorName: source.role == 'owner' ? source.authorName : 'Eu (Original: ${source.authorName ?? "Colega"})',
-        description: source.description,
-      );
+      // 1. Criar o novo caderno local usando Clonagem
+      final newNotebook = source.clone(newSubjectId: targetSubjectId);
+      
+      // Ajuste opcional para o título da cópia se não for o dono
+      if (source.role != 'owner') {
+        newNotebook.title = '${source.title} (Minha Cópia)';
+        newNotebook.authorName = 'Eu (Original: ${source.authorName ?? "Colega"})'; // Se precisarmos editar campos finais
+      }
 
       final int newId = await _repository.insertNotebook(newNotebook);
       newNotebook.id = newId;
@@ -266,59 +279,30 @@ class NotebooksController extends Notifier<NotebooksState> {
       final sourcePages = await _canvasRepository.getPagesByNotebook(source.id!, source.serverId);
       debugPrint('📋 [Duplicate] Iniciando cópia de ${sourcePages.length} páginas para o caderno $newId');
 
-      // 3. Copiar cada página
+      // 3. Copiar cada página usando Clonagem Profunda
       for (var page in sourcePages) {
-        final String newPageClientId = Uuid().v4(); // 🆔 Nova identidade única para a folha
-        
-        // 🚀 CRIAÇÃO LIMPA: Criar instância sem carregar IDs locais do original
-        final newPage = LocalPage(
-          notebookId: newId,
-          pageNumber: page.pageNumber,
-          isLandscape: page.isLandscape,
-          paperSize: page.paperSize,
-          lineType: page.lineType,
-          lineSpacing: page.lineSpacing,
-          title: page.title,
-          footer: page.footer,
-          extractedText: page.extractedText,
-          isFrozen: page.isFrozen,
-          clientId: newPageClientId,
-          syncedWithCloud: 0,
+        final clonedPage = page.clone(
+          newNotebookId: newId,
+          newPageNumber: page.pageNumber, // Mantém o número original no novo caderno
         );
         
         // Salvar a folha primeiro (gera o ID local correto no SQLite)
-        final int newLocalPageId = await _canvasRepository.savePage(newPage, null);
+        final int newLocalPageId = await _canvasRepository.savePage(clonedPage, null);
         debugPrint('📄 [Duplicate] Folha original (localId: ${page.id}) copiada para nova localId $newLocalPageId');
         
-        // 🚀 CLONAGEM PROFUNDA: Copiar traços, textos e imagens com NOVOS UUIDs
-        int strokesCount = 0;
-        for (var stroke in page.strokes) {
-          final clonedStroke = stroke.clone()
-            ..id = Uuid().v4() // 🆔 Nova identidade única
-            ..updatedAt = DateTime.now().millisecondsSinceEpoch;
-          await _canvasRepository.saveSingleStroke(newPageClientId, clonedStroke);
-          strokesCount++;
+        for (var stroke in clonedPage.strokes) {
+          await _canvasRepository.saveSingleStroke(clonedPage.clientId, stroke);
         }
 
-        int textsCount = 0;
-        for (var text in page.textBlocks) {
-          final clonedText = text.clone()
-            ..id = Uuid().v4() // 🆔 Nova identidade única
-            ..updatedAt = DateTime.now().millisecondsSinceEpoch;
-          await _canvasRepository.saveSingleTextBlock(newPageClientId, clonedText);
-          textsCount++;
+        for (var text in clonedPage.textBlocks) {
+          await _canvasRepository.saveSingleTextBlock(clonedPage.clientId, text);
         }
 
-        int imagesCount = 0;
-        for (var img in page.imageBlocks) {
-          final clonedImg = img.clone()
-            ..id = Uuid().v4() // 🆔 Nova identidade única
-            ..updatedAt = DateTime.now().millisecondsSinceEpoch;
-          await _canvasRepository.saveSingleImageBlock(newPageClientId, clonedImg);
-          imagesCount++;
+        for (var img in clonedPage.imageBlocks) {
+          await _canvasRepository.saveSingleImageBlock(clonedPage.clientId, img);
         }
         
-        debugPrint('✅ [Duplicate] Conteúdo da folha ${page.pageNumber} duplicado: $strokesCount traços, $textsCount textos, $imagesCount imagens');
+        debugPrint('✅ [Duplicate] Conteúdo da folha ${page.pageNumber} duplicado com Clonagem Real');
       }
     } finally {
       state = state.copyWith(isLoading: false);

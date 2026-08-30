@@ -55,7 +55,7 @@ class LiveVoiceCockpit extends StatelessWidget {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF27AE60).withValues(alpha: 0.25),
+              color: const Color(0xFF27AE60).withOpacity(0.25),
               blurRadius: 20,
               offset: const Offset(0, 8)
           ),
@@ -100,7 +100,7 @@ class LiveVoiceCockpit extends StatelessWidget {
                   ),
                   boxShadow: isTalking ? [
                     BoxShadow(
-                      color: const Color(0xFF2ECC71).withValues(alpha: (level * 8).clamp(0.4, 0.9)), 
+                      color: const Color(0xFF2ECC71).withOpacity((level * 8).clamp(0.4, 0.9)), 
                       blurRadius: 10 + (level * 60), 
                       spreadRadius: 2 + (level * 15)
                     )
@@ -108,7 +108,7 @@ class LiveVoiceCockpit extends StatelessWidget {
                     const BoxShadow(color: Colors.blue, blurRadius: 8, spreadRadius: 1)
                   ] : (activity != 'idle' ? [
                     BoxShadow(
-                      color: activity == 'drawing' ? Colors.orangeAccent.withValues(alpha: 0.3) : Colors.blueAccent.withValues(alpha: 0.3),
+                      color: activity == 'drawing' ? Colors.orangeAccent.withOpacity(0.3) : Colors.blueAccent.withOpacity(0.3),
                       blurRadius: 8,
                       spreadRadius: 1
                     )
@@ -245,7 +245,7 @@ class LiveVoiceCockpit extends StatelessWidget {
           color: color, 
           shape: BoxShape.circle,
           boxShadow: isRecording ? [
-            BoxShadow(color: Colors.redAccent.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 2)
+            BoxShadow(color: Colors.redAccent.withOpacity(0.5), blurRadius: 10, spreadRadius: 2)
           ] : null,
         ),
         child: Icon(icon, size: 14, color: Colors.white),

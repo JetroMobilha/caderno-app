@@ -442,7 +442,7 @@ class CollaborationRoomService extends ChangeNotifier {
           final exI = tp.strokes.indexWhere((s) => s.id == sid);
           if (exI != -1) {
             tp.strokes[exI].isDeleted = true;
-            tp.strokes[exI].updatedAt = sm['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
+            tp.strokes[exI].updatedAt = sm['updated_at'] ?? TimeService().nowMs();
             hasChanges = true;
           }
           _repository.deleteSingleStroke(sid);
@@ -535,7 +535,7 @@ class CollaborationRoomService extends ChangeNotifier {
       if (d['is_deleted'] == true) {
         tp.textBlocks.removeWhere((t) => t.id == bid);
       } else {
-        final int remoteTs = bd['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
+        final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
         final exI = tp.textBlocks.indexWhere((t) => t.id == bid);
         if (exI != -1 && tp.textBlocks[exI].updatedAt > remoteTs) return;
 
@@ -571,7 +571,7 @@ class CollaborationRoomService extends ChangeNotifier {
       if (d['is_deleted'] == true) {
         tp.imageBlocks.removeWhere((i) => i.id == bid);
       } else {
-        final int remoteTs = bd['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
+        final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
         final exI = tp.imageBlocks.indexWhere((i) => i.id == bid);
         if (exI != -1 && tp.imageBlocks[exI].updatedAt > remoteTs) return;
 
@@ -897,20 +897,20 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void sendMessage(String m) {
-    if (_liveNotebookSid == null || _myUserId == null) return;
+    if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
     final msg = {
       'type': 'text',
       'sender_id': _myUserId,
       'message': m,
-      'msg_id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'timestamp': DateTime.now().toIso8601String()
+      'msg_id': TimeService().nowMs().toString(),
+      'timestamp': TimeService().now().toIso8601String()
     };
     _addChatMessage(msg);
     _realtimeService.broadcastChatMessage(notebookId: _liveNotebookSid!, myUserId: _myUserId!, message: m);
   }
 
   void broadcastPointer(Offset pos, int pageNumber, String tool) {
-    if (_liveNotebookSid == null || _myUserId == null) return;
+    if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
     _realtimeService.broadcastPointerMove(
       notebookId: _liveNotebookSid!,
       myUserId: _myUserId!,
@@ -920,8 +920,17 @@ class CollaborationRoomService extends ChangeNotifier {
     );
   }
 
+  void broadcastPageEvent(String action, Map<String, dynamic> data) {
+    if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+    _realtimeService.broadcastPageEvent(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+      pageData: {'action': action, ...data},
+    );
+  }
+
   void toggleHandRaise() {
-    if (_myUserId == null || _liveNotebookSid == null) return;
+    if (_isDisposed || _myUserId == null || _liveNotebookSid == null) return;
     isMyHandRaised = !isMyHandRaised;
     notifyListeners();
     _realtimeService.broadcastHandEvent(notebookId: _liveNotebookSid!, myUserId: _myUserId!, isRaised: isMyHandRaised);
@@ -929,19 +938,21 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void sendReaction(String emoji) {
-    if (_myUserId == null || _liveNotebookSid == null) return;
+    if (_isDisposed || _myUserId == null || _liveNotebookSid == null) return;
     userReactions[_myUserId!] = emoji;
     _reactionTimers[_myUserId!]?.cancel();
     _reactionTimers[_myUserId!] = Timer(const Duration(seconds: 5), () {
-      userReactions[_myUserId!] = null;
-      notifyListeners();
+      if (!_isDisposed) {
+        userReactions[_myUserId!] = null;
+        notifyListeners();
+      }
     });
     _realtimeService.broadcastReaction(notebookId: _liveNotebookSid!, myUserId: _myUserId!, reaction: emoji);
     notifyListeners();
   }
 
   void toggleFollowUser(String? uid) {
-    if (uid == _myUserId) return;
+    if (_isDisposed || uid == _myUserId) return;
     followingUserId = (followingUserId == uid) ? null : uid;
     if (_liveNotebookSid != null && _myUserId != null) {
       _realtimeService.broadcastFollowUpdate(notebookId: _liveNotebookSid!, myUserId: _myUserId!, followingUserId: followingUserId);
@@ -950,7 +961,7 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void startViewportBroadcasting() {
-    if (isBroadcastingViewport) return;
+    if (_isDisposed || isBroadcastingViewport) return;
     isBroadcastingViewport = true;
     notifyListeners();
     _viewportBroadcastTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
@@ -981,10 +992,11 @@ class CollaborationRoomService extends ChangeNotifier {
     isBroadcastingViewport = false;
     _viewportBroadcastTimer?.cancel();
     _viewportBroadcastTimer = null;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   void toggleVoiceCall(String userId) {
+    if (_isDisposed) return;
     if (isLiveSessionActive) {
       _realtimeService.stopVoiceCall(notebookId: _liveNotebookSid!, myUserId: _myUserId!);
       isLiveSessionActive = false;
@@ -996,7 +1008,7 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void acceptVoiceCall() {
-    if (incomingVoiceCall == null) return;
+    if (_isDisposed || incomingVoiceCall == null) return;
     _realtimeService.startVoiceCall(notebookId: _liveNotebookSid!, myUserId: _myUserId!);
     isLiveSessionActive = true;
     incomingVoiceCall = null;
@@ -1005,11 +1017,11 @@ class CollaborationRoomService extends ChangeNotifier {
 
   void dismissVoiceCall() {
     incomingVoiceCall = null;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<void> toggleParticipantVoice(String userId, bool enabled) async {
-    if (_currentUserRole != 'owner' && _currentUserRole != 'editor') return;
+    if (_isDisposed || (_currentUserRole != 'owner' && _currentUserRole != 'editor')) return;
     try {
       await _apiService.post('/notebooks/$_liveNotebookSid/session/update-permission', {
         'target_id': userId,
@@ -1022,7 +1034,7 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   Future<void> fetchEnrolledMembers() async {
-    if (_liveNotebookSid == null) return;
+    if (_isDisposed || _liveNotebookSid == null) return;
     try {
       final response = await _apiService.get('/notebooks/$_liveNotebookSid/members');
       if (response.statusCode == 200) {
@@ -1036,6 +1048,7 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void updateUserRoleLocally(String userId, String role) {
+    if (_isDisposed) return;
     final idx = onlineUsers.indexWhere((u) => u['id'].toString() == userId);
     if (idx != -1) {
       onlineUsers[idx]['role'] = role;
@@ -1049,21 +1062,21 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void toggleSessionLock() {
-    if (_currentUserRole != 'owner') return;
+    if (_isDisposed || _currentUserRole != 'owner') return;
     isSessionLocked = !isSessionLocked;
     _broadcastSessionPolicies();
     notifyListeners();
   }
 
   void toggleAuthorColors() {
-    if (_currentUserRole != 'owner') return;
+    if (_isDisposed || _currentUserRole != 'owner') return;
     isAuthorColorEnabled = !isAuthorColorEnabled;
     _broadcastSessionPolicies();
     notifyListeners();
   }
 
   Future<void> setVoiceMode(String mode) async {
-    if (_currentUserRole != 'owner' && _currentUserRole != 'editor') return;
+    if (_isDisposed || (_currentUserRole != 'owner' && _currentUserRole != 'editor')) return;
     sessionVoiceMode = mode;
     notifyListeners();
     try {

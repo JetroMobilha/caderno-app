@@ -3,8 +3,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/controllers/auth_controller.dart';
+import '../../features/auth/controllers/auth_state.dart';
 import '../../features/canvas/repositories/canvas_repository.dart';
 import 'api_provider.dart';
+import 'realtime_service.dart';
 import 'sync_service.dart';
 
 class SyncNotifier extends StateNotifier<SyncState> {
@@ -21,8 +23,23 @@ class SyncNotifier extends StateNotifier<SyncState> {
     // 2. Ouvir mudanças de rede para sincronização inteligente (Quando ficar online)
     _listenToConnectivity();
 
-    // 🚀 REMOVIDO: Future.microtask(() => performSync());
-    // O sincronismo agora é disparado pelo Login ou pela Deteção de Rede estável.
+    // 3. 🚀 REINÍCIO INTELIGENTE NO LOGIN:
+    // Observa o estado de autenticação. Se passar de deslogado para logado,
+    // força o reinício da rede e sincroniza imediatamente.
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      final wasAuthenticated = previous?.isAuthenticated ?? false;
+      final isNowAuthenticated = next.isAuthenticated;
+
+      if (!wasAuthenticated && isNowAuthenticated) {
+        debugPrint('🔐 [Sync] Login detetado. Reiniciando rede e forçando sincronização...');
+        
+        // A. Forçar reinício do WebSocket (Realtime)
+        ref.read(realtimeServiceProvider).initConnection();
+        
+        // B. Disparar Sincronização Leve (Metadata) imediatamente
+        performSync(forced: true, metadataOnly: true);
+      }
+    });
   }
 
   void _startAutoSync() {
@@ -55,14 +72,14 @@ class SyncNotifier extends StateNotifier<SyncState> {
     });
   }
 
-  Future<void> performSync({bool forced = false}) async {
+  Future<void> performSync({bool forced = false, bool metadataOnly = false, bool pushOnly = false}) async {
     if (state == SyncState.syncing) return;
 
     state = SyncState.syncing;
-    debugPrint('🔄 [SyncProvider] A iniciar ciclo de sincronização...');
+    debugPrint('🔄 [SyncProvider] A iniciar ciclo de sincronização... (Forced: $forced, Meta: $metadataOnly, Push: $pushOnly)');
     
     try {
-      await _syncService.syncAll(forced: forced);
+      await _syncService.syncAll(forced: forced, metadataOnly: metadataOnly, pushOnly: pushOnly);
       state = SyncState.idle;
       debugPrint('✅ [SyncProvider] Ciclo concluído.');
     } catch (e) {

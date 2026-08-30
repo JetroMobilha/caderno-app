@@ -15,6 +15,7 @@ class CanvasToolState {
   final Set<String> selectedImageIds;
   final Offset? selectionRectStart;
   final Offset? selectionRectEnd;
+  final List<Offset>? lassoPath; // 🚀 Novo
   final bool isTransformMode;
   final bool isHighlighter;
   final Offset totalSelectionDelta;
@@ -31,6 +32,7 @@ class CanvasToolState {
     this.selectedImageIds = const {},
     this.selectionRectStart,
     this.selectionRectEnd,
+    this.lassoPath, // 🚀
     this.isTransformMode = false,
     this.isHighlighter = false,
     this.totalSelectionDelta = Offset.zero,
@@ -48,6 +50,7 @@ class CanvasToolState {
     Set<String>? selectedImageIds,
     Offset? selectionRectStart,
     Offset? selectionRectEnd,
+    List<Offset>? lassoPath, // 🚀
     bool? isTransformMode,
     bool? isHighlighter,
     Offset? totalSelectionDelta,
@@ -64,6 +67,7 @@ class CanvasToolState {
       selectedImageIds: selectedImageIds ?? this.selectedImageIds,
       selectionRectStart: selectionRectStart ?? this.selectionRectStart,
       selectionRectEnd: selectionRectEnd ?? this.selectionRectEnd,
+      lassoPath: lassoPath ?? this.lassoPath, // 🚀
       isTransformMode: isTransformMode ?? this.isTransformMode,
       isHighlighter: isHighlighter ?? this.isHighlighter,
       totalSelectionDelta: totalSelectionDelta ?? this.totalSelectionDelta,
@@ -82,6 +86,7 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       isTransformMode: false,
       selectionRectStart: null,
       selectionRectEnd: null,
+      lassoPath: null, // 🚀
     );
   }
 
@@ -119,6 +124,7 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
     state = state.copyWith(
       selectionRectStart: start,
       selectionRectEnd: end,
+      lassoPath: null, // Resetar lasso se usar rect
     );
 
     if (start != null && end != null && page != null) {
@@ -142,6 +148,46 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
     }
   }
 
+  void setLassoPath(List<Offset>? path, [LocalPage? page]) {
+    state = state.copyWith(
+      lassoPath: path,
+      selectionRectStart: null,
+      selectionRectEnd: null,
+    );
+
+    if (path != null && path.length > 3 && page != null) {
+      final newStrokeIds = <String>{};
+      for (var s in page.strokes) {
+        if (!s.isDeleted && s.points.any((pt) => _isPointInPolygon(pt, path))) {
+          newStrokeIds.add(s.id);
+        }
+      }
+      final newTextIds = <String>{};
+      for (var t in page.textBlocks) {
+        if (!t.isDeleted && _isPointInPolygon(t.position, path)) {
+          newTextIds.add(t.id);
+        }
+      }
+      state = state.copyWith(
+        selectedStrokeIds: newStrokeIds,
+        selectedTextIds: newTextIds,
+      );
+    }
+  }
+
+  bool _isPointInPolygon(Offset point, List<Offset> polygon) {
+    bool result = false;
+    int j = polygon.length - 1;
+    for (int i = 0; i < polygon.length; i++) {
+      if ((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy) &&
+          (point.dx < (polygon[j].dx - polygon[i].dx) * (point.dy - polygon[i].dy) / (polygon[j].dy - polygon[i].dy) + polygon[i].dx)) {
+        result = !result;
+      }
+      j = i;
+    }
+    return result;
+  }
+
   void clearSelection() {
     state = state.copyWith(
       selectedStrokeIds: {},
@@ -149,6 +195,7 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       selectedImageIds: {},
       selectionRectStart: null,
       selectionRectEnd: null,
+      lassoPath: null, // 🚀
       isTransformMode: false,
       totalSelectionDelta: Offset.zero,
     );

@@ -6,6 +6,10 @@ import '../../../core/network/sync_provider.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../models/subject_model.dart';
 import '../repositories/subject_repository.dart';
+import '../../notebooks/repositories/notebook_repository.dart';
+import '../../canvas/repositories/canvas_repository.dart';
+import 'package:flutter/foundation.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart';
 
 // ============================================================================
 // 🧠 CONTROLADOR OFFLINE-FIRST (Puro, Rápido e Sem Polling)
@@ -50,6 +54,74 @@ class SubjectsController extends Notifier<List<Subject>> {
 
   Future<void> deleteSubject(Subject subject) async {
     await _repository.deleteSubject(subject);
+  }
+
+  Future<void> restoreSubject(Subject subject) async {
+    if (subject.id == null) return;
+    await _repository.restoreSubject(subject.id!);
+    // 🚀 Sincronizar para informar a nuvem do restauro
+    syncManuallyWithCloud();
+  }
+
+  Future<List<Subject>> getTrashItems() async {
+    return await _repository.getDeletedSubjects();
+  }
+
+  Future<void> emptyTrash() async {
+    final deleted = await _repository.getDeletedSubjects();
+    for (var sub in deleted) {
+      if (sub.id != null) await _repository.hardDeleteSubject(sub.id!);
+    }
+  }
+
+  // 🚀 DUPLICAÇÃO PROFUNDA: Pasta -> Cadernos -> Páginas -> Conteúdo
+  Future<void> duplicateSubject(Subject source) async {
+    try {
+      final notebookRepo = ref.read(notebookRepositoryProvider);
+      final canvasRepo = ref.read(canvasRepositoryProvider);
+
+      // 1. Clonar a Pasta
+      final clonedSubject = source.clone();
+      final newSubject = await _repository.addSubject(clonedSubject);
+      
+      if (newSubject == null || newSubject.id == null) return;
+      final int newSubId = newSubject.id!;
+
+      // 2. Obter Cadernos da Pasta Original
+      final originalNotebooks = await notebookRepo.getNotebooksBySubject(source.id!, source.serverId);
+      debugPrint('📑 [SubjectClone] Iniciando cópia de ${originalNotebooks.length} cadernos para a pasta $newSubId');
+
+      for (var nb in originalNotebooks) {
+        // 3. Clonar cada Caderno
+        final clonedNb = nb.clone(newSubjectId: newSubId);
+        final int newNbId = await notebookRepo.insertNotebook(clonedNb);
+
+        // 4. Obter Páginas do Caderno Original com Conteúdo
+        final originalPages = await canvasRepo.getPagesByNotebook(nb.id!, nb.serverId);
+        debugPrint('  📄 [SubjectClone] Copiando ${originalPages.length} páginas para o caderno $newNbId');
+
+        for (var page in originalPages) {
+          // 5. Clonar cada Página
+          final clonedPage = page.clone(newNotebookId: newNbId);
+          await canvasRepo.savePage(clonedPage, null);
+
+          // 6. Salvar Elementos (Strokes, Text, Images)
+          for (var s in clonedPage.strokes) {
+            await canvasRepo.saveSingleStroke(clonedPage.clientId, s);
+          }
+          for (var t in clonedPage.textBlocks) {
+            await canvasRepo.saveSingleTextBlock(clonedPage.clientId, t);
+          }
+          for (var i in clonedPage.imageBlocks) {
+            await canvasRepo.saveSingleImageBlock(clonedPage.clientId, i);
+          }
+        }
+      }
+      
+      debugPrint('✅ [SubjectClone] Pasta "${source.name}" duplicada com sucesso!');
+    } catch (e) {
+      debugPrint('🚨 [SubjectClone] Erro fatal: $e');
+    }
   }
 
   // 📡 Chamado manualmente pelo botão da Gaveta ou pelo Reverb (WebSocket)
@@ -149,4 +221,77 @@ class ActiveSubjectNotifier extends Notifier<Subject?> {
 
 final activeSubjectProvider = NotifierProvider<ActiveSubjectNotifier, Subject?>(() {
   return ActiveSubjectNotifier();
+});
+
+// ============================================================================
+// ⚙️ DEFINIÇÕES DE UI (Persistência de filtros e vistas)
+// ============================================================================
+class SubjectsUiSettings {
+  final bool showArchivedInDrawer;
+  final bool showArchivedInList;
+  final bool showArchivedInNotebooks;
+
+  SubjectsUiSettings({
+    this.showArchivedInDrawer = false,
+    this.showArchivedInList = false,
+    this.showArchivedInNotebooks = false,
+  });
+
+  SubjectsUiSettings copyWith({
+    bool? showArchivedInDrawer,
+    bool? showArchivedInList,
+    bool? showArchivedInNotebooks,
+  }) {
+    return SubjectsUiSettings(
+      showArchivedInDrawer: showArchivedInDrawer ?? this.showArchivedInDrawer,
+      showArchivedInList: showArchivedInList ?? this.showArchivedInList,
+      showArchivedInNotebooks: showArchivedInNotebooks ?? this.showArchivedInNotebooks,
+    );
+  }
+}
+
+class SubjectsUiNotifier extends Notifier<SubjectsUiSettings> {
+  static const _kDrawerKey = 'ui_subjects_drawer_archived';
+  static const _kListKey = 'ui_subjects_list_archived';
+  static const _kNotebooksKey = 'ui_notebooks_list_archived';
+
+  @override
+  SubjectsUiSettings build() {
+    _load();
+    return SubjectsUiSettings();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = SubjectsUiSettings(
+      showArchivedInDrawer: prefs.getBool(_kDrawerKey) ?? false,
+      showArchivedInList: prefs.getBool(_kListKey) ?? false,
+      showArchivedInNotebooks: prefs.getBool(_kNotebooksKey) ?? false,
+    );
+  }
+
+  Future<void> toggleDrawerArchive() async {
+    final newValue = !state.showArchivedInDrawer;
+    state = state.copyWith(showArchivedInDrawer: newValue);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kDrawerKey, newValue);
+  }
+
+  Future<void> toggleListArchive({bool? forceValue}) async {
+    final newValue = forceValue ?? !state.showArchivedInList;
+    state = state.copyWith(showArchivedInList: newValue);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kListKey, newValue);
+  }
+
+  Future<void> toggleNotebooksArchive() async {
+    final newValue = !state.showArchivedInNotebooks;
+    state = state.copyWith(showArchivedInNotebooks: newValue);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kNotebooksKey, newValue);
+  }
+}
+
+final subjectsUiProvider = NotifierProvider<SubjectsUiNotifier, SubjectsUiSettings>(() {
+  return SubjectsUiNotifier();
 });

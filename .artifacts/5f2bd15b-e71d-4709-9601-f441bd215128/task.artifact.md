@@ -1,0 +1,5 @@
+- [ ] Adicionar `initialTabIndex` ao `TrashScreen`
+- [ ] Adicionar botão de Lixeira no cabeçalho do `DrawerSubjectsList`
+- [ ] Remover atalho de Lixeira antigo da gaveta
+- [ ] Adicionar botão de Lixeira no `NotebooksListScreen`
+- [ ] Verificar navegação contextual da lixeira

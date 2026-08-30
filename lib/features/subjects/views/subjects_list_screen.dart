@@ -9,20 +9,42 @@ import '../controllers/subjects_controller.dart';
 import '../widgets/subject_list_item.dart';
 import '../widgets/subject_dialogs.dart';
 
-class SubjectsListScreen extends ConsumerWidget {
-  const SubjectsListScreen({super.key});
+class SubjectsListScreen extends ConsumerStatefulWidget {
+  final bool initialShowArchived;
+  const SubjectsListScreen({super.key, this.initialShowArchived = false});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SubjectsListScreen> createState() => _SubjectsListScreenState();
+}
+
+class _SubjectsListScreenState extends ConsumerState<SubjectsListScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialShowArchived) {
+      Future.microtask(() => ref.read(subjectsUiProvider.notifier).toggleListArchive(forceValue: true));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uiSettings = ref.watch(subjectsUiProvider);
+    final showArchived = uiSettings.showArchivedInList;
     final themeColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
-        title: Text('Os meus Cadernos', style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 22)),
+        title: Text(showArchived ? 'Pastas Arquivadas' : 'Os meus Cadernos', 
+          style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 22)),
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: Icon(showArchived ? Icons.inventory_2_rounded : Icons.archive_outlined),
+            onPressed: () => ref.read(subjectsUiProvider.notifier).toggleListArchive(),
+            tooltip: showArchived ? 'Ver Ativas' : 'Ver Arquivadas',
+          ),
           if (ref.watch(syncProvider) == SyncState.syncing)
             const Padding(
               padding: EdgeInsets.only(right: 16.0),
@@ -31,8 +53,8 @@ class SubjectsListScreen extends ConsumerWidget {
         ],
       ),
       drawer: const AppDrawer(),
-      body: const SubjectsListBody(),
-      floatingActionButton: FloatingActionButton(
+      body: SubjectsListBody(showArchived: showArchived),
+      floatingActionButton: showArchived ? null : FloatingActionButton(
         backgroundColor: themeColor,
         foregroundColor: Colors.white,
         elevation: 4,
@@ -49,20 +71,26 @@ class SubjectsListScreen extends ConsumerWidget {
 }
 
 class SubjectsListBody extends ConsumerWidget {
-  const SubjectsListBody({super.key});
+  final bool showArchived;
+  const SubjectsListBody({super.key, required this.showArchived});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subjects = ref.watch(subjectsProvider);
+    final allSubjects = ref.watch(subjectsProvider);
+    
+    // 🚀 Filtrar e ordenar
+    final activeSubjects = allSubjects.where((s) => s.isArchived == showArchived).toList();
+    activeSubjects.sort((a, b) => a.name.compareTo(b.name));
 
-    if (subjects.isEmpty) {
+    if (activeSubjects.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.menu_book_rounded, size: 64, color: Colors.grey.shade300),
+            Icon(showArchived ? Icons.archive_outlined : Icons.menu_book_rounded, size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
-            Text('Nenhuma disciplina criada.', style: GoogleFonts.inter(color: Colors.grey, fontSize: 16)),
+            Text(showArchived ? 'Nenhuma pasta arquivada.' : 'Nenhuma pasta ativa.', 
+              style: GoogleFonts.inter(color: Colors.grey, fontSize: 16)),
           ],
         ),
       );
@@ -70,9 +98,9 @@ class SubjectsListBody extends ConsumerWidget {
 
     return ListView.builder(
       padding: const EdgeInsets.only(top: 8, bottom: 80),
-      itemCount: subjects.length,
+      itemCount: activeSubjects.length,
       itemBuilder: (context, index) {
-        return SubjectListItem(subject: subjects[index]);
+        return SubjectListItem(subject: activeSubjects[index]);
       },
     );
   }

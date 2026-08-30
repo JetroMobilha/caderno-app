@@ -93,5 +93,20 @@ class Stroke {
     );
   }
 
-  Stroke clone() => Stroke.fromJson(toJson());
+  Stroke clone({String? newId, int? newPageNumber}) {
+    return Stroke(
+      id: newId ?? const Uuid().v4(),
+      color: color,
+      thickness: thickness,
+      points: List.from(points),
+      isDeleted: isDeleted,
+      deletedInSession: deletedInSession,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      pageNumber: newPageNumber ?? pageNumber,
+      creatorId: creatorId,
+      syncedWithCloud: false,
+      isHighlighter: isHighlighter,
+    );
+  }
 }

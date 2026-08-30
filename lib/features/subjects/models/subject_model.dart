@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart';
 
 class Subject {
   final int? id;
@@ -12,6 +13,8 @@ class Subject {
   final int isDeleted;
   final int updatedAt;
   int version; // 🔄 UI Only
+  final bool isArchived;
+  final bool isFavorite;
 
   Subject({
     this.id,
@@ -23,9 +26,12 @@ class Subject {
     this.icon,
     this.syncedWithCloud = 0,
     this.isDeleted = 0,
-    this.updatedAt = 0,
+    int? updatedAt,
     this.version = 1,
-  }) : clientId = clientId ?? const Uuid().v4();
+    this.isArchived = false,
+    this.isFavorite = false,
+  }) : clientId = clientId ?? const Uuid().v4(),
+       updatedAt = updatedAt ?? TimeService().nowMs();
 
   Subject copyWith({
     int? id,
@@ -39,6 +45,8 @@ class Subject {
     int? isDeleted,
     int? updatedAt,
     int? version,
+    bool? isArchived,
+    bool? isFavorite,
   }) {
     return Subject(
       id: id ?? this.id,
@@ -52,6 +60,8 @@ class Subject {
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -78,8 +88,10 @@ class Subject {
       icon: json['icon'],
       isDeleted: json['deleted_at'] != null ? 1 : 0,
       syncedWithCloud: json['synced_with_cloud'] ?? 1,
-      updatedAt: upAt ?? 0,
+      updatedAt: upAt ?? TimeService().nowMs(),
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
+      isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
+      isFavorite: json['is_favorite'] == 1 || json['is_favorite'] == true,
     );
   }
 
@@ -96,6 +108,26 @@ class Subject {
       'is_deleted': isDeleted,
       'updated_at': updatedAt,
       'version': 1,
+      'is_archived': isArchived ? 1 : 0,
+      'is_favorite': isFavorite ? 1 : 0,
     };
+  }
+
+  Subject clone({String? newClientId, int? newUserId}) {
+    return Subject(
+      id: null,
+      serverId: null,
+      clientId: newClientId ?? const Uuid().v4(),
+      userId: newUserId ?? userId,
+      name: '$name (Cópia)',
+      color: color,
+      icon: icon,
+      syncedWithCloud: 0,
+      isDeleted: 0,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      isArchived: false,
+      isFavorite: false,
+    );
   }
 }

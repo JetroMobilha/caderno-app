@@ -18,6 +18,8 @@ class Users extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
 }
 
 class Subjects extends Table {
@@ -32,6 +34,8 @@ class Subjects extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
 }
 
 class Notebooks extends Table {
@@ -43,9 +47,6 @@ class Notebooks extends Table {
   TextColumn get coverType => text()();
   TextColumn get color => text().nullable()();
   TextColumn get coverImage => text().nullable()();
-  TextColumn get lineType => text().nullable()();
-  TextColumn get paperSize => text().nullable()();
-  RealColumn get lineSpacing => real().nullable()();
   IntColumn get isPublished => integer().withDefault(const Constant(0))();
   RealColumn get price => real().withDefault(const Constant(0.00))();
   TextColumn get description => text().nullable()();
@@ -57,8 +58,11 @@ class Notebooks extends Table {
   TextColumn get templateType => text().withDefault(const Constant('study'))();
   TextColumn get collaborationMode => text().withDefault(const Constant('study_group'))();
   TextColumn get role => text().withDefault(const Constant('owner'))();
-  TextColumn get alternativeTitle => text().nullable()(); // 🚀 Sincronizado com sessão viva
-  TextColumn get sharingType => text().withDefault(const Constant('full'))(); // 🚀 full ou scoped
+  TextColumn get alternativeTitle => text().nullable()();
+  TextColumn get sharingType => text().withDefault(const Constant('full'))();
+  TextColumn get tags => text().nullable()(); // 🚀 v20: Tags separadas por vírgula
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v20
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v20
 }
 
 class Pages extends Table {
@@ -76,9 +80,10 @@ class Pages extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   IntColumn get isFrozen => integer().withDefault(const Constant(0))();
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v19
   TextColumn get paperSize => text().withDefault(const Constant('A4'))();
-  TextColumn get lineType => text().nullable()(); // 🚀 Novo: Pauta por folha
-  RealColumn get lineSpacing => real().nullable()(); // 🚀 Novo: Espaçamento por folha
+  TextColumn get lineType => text().nullable()();
+  RealColumn get lineSpacing => real().nullable()();
   TextColumn get backgroundPdfPath => text().nullable()();
 }
 
@@ -142,6 +147,8 @@ class NotebookUser extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
 }
 
 class Payments extends Table {
@@ -158,6 +165,8 @@ class Payments extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
 }
 
 class LessonRecordings extends Table {
@@ -171,6 +180,8 @@ class LessonRecordings extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
 }
 
 @DriftDatabase(tables: [
@@ -207,7 +218,7 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(canvasImageBlocks, canvasImageBlocks.deletedInSession);
         }
         if (from < 5) await m.alterTable(TableMigration(pages, newColumns: [pages.clientId]));
-        if (from < 6) await m.addColumn(notebooks, notebooks.lineSpacing);
+        if (from < 6)  ;
         if (from < 7) {
           await m.addColumn(users, users.version);
           await m.addColumn(subjects, subjects.version);
@@ -233,39 +244,46 @@ class AppDatabase extends _$AppDatabase {
         if (from < 12) await m.createTable(lessonRecordings);
         if (from < 13) await m.addColumn(pages, pages.paperSize);
         if (from < 14) await m.addColumn(notebooks, notebooks.collaborationMode);
-        if (from < 15) {
-           try {
-             await customStatement('ALTER TABLE notebooks ADD COLUMN role TEXT DEFAULT "owner"');
-           } catch (e) {
-             print('⚠️ Migração role ignorada (provavelmente já existe): $e');
-           }
-        }
+        if (from < 15) await customStatement('ALTER TABLE notebooks ADD COLUMN role TEXT DEFAULT "owner"');
         if (from < 16) {
-           try {
-             await customStatement('ALTER TABLE notebooks ADD COLUMN alternative_title TEXT');
-             await customStatement('ALTER TABLE notebooks ADD COLUMN sharing_type TEXT DEFAULT "full"');
-           } catch (e) {
-             print('⚠️ Migração versao 16 ignorada: $e');
-           }
+          await customStatement('ALTER TABLE notebooks ADD COLUMN alternative_title TEXT');
+          await customStatement('ALTER TABLE notebooks ADD COLUMN sharing_type TEXT DEFAULT "full"');
         }
         if (from < 17) {
           await m.addColumn(pages, pages.lineType);
           await m.addColumn(pages, pages.lineSpacing);
         }
         if (from < 18) {
-          // 🛡️ CORREÇÃO: Usar colunas específicas geradas pelo Drift para migrações manuais
-          await m.addColumn(users, users.bio);
-          await m.addColumn(users, users.institution);
-          await m.addColumn(users, users.preferredColor);
-          await m.addColumn(users, users.preferredFont);
-          await m.addColumn(users, users.specialties);
+          await customStatement('ALTER TABLE users ADD COLUMN bio TEXT');
+          await customStatement('ALTER TABLE users ADD COLUMN institution TEXT');
+          await customStatement('ALTER TABLE users ADD COLUMN preferred_color TEXT');
+          await customStatement('ALTER TABLE users ADD COLUMN preferred_font TEXT');
+          await customStatement('ALTER TABLE users ADD COLUMN specialties TEXT');
+        }
+        if (from < 19) {
+          await customStatement('ALTER TABLE pages ADD COLUMN is_favorite INTEGER DEFAULT 0 NOT NULL');
+        }
+        if (from < 20) {
+          await m.addColumn(notebooks, notebooks.tags);
+          await m.addColumn(notebooks, notebooks.isArchived);
+          await m.addColumn(notebooks, notebooks.isFavorite);
+        }
+        if (from < 21) {
+          // 🚀 REMOÇÃO DE CAMPOS REDUNDANTES (v21)
+          // O Drift não suporta dropColumn diretamente em SQLite nativo sem recriar tabela.
+          // Para manter simplicidade nesta fase, vamos apenas ignorar os dados nos modelos.
+          // Contudo, para o esquema ficar limpo, marcamos aqui a intenção.
+        }
+        if (from < 22) {
+          await m.addColumn(subjects, subjects.isArchived);
+          await m.addColumn(subjects, subjects.isFavorite);
         }
       },
     );
   }
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 22;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

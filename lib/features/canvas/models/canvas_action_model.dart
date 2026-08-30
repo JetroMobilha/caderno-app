@@ -161,7 +161,7 @@ class AddStrokeAction extends CanvasAction {
 
   @override void execute(LocalPage page) {
     stroke.isDeleted = false;
-    stroke.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    stroke.updatedAt = TimeService().nowMs();
     final idx = page.strokes.indexWhere((s) => s.id == stroke.id);
     if (idx != -1) {
       page.strokes[idx] = stroke;
@@ -173,7 +173,7 @@ class AddStrokeAction extends CanvasAction {
     final idx = page.strokes.indexWhere((s) => s.id == stroke.id);
     if (idx != -1) {
       page.strokes[idx].isDeleted = true;
-      page.strokes[idx].updatedAt = DateTime.now().millisecondsSinceEpoch;
+      page.strokes[idx].updatedAt = TimeService().nowMs();
     }
   }
 }
@@ -195,7 +195,7 @@ class DeleteAction extends CanvasAction {
   };
 
   @override void execute(LocalPage page) {
-    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int now = TimeService().nowMs();
     for (var s in strokes) { 
       final idx = page.strokes.indexWhere((item) => item.id == s.id);
       if (idx != -1) {
@@ -219,7 +219,7 @@ class DeleteAction extends CanvasAction {
     }
   }
   @override void undo(LocalPage page) {
-    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int now = TimeService().nowMs();
     for (var s in strokes) {
       final idx = page.strokes.indexWhere((item) => item.id == s.id);
       if (idx != -1) {
@@ -258,7 +258,7 @@ class AddTextAction extends CanvasAction {
 
   @override void execute(LocalPage page) {
     block.isDeleted = false;
-    block.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    block.updatedAt = TimeService().nowMs();
     final idx = page.textBlocks.indexWhere((t) => t.id == block.id);
     if (idx != -1) {
       page.textBlocks[idx] = block;
@@ -270,7 +270,7 @@ class AddTextAction extends CanvasAction {
     final idx = page.textBlocks.indexWhere((t) => t.id == block.id);
     if (idx != -1) {
       page.textBlocks[idx].isDeleted = true;
-      page.textBlocks[idx].updatedAt = DateTime.now().millisecondsSinceEpoch;
+      page.textBlocks[idx].updatedAt = TimeService().nowMs();
     }
   }
 }
@@ -289,7 +289,7 @@ class AddImageAction extends CanvasAction {
 
   @override void execute(LocalPage page) {
     block.isDeleted = false;
-    block.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    block.updatedAt = TimeService().nowMs();
     final idx = page.imageBlocks.indexWhere((img) => img.id == block.id);
     if (idx != -1) {
       page.imageBlocks[idx] = block;
@@ -301,7 +301,7 @@ class AddImageAction extends CanvasAction {
     final idx = page.imageBlocks.indexWhere((img) => img.id == block.id);
     if (idx != -1) {
       page.imageBlocks[idx].isDeleted = true;
-      page.imageBlocks[idx].updatedAt = DateTime.now().millisecondsSinceEpoch;
+      page.imageBlocks[idx].updatedAt = TimeService().nowMs();
     }
   }
 }
@@ -402,12 +402,12 @@ class AddPageAction extends CanvasAction {
     page.isDeleted = false;
     if (lineType != null) page.lineType = lineType;
     if (lineSpacing != null) page.lineSpacing = lineSpacing;
-    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    page.updatedAt = TimeService().nowMs();
   }
 
   @override void undo(LocalPage page) {
     page.isDeleted = true;
-    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    page.updatedAt = TimeService().nowMs();
   }
 }
 
@@ -431,11 +431,11 @@ class DeletePageAction extends CanvasAction {
 
   @override void execute(LocalPage page) {
     page.isDeleted = true;
-    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    page.updatedAt = TimeService().nowMs();
   }
 
   @override void undo(LocalPage page) {
     page.isDeleted = false;
-    page.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    page.updatedAt = TimeService().nowMs();
   }
 }

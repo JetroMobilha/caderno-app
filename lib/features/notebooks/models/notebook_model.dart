@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart';
 
 class Notebook {
   int? id;
@@ -9,9 +10,6 @@ class Notebook {
   String coverType;
   String? color;
   String? coverImage;
-  String lineType;
-  String paperSize;
-  double? lineSpacing; // 📏 Espaçamento dinâmico entre linhas/grelha
   String templateType; // 🚀 'study', 'technical', 'formal'
   String collaborationMode; // 🚀 'study_group', 'lecture', 'tutoring'
   int version; // 🔄 Versão lógica para UI/Compatibilidade
@@ -20,7 +18,7 @@ class Notebook {
   final int isPublished;
   final double price;
   final String? description;
-  final String? authorName;
+  String? authorName;
 
   final int syncedWithCloud;
   final int isDeleted;
@@ -28,6 +26,11 @@ class Notebook {
   final String role; // 🚀 'owner', 'editor', 'viewer' ou 'student'
   final String? alternativeTitle; // 🚀
   final String sharingType; // 🚀 'full' ou 'scoped'
+
+  // 🚀 v20: Maturação de Estrutura
+  final List<String> tags;
+  final bool isArchived;
+  final bool isFavorite;
 
   Notebook({
     this.id,
@@ -38,9 +41,6 @@ class Notebook {
     required this.coverType,
     this.color,
     this.coverImage,
-    required this.lineType,
-    required this.paperSize,
-    this.lineSpacing,
     this.templateType = 'study',
     this.collaborationMode = 'study_group',
     this.isPublished = 0,
@@ -54,8 +54,11 @@ class Notebook {
     this.role = 'owner',
     this.alternativeTitle,
     this.sharingType = 'full',
+    this.tags = const [],
+    this.isArchived = false,
+    this.isFavorite = false,
   }) : clientId = clientId ?? const Uuid().v4(),
-       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+       updatedAt = updatedAt ?? TimeService().nowMs();
 
   Notebook copyWith({
     int? id,
@@ -82,6 +85,9 @@ class Notebook {
     String? role,
     String? alternativeTitle,
     String? sharingType,
+    List<String>? tags,
+    bool? isArchived,
+    bool? isFavorite,
   }) {
     return Notebook(
       id: id ?? this.id,
@@ -92,9 +98,6 @@ class Notebook {
       coverType: coverType ?? this.coverType,
       color: color ?? this.color,
       coverImage: coverImage ?? this.coverImage,
-      lineType: lineType ?? this.lineType,
-      paperSize: paperSize ?? this.paperSize,
-      lineSpacing: lineSpacing ?? this.lineSpacing,
       templateType: templateType ?? this.templateType,
       collaborationMode: collaborationMode ?? this.collaborationMode,
       isPublished: isPublished ?? this.isPublished,
@@ -108,6 +111,9 @@ class Notebook {
       role: role ?? this.role,
       alternativeTitle: alternativeTitle ?? this.alternativeTitle,
       sharingType: sharingType ?? this.sharingType,
+      tags: tags ?? this.tags,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -124,9 +130,6 @@ class Notebook {
       'cover_type': coverType,
       'color': color,
       'cover_image': coverImage,
-      'line_type': lineType,
-      'paper_size': paperSize,
-      'line_spacing': lineSpacing,
       'template_type': templateType,
       'collaboration_mode': collaborationMode,
       'is_published': isPublished,
@@ -140,6 +143,9 @@ class Notebook {
       'role': role,
       'alternative_title': alternativeTitle,
       'sharing_type': sharingType,
+      'tags': tags, // 🚀 v20: Enviado como List (JSON Array no HTTP)
+      'is_archived': isArchived ? 1 : 0, // 🚀 v20
+      'is_favorite': isFavorite ? 1 : 0, // 🚀 v20
     };
   }
 
@@ -169,9 +175,6 @@ class Notebook {
       coverType: json['cover_type'] ?? 'color',
       color: json['color'],
       coverImage: json['cover_image'],
-      lineType: lineType,
-      paperSize: json['paper_size'] ?? 'A4',
-      lineSpacing: json['line_spacing'] != null ? double.tryParse(json['line_spacing'].toString()) : null,
       templateType: json['template_type'] ?? 'study',
       collaborationMode: json['collaboration_mode'] ?? 'study_group',
       isPublished: int.tryParse(json['is_published']?.toString() ?? '0') ?? 0,
@@ -180,11 +183,52 @@ class Notebook {
       authorName: json['author_name'],
       syncedWithCloud: json['synced_with_cloud'] ?? 1,
       isDeleted: json['deleted_at'] != null ? 1 : 0,
-      updatedAt: upAt ?? DateTime.now().millisecondsSinceEpoch,
+      updatedAt: upAt ?? TimeService().nowMs(),
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
       role: json['role'] ?? 'owner',
       alternativeTitle: json['alternative_title'],
       sharingType: json['sharing_type'] ?? 'full',
+      tags: _parseTags(json['tags']),
+      isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
+      isFavorite: json['is_favorite'] == 1 || json['is_favorite'] == true,
+    );
+  }
+
+  static List<String> _parseTags(dynamic tagsJson) {
+    if (tagsJson == null) return [];
+    if (tagsJson is List) return tagsJson.map((e) => e.toString()).toList();
+    if (tagsJson is String) {
+      return tagsJson.split(',').where((t) => t.isNotEmpty).toList();
+    }
+    return [];
+  }
+
+  Notebook clone({String? newClientId, int? newSubjectId}) {
+    return Notebook(
+      id: null,
+      serverId: null,
+      clientId: newClientId ?? const Uuid().v4(),
+      subjectId: newSubjectId ?? subjectId,
+      title: '$title (Cópia)',
+      coverType: coverType,
+      color: color,
+      coverImage: coverImage,
+      templateType: templateType,
+      collaborationMode: collaborationMode,
+      isPublished: 0,
+      price: 0.0,
+      description: description,
+      authorName: authorName,
+      syncedWithCloud: 0,
+      isDeleted: 0,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      role: 'owner',
+      alternativeTitle: alternativeTitle,
+      sharingType: sharingType,
+      tags: List.from(tags),
+      isArchived: false,
+      isFavorite: false,
     );
   }
 }

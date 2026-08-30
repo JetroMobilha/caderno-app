@@ -44,6 +44,23 @@ class PaperStyleDialog extends ConsumerWidget {
               Navigator.pop(context);
             },
           ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.description_outlined),
+            title: const Text('Cornell Notes'),
+            onTap: () {
+              docNotifier.setLineType(currentPage, 'cornell');
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.grid_on_rounded),
+            title: const Text('Grelha Engenharia'),
+            onTap: () {
+              docNotifier.setLineType(currentPage, 'engineering');
+              Navigator.pop(context);
+            },
+          ),
         ],
       ),
     );

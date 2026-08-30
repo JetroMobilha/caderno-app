@@ -4,6 +4,7 @@ import '../../providers/canvas_tool_provider.dart';
 
 class ColorStudioDialog extends ConsumerWidget {
   final bool isForText;
+  final Function(String)? onColorSelected; // 🚀 Novo callback
 
   static const Map<String, Color> colorPalette = {
     'Black': Color(0xFF1A1A24),
@@ -31,6 +32,7 @@ class ColorStudioDialog extends ConsumerWidget {
   const ColorStudioDialog({
     super.key,
     this.isForText = false,
+    this.onColorSelected, // 🚀
   });
 
   @override
@@ -40,7 +42,7 @@ class ColorStudioDialog extends ConsumerWidget {
     return AlertDialog(
       backgroundColor: const Color(0xFFFDFBF7),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(isForText ? 'Cor do Texto' : 'Cor da Caneta'),
+      title: Text(onColorSelected != null ? 'Mudar Cor da Seleção' : (isForText ? 'Cor do Texto' : 'Cor da Caneta')),
       content: SizedBox(
         width: 300,
         child: Wrap(
@@ -48,8 +50,11 @@ class ColorStudioDialog extends ConsumerWidget {
           runSpacing: 12,
           children: colorPalette.entries.map((e) => GestureDetector(
             onTap: () {
-              final hex = '#${e.value.toARGB32().toRadixString(16).substring(2)}';
-              if (isForText) {
+              final hex = '#${e.value.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
+              
+              if (onColorSelected != null) {
+                onColorSelected!(hex);
+              } else if (isForText) {
                 // To be implemented: setTextColor in Document or Tool
               } else {
                 toolNotifier.setColor(hex);

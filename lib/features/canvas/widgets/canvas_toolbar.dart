@@ -54,7 +54,7 @@ class CanvasToolbar extends ConsumerWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 15, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8)),
         ],
       ),
       child: Wrap(
@@ -62,19 +62,32 @@ class CanvasToolbar extends ConsumerWidget {
         crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.center,
         children: [
           _buildToolButton(toolNotifier, Icons.brush, ToolMode.draw, 'Caneta', toolState.currentTool),
-          _buildToolButton(toolNotifier, Icons.auto_fix_high, ToolMode.eraser, 'Borracha', toolState.currentTool),
+          _buildToolButton(toolNotifier, Icons.auto_fix_high, ToolMode.eraser, 'Apagar Objeto', toolState.currentTool),
+          _buildToolButton(toolNotifier, Icons.cleaning_services_rounded, ToolMode.pixelEraser, 'Borracha de Precisão', toolState.currentTool), // 🚀
           _buildToolButton(toolNotifier, Icons.text_fields, ToolMode.text, 'Texto', toolState.currentTool),
-          _buildToolButton(toolNotifier, Icons.highlight_alt, ToolMode.select, 'Selecionar', toolState.currentTool),
-          
+          _buildToolButton(toolNotifier, Icons.highlight_alt, ToolMode.select, 'Selecionar (Rect)', toolState.currentTool),
+          _buildToolButton(toolNotifier, Icons.gesture_rounded, ToolMode.lasso, 'Laço de Seleção', toolState.currentTool), // 🚀
+
           _buildCompactIconButton(Icons.style_rounded, () => Scaffold.of(context).openEndDrawer(), 'Ver Páginas', const Color(0xFF0F4C5C)),
-          
-          if (toolState.selectedStrokeIds.isNotEmpty || toolState.selectedTextIds.isNotEmpty || toolState.selectedImageIds.isNotEmpty)
+
+          if (toolState.selectedStrokeIds.isNotEmpty || toolState.selectedTextIds.isNotEmpty || toolState.selectedImageIds.isNotEmpty) ...[
             _buildCompactIconButton(
               toolState.isTransformMode ? Icons.check_circle_rounded : Icons.open_with_rounded, 
               () => toolNotifier.toggleTransformMode(), 
               toolState.isTransformMode ? 'Concluir' : 'Redimensionar Seleção', 
               toolState.isTransformMode ? Colors.green : const Color(0xFFE67E22)
             ),
+            // 🚀 Botão para mudar cor da seleção em lote
+            InkWell(
+              onTap: onColorTap,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(border: Border.all(color: Colors.black12), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.palette_outlined, size: 18, color: Colors.blueAccent),
+              ),
+            ),
+          ],
 
           if (!isSmallScreen) _buildToolButton(toolNotifier, Icons.pan_tool, ToolMode.pan, 'Mover Folha', toolState.currentTool),
           
@@ -103,8 +116,8 @@ class CanvasToolbar extends ConsumerWidget {
             _buildCompactIconButton(Icons.add_photo_alternate_outlined, onAddImageTap, 'Adicionar Imagem', const Color(0xFF1A1A24)),
           
           if (isSmallScreen) ...[
-            _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.3)),
-            _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.3)),
+            _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
+            _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
           ],
 
           if (isSmallScreen)
@@ -115,8 +128,8 @@ class CanvasToolbar extends ConsumerWidget {
             _buildCompactIconButton(Icons.zoom_out, () => viewportNotifier.zoom(0.8), 'Afastar', const Color(0xFF1A1A24)),
             _buildCompactIconButton(Icons.zoom_in, () => viewportNotifier.zoom(1.2), 'Aproximar', const Color(0xFF1A1A24)),
             Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.5)),
-            _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.5)),
+            _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+            _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
             _buildCompactIconButton(Icons.delete_forever, onDeletePageTap, 'Rasgar Folha', Colors.redAccent),
           ],
 
@@ -130,7 +143,7 @@ class CanvasToolbar extends ConsumerWidget {
                 alignment: Alignment.center, 
                 child: CircleAvatar(
                   radius: 11, 
-                  backgroundColor: Color(int.parse(toolState.selectedColorHex.replaceFirst('#', '0xFF'))).withValues(alpha: toolState.isHighlighter ? 0.4 : 1.0)
+                  backgroundColor: Color(int.parse(toolState.selectedColorHex.replaceFirst('#', '0xFF'))).withOpacity(toolState.isHighlighter ? 0.4 : 1.0)
                 )
               )
             ),
@@ -146,8 +159,8 @@ class CanvasToolbar extends ConsumerWidget {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      CircleAvatar(radius: (toolState.selectedThickness / 1.5).clamp(2.0, 9.0), backgroundColor: const Color(0xFF1A1A24).withValues(alpha: toolState.isHighlighter ? 0.4 : 1.0)),
-                      if (toolState.isHighlighter) Icon(Icons.highlight, size: 10, color: Colors.white.withValues(alpha: 0.8)),
+                      CircleAvatar(radius: (toolState.selectedThickness / 1.5).clamp(2.0, 9.0), backgroundColor: const Color(0xFF1A1A24).withOpacity(toolState.isHighlighter ? 0.4 : 1.0)),
+                      if (toolState.isHighlighter) Icon(Icons.highlight, size: 10, color: Colors.white.withOpacity(0.8)),
                     ],
                   )
                 )
@@ -166,7 +179,7 @@ class CanvasToolbar extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 15, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -182,7 +195,7 @@ class CanvasToolbar extends ConsumerWidget {
   Widget _buildToolButton(CanvasToolNotifier notifier, IconData icon, ToolMode mode, String tooltip, ToolMode currentTool) {
     final bool isActive = currentTool == mode;
     return Container(
-      decoration: BoxDecoration(color: isActive ? const Color(0xFF0F4C5C).withValues(alpha: 0.15) : Colors.transparent, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: isActive ? const Color(0xFF0F4C5C).withOpacity(0.15) : Colors.transparent, shape: BoxShape.circle),
       child: IconButton(iconSize: 20, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, icon: Icon(icon, color: isActive ? const Color(0xFF0F4C5C) : const Color(0xFF1A1A24)), onPressed: () => notifier.switchTool(mode), tooltip: tooltip),
     );
   }

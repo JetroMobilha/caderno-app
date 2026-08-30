@@ -1,3 +1,4 @@
+// Refactored to remove onAgendaTap
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,8 +10,6 @@ import 'package:caderno_digital_app/features/auth/views/profile_screen.dart';
 import 'package:caderno_digital_app/features/auth/views/login_screen.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
-import 'package:caderno_digital_app/core/theme/app_profile.dart';
-import 'package:caderno_digital_app/features/agenda/screens/quick_notes_screen.dart';
 import 'package:caderno_digital_app/features/marketplace/views/marketplace_screen.dart';
 
 // Modular Components
@@ -116,6 +115,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
+            onLogout: () => _confirmLogout(context), // 🚀 Passar ação
           ),
           DrawerSubjectsList(
             subjects: subjectsList,
@@ -140,10 +140,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketplaceScreen()));
             },
-            onAgendaTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickNotesScreen()));
-            },
             onSharedTap: () {
               Navigator.pop(context);
               final virtualSharedSubject = Subject(
@@ -155,19 +151,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               );
               ref.read(activeSubjectProvider.notifier).setSubject(virtualSharedSubject);
             },
-          ),
-          const Divider(height: 1, color: Colors.black12),
-          Material(
-            color: Colors.black.withOpacity(0.02),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
-                title: Text('Terminar Sessão', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent)),
-                onTap: () => _confirmLogout(context),
-              ),
-            ),
           ),
           const SizedBox(height: 8),
         ],

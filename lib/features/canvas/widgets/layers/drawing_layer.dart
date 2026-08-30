@@ -21,11 +21,6 @@ class DrawingLayer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final toolState = ref.watch(canvasToolProvider);
-    final docState = ref.watch(canvasDocumentProvider);
-    final realtime = ref.read(realtimeServiceProvider);
-    
-    // Provisório: Obter o serviço de colaboração para os traços remotos
-    // Numa fase posterior, isto pode ser um provider específico
     final collabService = ref.read(collaborationRoomServiceProvider);
 
     return IgnorePointer(
@@ -53,6 +48,7 @@ class DrawingLayer extends ConsumerWidget {
                 selectionRect: toolState.selectionRectStart != null && toolState.selectionRectEnd != null
                     ? Rect.fromPoints(toolState.selectionRectStart!, toolState.selectionRectEnd!)
                     : null,
+                lassoPath: toolState.lassoPath,
                 pageVersion: page.version,
                 remoteMovingStrokeIds: collabService.remoteMovingStrokeIds,
                 userColors: collabService.userColorsMap,

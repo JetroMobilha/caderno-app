@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class CanvasViewportState {
   final int currentPageIndex;
+  final String? currentPageClientId; // 🚀 ÂNCORA: Identidade da folha atual
   final bool isFocusMode;
   final int activePointerCount;
   final Size? lastScreenSize;
@@ -11,6 +12,7 @@ class CanvasViewportState {
 
   CanvasViewportState({
     this.currentPageIndex = 0,
+    this.currentPageClientId,
     this.isFocusMode = false,
     this.activePointerCount = 0,
     this.lastScreenSize,
@@ -20,6 +22,7 @@ class CanvasViewportState {
 
   CanvasViewportState copyWith({
     int? currentPageIndex,
+    String? currentPageClientId,
     bool? isFocusMode,
     int? activePointerCount,
     Size? lastScreenSize,
@@ -28,6 +31,7 @@ class CanvasViewportState {
   }) {
     return CanvasViewportState(
       currentPageIndex: currentPageIndex ?? this.currentPageIndex,
+      currentPageClientId: currentPageClientId ?? this.currentPageClientId,
       isFocusMode: isFocusMode ?? this.isFocusMode,
       activePointerCount: activePointerCount ?? this.activePointerCount,
       lastScreenSize: lastScreenSize ?? this.lastScreenSize,
@@ -37,7 +41,7 @@ class CanvasViewportState {
   }
 }
 
-class CanvasViewportNotifier extends Notifier<CanvasViewportState> {
+class CanvasViewportNotifier extends AutoDisposeNotifier<CanvasViewportState> {
   late final TransformationController transformationController;
   late final PageController pageController;
 
@@ -54,14 +58,40 @@ class CanvasViewportNotifier extends Notifier<CanvasViewportState> {
     return CanvasViewportState();
   }
 
-  void setPageIndex(int index) {
-    if (state.currentPageIndex == index) return;
-    state = state.copyWith(currentPageIndex: index);
+  void setPageIndex(int index, {String? clientId}) {
+    if (state.currentPageIndex == index && state.currentPageClientId == clientId) return;
+    state = state.copyWith(currentPageIndex: index, currentPageClientId: clientId);
   }
 
-  void jumpToPage(int index) {
-    setPageIndex(index);
-    pageController.jumpToPage(index);
+  void jumpToPage(int index, {String? clientId}) {
+    if (state.currentPageIndex == index && state.currentPageClientId == clientId && pageController.hasClients && pageController.page?.round() == index) return;
+    setPageIndex(index, clientId: clientId);
+    if (pageController.hasClients) {
+      Future.microtask(() {
+        pageController.jumpToPage(index);
+      });
+    }
+  }
+
+  /// 🚀 SINCRONIA ESTRUTURAL: Ajusta o índice se as páginas mudarem de lugar
+  void syncIndexWithId(List<String> allClientIds) {
+    if (state.currentPageClientId == null) {
+       if (allClientIds.isNotEmpty && state.currentPageIndex < allClientIds.length) {
+         state = state.copyWith(currentPageClientId: allClientIds[state.currentPageIndex]);
+       }
+       return;
+    }
+
+    final int newIndex = allClientIds.indexOf(state.currentPageClientId!);
+    if (newIndex != -1 && newIndex != state.currentPageIndex) {
+      debugPrint('⚓ [Viewport] Ajustando índice por ID: ${state.currentPageIndex} -> $newIndex');
+      state = state.copyWith(currentPageIndex: newIndex);
+      if (pageController.hasClients) {
+        Future.microtask(() {
+          pageController.jumpToPage(newIndex);
+        });
+      }
+    }
   }
 
   void toggleFocusMode() {
@@ -105,6 +135,6 @@ class CanvasViewportNotifier extends Notifier<CanvasViewportState> {
   }
 }
 
-final canvasViewportProvider = NotifierProvider<CanvasViewportNotifier, CanvasViewportState>(() {
+final canvasViewportProvider = NotifierProvider.autoDispose<CanvasViewportNotifier, CanvasViewportState>(() {
   return CanvasViewportNotifier();
 });

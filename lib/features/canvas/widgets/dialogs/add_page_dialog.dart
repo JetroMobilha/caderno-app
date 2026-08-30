@@ -1,0 +1,384 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../providers/canvas_document_provider.dart';
+
+class AddPageDialog extends StatefulWidget {
+  final String defaultLineType;
+  final double defaultLineSpacing;
+  final int? insertIndex; // 🚀 Posição de inserção opcional
+
+  const AddPageDialog({
+    super.key,
+    this.defaultLineType = 'ruled',
+    this.defaultLineSpacing = 28.0,
+    this.insertIndex,
+  });
+
+  @override
+  State<AddPageDialog> createState() => _AddPageDialogState();
+}
+
+class _AddPageDialogState extends State<AddPageDialog> {
+  String _selectedSize = 'A4';
+  bool _isLandscape = false;
+  late String _selectedLineType;
+  final TextEditingController _sectionController = TextEditingController();
+  int _quantity = 1; // 🚀 Quantidade padrão
+  
+  final List<String> _sizes = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'];
+  
+  final List<Map<String, dynamic>> _lineTypes = [
+    {'id': 'ruled', 'label': 'Pautado', 'icon': Icons.view_headline},
+    {'id': 'grid', 'label': 'Quadriculado', 'icon': Icons.grid_4x4},
+    {'id': 'dots', 'label': 'Pontilhado', 'icon': Icons.more_horiz},
+    {'id': 'blank', 'label': 'Liso', 'icon': Icons.check_box_outline_blank},
+    {'id': 'cornell', 'label': 'Cornell', 'icon': Icons.description_outlined},
+    {'id': 'engineering', 'label': 'Engenharia', 'icon': Icons.grid_on_rounded},
+  ];
+
+  @override
+  void dispose() {
+    _sectionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLineType = widget.defaultLineType;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (context, ref, child) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFFFDFBF7),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text(
+            'Nova Folha',
+            style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+          ),
+          content: Container(
+            // 🚀 RESPONSIVIDADE: Define um tamanho máximo para o modal não esticar em telas grandes
+            width: MediaQuery.of(context).size.width > 600 ? 450 : double.maxFinite,
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. Orientação
+                  Text('Orientação', style: _sectionStyle()),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildOptionCard(
+                        label: 'Vertical',
+                        icon: Icons.stay_current_portrait_rounded,
+                        isSelected: !_isLandscape,
+                        onTap: () => setState(() => _isLandscape = false),
+                      ),
+                      const SizedBox(width: 12),
+                      _buildOptionCard(
+                        label: 'Horizontal',
+                        icon: Icons.stay_current_landscape_rounded,
+                        isSelected: _isLandscape,
+                        onTap: () => setState(() => _isLandscape = true),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 2. Tamanho
+                  Text('Tamanho do Papel', style: _sectionStyle()),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _sizes.map((size) {
+                      final bool isSelected = _selectedSize == size;
+                      return ChoiceChip(
+                        label: Text(size),
+                        selected: isSelected,
+                        onSelected: (val) => setState(() => _selectedSize = size),
+                        selectedColor: const Color(0xFF0F4C5C).withOpacity(0.15),
+                        labelStyle: TextStyle(
+                          color: isSelected ? const Color(0xFF0F4C5C) : Colors.black87,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 3. Estilo de Pauta
+                  Text('Estilo de Pauta', style: _sectionStyle()),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      alignment: WrapAlignment.start,
+                      children: _lineTypes.map((type) {
+                        final bool isSelected = _selectedLineType == type['id'];
+                        return InkWell(
+                          onTap: () => setState(() => _selectedLineType = type['id']),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 110, // 🚀 Tamanho fixo para evitar estiramento
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.1) : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  type['icon'],
+                                  color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54,
+                                  size: 16, // 🚀 Reduzido de 24
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  type['label'],
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 4. Quantidade (NOVO)
+                  Text('Quantidade de Folhas', style: _sectionStyle()),
+                  const SizedBox(height: 12),
+                  _buildQuantitySelector(),
+                  const SizedBox(height: 24),
+
+                  // 5. Secção
+                  Text('Secção (Opcional)', style: _sectionStyle()),
+                  const SizedBox(height: 12),
+                  _buildSectionAutocomplete(ref),
+                ],
+              ),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCELAR', style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(canvasDocumentProvider.notifier).addNewPage(
+                  isLandscape: _isLandscape,
+                  paperSize: _selectedSize,
+                  lineType: _selectedLineType,
+                  lineSpacing: widget.defaultLineSpacing,
+                  sectionTitle: _sectionController.text.trim().isEmpty ? null : _sectionController.text.trim(),
+                  count: _quantity,
+                  insertIndex: widget.insertIndex,
+                );
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F4C5C),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('ADICIONAR', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  TextStyle _sectionStyle() => GoogleFonts.inter(
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+    color: Colors.black38,
+    letterSpacing: 1.1,
+  );
+
+  Widget _buildQuantitySelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _quantityButton(Icons.remove, () {
+            if (_quantity > 1) setState(() => _quantity--);
+          }),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              '$_quantity',
+              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
+            ),
+          ),
+          _quantityButton(Icons.add, () {
+            if (_quantity < 50) setState(() => _quantity++);
+          }),
+          const SizedBox(width: 12),
+          Text(
+            _quantity == 1 ? 'folha' : 'folhas',
+            style: GoogleFonts.inter(fontSize: 14, color: Colors.black45),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quantityButton(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(6), // 🚀 Reduzido de 8
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)],
+        ),
+        child: Icon(icon, size: 16, color: const Color(0xFF0F4C5C)), // 🚀 Reduzido de 20
+      ),
+    );
+  }
+
+  Widget _buildSectionAutocomplete(WidgetRef ref) {
+    final docState = ref.watch(canvasDocumentProvider);
+    final List<String> existingSections = docState.pages
+        .map((p) => p.sectionTitle)
+        .where((s) => s != null && s.isNotEmpty)
+        .cast<String>()
+        .toSet()
+        .toList();
+
+    return Autocomplete<String>(
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        // 🚀 Mostrar todas as opções se o campo estiver vazio
+        if (textEditingValue.text.isEmpty) {
+          return existingSections;
+        }
+        return existingSections.where((String option) {
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        });
+      },
+      onSelected: (String selection) {
+        _sectionController.text = selection;
+      },
+      fieldViewBuilder: (context, fieldController, focusNode, onFieldSubmitted) {
+        return TextField(
+          controller: fieldController,
+          focusNode: focusNode,
+          onChanged: (val) => _sectionController.text = val,
+          onTap: () {
+            // 🚀 Ao clicar, se estiver vazio, forçar a abertura do menu
+            if (fieldController.text.isEmpty) {
+              fieldController.text = ''; 
+            }
+          },
+          decoration: InputDecoration(
+            hintText: 'Ex: Resumo Aula 1',
+            filled: true,
+            fillColor: Colors.black.withOpacity(0.03),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            suffixIcon: const Icon(Icons.arrow_drop_down, color: Colors.black26),
+          ),
+          style: GoogleFonts.inter(fontSize: 14),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.7,
+              constraints: const BoxConstraints(maxHeight: 200, maxWidth: 400),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  return ListTile(
+                    dense: true,
+                    title: Text(option, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    onTap: () => onSelected(option),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOptionCard({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.1) : Colors.transparent,
+            border: Border.all(
+              color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12,
+              width: isSelected ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 18, color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54), // 🚀 Reduzido para 18
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12, // 🚀 Pequeno ajuste na fonte para acompanhar
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

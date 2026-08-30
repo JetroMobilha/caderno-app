@@ -1,56 +1,52 @@
-# Plano de Implementação: Expansão do Perfil do Utilizador e Remoção do Perfil da Aplicação
+# Plano de Implementação: Transição de Terminologia para "Pastas"
 
-Este plano visa simplificar a experiência do utilizador ao remover a seleção global de "Perfil da Aplicação" e expandir o "Perfil do Utilizador" com campos e preferências úteis para um projeto de grande dimensão (EdTech, Colaboração e IA).
+Este plano visa tornar a aplicação mais abrangente para diversos setores (Corporativo, Engenharia, Direito, etc.), substituindo os termos académicos "Disciplina" e "Matéria" por "**Pasta**" em toda a interface do utilizador.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> A remoção do `AppProfile` significa que a aplicação deixará de ter um seletor de "Modo Académico/Corporativo" na gaveta. As variações visuais serão agora baseadas nas preferências do utilizador ou no contexto do caderno aberto.
-
-> [!WARNING]
-> Esta alteração envolve uma migração de base de dados (versão 18) para adicionar novos campos à tabela de utilizadores.
+> Esta alteração é puramente visual e de experiência de utilizador (UX). O código interno, as tabelas da base de dados e os endpoints da API continuarão a usar o termo `Subject` para manter a compatibilidade técnica e evitar quebras no sistema de sincronização.
 
 ## Proposed Changes
 
-### [Auth & User Model]
-Expandir o modelo de utilizador para suportar a nova visão de "Perfil Premium".
+### [App - Flutter]
+Substituição massiva de strings visíveis ao utilizador.
 
-#### [MODIFY] [user_model.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/auth/models/user_model.dart)
-- Adicionar campos: `bio`, `institution`, `preferredColor`, `preferredFont`, `specialties`.
-- Atualizar construtor, `fromJson` e `toJson`.
+#### [MODIFY] [drawer_subjects_list.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/shared/widgets/drawer/drawer_subjects_list.dart)
+- "AS MINHAS DISCIPLINAS" -> "**AS MINHAS PASTAS**"
+- "Criar Nova Disciplina" -> "**Criar Nova Pasta**"
+- "Nenhuma disciplina criada" -> "**Nenhuma pasta criada**"
 
-#### [MODIFY] [app_database.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/database/app_database.dart)
-- Adicionar colunas correspondentes na tabela `Users`.
-- Implementar migração para a versão 18 no `onUpgrade`.
+#### [MODIFY] [subject_dialogs.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/subjects/widgets/subject_dialogs.dart)
+- "Apagar Disciplina?" -> "**Apagar Pasta?**"
+- "A disciplina... será apagada" -> "**A pasta... será apagada**"
+- "Disciplina eliminada!" -> "**Pasta eliminada!**"
+- "Editar Matéria" -> "**Editar Pasta**"
+- "Nova Disciplina" -> "**Nova Pasta**"
+- "Nome da Matéria" -> "**Nome da Pasta**"
 
-### [Theme & UI Cleanup]
-Remover a dependência do `AppProfile` e unificar o tema.
+#### [MODIFY] [notebook_dialogs.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/notebooks/widgets/notebook_dialogs.dart)
+- "Disciplina de Destino:" -> "**Pasta de Destino:**"
+- "Para qual disciplina desejas mover..." -> "**Para qual pasta desejas mover...**"
 
-#### [DELETE] [app_profile.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/theme/app_profile.dart)
-- Remover este ficheiro e o seu respectivo Notifier/Provider.
+#### [MODIFY] [marketplace_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/marketplace/views/marketplace_screen.dart)
+- "Pesquisar por matéria..." -> "**Pesquisar por pasta...**"
 
-#### [MODIFY] [app_theme.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/theme/app_theme.dart)
-- Ajustar para ler a cor primária e a fonte diretamente do utilizador autenticado (`authProvider`).
-- Definir "Inter" como a fonte padrão e o azul petróleo (`#0F4C5C`) como cor padrão de fallback.
+#### [MODIFY] [notebook_empty_states.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/notebooks/widgets/notebook_empty_states.dart)
+- "...selecionares ou criares a tua primeira disciplina" -> "**...selecionares ou criares a tua primeira pasta**"
 
-### [User Interface]
-Refatorar a Gaveta e o ecrã de Perfil.
+### [Backend - Laravel]
+Atualizar mensagens de erro enviadas para o cliente.
 
-#### [MODIFY] [app_drawer.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/shared/widgets/app_drawer.dart)
-- Remover o seletor de perfil no `DrawerHeaderWidget`.
-- Substituir etiquetas dinâmicas ("Disciplinas" vs "Projetos") por uma nomenclatura única e profissional.
-
-#### [MODIFY] [profile_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/auth/views/profile_screen.dart)
-- Adicionar campos de edição para Bio, Instituição e Especialidades.
-- Adicionar seletor de "Cor Favorita" (para personalizar a UI).
+#### [MODIFY] [SubjectController.php](file:///C:/xampp/htdocs/caderno-backend/app/Http/Controllers/SubjectController.php)
+- "Disciplina não encontrada" -> "**Pasta não encontrada**"
+- "Disciplina eliminada com sucesso" -> "**Pasta eliminada com sucesso**"
 
 ## Verification Plan
 
-### Automated Tests
-- Verificar se o `UserModel.fromJson` lida corretamente com os novos campos nulos.
-- Validar se a migração 18 da base de dados não causa perda de dados existentes.
-
 ### Manual Verification
-- Fazer logout e login para garantir que os dados persistidos no servidor (Laravel) são recuperados.
-- Abrir a gaveta e verificar se a seleção de perfil desapareceu.
-- Mudar a "Cor Favorita" no perfil e ver se a cor primária da app muda instantaneamente.
+1.  Abrir a gaveta e confirmar o título "**AS MINHAS PASTAS**".
+2.  Tentar criar uma pasta e verificar se o título do diálogo é "**Nova Pasta**".
+3.  Tentar apagar uma pasta e verificar a mensagem de confirmação.
+4.  No ecrã de Marketplace, verificar a barra de pesquisa.
+5.  Mover um caderno entre pastas e validar as labels do seletor.

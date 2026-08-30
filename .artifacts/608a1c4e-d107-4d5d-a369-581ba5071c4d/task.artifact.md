@@ -1,0 +1,4 @@
+- [ ] Implementar largura máxima responsiva no `CanvasScreen`
+- [ ] Corrigir compatibilidade de cores (`withOpacity`) em todos os widgets do Canvas
+- [ ] Centralizar e limitar largura da `CanvasToolbar`
+- [ ] Validar layout no estado vazio (sem folhas)

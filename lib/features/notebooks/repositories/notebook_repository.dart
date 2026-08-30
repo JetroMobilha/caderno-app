@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_service.dart';
 import '../models/notebook_model.dart';
@@ -36,9 +37,6 @@ class NotebookRepository {
       coverType: row.coverType,
       color: row.color,
       coverImage: row.coverImage,
-      lineType: row.lineType ?? 'ruled',
-      paperSize: row.paperSize ?? 'A4',
-      lineSpacing: row.lineSpacing,
       templateType: row.templateType,
       isPublished: row.isPublished,
       price: row.price,
@@ -50,7 +48,15 @@ class NotebookRepository {
       role: row.role ?? 'owner',
       alternativeTitle: row.alternativeTitle,
       sharingType: row.sharingType ?? 'full',
+      tags: _parseTags(row.tags),
+      isArchived: row.isArchived == 1,
+      isFavorite: row.isFavorite == 1,
     )).toList();
+  }
+
+  static List<String> _parseTags(String? tagsStr) {
+    if (tagsStr == null || tagsStr.isEmpty) return [];
+    return tagsStr.split(',').where((t) => t.isNotEmpty).toList();
   }
 
   // =========================================================================
@@ -70,9 +76,6 @@ class NotebookRepository {
               coverType: row.coverType,
               color: row.color,
               coverImage: row.coverImage,
-              lineType: row.lineType ?? 'ruled',
-              paperSize: row.paperSize ?? 'A4',
-              lineSpacing: row.lineSpacing,
               templateType: row.templateType,
               isPublished: row.isPublished,
               price: row.price,
@@ -84,6 +87,9 @@ class NotebookRepository {
               role: row.role ?? 'owner',
               alternativeTitle: row.alternativeTitle,
               sharingType: row.sharingType ?? 'full',
+              tags: _parseTags(row.tags),
+              isArchived: row.isArchived == 1,
+              isFavorite: row.isFavorite == 1,
             )).toList());
   }
 
@@ -99,9 +105,6 @@ class NotebookRepository {
       coverType: notebook.coverType,
       color: Value(notebook.color),
       coverImage: Value(notebook.coverImage),
-      lineType: Value(notebook.lineType),
-      paperSize: Value(notebook.paperSize),
-      lineSpacing: Value(notebook.lineSpacing),
       templateType: Value(notebook.templateType),
       isPublished: Value(notebook.isPublished),
       price: Value(notebook.price),
@@ -109,7 +112,7 @@ class NotebookRepository {
       authorName: Value(notebook.authorName),
       syncedWithCloud: const Value(0),
       isDeleted: const Value(0),
-      updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      updatedAt: Value(TimeService().nowMs()),
     );
     return await _db.into(_db.notebooks).insert(companion);
   }
@@ -126,16 +129,13 @@ class NotebookRepository {
         coverType: Value(notebook.coverType),
         color: Value(notebook.color),
         coverImage: Value(notebook.coverImage),
-        lineType: Value(notebook.lineType),
-        paperSize: Value(notebook.paperSize),
-        lineSpacing: Value(notebook.lineSpacing),
         templateType: Value(notebook.templateType),
         isPublished: Value(notebook.isPublished),
         price: Value(notebook.price),
         description: Value(notebook.description),
         authorName: Value(notebook.authorName),
         syncedWithCloud: const Value(0),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        updatedAt: Value(TimeService().nowMs()),
       ),
     );
   }
@@ -149,9 +149,58 @@ class NotebookRepository {
       NotebooksCompanion(
         isDeleted: const Value(1),
         syncedWithCloud: const Value(0),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        updatedAt: Value(TimeService().nowMs()),
       ),
     );
+  }
+
+  // =========================================================================
+  // ♻️ LIXEIRA & RESTAURO
+  // =========================================================================
+  Future<List<Notebook>> getDeletedNotebooks() async {
+    final rows = await (_db.select(_db.notebooks)
+          ..where((t) => t.isDeleted.equals(1))
+          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
+        .get();
+
+    return rows.map((row) => Notebook(
+      id: row.id,
+      serverId: row.serverId,
+      clientId: row.clientId,
+      subjectId: row.subjectId,
+      title: row.title,
+      coverType: row.coverType,
+      color: row.color,
+      coverImage: row.coverImage,
+      templateType: row.templateType,
+      isPublished: row.isPublished,
+      price: row.price,
+      description: row.description,
+      authorName: row.authorName,
+      isDeleted: row.isDeleted,
+      syncedWithCloud: row.syncedWithCloud,
+      updatedAt: row.updatedAt,
+      role: row.role ?? 'owner',
+      alternativeTitle: row.alternativeTitle,
+      sharingType: row.sharingType ?? 'full',
+      tags: _parseTags(row.tags),
+      isArchived: row.isArchived == 1,
+      isFavorite: row.isFavorite == 1,
+    )).toList();
+  }
+
+  Future<void> restoreNotebook(int id) async {
+    await (_db.update(_db.notebooks)..where((t) => t.id.equals(id))).write(
+      NotebooksCompanion(
+        isDeleted: const Value(0),
+        syncedWithCloud: const Value(0),
+        updatedAt: Value(TimeService().nowMs()),
+      ),
+    );
+  }
+
+  Future<void> hardDeleteNotebook(int id) async {
+    await (_db.delete(_db.notebooks)..where((t) => t.id.equals(id))).go();
   }
 
   // =========================================================================
@@ -255,6 +304,38 @@ class NotebookRepository {
       debugPrint('🚨 Erro ao guardar configurações: $e');
       return false;
     }
+  }
+
+  Future<List<Notebook>> getAllNotebooks() async {
+    final rows = await (_db.select(_db.notebooks)
+          ..where((t) => t.isDeleted.equals(0))
+          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
+        .get();
+
+    return rows.map((row) => Notebook(
+      id: row.id,
+      serverId: row.serverId,
+      clientId: row.clientId,
+      subjectId: row.subjectId,
+      title: row.title,
+      coverType: row.coverType,
+      color: row.color,
+      coverImage: row.coverImage,
+      templateType: row.templateType,
+      isPublished: row.isPublished,
+      price: row.price,
+      description: row.description,
+      authorName: row.authorName,
+      isDeleted: row.isDeleted,
+      syncedWithCloud: row.syncedWithCloud,
+      updatedAt: row.updatedAt,
+      role: row.role ?? 'owner',
+      alternativeTitle: row.alternativeTitle,
+      sharingType: row.sharingType ?? 'full',
+      tags: _parseTags(row.tags),
+      isArchived: row.isArchived == 1,
+      isFavorite: row.isFavorite == 1,
+    )).toList();
   }
 }
 

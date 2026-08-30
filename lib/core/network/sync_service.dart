@@ -115,6 +115,10 @@ class SyncService {
         payload.add(subjectObj.toJson());
       }
 
+      if (payload.isNotEmpty) {
+        debugPrint('🛫 [Sync-Push] Enviando ${payload.length} disciplinas: ${payload.map((s) => '${s['name']}(del:${s['is_deleted']})').join(', ')}');
+      }
+
       final response = await _apiService.post('/sync/push', {
         'subjects': payload,
         'last_synced_at': lastSynced,
@@ -176,7 +180,11 @@ class SyncService {
 
         final existing = await (_db.select(_db.subjects)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
         if (existing != null) {
-          if (serverTime > existing.updatedAt) {
+          // 🚀 PRIORIDADE PARA ELIMINAÇÃO: Se o servidor diz que foi apagado, marcamos localmente 
+          // mesmo que o timestamp pareça idêntico, para evitar "ressurreição" de itens.
+          final bool serverSaysDeleted = sub['deleted_at'] != null;
+          
+          if (serverSaysDeleted || serverTime > existing.updatedAt) {
             await (_db.update(_db.subjects)..where((t) => t.id.equals(existing.id))).write(companion);
           }
         } else {
@@ -258,7 +266,7 @@ class SyncService {
           if (sub != null && sub.serverId != null) cloudSubId = sub.serverId;
         }
         final notebookObj = notebooks_model.Notebook(
-          id: row.id, serverId: row.serverId, clientId: effectiveUuid, subjectId: cloudSubId, title: row.title, coverType: row.coverType, color: row.color, coverImage: row.coverImage, lineType: row.lineType ?? 'ruled', paperSize: row.paperSize ?? 'A4', lineSpacing: row.lineSpacing, templateType: row.templateType, collaborationMode: row.collaborationMode, isPublished: row.isPublished, price: row.price, description: row.description, authorName: row.authorName, syncedWithCloud: row.syncedWithCloud, isDeleted: row.isDeleted, updatedAt: row.updatedAt,
+          id: row.id, serverId: row.serverId, clientId: effectiveUuid, subjectId: cloudSubId, title: row.title, coverType: row.coverType, color: row.color, coverImage: row.coverImage, templateType: row.templateType, collaborationMode: row.collaborationMode, isPublished: row.isPublished, price: row.price, description: row.description, authorName: row.authorName, syncedWithCloud: row.syncedWithCloud, isDeleted: row.isDeleted, updatedAt: row.updatedAt,
         );
         payload.add(notebookObj.toJson());
       }
@@ -328,8 +336,7 @@ class SyncService {
         final companion = NotebooksCompanion.insert(
           serverId: Value(sId), clientId: Value(cId ?? uniqid()), subjectId: Value(localSubId), title: net['title'] ?? '',
           coverType: net['cover_type'] ?? 'color', color: Value(net['color']), coverImage: Value(net['cover_image']),
-          lineType: Value(net['line_type'] ?? 'ruled'), lineSpacing: Value(net['line_spacing'] != null ? double.tryParse(net['line_spacing'].toString()) : null),
-          paperSize: Value(net['paper_size'] ?? 'A4'), templateType: Value(net['template_type'] ?? 'study'), collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
+          templateType: Value(net['template_type'] ?? 'study'), collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
           isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0), price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
           isDeleted: Value(net['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), updatedAt: Value(serverTime), role: Value(net['role'] ?? 'viewer'),
           alternativeTitle: Value(net['alternative_title']), sharingType: Value(net['sharing_type'] ?? 'full'),
@@ -383,8 +390,7 @@ class SyncService {
                   coverType: net['cover_type'] ?? 'color', 
                   color: net['color'] != null ? Value(net['color']) : const Value.absent(),
                   coverImage: Value(net['cover_image']),
-                  lineType: Value(net['line_type'] ?? 'ruled'), lineSpacing: Value(net['line_spacing'] != null ? double.tryParse(net['line_spacing'].toString()) : null),
-                  paperSize: Value(net['paper_size'] ?? 'A4'), templateType: Value(net['template_type'] ?? 'study'), collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
+                  templateType: Value(net['template_type'] ?? 'study'), collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
                   isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0), price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
                   description: Value(net['description']), authorName: Value(net['author_name']), isDeleted: Value(net['deleted_at'] != null ? 1 : 0),
                   syncedWithCloud: const Value(1), updatedAt: Value(serverTime), role: Value(serverRole),
@@ -410,7 +416,7 @@ class SyncService {
                       NotebooksCompanion(
                         serverId: companion.serverId, subjectId: companion.subjectId, title: companion.title, coverType: companion.coverType, 
                         color: net['color'] != null ? Value(net['color']) : const Value.absent(),
-                        coverImage: companion.coverImage, lineType: companion.lineType, lineSpacing: companion.lineSpacing, paperSize: companion.paperSize, templateType: companion.templateType, collaborationMode: companion.collaborationMode, isPublished: companion.isPublished, price: companion.price, description: companion.description, authorName: companion.authorName, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: companion.updatedAt, role: companion.role, alternativeTitle: companion.alternativeTitle, sharingType: companion.sharingType,
+                        coverImage: companion.coverImage,templateType: companion.templateType, collaborationMode: companion.collaborationMode, isPublished: companion.isPublished, price: companion.price, description: companion.description, authorName: companion.authorName, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: companion.updatedAt, role: companion.role, alternativeTitle: companion.alternativeTitle, sharingType: companion.sharingType,
                       )
                     );
                   }
@@ -483,7 +489,8 @@ class SyncService {
       bool serverHasMore = false;
 
       // 🚀 OTIMIZAÇÃO: Enviar em lotes (Chunks) para reduzir overhead de rede sem travar
-      const int batchSize = 4;
+      // 🚀 OTIMIZAÇÃO: Lote maior para reordenações e cadernos grandes
+      const int batchSize = 10;
       for (int i = 0; i < unsyncedPages.length; i += batchSize) {
         final currentBatch = unsyncedPages.sublist(i, (i + batchSize > unsyncedPages.length) ? unsyncedPages.length : i + batchSize);
         final List<Map<String, dynamic>> pagesPayload = [];
@@ -492,19 +499,25 @@ class SyncService {
           final notebook = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
           if (notebook == null || notebook.serverId == null) continue;
           
+          final String? cId = row.clientId;
+          if (cId == null) continue;
+          
+          // 🚀 CARREGAMENTO COMPLETO: Precisamos de enviar o conteúdo (strokes, etc)
+          // mesmo que a folha esteja apagada, para o servidor guardar o snapshot final.
+          final fullPage = await _canvasRepository.getPageByClientId(cId, onlyUnsynced: true);
+          if (fullPage == null) continue;
+
+          final pageMap = await fullPage.toJsonAsync();
+          pageMap['notebook_id'] = notebook.serverId;
+          // Garantir que o estado de deleção está correto no mapa
+          pageMap['is_deleted'] = row.isDeleted == 1 ? 1 : 0;
+          if (row.serverId != null) pageMap['server_id'] = row.serverId;
+
+          pagesPayload.add(pageMap);
+          
           if (row.isDeleted == 1) {
-            pagesPayload.add({'notebook_id': notebook.serverId, 'page_number': row.pageNumber, 'client_id': row.clientId, 'server_id': row.serverId, 'is_deleted': 1});
+            debugPrint('🛫 [Sync-Push-Delete] Enviando folha apagada ${row.pageNumber} com conteúdos pendentes.');
           } else {
-            final fullPage = await _canvasRepository.getPageByClientId(row.clientId!, onlyUnsynced: true);
-            if (fullPage == null) continue;
-            
-            // 🚀 OTIMIZAÇÃO: Já não simplificamos aqui para poupar CPU no dispositivo.
-            // O servidor fará a simplificação global para todos os clientes.
-            final pageMap = await fullPage.toJsonAsync();
-            pageMap['notebook_id'] = notebook.serverId;
-            pageMap['is_deleted'] = 0;
-            pagesPayload.add(pageMap);
-            
             debugPrint('🛫 [Sync-Push-Delta] Enviando novidades da página ${row.pageNumber}: ${fullPage.strokes.length} traços.');
           }
         }
@@ -547,6 +560,16 @@ class SyncService {
 
               if (status == 'ignored_old' && sNbId != null) {
                 await pullSpecificPage(sNbId, syncedPageMap['page_number'] ?? 0, clientId: cId);
+                continue;
+              }
+              
+              if (status == 'deleted') {
+                final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                if (localPage != null) {
+                  // 🚀 PRESERVAÇÃO: Não apagar fisicamente. 
+                  // Apenas marcar como sincronizado para que o utilizador possa restaurar se quiser.
+                  await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                }
                 continue;
               }
 
@@ -643,11 +666,11 @@ class SyncService {
               final int sId = sPage['id'] is int ? sPage['id'] : int.parse(sPage['id'].toString());
               final String? cId = sPage['client_id']?.toString();
               if (cId != null) serverClientIds.add(cId);
-              if (sPage['deleted_at'] != null || sPage['is_deleted'] == 1) {
-                if (cId != null) await (_db.delete(_db.pages)..where((t) => t.clientId.equals(cId))).go();
-                else await (_db.delete(_db.pages)..where((t) => t.serverId.equals(sId))).go();
-                continue;
-              }
+              
+              // 🚀 JÁ NÃO APAGAMOS FISICAMENTE NO PULL
+              // O savePageFromMap tratará de marcar isDeleted=1 ou 0
+              // permitindo que o restauro funcione entre dispositivos.
+              
               final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
               if (notebook == null) continue;
               final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
@@ -739,26 +762,40 @@ class SyncService {
         images = results[2];
       }
 
+      // 🚀 VERIFICAÇÃO DE EXISTÊNCIA: Garantir que as páginas ainda existem no banco local
+      // para evitar erros de Foreign Key.
+      final existingPageRows = await (_db.select(_db.pages)..where((t) => t.id.isIn(validPageIds))).get();
+      final Set<int> confirmedIds = existingPageRows.map((r) => r.id).toSet();
+      
+      final finalPageIds = validPageIds.where((id) => confirmedIds.contains(id)).toList();
+      if (finalPageIds.isEmpty) return;
+
       await _db.batch((batch) {
-        batch.deleteWhere(_db.canvasStrokes, (t) => t.pageId.isIn(validPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasTextBlocks, (t) => t.pageId.isIn(validPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasImageBlocks, (t) => t.pageId.isIn(validPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasStrokes, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasTextBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasImageBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
         
         for (var s in strokes) {
-          if (s.pageId.value > 0) batch.insert(_db.canvasStrokes, s, mode: InsertMode.insertOrReplace);
+          if (confirmedIds.contains(s.pageId.value)) {
+            batch.insert(_db.canvasStrokes, s, mode: InsertMode.insertOrReplace);
+          }
         }
         for (var t in texts) {
-          if (t.pageId.value > 0) batch.insert(_db.canvasTextBlocks, t, mode: InsertMode.insertOrReplace);
+          if (confirmedIds.contains(t.pageId.value)) {
+            batch.insert(_db.canvasTextBlocks, t, mode: InsertMode.insertOrReplace);
+          }
         }
         for (var i in images) {
-          if (i.pageId.value > 0) batch.insert(_db.canvasImageBlocks, i, mode: InsertMode.insertOrReplace);
+          if (confirmedIds.contains(i.pageId.value)) {
+            batch.insert(_db.canvasImageBlocks, i, mode: InsertMode.insertOrReplace);
+          }
         }
 
-        for (var id in validPageIds) {
+        for (var id in finalPageIds) {
            batch.update(_db.pages, PagesCompanion(updatedAt: Value(TimeService().nowMs()), syncedWithCloud: const Value(1)), where: (t) => t.id.equals(id));
         }
       });
-      debugPrint('✅ [Sync-Batch] Sincronizados ${strokes.length} elementos em ${validPageIds.length} páginas.');
+      debugPrint('✅ [Sync-Batch] Sincronizados ${strokes.length} elementos em ${finalPageIds.length} páginas.');
     } catch (e) { 
       debugPrint('🚨 [Sync-Batch] Falha crítica: $e'); 
     }

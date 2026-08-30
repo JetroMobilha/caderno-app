@@ -179,38 +179,26 @@ class _NotebookCoverState extends State<NotebookCover> with SingleTickerProvider
                       ],
                     ),
 
-                    // --- RODAPÉ: METADADOS ESPECIFICAÇÕES ---
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    // --- RODAPÉ: TAGS E ETIQUETAS ---
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Estilo e Tamanho (Ex: A4 • Pautado)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                widget.notebook.lineType == 'grid'
-                                    ? Icons.grid_4x4_rounded
-                                    : widget.notebook.lineType == 'blank'
-                                    ? Icons.check_box_outline_blank_rounded
-                                    : Icons.view_headline_rounded,
-                                size: 12,
-                                color: Colors.white,
+                        if (widget.notebook.tags.isNotEmpty)
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: widget.notebook.tags.take(3).map((tag) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${widget.notebook.paperSize}',
-                                style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white),
+                              child: Text(
+                                '#$tag',
+                                style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
-                            ],
+                            )).toList(),
                           ),
-                        ),
                       ],
                     ),
                   ],
@@ -218,15 +206,22 @@ class _NotebookCoverState extends State<NotebookCover> with SingleTickerProvider
               ),
 
               // =========================================================
-              // 3. 🛡️ BADGES DE ESTADO (NUVEM, PARTILHA E LOJA)
+              // 3. 🛡️ BADGES DE ESTADO (NUVEM, FAVORITO, PARTILHA)
               // =========================================================
 
-              // A) Selo de "Não Sincronizado" ou "Partilhado" (Canto Superior Direito)
+              // A) Selo de "Não Sincronizado", "Favorito" ou "Partilhado"
               Positioned(
                 top: 8,
-                right: 32, // Afastado para não colidir com o botão de 3 pontos da UI
+                right: 32,
                 child: Row(
                   children: [
+                    if (widget.notebook.isFavorite)
+                      _buildBadge(
+                        icon: Icons.star_rounded,
+                        color: Colors.orange,
+                        tooltip: 'Favorito',
+                      ),
+                    const SizedBox(width: 4),
                     if (isUnsynced)
                       _buildBadge(
                         icon: Icons.cloud_upload_rounded,

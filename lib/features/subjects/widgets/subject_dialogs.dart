@@ -12,8 +12,8 @@ class SubjectDialogs {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.paper,
-        title: Text('Apagar Disciplina?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.redAccent)),
-        content: Text('A disciplina "${subject.name}" e os cadernos serão apagados.', style: GoogleFonts.inter()),
+        title: Text('Apagar Pasta?', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+        content: Text('A pasta "${subject.name}" e os cadernos serão apagados.', style: GoogleFonts.inter()),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
@@ -28,7 +28,7 @@ class SubjectDialogs {
                 await subNotifier.deleteSubject(subject);
                 drawerNavigator.pop();
                 snackBarMessenger.showSnackBar(
-                    const SnackBar(content: Text('Disciplina eliminada! 🗑️'), backgroundColor: Colors.green, duration: Duration(seconds: 2))
+                    const SnackBar(content: Text('Pasta eliminada! 🗑️'), backgroundColor: Colors.green, duration: Duration(seconds: 2))
                 );
               } catch (e) {
                 snackBarMessenger.showSnackBar(
@@ -97,7 +97,7 @@ class SubjectDialogs {
                     Icon(isEditing ? Icons.edit_rounded : Icons.library_add_rounded, color: themeColor),
                     const SizedBox(width: 10),
                     Flexible(
-                      child: Text(isEditing ? 'Editar Matéria' : 'Nova Disciplina', 
+                      child: Text(isEditing ? 'Editar Pasta' : 'Nova Pasta', 
                         style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -111,7 +111,7 @@ class SubjectDialogs {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Nome da Matéria', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                        Text('Nome da Pasta', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: nameController,

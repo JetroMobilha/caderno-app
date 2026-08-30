@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/network/time_service.dart';
 
 class ImageBlock {
   String id;
@@ -18,6 +19,7 @@ class ImageBlock {
   bool deletedInSession;
   int updatedAt;
   int version;
+  final int? pageNumber; // 🚀 Adicionado para contexto de página
   final String? creatorId;
   bool syncedWithCloud;
 
@@ -30,12 +32,13 @@ class ImageBlock {
     this.rotation = 0.0,
     this.isDeleted = false,
     this.deletedInSession = false,
+    this.pageNumber, // 🚀
     int? updatedAt,
     this.version = 1,
     this.creatorId,
-    this.syncedWithCloud = false, // 🚀 Começa como falso
+    this.syncedWithCloud = false,
   }) : id = id ?? const Uuid().v4(),
-       updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+       updatedAt = updatedAt ?? TimeService().nowMs();
 
   Map<String, dynamic> toJson() {
     return {
@@ -48,6 +51,7 @@ class ImageBlock {
       'image_path': imagePath,
       'is_deleted': isDeleted,
       'deleted_in_session': deletedInSession,
+      'page_number': pageNumber, // 🚀
       'updated_at': updatedAt,
       'version': version,
       'creator_id': creatorId,
@@ -98,6 +102,7 @@ class ImageBlock {
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
       deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
+      pageNumber: json['page_number'] as int?, // 🚀
       updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
       creatorId: json['creator_id']?.toString(),
@@ -105,5 +110,21 @@ class ImageBlock {
     );
   }
 
-  ImageBlock clone() => ImageBlock.fromJson(toJson());
+  ImageBlock clone({String? newId, int? newPageNumber}) {
+    return ImageBlock(
+      id: newId ?? const Uuid().v4(),
+      imagePath: imagePath,
+      position: position,
+      width: width,
+      height: height,
+      rotation: rotation,
+      isDeleted: isDeleted,
+      deletedInSession: deletedInSession,
+      pageNumber: newPageNumber ?? pageNumber,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      creatorId: creatorId,
+      syncedWithCloud: false,
+    );
+  }
 }

@@ -31,7 +31,7 @@ class BackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final bgPaint = Paint()
-      ..color = const Color(0xFF1B365D).withValues(alpha: 0.18)
+      ..color = const Color(0xFF1B365D).withOpacity(0.18)
       ..strokeWidth = 1.0;
 
     if (lineType == 'ruled') {
@@ -39,7 +39,7 @@ class BackgroundPainter extends CustomPainter {
           const Offset(60, 0),
           Offset(60, size.height),
           Paint()
-            ..color = Colors.redAccent.withValues(alpha: 0.4)
+            ..color = Colors.redAccent.withOpacity(0.4)
             ..strokeWidth = 1.5);
       for (double y = 90; y < size.height - 60; y += lineSpacing) {
         canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
@@ -62,16 +62,35 @@ class BackgroundPainter extends CustomPainter {
           const Offset(60, 0),
           Offset(60, size.height),
           Paint()
-            ..color = Colors.redAccent.withValues(alpha: 0.4)
+            ..color = Colors.redAccent.withOpacity(0.4)
             ..strokeWidth = 1.5);
       for (double y = 90; y < size.height - 60; y += lineSpacing) {
         canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
       }
       final slantPaint = Paint()
-        ..color = const Color(0xFF1B365D).withValues(alpha: 0.08)
+        ..color = const Color(0xFF1B365D).withOpacity(0.08)
         ..strokeWidth = 1.0;
       for (double x = -400; x < size.width; x += lineSpacing * 1.6) {
         canvas.drawLine(Offset(x, 0), Offset(x + size.height * 0.35, size.height), slantPaint);
+      }
+    } else if (lineType == 'cornell') {
+      // Linha Vertical (Cue Column)
+      canvas.drawLine(const Offset(160, 0), Offset(160, size.height - 120), Paint()..color = Colors.redAccent.withOpacity(0.3)..strokeWidth = 1.5);
+      // Linha Horizontal (Summary)
+      canvas.drawLine(Offset(0, size.height - 120), Offset(size.width, size.height - 120), Paint()..color = Colors.redAccent.withOpacity(0.3)..strokeWidth = 1.5);
+      
+      for (double y = 60; y < size.height - 120; y += lineSpacing) {
+        canvas.drawLine(Offset(160, y), Offset(size.width - 20, y), bgPaint);
+      }
+    } else if (lineType == 'engineering') {
+      final minorPaint = Paint()..color = const Color(0xFF1B365D).withOpacity(0.08)..strokeWidth = 0.5;
+      final majorPaint = Paint()..color = const Color(0xFF1B365D).withOpacity(0.2)..strokeWidth = 1.0;
+
+      for (double y = 0; y < size.height; y += 10) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), (y % 50 == 0) ? majorPaint : minorPaint);
+      }
+      for (double x = 0; x < size.width; x += 10) {
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), (x % 50 == 0) ? majorPaint : minorPaint);
       }
     }
   }
@@ -85,6 +104,7 @@ class StrokesPainter extends CustomPainter {
   final List<Stroke> strokes;
   final Set<String> selectedStrokeIds;
   final Rect? selectionRect;
+  final List<Offset>? lassoPath; // 🚀 Novo
   final int pageVersion;
   final Set<String> remoteMovingStrokeIds;
   final Set<String>? visibleAuthorIds;
@@ -96,6 +116,7 @@ class StrokesPainter extends CustomPainter {
     required this.strokes,
     required this.selectedStrokeIds,
     required this.selectionRect,
+    this.lassoPath, // 🚀
     required this.pageVersion,
     this.remoteMovingStrokeIds = const {},
     this.visibleAuthorIds,
@@ -121,7 +142,7 @@ class StrokesPainter extends CustomPainter {
       }
 
       final paint = Paint()
-        ..color = stroke.isHighlighter ? strokeColor.withValues(alpha: 0.4) : strokeColor
+        ..color = stroke.isHighlighter ? strokeColor.withOpacity(0.4) : strokeColor
         ..strokeWidth = stroke.thickness
         ..style = PaintingStyle.stroke
         ..strokeCap = stroke.isHighlighter ? StrokeCap.square : StrokeCap.round
@@ -165,12 +186,32 @@ class StrokesPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.5);
     }
+
+    if (lassoPath != null && lassoPath!.isNotEmpty) {
+      final Path path = Path()..moveTo(lassoPath!.first.dx, lassoPath!.first.dy);
+      for (var i = 1; i < lassoPath!.length; i++) {
+        path.lineTo(lassoPath![i].dx, lassoPath![i].dy);
+      }
+      // Não fechar o path se for desenho live, ou fechar? Geralmente se fecha para seleção.
+      path.close();
+
+      canvas.drawPath(path, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = const Color(0xFF0F4C5C)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round);
+    }
   }
 
   @override
   bool shouldRepaint(StrokesPainter oldDelegate) {
     return oldDelegate.pageVersion != pageVersion ||
         oldDelegate.selectionRect != selectionRect ||
+        oldDelegate.lassoPath != lassoPath || // 🚀
         oldDelegate.selectionDelta != selectionDelta ||
         !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) ||
         !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) ||
@@ -191,7 +232,7 @@ class ActiveStrokePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (currentPoints.isEmpty) return;
     final paint = Paint()
-      ..color = isHighlighter ? visualColor.withValues(alpha: 0.4) : visualColor
+      ..color = isHighlighter ? visualColor.withOpacity(0.4) : visualColor
       ..strokeWidth = currentThickness
       ..style = PaintingStyle.stroke
       ..strokeCap = isHighlighter ? StrokeCap.square : StrokeCap.round
@@ -234,7 +275,7 @@ class RemoteLiveStrokesPainter extends CustomPainter {
       }
 
       final paint = Paint()
-        ..color = stroke.isHighlighter ? strokeColor.withValues(alpha: 0.32) : strokeColor.withValues(alpha: 0.8)
+        ..color = stroke.isHighlighter ? strokeColor.withOpacity(0.32) : strokeColor.withOpacity(0.8)
         ..strokeWidth = stroke.thickness
         ..style = PaintingStyle.stroke
         ..strokeCap = stroke.isHighlighter ? StrokeCap.square : StrokeCap.round
@@ -306,7 +347,7 @@ class RemotePointersPainter extends CustomPainter {
         text: TextSpan(
           text: String.fromCharCode(toolIcon.codePoint),
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.9),
+            color: Colors.white.withOpacity(0.9),
             fontSize: 10,
             fontFamily: toolIcon.fontFamily,
             package: toolIcon.fontPackage,

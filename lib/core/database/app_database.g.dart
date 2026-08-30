@@ -162,6 +162,30 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<int> isArchived = GeneratedColumn<int>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isFavoriteMeta = const VerificationMeta(
+    'isFavorite',
+  );
+  @override
+  late final GeneratedColumn<int> isFavorite = GeneratedColumn<int>(
+    'is_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -178,6 +202,8 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -291,6 +317,18 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+        _isFavoriteMeta,
+        isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
+      );
+    }
     return context;
   }
 
@@ -356,6 +394,14 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         DriftSqlType.int,
         data['${effectivePrefix}version'],
       )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      isFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_favorite'],
+      )!,
     );
   }
 
@@ -380,6 +426,8 @@ class User extends DataClass implements Insertable<User> {
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
+  final int isArchived;
+  final int isFavorite;
   const User({
     required this.id,
     this.serverId,
@@ -395,6 +443,8 @@ class User extends DataClass implements Insertable<User> {
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
+    required this.isArchived,
+    required this.isFavorite,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -427,6 +477,8 @@ class User extends DataClass implements Insertable<User> {
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
+    map['is_archived'] = Variable<int>(isArchived);
+    map['is_favorite'] = Variable<int>(isFavorite);
     return map;
   }
 
@@ -458,6 +510,8 @@ class User extends DataClass implements Insertable<User> {
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
+      isArchived: Value(isArchived),
+      isFavorite: Value(isFavorite),
     );
   }
 
@@ -481,6 +535,8 @@ class User extends DataClass implements Insertable<User> {
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
+      isArchived: serializer.fromJson<int>(json['isArchived']),
+      isFavorite: serializer.fromJson<int>(json['isFavorite']),
     );
   }
   @override
@@ -501,6 +557,8 @@ class User extends DataClass implements Insertable<User> {
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
+      'isArchived': serializer.toJson<int>(isArchived),
+      'isFavorite': serializer.toJson<int>(isFavorite),
     };
   }
 
@@ -519,6 +577,8 @@ class User extends DataClass implements Insertable<User> {
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
+    int? isArchived,
+    int? isFavorite,
   }) => User(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -538,6 +598,8 @@ class User extends DataClass implements Insertable<User> {
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
+    isArchived: isArchived ?? this.isArchived,
+    isFavorite: isFavorite ?? this.isFavorite,
   );
   User copyWithCompanion(UsersCompanion data) {
     return User(
@@ -565,6 +627,12 @@ class User extends DataClass implements Insertable<User> {
           : this.syncedWithCloud,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      isFavorite: data.isFavorite.present
+          ? data.isFavorite.value
+          : this.isFavorite,
     );
   }
 
@@ -584,7 +652,9 @@ class User extends DataClass implements Insertable<User> {
           ..write('specialties: $specialties, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -605,6 +675,8 @@ class User extends DataClass implements Insertable<User> {
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   );
   @override
   bool operator ==(Object other) =>
@@ -623,7 +695,9 @@ class User extends DataClass implements Insertable<User> {
           other.specialties == this.specialties &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
-          other.version == this.version);
+          other.version == this.version &&
+          other.isArchived == this.isArchived &&
+          other.isFavorite == this.isFavorite);
 }
 
 class UsersCompanion extends UpdateCompanion<User> {
@@ -641,6 +715,8 @@ class UsersCompanion extends UpdateCompanion<User> {
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
+  final Value<int> isArchived;
+  final Value<int> isFavorite;
   const UsersCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -656,6 +732,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   });
   UsersCompanion.insert({
     this.id = const Value.absent(),
@@ -672,6 +750,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   }) : name = Value(name),
        email = Value(email);
   static Insertable<User> custom({
@@ -689,6 +769,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
+    Expression<int>? isArchived,
+    Expression<int>? isFavorite,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -705,6 +787,8 @@ class UsersCompanion extends UpdateCompanion<User> {
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (isFavorite != null) 'is_favorite': isFavorite,
     });
   }
 
@@ -723,6 +807,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
+    Value<int>? isArchived,
+    Value<int>? isFavorite,
   }) {
     return UsersCompanion(
       id: id ?? this.id,
@@ -739,6 +825,8 @@ class UsersCompanion extends UpdateCompanion<User> {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -787,6 +875,12 @@ class UsersCompanion extends UpdateCompanion<User> {
     if (version.present) {
       map['version'] = Variable<int>(version.value);
     }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<int>(isArchived.value);
+    }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<int>(isFavorite.value);
+    }
     return map;
   }
 
@@ -806,7 +900,9 @@ class UsersCompanion extends UpdateCompanion<User> {
           ..write('specialties: $specialties, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -941,6 +1037,30 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<int> isArchived = GeneratedColumn<int>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isFavoriteMeta = const VerificationMeta(
+    'isFavorite',
+  );
+  @override
+  late final GeneratedColumn<int> isFavorite = GeneratedColumn<int>(
+    'is_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -954,6 +1074,8 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1039,6 +1161,18 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
         version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+        _isFavoriteMeta,
+        isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
+      );
+    }
     return context;
   }
 
@@ -1092,6 +1226,14 @@ class $SubjectsTable extends Subjects with TableInfo<$SubjectsTable, Subject> {
         DriftSqlType.int,
         data['${effectivePrefix}version'],
       )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      isFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_favorite'],
+      )!,
     );
   }
 
@@ -1113,6 +1255,8 @@ class Subject extends DataClass implements Insertable<Subject> {
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
+  final int isArchived;
+  final int isFavorite;
   const Subject({
     required this.id,
     this.serverId,
@@ -1125,6 +1269,8 @@ class Subject extends DataClass implements Insertable<Subject> {
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
+    required this.isArchived,
+    required this.isFavorite,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1146,6 +1292,8 @@ class Subject extends DataClass implements Insertable<Subject> {
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
+    map['is_archived'] = Variable<int>(isArchived);
+    map['is_favorite'] = Variable<int>(isFavorite);
     return map;
   }
 
@@ -1166,6 +1314,8 @@ class Subject extends DataClass implements Insertable<Subject> {
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
+      isArchived: Value(isArchived),
+      isFavorite: Value(isFavorite),
     );
   }
 
@@ -1186,6 +1336,8 @@ class Subject extends DataClass implements Insertable<Subject> {
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
+      isArchived: serializer.fromJson<int>(json['isArchived']),
+      isFavorite: serializer.fromJson<int>(json['isFavorite']),
     );
   }
   @override
@@ -1203,6 +1355,8 @@ class Subject extends DataClass implements Insertable<Subject> {
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
+      'isArchived': serializer.toJson<int>(isArchived),
+      'isFavorite': serializer.toJson<int>(isFavorite),
     };
   }
 
@@ -1218,6 +1372,8 @@ class Subject extends DataClass implements Insertable<Subject> {
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
+    int? isArchived,
+    int? isFavorite,
   }) => Subject(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -1230,6 +1386,8 @@ class Subject extends DataClass implements Insertable<Subject> {
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
+    isArchived: isArchived ?? this.isArchived,
+    isFavorite: isFavorite ?? this.isFavorite,
   );
   Subject copyWithCompanion(SubjectsCompanion data) {
     return Subject(
@@ -1246,6 +1404,12 @@ class Subject extends DataClass implements Insertable<Subject> {
           : this.syncedWithCloud,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      isFavorite: data.isFavorite.present
+          ? data.isFavorite.value
+          : this.isFavorite,
     );
   }
 
@@ -1262,7 +1426,9 @@ class Subject extends DataClass implements Insertable<Subject> {
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -1280,6 +1446,8 @@ class Subject extends DataClass implements Insertable<Subject> {
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   );
   @override
   bool operator ==(Object other) =>
@@ -1295,7 +1463,9 @@ class Subject extends DataClass implements Insertable<Subject> {
           other.isDeleted == this.isDeleted &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
-          other.version == this.version);
+          other.version == this.version &&
+          other.isArchived == this.isArchived &&
+          other.isFavorite == this.isFavorite);
 }
 
 class SubjectsCompanion extends UpdateCompanion<Subject> {
@@ -1310,6 +1480,8 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
+  final Value<int> isArchived;
+  final Value<int> isFavorite;
   const SubjectsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -1322,6 +1494,8 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   });
   SubjectsCompanion.insert({
     this.id = const Value.absent(),
@@ -1335,6 +1509,8 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   }) : userId = Value(userId),
        name = Value(name),
        color = Value(color);
@@ -1350,6 +1526,8 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
+    Expression<int>? isArchived,
+    Expression<int>? isFavorite,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1363,6 +1541,8 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (isFavorite != null) 'is_favorite': isFavorite,
     });
   }
 
@@ -1378,6 +1558,8 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
+    Value<int>? isArchived,
+    Value<int>? isFavorite,
   }) {
     return SubjectsCompanion(
       id: id ?? this.id,
@@ -1391,6 +1573,8 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -1430,6 +1614,12 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
     if (version.present) {
       map['version'] = Variable<int>(version.value);
     }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<int>(isArchived.value);
+    }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<int>(isFavorite.value);
+    }
     return map;
   }
 
@@ -1446,7 +1636,9 @@ class SubjectsCompanion extends UpdateCompanion<Subject> {
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -1547,39 +1739,6 @@ class $NotebooksTable extends Notebooks
     aliasedName,
     true,
     type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _lineTypeMeta = const VerificationMeta(
-    'lineType',
-  );
-  @override
-  late final GeneratedColumn<String> lineType = GeneratedColumn<String>(
-    'line_type',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _paperSizeMeta = const VerificationMeta(
-    'paperSize',
-  );
-  @override
-  late final GeneratedColumn<String> paperSize = GeneratedColumn<String>(
-    'paper_size',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _lineSpacingMeta = const VerificationMeta(
-    'lineSpacing',
-  );
-  @override
-  late final GeneratedColumn<double> lineSpacing = GeneratedColumn<double>(
-    'line_spacing',
-    aliasedName,
-    true,
-    type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _isPublishedMeta = const VerificationMeta(
@@ -1732,6 +1891,39 @@ class $NotebooksTable extends Notebooks
     requiredDuringInsert: false,
     defaultValue: const Constant('full'),
   );
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+    'tags',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<int> isArchived = GeneratedColumn<int>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isFavoriteMeta = const VerificationMeta(
+    'isFavorite',
+  );
+  @override
+  late final GeneratedColumn<int> isFavorite = GeneratedColumn<int>(
+    'is_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1742,9 +1934,6 @@ class $NotebooksTable extends Notebooks
     coverType,
     color,
     coverImage,
-    lineType,
-    paperSize,
-    lineSpacing,
     isPublished,
     price,
     description,
@@ -1758,6 +1947,9 @@ class $NotebooksTable extends Notebooks
     role,
     alternativeTitle,
     sharingType,
+    tags,
+    isArchived,
+    isFavorite,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1818,27 +2010,6 @@ class $NotebooksTable extends Notebooks
       context.handle(
         _coverImageMeta,
         coverImage.isAcceptableOrUnknown(data['cover_image']!, _coverImageMeta),
-      );
-    }
-    if (data.containsKey('line_type')) {
-      context.handle(
-        _lineTypeMeta,
-        lineType.isAcceptableOrUnknown(data['line_type']!, _lineTypeMeta),
-      );
-    }
-    if (data.containsKey('paper_size')) {
-      context.handle(
-        _paperSizeMeta,
-        paperSize.isAcceptableOrUnknown(data['paper_size']!, _paperSizeMeta),
-      );
-    }
-    if (data.containsKey('line_spacing')) {
-      context.handle(
-        _lineSpacingMeta,
-        lineSpacing.isAcceptableOrUnknown(
-          data['line_spacing']!,
-          _lineSpacingMeta,
-        ),
       );
     }
     if (data.containsKey('is_published')) {
@@ -1940,6 +2111,24 @@ class $NotebooksTable extends Notebooks
         ),
       );
     }
+    if (data.containsKey('tags')) {
+      context.handle(
+        _tagsMeta,
+        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
+      );
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+        _isFavoriteMeta,
+        isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
+      );
+    }
     return context;
   }
 
@@ -1980,18 +2169,6 @@ class $NotebooksTable extends Notebooks
       coverImage: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}cover_image'],
-      ),
-      lineType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}line_type'],
-      ),
-      paperSize: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}paper_size'],
-      ),
-      lineSpacing: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}line_spacing'],
       ),
       isPublished: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -2045,6 +2222,18 @@ class $NotebooksTable extends Notebooks
         DriftSqlType.string,
         data['${effectivePrefix}sharing_type'],
       )!,
+      tags: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags'],
+      ),
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      isFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_favorite'],
+      )!,
     );
   }
 
@@ -2063,9 +2252,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   final String coverType;
   final String? color;
   final String? coverImage;
-  final String? lineType;
-  final String? paperSize;
-  final double? lineSpacing;
   final int isPublished;
   final double price;
   final String? description;
@@ -2079,6 +2265,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   final String role;
   final String? alternativeTitle;
   final String sharingType;
+  final String? tags;
+  final int isArchived;
+  final int isFavorite;
   const Notebook({
     required this.id,
     this.serverId,
@@ -2088,9 +2277,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     required this.coverType,
     this.color,
     this.coverImage,
-    this.lineType,
-    this.paperSize,
-    this.lineSpacing,
     required this.isPublished,
     required this.price,
     this.description,
@@ -2104,6 +2290,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     required this.role,
     this.alternativeTitle,
     required this.sharingType,
+    this.tags,
+    required this.isArchived,
+    required this.isFavorite,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2126,15 +2315,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     if (!nullToAbsent || coverImage != null) {
       map['cover_image'] = Variable<String>(coverImage);
     }
-    if (!nullToAbsent || lineType != null) {
-      map['line_type'] = Variable<String>(lineType);
-    }
-    if (!nullToAbsent || paperSize != null) {
-      map['paper_size'] = Variable<String>(paperSize);
-    }
-    if (!nullToAbsent || lineSpacing != null) {
-      map['line_spacing'] = Variable<double>(lineSpacing);
-    }
     map['is_published'] = Variable<int>(isPublished);
     map['price'] = Variable<double>(price);
     if (!nullToAbsent || description != null) {
@@ -2154,6 +2334,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       map['alternative_title'] = Variable<String>(alternativeTitle);
     }
     map['sharing_type'] = Variable<String>(sharingType);
+    if (!nullToAbsent || tags != null) {
+      map['tags'] = Variable<String>(tags);
+    }
+    map['is_archived'] = Variable<int>(isArchived);
+    map['is_favorite'] = Variable<int>(isFavorite);
     return map;
   }
 
@@ -2177,15 +2362,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       coverImage: coverImage == null && nullToAbsent
           ? const Value.absent()
           : Value(coverImage),
-      lineType: lineType == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lineType),
-      paperSize: paperSize == null && nullToAbsent
-          ? const Value.absent()
-          : Value(paperSize),
-      lineSpacing: lineSpacing == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lineSpacing),
       isPublished: Value(isPublished),
       price: Value(price),
       description: description == null && nullToAbsent
@@ -2205,6 +2381,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           ? const Value.absent()
           : Value(alternativeTitle),
       sharingType: Value(sharingType),
+      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
+      isArchived: Value(isArchived),
+      isFavorite: Value(isFavorite),
     );
   }
 
@@ -2222,9 +2401,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       coverType: serializer.fromJson<String>(json['coverType']),
       color: serializer.fromJson<String?>(json['color']),
       coverImage: serializer.fromJson<String?>(json['coverImage']),
-      lineType: serializer.fromJson<String?>(json['lineType']),
-      paperSize: serializer.fromJson<String?>(json['paperSize']),
-      lineSpacing: serializer.fromJson<double?>(json['lineSpacing']),
       isPublished: serializer.fromJson<int>(json['isPublished']),
       price: serializer.fromJson<double>(json['price']),
       description: serializer.fromJson<String?>(json['description']),
@@ -2238,6 +2414,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       role: serializer.fromJson<String>(json['role']),
       alternativeTitle: serializer.fromJson<String?>(json['alternativeTitle']),
       sharingType: serializer.fromJson<String>(json['sharingType']),
+      tags: serializer.fromJson<String?>(json['tags']),
+      isArchived: serializer.fromJson<int>(json['isArchived']),
+      isFavorite: serializer.fromJson<int>(json['isFavorite']),
     );
   }
   @override
@@ -2252,9 +2431,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       'coverType': serializer.toJson<String>(coverType),
       'color': serializer.toJson<String?>(color),
       'coverImage': serializer.toJson<String?>(coverImage),
-      'lineType': serializer.toJson<String?>(lineType),
-      'paperSize': serializer.toJson<String?>(paperSize),
-      'lineSpacing': serializer.toJson<double?>(lineSpacing),
       'isPublished': serializer.toJson<int>(isPublished),
       'price': serializer.toJson<double>(price),
       'description': serializer.toJson<String?>(description),
@@ -2268,6 +2444,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       'role': serializer.toJson<String>(role),
       'alternativeTitle': serializer.toJson<String?>(alternativeTitle),
       'sharingType': serializer.toJson<String>(sharingType),
+      'tags': serializer.toJson<String?>(tags),
+      'isArchived': serializer.toJson<int>(isArchived),
+      'isFavorite': serializer.toJson<int>(isFavorite),
     };
   }
 
@@ -2280,9 +2459,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     String? coverType,
     Value<String?> color = const Value.absent(),
     Value<String?> coverImage = const Value.absent(),
-    Value<String?> lineType = const Value.absent(),
-    Value<String?> paperSize = const Value.absent(),
-    Value<double?> lineSpacing = const Value.absent(),
     int? isPublished,
     double? price,
     Value<String?> description = const Value.absent(),
@@ -2296,6 +2472,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     String? role,
     Value<String?> alternativeTitle = const Value.absent(),
     String? sharingType,
+    Value<String?> tags = const Value.absent(),
+    int? isArchived,
+    int? isFavorite,
   }) => Notebook(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -2305,9 +2484,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     coverType: coverType ?? this.coverType,
     color: color.present ? color.value : this.color,
     coverImage: coverImage.present ? coverImage.value : this.coverImage,
-    lineType: lineType.present ? lineType.value : this.lineType,
-    paperSize: paperSize.present ? paperSize.value : this.paperSize,
-    lineSpacing: lineSpacing.present ? lineSpacing.value : this.lineSpacing,
     isPublished: isPublished ?? this.isPublished,
     price: price ?? this.price,
     description: description.present ? description.value : this.description,
@@ -2323,6 +2499,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
         ? alternativeTitle.value
         : this.alternativeTitle,
     sharingType: sharingType ?? this.sharingType,
+    tags: tags.present ? tags.value : this.tags,
+    isArchived: isArchived ?? this.isArchived,
+    isFavorite: isFavorite ?? this.isFavorite,
   );
   Notebook copyWithCompanion(NotebooksCompanion data) {
     return Notebook(
@@ -2336,11 +2515,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       coverImage: data.coverImage.present
           ? data.coverImage.value
           : this.coverImage,
-      lineType: data.lineType.present ? data.lineType.value : this.lineType,
-      paperSize: data.paperSize.present ? data.paperSize.value : this.paperSize,
-      lineSpacing: data.lineSpacing.present
-          ? data.lineSpacing.value
-          : this.lineSpacing,
       isPublished: data.isPublished.present
           ? data.isPublished.value
           : this.isPublished,
@@ -2370,6 +2544,13 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       sharingType: data.sharingType.present
           ? data.sharingType.value
           : this.sharingType,
+      tags: data.tags.present ? data.tags.value : this.tags,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      isFavorite: data.isFavorite.present
+          ? data.isFavorite.value
+          : this.isFavorite,
     );
   }
 
@@ -2384,9 +2565,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           ..write('coverType: $coverType, ')
           ..write('color: $color, ')
           ..write('coverImage: $coverImage, ')
-          ..write('lineType: $lineType, ')
-          ..write('paperSize: $paperSize, ')
-          ..write('lineSpacing: $lineSpacing, ')
           ..write('isPublished: $isPublished, ')
           ..write('price: $price, ')
           ..write('description: $description, ')
@@ -2399,7 +2577,10 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           ..write('collaborationMode: $collaborationMode, ')
           ..write('role: $role, ')
           ..write('alternativeTitle: $alternativeTitle, ')
-          ..write('sharingType: $sharingType')
+          ..write('sharingType: $sharingType, ')
+          ..write('tags: $tags, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -2414,9 +2595,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     coverType,
     color,
     coverImage,
-    lineType,
-    paperSize,
-    lineSpacing,
     isPublished,
     price,
     description,
@@ -2430,6 +2608,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     role,
     alternativeTitle,
     sharingType,
+    tags,
+    isArchived,
+    isFavorite,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -2443,9 +2624,6 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           other.coverType == this.coverType &&
           other.color == this.color &&
           other.coverImage == this.coverImage &&
-          other.lineType == this.lineType &&
-          other.paperSize == this.paperSize &&
-          other.lineSpacing == this.lineSpacing &&
           other.isPublished == this.isPublished &&
           other.price == this.price &&
           other.description == this.description &&
@@ -2458,7 +2636,10 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           other.collaborationMode == this.collaborationMode &&
           other.role == this.role &&
           other.alternativeTitle == this.alternativeTitle &&
-          other.sharingType == this.sharingType);
+          other.sharingType == this.sharingType &&
+          other.tags == this.tags &&
+          other.isArchived == this.isArchived &&
+          other.isFavorite == this.isFavorite);
 }
 
 class NotebooksCompanion extends UpdateCompanion<Notebook> {
@@ -2470,9 +2651,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   final Value<String> coverType;
   final Value<String?> color;
   final Value<String?> coverImage;
-  final Value<String?> lineType;
-  final Value<String?> paperSize;
-  final Value<double?> lineSpacing;
   final Value<int> isPublished;
   final Value<double> price;
   final Value<String?> description;
@@ -2486,6 +2664,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   final Value<String> role;
   final Value<String?> alternativeTitle;
   final Value<String> sharingType;
+  final Value<String?> tags;
+  final Value<int> isArchived;
+  final Value<int> isFavorite;
   const NotebooksCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -2495,9 +2676,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.coverType = const Value.absent(),
     this.color = const Value.absent(),
     this.coverImage = const Value.absent(),
-    this.lineType = const Value.absent(),
-    this.paperSize = const Value.absent(),
-    this.lineSpacing = const Value.absent(),
     this.isPublished = const Value.absent(),
     this.price = const Value.absent(),
     this.description = const Value.absent(),
@@ -2511,6 +2689,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.role = const Value.absent(),
     this.alternativeTitle = const Value.absent(),
     this.sharingType = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   });
   NotebooksCompanion.insert({
     this.id = const Value.absent(),
@@ -2521,9 +2702,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     required String coverType,
     this.color = const Value.absent(),
     this.coverImage = const Value.absent(),
-    this.lineType = const Value.absent(),
-    this.paperSize = const Value.absent(),
-    this.lineSpacing = const Value.absent(),
     this.isPublished = const Value.absent(),
     this.price = const Value.absent(),
     this.description = const Value.absent(),
@@ -2537,6 +2715,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.role = const Value.absent(),
     this.alternativeTitle = const Value.absent(),
     this.sharingType = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   }) : title = Value(title),
        coverType = Value(coverType);
   static Insertable<Notebook> custom({
@@ -2548,9 +2729,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Expression<String>? coverType,
     Expression<String>? color,
     Expression<String>? coverImage,
-    Expression<String>? lineType,
-    Expression<String>? paperSize,
-    Expression<double>? lineSpacing,
     Expression<int>? isPublished,
     Expression<double>? price,
     Expression<String>? description,
@@ -2564,6 +2742,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Expression<String>? role,
     Expression<String>? alternativeTitle,
     Expression<String>? sharingType,
+    Expression<String>? tags,
+    Expression<int>? isArchived,
+    Expression<int>? isFavorite,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2574,9 +2755,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       if (coverType != null) 'cover_type': coverType,
       if (color != null) 'color': color,
       if (coverImage != null) 'cover_image': coverImage,
-      if (lineType != null) 'line_type': lineType,
-      if (paperSize != null) 'paper_size': paperSize,
-      if (lineSpacing != null) 'line_spacing': lineSpacing,
       if (isPublished != null) 'is_published': isPublished,
       if (price != null) 'price': price,
       if (description != null) 'description': description,
@@ -2590,6 +2768,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       if (role != null) 'role': role,
       if (alternativeTitle != null) 'alternative_title': alternativeTitle,
       if (sharingType != null) 'sharing_type': sharingType,
+      if (tags != null) 'tags': tags,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (isFavorite != null) 'is_favorite': isFavorite,
     });
   }
 
@@ -2602,9 +2783,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Value<String>? coverType,
     Value<String?>? color,
     Value<String?>? coverImage,
-    Value<String?>? lineType,
-    Value<String?>? paperSize,
-    Value<double?>? lineSpacing,
     Value<int>? isPublished,
     Value<double>? price,
     Value<String?>? description,
@@ -2618,6 +2796,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Value<String>? role,
     Value<String?>? alternativeTitle,
     Value<String>? sharingType,
+    Value<String?>? tags,
+    Value<int>? isArchived,
+    Value<int>? isFavorite,
   }) {
     return NotebooksCompanion(
       id: id ?? this.id,
@@ -2628,9 +2809,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       coverType: coverType ?? this.coverType,
       color: color ?? this.color,
       coverImage: coverImage ?? this.coverImage,
-      lineType: lineType ?? this.lineType,
-      paperSize: paperSize ?? this.paperSize,
-      lineSpacing: lineSpacing ?? this.lineSpacing,
       isPublished: isPublished ?? this.isPublished,
       price: price ?? this.price,
       description: description ?? this.description,
@@ -2644,6 +2822,9 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       role: role ?? this.role,
       alternativeTitle: alternativeTitle ?? this.alternativeTitle,
       sharingType: sharingType ?? this.sharingType,
+      tags: tags ?? this.tags,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -2673,15 +2854,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     }
     if (coverImage.present) {
       map['cover_image'] = Variable<String>(coverImage.value);
-    }
-    if (lineType.present) {
-      map['line_type'] = Variable<String>(lineType.value);
-    }
-    if (paperSize.present) {
-      map['paper_size'] = Variable<String>(paperSize.value);
-    }
-    if (lineSpacing.present) {
-      map['line_spacing'] = Variable<double>(lineSpacing.value);
     }
     if (isPublished.present) {
       map['is_published'] = Variable<int>(isPublished.value);
@@ -2722,6 +2894,15 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     if (sharingType.present) {
       map['sharing_type'] = Variable<String>(sharingType.value);
     }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
+    }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<int>(isArchived.value);
+    }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<int>(isFavorite.value);
+    }
     return map;
   }
 
@@ -2736,9 +2917,6 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
           ..write('coverType: $coverType, ')
           ..write('color: $color, ')
           ..write('coverImage: $coverImage, ')
-          ..write('lineType: $lineType, ')
-          ..write('paperSize: $paperSize, ')
-          ..write('lineSpacing: $lineSpacing, ')
           ..write('isPublished: $isPublished, ')
           ..write('price: $price, ')
           ..write('description: $description, ')
@@ -2751,7 +2929,10 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
           ..write('collaborationMode: $collaborationMode, ')
           ..write('role: $role, ')
           ..write('alternativeTitle: $alternativeTitle, ')
-          ..write('sharingType: $sharingType')
+          ..write('sharingType: $sharingType, ')
+          ..write('tags: $tags, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -2929,6 +3110,18 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _isFavoriteMeta = const VerificationMeta(
+    'isFavorite',
+  );
+  @override
+  late final GeneratedColumn<int> isFavorite = GeneratedColumn<int>(
+    'is_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _paperSizeMeta = const VerificationMeta(
     'paperSize',
   );
@@ -2991,6 +3184,7 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     updatedAt,
     version,
     isFrozen,
+    isFavorite,
     paperSize,
     lineType,
     lineSpacing,
@@ -3102,6 +3296,12 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         isFrozen.isAcceptableOrUnknown(data['is_frozen']!, _isFrozenMeta),
       );
     }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+        _isFavoriteMeta,
+        isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
+      );
+    }
     if (data.containsKey('paper_size')) {
       context.handle(
         _paperSizeMeta,
@@ -3197,6 +3397,10 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         DriftSqlType.int,
         data['${effectivePrefix}is_frozen'],
       )!,
+      isFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_favorite'],
+      )!,
       paperSize: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}paper_size'],
@@ -3237,6 +3441,7 @@ class Page extends DataClass implements Insertable<Page> {
   final int updatedAt;
   final int version;
   final int isFrozen;
+  final int isFavorite;
   final String paperSize;
   final String? lineType;
   final double? lineSpacing;
@@ -3256,6 +3461,7 @@ class Page extends DataClass implements Insertable<Page> {
     required this.updatedAt,
     required this.version,
     required this.isFrozen,
+    required this.isFavorite,
     required this.paperSize,
     this.lineType,
     this.lineSpacing,
@@ -3288,6 +3494,7 @@ class Page extends DataClass implements Insertable<Page> {
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
     map['is_frozen'] = Variable<int>(isFrozen);
+    map['is_favorite'] = Variable<int>(isFavorite);
     map['paper_size'] = Variable<String>(paperSize);
     if (!nullToAbsent || lineType != null) {
       map['line_type'] = Variable<String>(lineType);
@@ -3327,6 +3534,7 @@ class Page extends DataClass implements Insertable<Page> {
       updatedAt: Value(updatedAt),
       version: Value(version),
       isFrozen: Value(isFrozen),
+      isFavorite: Value(isFavorite),
       paperSize: Value(paperSize),
       lineType: lineType == null && nullToAbsent
           ? const Value.absent()
@@ -3360,6 +3568,7 @@ class Page extends DataClass implements Insertable<Page> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       isFrozen: serializer.fromJson<int>(json['isFrozen']),
+      isFavorite: serializer.fromJson<int>(json['isFavorite']),
       paperSize: serializer.fromJson<String>(json['paperSize']),
       lineType: serializer.fromJson<String?>(json['lineType']),
       lineSpacing: serializer.fromJson<double?>(json['lineSpacing']),
@@ -3386,6 +3595,7 @@ class Page extends DataClass implements Insertable<Page> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'isFrozen': serializer.toJson<int>(isFrozen),
+      'isFavorite': serializer.toJson<int>(isFavorite),
       'paperSize': serializer.toJson<String>(paperSize),
       'lineType': serializer.toJson<String?>(lineType),
       'lineSpacing': serializer.toJson<double?>(lineSpacing),
@@ -3408,6 +3618,7 @@ class Page extends DataClass implements Insertable<Page> {
     int? updatedAt,
     int? version,
     int? isFrozen,
+    int? isFavorite,
     String? paperSize,
     Value<String?> lineType = const Value.absent(),
     Value<double?> lineSpacing = const Value.absent(),
@@ -3429,6 +3640,7 @@ class Page extends DataClass implements Insertable<Page> {
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     isFrozen: isFrozen ?? this.isFrozen,
+    isFavorite: isFavorite ?? this.isFavorite,
     paperSize: paperSize ?? this.paperSize,
     lineType: lineType.present ? lineType.value : this.lineType,
     lineSpacing: lineSpacing.present ? lineSpacing.value : this.lineSpacing,
@@ -3466,6 +3678,9 @@ class Page extends DataClass implements Insertable<Page> {
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       isFrozen: data.isFrozen.present ? data.isFrozen.value : this.isFrozen,
+      isFavorite: data.isFavorite.present
+          ? data.isFavorite.value
+          : this.isFavorite,
       paperSize: data.paperSize.present ? data.paperSize.value : this.paperSize,
       lineType: data.lineType.present ? data.lineType.value : this.lineType,
       lineSpacing: data.lineSpacing.present
@@ -3494,6 +3709,7 @@ class Page extends DataClass implements Insertable<Page> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('isFrozen: $isFrozen, ')
+          ..write('isFavorite: $isFavorite, ')
           ..write('paperSize: $paperSize, ')
           ..write('lineType: $lineType, ')
           ..write('lineSpacing: $lineSpacing, ')
@@ -3518,6 +3734,7 @@ class Page extends DataClass implements Insertable<Page> {
     updatedAt,
     version,
     isFrozen,
+    isFavorite,
     paperSize,
     lineType,
     lineSpacing,
@@ -3541,6 +3758,7 @@ class Page extends DataClass implements Insertable<Page> {
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
           other.isFrozen == this.isFrozen &&
+          other.isFavorite == this.isFavorite &&
           other.paperSize == this.paperSize &&
           other.lineType == this.lineType &&
           other.lineSpacing == this.lineSpacing &&
@@ -3562,6 +3780,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<int> isFrozen;
+  final Value<int> isFavorite;
   final Value<String> paperSize;
   final Value<String?> lineType;
   final Value<double?> lineSpacing;
@@ -3581,6 +3800,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.isFrozen = const Value.absent(),
+    this.isFavorite = const Value.absent(),
     this.paperSize = const Value.absent(),
     this.lineType = const Value.absent(),
     this.lineSpacing = const Value.absent(),
@@ -3601,6 +3821,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.isFrozen = const Value.absent(),
+    this.isFavorite = const Value.absent(),
     this.paperSize = const Value.absent(),
     this.lineType = const Value.absent(),
     this.lineSpacing = const Value.absent(),
@@ -3622,6 +3843,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<int>? isFrozen,
+    Expression<int>? isFavorite,
     Expression<String>? paperSize,
     Expression<String>? lineType,
     Expression<double>? lineSpacing,
@@ -3642,6 +3864,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (isFrozen != null) 'is_frozen': isFrozen,
+      if (isFavorite != null) 'is_favorite': isFavorite,
       if (paperSize != null) 'paper_size': paperSize,
       if (lineType != null) 'line_type': lineType,
       if (lineSpacing != null) 'line_spacing': lineSpacing,
@@ -3664,6 +3887,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<int>? isFrozen,
+    Value<int>? isFavorite,
     Value<String>? paperSize,
     Value<String?>? lineType,
     Value<double?>? lineSpacing,
@@ -3684,6 +3908,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       isFrozen: isFrozen ?? this.isFrozen,
+      isFavorite: isFavorite ?? this.isFavorite,
       paperSize: paperSize ?? this.paperSize,
       lineType: lineType ?? this.lineType,
       lineSpacing: lineSpacing ?? this.lineSpacing,
@@ -3736,6 +3961,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     if (isFrozen.present) {
       map['is_frozen'] = Variable<int>(isFrozen.value);
     }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<int>(isFavorite.value);
+    }
     if (paperSize.present) {
       map['paper_size'] = Variable<String>(paperSize.value);
     }
@@ -3768,6 +3996,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('isFrozen: $isFrozen, ')
+          ..write('isFavorite: $isFavorite, ')
           ..write('paperSize: $paperSize, ')
           ..write('lineType: $lineType, ')
           ..write('lineSpacing: $lineSpacing, ')
@@ -6027,6 +6256,30 @@ class $NotebookUserTable extends NotebookUser
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<int> isArchived = GeneratedColumn<int>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isFavoriteMeta = const VerificationMeta(
+    'isFavorite',
+  );
+  @override
+  late final GeneratedColumn<int> isFavorite = GeneratedColumn<int>(
+    'is_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6037,6 +6290,8 @@ class $NotebookUserTable extends NotebookUser
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6102,6 +6357,18 @@ class $NotebookUserTable extends NotebookUser
         version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+        _isFavoriteMeta,
+        isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
+      );
+    }
     return context;
   }
 
@@ -6143,6 +6410,14 @@ class $NotebookUserTable extends NotebookUser
         DriftSqlType.int,
         data['${effectivePrefix}version'],
       )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      isFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_favorite'],
+      )!,
     );
   }
 
@@ -6162,6 +6437,8 @@ class NotebookUserData extends DataClass
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
+  final int isArchived;
+  final int isFavorite;
   const NotebookUserData({
     required this.id,
     this.serverId,
@@ -6171,6 +6448,8 @@ class NotebookUserData extends DataClass
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
+    required this.isArchived,
+    required this.isFavorite,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6185,6 +6464,8 @@ class NotebookUserData extends DataClass
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
+    map['is_archived'] = Variable<int>(isArchived);
+    map['is_favorite'] = Variable<int>(isFavorite);
     return map;
   }
 
@@ -6200,6 +6481,8 @@ class NotebookUserData extends DataClass
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
+      isArchived: Value(isArchived),
+      isFavorite: Value(isFavorite),
     );
   }
 
@@ -6217,6 +6500,8 @@ class NotebookUserData extends DataClass
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
+      isArchived: serializer.fromJson<int>(json['isArchived']),
+      isFavorite: serializer.fromJson<int>(json['isFavorite']),
     );
   }
   @override
@@ -6231,6 +6516,8 @@ class NotebookUserData extends DataClass
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
+      'isArchived': serializer.toJson<int>(isArchived),
+      'isFavorite': serializer.toJson<int>(isFavorite),
     };
   }
 
@@ -6243,6 +6530,8 @@ class NotebookUserData extends DataClass
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
+    int? isArchived,
+    int? isFavorite,
   }) => NotebookUserData(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -6252,6 +6541,8 @@ class NotebookUserData extends DataClass
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
+    isArchived: isArchived ?? this.isArchived,
+    isFavorite: isFavorite ?? this.isFavorite,
   );
   NotebookUserData copyWithCompanion(NotebookUserCompanion data) {
     return NotebookUserData(
@@ -6267,6 +6558,12 @@ class NotebookUserData extends DataClass
           : this.syncedWithCloud,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      isFavorite: data.isFavorite.present
+          ? data.isFavorite.value
+          : this.isFavorite,
     );
   }
 
@@ -6280,7 +6577,9 @@ class NotebookUserData extends DataClass
           ..write('role: $role, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -6295,6 +6594,8 @@ class NotebookUserData extends DataClass
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   );
   @override
   bool operator ==(Object other) =>
@@ -6307,7 +6608,9 @@ class NotebookUserData extends DataClass
           other.role == this.role &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
-          other.version == this.version);
+          other.version == this.version &&
+          other.isArchived == this.isArchived &&
+          other.isFavorite == this.isFavorite);
 }
 
 class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
@@ -6319,6 +6622,8 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
+  final Value<int> isArchived;
+  final Value<int> isFavorite;
   const NotebookUserCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -6328,6 +6633,8 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   });
   NotebookUserCompanion.insert({
     this.id = const Value.absent(),
@@ -6338,6 +6645,8 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   }) : notebookId = Value(notebookId),
        userId = Value(userId);
   static Insertable<NotebookUserData> custom({
@@ -6349,6 +6658,8 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
+    Expression<int>? isArchived,
+    Expression<int>? isFavorite,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -6359,6 +6670,8 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (isFavorite != null) 'is_favorite': isFavorite,
     });
   }
 
@@ -6371,6 +6684,8 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
+    Value<int>? isArchived,
+    Value<int>? isFavorite,
   }) {
     return NotebookUserCompanion(
       id: id ?? this.id,
@@ -6381,6 +6696,8 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -6411,6 +6728,12 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
     if (version.present) {
       map['version'] = Variable<int>(version.value);
     }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<int>(isArchived.value);
+    }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<int>(isFavorite.value);
+    }
     return map;
   }
 
@@ -6424,7 +6747,9 @@ class NotebookUserCompanion extends UpdateCompanion<NotebookUserData> {
           ..write('role: $role, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -6579,6 +6904,30 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<int> isArchived = GeneratedColumn<int>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isFavoriteMeta = const VerificationMeta(
+    'isFavorite',
+  );
+  @override
+  late final GeneratedColumn<int> isFavorite = GeneratedColumn<int>(
+    'is_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6594,6 +6943,8 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6696,6 +7047,18 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
         version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+        _isFavoriteMeta,
+        isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
+      );
+    }
     return context;
   }
 
@@ -6757,6 +7120,14 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
         DriftSqlType.int,
         data['${effectivePrefix}version'],
       )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      isFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_favorite'],
+      )!,
     );
   }
 
@@ -6780,6 +7151,8 @@ class Payment extends DataClass implements Insertable<Payment> {
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
+  final int isArchived;
+  final int isFavorite;
   const Payment({
     required this.id,
     this.serverId,
@@ -6794,6 +7167,8 @@ class Payment extends DataClass implements Insertable<Payment> {
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
+    required this.isArchived,
+    required this.isFavorite,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6815,6 +7190,8 @@ class Payment extends DataClass implements Insertable<Payment> {
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
+    map['is_archived'] = Variable<int>(isArchived);
+    map['is_favorite'] = Variable<int>(isFavorite);
     return map;
   }
 
@@ -6837,6 +7214,8 @@ class Payment extends DataClass implements Insertable<Payment> {
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
+      isArchived: Value(isArchived),
+      isFavorite: Value(isFavorite),
     );
   }
 
@@ -6859,6 +7238,8 @@ class Payment extends DataClass implements Insertable<Payment> {
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
+      isArchived: serializer.fromJson<int>(json['isArchived']),
+      isFavorite: serializer.fromJson<int>(json['isFavorite']),
     );
   }
   @override
@@ -6878,6 +7259,8 @@ class Payment extends DataClass implements Insertable<Payment> {
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
+      'isArchived': serializer.toJson<int>(isArchived),
+      'isFavorite': serializer.toJson<int>(isFavorite),
     };
   }
 
@@ -6895,6 +7278,8 @@ class Payment extends DataClass implements Insertable<Payment> {
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
+    int? isArchived,
+    int? isFavorite,
   }) => Payment(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -6909,6 +7294,8 @@ class Payment extends DataClass implements Insertable<Payment> {
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
+    isArchived: isArchived ?? this.isArchived,
+    isFavorite: isFavorite ?? this.isFavorite,
   );
   Payment copyWithCompanion(PaymentsCompanion data) {
     return Payment(
@@ -6929,6 +7316,12 @@ class Payment extends DataClass implements Insertable<Payment> {
           : this.syncedWithCloud,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      isFavorite: data.isFavorite.present
+          ? data.isFavorite.value
+          : this.isFavorite,
     );
   }
 
@@ -6947,7 +7340,9 @@ class Payment extends DataClass implements Insertable<Payment> {
           ..write('itemId: $itemId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -6967,6 +7362,8 @@ class Payment extends DataClass implements Insertable<Payment> {
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   );
   @override
   bool operator ==(Object other) =>
@@ -6984,7 +7381,9 @@ class Payment extends DataClass implements Insertable<Payment> {
           other.itemId == this.itemId &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
-          other.version == this.version);
+          other.version == this.version &&
+          other.isArchived == this.isArchived &&
+          other.isFavorite == this.isFavorite);
 }
 
 class PaymentsCompanion extends UpdateCompanion<Payment> {
@@ -7001,6 +7400,8 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
+  final Value<int> isArchived;
+  final Value<int> isFavorite;
   const PaymentsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -7015,6 +7416,8 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   });
   PaymentsCompanion.insert({
     this.id = const Value.absent(),
@@ -7030,6 +7433,8 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   }) : userId = Value(userId),
        amount = Value(amount),
        entity = Value(entity),
@@ -7048,6 +7453,8 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
+    Expression<int>? isArchived,
+    Expression<int>? isFavorite,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -7063,6 +7470,8 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (isFavorite != null) 'is_favorite': isFavorite,
     });
   }
 
@@ -7080,6 +7489,8 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
+    Value<int>? isArchived,
+    Value<int>? isFavorite,
   }) {
     return PaymentsCompanion(
       id: id ?? this.id,
@@ -7095,6 +7506,8 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -7140,6 +7553,12 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     if (version.present) {
       map['version'] = Variable<int>(version.value);
     }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<int>(isArchived.value);
+    }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<int>(isFavorite.value);
+    }
     return map;
   }
 
@@ -7158,7 +7577,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
           ..write('itemId: $itemId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -7289,6 +7710,30 @@ class $LessonRecordingsTable extends LessonRecordings
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<int> isArchived = GeneratedColumn<int>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isFavoriteMeta = const VerificationMeta(
+    'isFavorite',
+  );
+  @override
+  late final GeneratedColumn<int> isFavorite = GeneratedColumn<int>(
+    'is_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -7301,6 +7746,8 @@ class $LessonRecordingsTable extends LessonRecordings
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7383,6 +7830,18 @@ class $LessonRecordingsTable extends LessonRecordings
         version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+        _isFavoriteMeta,
+        isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
+      );
+    }
     return context;
   }
 
@@ -7432,6 +7891,14 @@ class $LessonRecordingsTable extends LessonRecordings
         DriftSqlType.int,
         data['${effectivePrefix}version'],
       )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      isFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_favorite'],
+      )!,
     );
   }
 
@@ -7452,6 +7919,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
   final int syncedWithCloud;
   final int updatedAt;
   final int version;
+  final int isArchived;
+  final int isFavorite;
   const LessonRecording({
     required this.id,
     this.serverId,
@@ -7463,6 +7932,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
     required this.syncedWithCloud,
     required this.updatedAt,
     required this.version,
+    required this.isArchived,
+    required this.isFavorite,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7481,6 +7952,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     map['updated_at'] = Variable<int>(updatedAt);
     map['version'] = Variable<int>(version);
+    map['is_archived'] = Variable<int>(isArchived);
+    map['is_favorite'] = Variable<int>(isFavorite);
     return map;
   }
 
@@ -7500,6 +7973,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
       syncedWithCloud: Value(syncedWithCloud),
       updatedAt: Value(updatedAt),
       version: Value(version),
+      isArchived: Value(isArchived),
+      isFavorite: Value(isFavorite),
     );
   }
 
@@ -7519,6 +7994,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
+      isArchived: serializer.fromJson<int>(json['isArchived']),
+      isFavorite: serializer.fromJson<int>(json['isFavorite']),
     );
   }
   @override
@@ -7535,6 +8012,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
+      'isArchived': serializer.toJson<int>(isArchived),
+      'isFavorite': serializer.toJson<int>(isFavorite),
     };
   }
 
@@ -7549,6 +8028,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
+    int? isArchived,
+    int? isFavorite,
   }) => LessonRecording(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -7560,6 +8041,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
+    isArchived: isArchived ?? this.isArchived,
+    isFavorite: isFavorite ?? this.isFavorite,
   );
   LessonRecording copyWithCompanion(LessonRecordingsCompanion data) {
     return LessonRecording(
@@ -7579,6 +8062,12 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
           : this.syncedWithCloud,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      isFavorite: data.isFavorite.present
+          ? data.isFavorite.value
+          : this.isFavorite,
     );
   }
 
@@ -7594,7 +8083,9 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
           ..write('durationSeconds: $durationSeconds, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -7611,6 +8102,8 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
     syncedWithCloud,
     updatedAt,
     version,
+    isArchived,
+    isFavorite,
   );
   @override
   bool operator ==(Object other) =>
@@ -7625,7 +8118,9 @@ class LessonRecording extends DataClass implements Insertable<LessonRecording> {
           other.durationSeconds == this.durationSeconds &&
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
-          other.version == this.version);
+          other.version == this.version &&
+          other.isArchived == this.isArchived &&
+          other.isFavorite == this.isFavorite);
 }
 
 class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
@@ -7639,6 +8134,8 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
   final Value<int> syncedWithCloud;
   final Value<int> updatedAt;
   final Value<int> version;
+  final Value<int> isArchived;
+  final Value<int> isFavorite;
   const LessonRecordingsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -7650,6 +8147,8 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   });
   LessonRecordingsCompanion.insert({
     this.id = const Value.absent(),
@@ -7662,6 +8161,8 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
     this.syncedWithCloud = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.isFavorite = const Value.absent(),
   }) : notebookId = Value(notebookId),
        title = Value(title),
        audioUrl = Value(audioUrl);
@@ -7676,6 +8177,8 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
     Expression<int>? syncedWithCloud,
     Expression<int>? updatedAt,
     Expression<int>? version,
+    Expression<int>? isArchived,
+    Expression<int>? isFavorite,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -7688,6 +8191,8 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (isFavorite != null) 'is_favorite': isFavorite,
     });
   }
 
@@ -7702,6 +8207,8 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
     Value<int>? syncedWithCloud,
     Value<int>? updatedAt,
     Value<int>? version,
+    Value<int>? isArchived,
+    Value<int>? isFavorite,
   }) {
     return LessonRecordingsCompanion(
       id: id ?? this.id,
@@ -7714,6 +8221,8 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+      isArchived: isArchived ?? this.isArchived,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -7750,6 +8259,12 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
     if (version.present) {
       map['version'] = Variable<int>(version.value);
     }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<int>(isArchived.value);
+    }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<int>(isFavorite.value);
+    }
     return map;
   }
 
@@ -7765,7 +8280,9 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
           ..write('durationSeconds: $durationSeconds, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('version: $version')
+          ..write('version: $version, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('isFavorite: $isFavorite')
           ..write(')'))
         .toString();
   }
@@ -7896,6 +8413,8 @@ typedef $$UsersTableCreateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 typedef $$UsersTableUpdateCompanionBuilder =
     UsersCompanion Function({
@@ -7913,6 +8432,8 @@ typedef $$UsersTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 
 final class $$UsersTableReferences
@@ -8051,6 +8572,16 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
 
   ColumnFilters<int> get version => $composableBuilder(
     column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8208,6 +8739,16 @@ class $$UsersTableOrderingComposer
     column: $table.version,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$UsersTableAnnotationComposer
@@ -8270,6 +8811,16 @@ class $$UsersTableAnnotationComposer
 
   GeneratedColumn<int> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => column,
+  );
 
   Expression<T> subjectsRefs<T extends Object>(
     Expression<T> Function($$SubjectsTableAnnotationComposer a) f,
@@ -8393,6 +8944,8 @@ class $$UsersTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => UsersCompanion(
                 id: id,
                 serverId: serverId,
@@ -8408,6 +8961,8 @@ class $$UsersTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           createCompanionCallback:
               ({
@@ -8425,6 +8980,8 @@ class $$UsersTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => UsersCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -8440,6 +8997,8 @@ class $$UsersTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -8557,6 +9116,8 @@ typedef $$SubjectsTableCreateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 typedef $$SubjectsTableUpdateCompanionBuilder =
     SubjectsCompanion Function({
@@ -8571,6 +9132,8 @@ typedef $$SubjectsTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 
 final class $$SubjectsTableReferences
@@ -8669,6 +9232,16 @@ class $$SubjectsTableFilterComposer
 
   ColumnFilters<int> get version => $composableBuilder(
     column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8780,6 +9353,16 @@ class $$SubjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$UsersTableOrderingComposer get userId {
     final $$UsersTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -8844,6 +9427,16 @@ class $$SubjectsTableAnnotationComposer
 
   GeneratedColumn<int> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => column,
+  );
 
   $$UsersTableAnnotationComposer get userId {
     final $$UsersTableAnnotationComposer composer = $composerBuilder(
@@ -8933,6 +9526,8 @@ class $$SubjectsTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => SubjectsCompanion(
                 id: id,
                 serverId: serverId,
@@ -8945,6 +9540,8 @@ class $$SubjectsTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           createCompanionCallback:
               ({
@@ -8959,6 +9556,8 @@ class $$SubjectsTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => SubjectsCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -8971,6 +9570,8 @@ class $$SubjectsTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -9068,9 +9669,6 @@ typedef $$NotebooksTableCreateCompanionBuilder =
       required String coverType,
       Value<String?> color,
       Value<String?> coverImage,
-      Value<String?> lineType,
-      Value<String?> paperSize,
-      Value<double?> lineSpacing,
       Value<int> isPublished,
       Value<double> price,
       Value<String?> description,
@@ -9084,6 +9682,9 @@ typedef $$NotebooksTableCreateCompanionBuilder =
       Value<String> role,
       Value<String?> alternativeTitle,
       Value<String> sharingType,
+      Value<String?> tags,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 typedef $$NotebooksTableUpdateCompanionBuilder =
     NotebooksCompanion Function({
@@ -9095,9 +9696,6 @@ typedef $$NotebooksTableUpdateCompanionBuilder =
       Value<String> coverType,
       Value<String?> color,
       Value<String?> coverImage,
-      Value<String?> lineType,
-      Value<String?> paperSize,
-      Value<double?> lineSpacing,
       Value<int> isPublished,
       Value<double> price,
       Value<String?> description,
@@ -9111,6 +9709,9 @@ typedef $$NotebooksTableUpdateCompanionBuilder =
       Value<String> role,
       Value<String?> alternativeTitle,
       Value<String> sharingType,
+      Value<String?> tags,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 
 final class $$NotebooksTableReferences
@@ -9236,21 +9837,6 @@ class $$NotebooksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get lineType => $composableBuilder(
-    column: $table.lineType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get paperSize => $composableBuilder(
-    column: $table.paperSize,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get lineSpacing => $composableBuilder(
-    column: $table.lineSpacing,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<int> get isPublished => $composableBuilder(
     column: $table.isPublished,
     builder: (column) => ColumnFilters(column),
@@ -9313,6 +9899,21 @@ class $$NotebooksTableFilterComposer
 
   ColumnFilters<String> get sharingType => $composableBuilder(
     column: $table.sharingType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9459,21 +10060,6 @@ class $$NotebooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get lineType => $composableBuilder(
-    column: $table.lineType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get paperSize => $composableBuilder(
-    column: $table.paperSize,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get lineSpacing => $composableBuilder(
-    column: $table.lineSpacing,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<int> get isPublished => $composableBuilder(
     column: $table.isPublished,
     builder: (column) => ColumnOrderings(column),
@@ -9539,6 +10125,21 @@ class $$NotebooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SubjectsTableOrderingComposer get subjectId {
     final $$SubjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -9595,17 +10196,6 @@ class $$NotebooksTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get lineType =>
-      $composableBuilder(column: $table.lineType, builder: (column) => column);
-
-  GeneratedColumn<String> get paperSize =>
-      $composableBuilder(column: $table.paperSize, builder: (column) => column);
-
-  GeneratedColumn<double> get lineSpacing => $composableBuilder(
-    column: $table.lineSpacing,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<int> get isPublished => $composableBuilder(
     column: $table.isPublished,
     builder: (column) => column,
@@ -9658,6 +10248,19 @@ class $$NotebooksTableAnnotationComposer
 
   GeneratedColumn<String> get sharingType => $composableBuilder(
     column: $table.sharingType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tags =>
+      $composableBuilder(column: $table.tags, builder: (column) => column);
+
+  GeneratedColumn<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
     builder: (column) => column,
   );
 
@@ -9801,9 +10404,6 @@ class $$NotebooksTableTableManager
                 Value<String> coverType = const Value.absent(),
                 Value<String?> color = const Value.absent(),
                 Value<String?> coverImage = const Value.absent(),
-                Value<String?> lineType = const Value.absent(),
-                Value<String?> paperSize = const Value.absent(),
-                Value<double?> lineSpacing = const Value.absent(),
                 Value<int> isPublished = const Value.absent(),
                 Value<double> price = const Value.absent(),
                 Value<String?> description = const Value.absent(),
@@ -9817,6 +10417,9 @@ class $$NotebooksTableTableManager
                 Value<String> role = const Value.absent(),
                 Value<String?> alternativeTitle = const Value.absent(),
                 Value<String> sharingType = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => NotebooksCompanion(
                 id: id,
                 serverId: serverId,
@@ -9826,9 +10429,6 @@ class $$NotebooksTableTableManager
                 coverType: coverType,
                 color: color,
                 coverImage: coverImage,
-                lineType: lineType,
-                paperSize: paperSize,
-                lineSpacing: lineSpacing,
                 isPublished: isPublished,
                 price: price,
                 description: description,
@@ -9842,6 +10442,9 @@ class $$NotebooksTableTableManager
                 role: role,
                 alternativeTitle: alternativeTitle,
                 sharingType: sharingType,
+                tags: tags,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           createCompanionCallback:
               ({
@@ -9853,9 +10456,6 @@ class $$NotebooksTableTableManager
                 required String coverType,
                 Value<String?> color = const Value.absent(),
                 Value<String?> coverImage = const Value.absent(),
-                Value<String?> lineType = const Value.absent(),
-                Value<String?> paperSize = const Value.absent(),
-                Value<double?> lineSpacing = const Value.absent(),
                 Value<int> isPublished = const Value.absent(),
                 Value<double> price = const Value.absent(),
                 Value<String?> description = const Value.absent(),
@@ -9869,6 +10469,9 @@ class $$NotebooksTableTableManager
                 Value<String> role = const Value.absent(),
                 Value<String?> alternativeTitle = const Value.absent(),
                 Value<String> sharingType = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => NotebooksCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -9878,9 +10481,6 @@ class $$NotebooksTableTableManager
                 coverType: coverType,
                 color: color,
                 coverImage: coverImage,
-                lineType: lineType,
-                paperSize: paperSize,
-                lineSpacing: lineSpacing,
                 isPublished: isPublished,
                 price: price,
                 description: description,
@@ -9894,6 +10494,9 @@ class $$NotebooksTableTableManager
                 role: role,
                 alternativeTitle: alternativeTitle,
                 sharingType: sharingType,
+                tags: tags,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -10057,6 +10660,7 @@ typedef $$PagesTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<int> isFrozen,
+      Value<int> isFavorite,
       Value<String> paperSize,
       Value<String?> lineType,
       Value<double?> lineSpacing,
@@ -10078,6 +10682,7 @@ typedef $$PagesTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<int> isFrozen,
+      Value<int> isFavorite,
       Value<String> paperSize,
       Value<String?> lineType,
       Value<double?> lineSpacing,
@@ -10235,6 +10840,11 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
 
   ColumnFilters<int> get isFrozen => $composableBuilder(
     column: $table.isFrozen,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10431,6 +11041,11 @@ class $$PagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get paperSize => $composableBuilder(
     column: $table.paperSize,
     builder: (column) => ColumnOrderings(column),
@@ -10534,6 +11149,11 @@ class $$PagesTableAnnotationComposer
 
   GeneratedColumn<int> get isFrozen =>
       $composableBuilder(column: $table.isFrozen, builder: (column) => column);
+
+  GeneratedColumn<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get paperSize =>
       $composableBuilder(column: $table.paperSize, builder: (column) => column);
@@ -10698,6 +11318,7 @@ class $$PagesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<int> isFrozen = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
                 Value<String> paperSize = const Value.absent(),
                 Value<String?> lineType = const Value.absent(),
                 Value<double?> lineSpacing = const Value.absent(),
@@ -10717,6 +11338,7 @@ class $$PagesTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 isFrozen: isFrozen,
+                isFavorite: isFavorite,
                 paperSize: paperSize,
                 lineType: lineType,
                 lineSpacing: lineSpacing,
@@ -10738,6 +11360,7 @@ class $$PagesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<int> isFrozen = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
                 Value<String> paperSize = const Value.absent(),
                 Value<String?> lineType = const Value.absent(),
                 Value<double?> lineSpacing = const Value.absent(),
@@ -10757,6 +11380,7 @@ class $$PagesTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 isFrozen: isFrozen,
+                isFavorite: isFavorite,
                 paperSize: paperSize,
                 lineType: lineType,
                 lineSpacing: lineSpacing,
@@ -12315,6 +12939,8 @@ typedef $$NotebookUserTableCreateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 typedef $$NotebookUserTableUpdateCompanionBuilder =
     NotebookUserCompanion Function({
@@ -12326,6 +12952,8 @@ typedef $$NotebookUserTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 
 final class $$NotebookUserTableReferences
@@ -12404,6 +13032,16 @@ class $$NotebookUserTableFilterComposer
 
   ColumnFilters<int> get version => $composableBuilder(
     column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12493,6 +13131,16 @@ class $$NotebookUserTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$NotebooksTableOrderingComposer get notebookId {
     final $$NotebooksTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -12568,6 +13216,16 @@ class $$NotebookUserTableAnnotationComposer
 
   GeneratedColumn<int> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => column,
+  );
 
   $$NotebooksTableAnnotationComposer get notebookId {
     final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
@@ -12652,6 +13310,8 @@ class $$NotebookUserTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => NotebookUserCompanion(
                 id: id,
                 serverId: serverId,
@@ -12661,6 +13321,8 @@ class $$NotebookUserTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           createCompanionCallback:
               ({
@@ -12672,6 +13334,8 @@ class $$NotebookUserTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => NotebookUserCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -12681,6 +13345,8 @@ class $$NotebookUserTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -12777,6 +13443,8 @@ typedef $$PaymentsTableCreateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 typedef $$PaymentsTableUpdateCompanionBuilder =
     PaymentsCompanion Function({
@@ -12793,6 +13461,8 @@ typedef $$PaymentsTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 
 final class $$PaymentsTableReferences
@@ -12883,6 +13553,16 @@ class $$PaymentsTableFilterComposer
 
   ColumnFilters<int> get version => $composableBuilder(
     column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12979,6 +13659,16 @@ class $$PaymentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$UsersTableOrderingComposer get userId {
     final $$UsersTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -13052,6 +13742,16 @@ class $$PaymentsTableAnnotationComposer
   GeneratedColumn<int> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
 
+  GeneratedColumn<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => column,
+  );
+
   $$UsersTableAnnotationComposer get userId {
     final $$UsersTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -13117,6 +13817,8 @@ class $$PaymentsTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => PaymentsCompanion(
                 id: id,
                 serverId: serverId,
@@ -13131,6 +13833,8 @@ class $$PaymentsTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           createCompanionCallback:
               ({
@@ -13147,6 +13851,8 @@ class $$PaymentsTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => PaymentsCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -13161,6 +13867,8 @@ class $$PaymentsTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -13241,6 +13949,8 @@ typedef $$LessonRecordingsTableCreateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 typedef $$LessonRecordingsTableUpdateCompanionBuilder =
     LessonRecordingsCompanion Function({
@@ -13254,6 +13964,8 @@ typedef $$LessonRecordingsTableUpdateCompanionBuilder =
       Value<int> syncedWithCloud,
       Value<int> updatedAt,
       Value<int> version,
+      Value<int> isArchived,
+      Value<int> isFavorite,
     });
 
 final class $$LessonRecordingsTableReferences
@@ -13337,6 +14049,16 @@ class $$LessonRecordingsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$NotebooksTableFilterComposer get notebookId {
     final $$NotebooksTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -13415,6 +14137,16 @@ class $$LessonRecordingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$NotebooksTableOrderingComposer get notebookId {
     final $$NotebooksTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -13478,6 +14210,16 @@ class $$LessonRecordingsTableAnnotationComposer
 
   GeneratedColumn<int> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<int> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isFavorite => $composableBuilder(
+    column: $table.isFavorite,
+    builder: (column) => column,
+  );
 
   $$NotebooksTableAnnotationComposer get notebookId {
     final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
@@ -13543,6 +14285,8 @@ class $$LessonRecordingsTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => LessonRecordingsCompanion(
                 id: id,
                 serverId: serverId,
@@ -13554,6 +14298,8 @@ class $$LessonRecordingsTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           createCompanionCallback:
               ({
@@ -13567,6 +14313,8 @@ class $$LessonRecordingsTableTableManager
                 Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
+                Value<int> isArchived = const Value.absent(),
+                Value<int> isFavorite = const Value.absent(),
               }) => LessonRecordingsCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -13578,6 +14326,8 @@ class $$LessonRecordingsTableTableManager
                 syncedWithCloud: syncedWithCloud,
                 updatedAt: updatedAt,
                 version: version,
+                isArchived: isArchived,
+                isFavorite: isFavorite,
               ),
           withReferenceMapper: (p0) => p0
               .map(

@@ -84,7 +84,7 @@ class AudioSessionService extends ChangeNotifier {
   bool get isAudioPlaying => _audioPlayer.state == PlayerState.playing;
   Duration get audioPosition => _currentAudioPosition ?? Duration.zero;
   Duration get audioDuration => _currentAudioDuration ?? Duration.zero;
-  Duration get recordingDuration => _recordingStartTime != null ? DateTime.now().difference(_recordingStartTime!) : Duration.zero;
+  Duration get recordingDuration => _recordingStartTime != null ? TimeService().now().difference(_recordingStartTime!) : Duration.zero;
 
   Future<void> loadLessonRecordings(int notebookId) async {
     final d = db.AppDatabase.instance;
@@ -129,7 +129,7 @@ class AudioSessionService extends ChangeNotifier {
     try {
       if (await _audioRecorder.hasPermission()) {
         isLessonRecording = true;
-        _recordingStartTime = DateTime.now();
+        _recordingStartTime = TimeService().now();
         _activeStreamMessageId = const Uuid().v4();
         
         String? path;
@@ -172,7 +172,7 @@ class AudioSessionService extends ChangeNotifier {
           title: title,
           audioUrl: permanentPath, 
           durationSeconds: drift.Value(duration),
-          updatedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+          updatedAt: drift.Value(TimeService().nowMs()),
         ));
         await loadLessonRecordings(notebookId);
 
@@ -208,7 +208,7 @@ class AudioSessionService extends ChangeNotifier {
     try { 
       if (_isDisposed || isRecording) return; 
       if (await _audioRecorder.hasPermission()) { 
-        isRecording = true; _isRecordingLive = isLive; _recordingStartTime = DateTime.now(); _activeStreamMessageId = const Uuid().v4(); _currentSegmentIndex = 0; 
+        isRecording = true; _isRecordingLive = isLive; _recordingStartTime = TimeService().now(); _activeStreamMessageId = const Uuid().v4(); _currentSegmentIndex = 0; 
         
         String? path; 
         if (!kIsWeb) { 
@@ -301,7 +301,7 @@ class AudioSessionService extends ChangeNotifier {
             'sender_id': myUserId,
             'audio_url': url,
             'duration': duration, 
-            'timestamp': DateTime.now().toIso8601String(),
+            'timestamp': TimeService().now().toIso8601String(),
           });
         }
 

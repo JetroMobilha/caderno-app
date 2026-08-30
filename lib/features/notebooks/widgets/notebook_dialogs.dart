@@ -11,9 +11,10 @@ import '../controllers/notebooks_controller.dart';
 class NotebookDialogs {
   static void showNotebookModal(BuildContext context, WidgetRef ref, Subject? activeSubject, Color themeColor, {required bool isEditing, Notebook? notebookToEdit}) {
     final titleController = TextEditingController(text: isEditing ? notebookToEdit!.title : '');
+    final tagsController = TextEditingController(text: isEditing ? notebookToEdit!.tags.join(', ') : '');
     final formKey = GlobalKey<FormState>();
-    String selectedLineType = isEditing ? (notebookToEdit!.lineType) : 'ruled';
     String selectedTemplate = isEditing ? (notebookToEdit!.templateType) : 'study';
+    bool isFavorite = isEditing ? notebookToEdit!.isFavorite : false;
     final List<String> availableColors = [
       '#8B0000', '#0F4C5C', '#1F4E79', '#3F51B5',
       '#6C3483', '#9B59B6', '#D81B60', '#E91E63',
@@ -58,6 +59,28 @@ class NotebookDialogs {
                     validator: (value) => value == null || value.trim().isEmpty ? 'Introduz o título' : null,
                   ),
                   const SizedBox(height: 20),
+                  TextFormField(
+                    controller: tagsController,
+                    decoration: InputDecoration(
+                      labelText: 'Etiquetas (Tags)',
+                      hintText: 'ex: Faculdade, Urgente, Projeto',
+                      helperText: 'Separa as tags por vírgula',
+                      border: const OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: themeColor, width: 1.5)),
+                      prefixIcon: Icon(Icons.tag_rounded, color: themeColor, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Marcar como Favorito', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: themeColor)),
+                    subtitle: const Text('Fixar no topo da lista', style: TextStyle(fontSize: 12)),
+                    secondary: Icon(Icons.star_rounded, color: isFavorite ? Colors.orange : Colors.grey),
+                    value: isFavorite,
+                    activeColor: Colors.orange,
+                    onChanged: (val) => setModalState(() => isFavorite = val),
+                  ),
+                  const SizedBox(height: 20),
                   Text('Propósito do Caderno:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: themeColor)),
                   const SizedBox(height: 12),
                   Row(
@@ -72,21 +95,7 @@ class NotebookDialogs {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text('Tipo de Pauta Inicial:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: themeColor)),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildLineTypeOption(context, Icons.view_headline_rounded, 'ruled', selectedLineType, themeColor, () => setModalState(() => selectedLineType = 'ruled')),
-                      const SizedBox(width: 8),
-                      _buildLineTypeOption(context, Icons.grid_4x4_rounded, 'grid', selectedLineType, themeColor, () => setModalState(() => selectedLineType = 'grid')),
-                      const SizedBox(width: 8),
-                      _buildLineTypeOption(context, Icons.more_horiz_rounded, 'dots', selectedLineType, themeColor, () => setModalState(() => selectedLineType = 'dots')),
-                      const SizedBox(width: 8),
-                      _buildLineTypeOption(context, Icons.check_box_outline_blank_rounded, 'blank', selectedLineType, themeColor, () => setModalState(() => selectedLineType = 'blank')),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text('Cor da Capa (16 Tons):', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54)),
+                  Text('Cor da Capa:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 10, runSpacing: 10,
@@ -114,13 +123,15 @@ class NotebookDialogs {
               onPressed: () async {
                 if (formKey.currentState!.validate()) {
                   final notifier = ref.read(notebooksProvider.notifier);
+                  final List<String> tags = tagsController.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
 
                   if (isEditing) {
                     final cadernoEditado = notebookToEdit!.copyWith(
                       title: titleController.text.trim(),
                       color: pickedColorHex,
-                      lineType: selectedLineType,
                       templateType: selectedTemplate,
+                      tags: tags,
+                      isFavorite: isFavorite,
                     );
                     await notifier.updateNotebook(cadernoEditado);
                     if (contextDialog.mounted) Navigator.pop(contextDialog);
@@ -130,9 +141,9 @@ class NotebookDialogs {
                       title: titleController.text.trim(),
                       coverType: 'color',
                       color: pickedColorHex,
-                      lineType: selectedLineType,
-                      paperSize: 'A4',
                       templateType: selectedTemplate,
+                      tags: tags,
+                      isFavorite: isFavorite,
                     );
 
                     newNotebook.id = await notifier.addNotebook(newNotebook, activeSubject?.serverId);
@@ -178,25 +189,6 @@ class NotebookDialogs {
               Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? color : Colors.grey)),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildLineTypeOption(BuildContext context, IconData icon, String type, String selected, Color themeColor, VoidCallback onTap) {
-    final isSelected = selected == type;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? themeColor.withOpacity(0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isSelected ? themeColor : Colors.grey.shade300, width: isSelected ? 2 : 1),
-          ),
-          child: Icon(icon, color: isSelected ? themeColor : Colors.grey, size: 20),
         ),
       ),
     );
@@ -254,7 +246,7 @@ class NotebookDialogs {
             children: [
               Text('Onde desejas guardar a cópia de "${notebook.title}"?', style: GoogleFonts.inter(fontSize: 14)),
               const SizedBox(height: 20),
-              Text('Disciplina de Destino:', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+              Text('Pasta de Destino:', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -329,7 +321,7 @@ class NotebookDialogs {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Para qual disciplina desejas mover "${notebook.title}"?', style: GoogleFonts.inter(fontSize: 14)),
+              Text('Para qual pasta desejas mover "${notebook.title}"?', style: GoogleFonts.inter(fontSize: 14)),
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),

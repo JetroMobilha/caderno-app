@@ -16,11 +16,14 @@ class LocalPage {
   String? lineType;
   double? lineSpacing;
   bool isFrozen; 
+  bool isFavorite; 
   bool isDeleted;
   bool isTearing = false;
   bool isContentLoaded = false;
 
   String title;
+  String? sectionTitle; 
+  String? sectionColor; // 🚀 v20: Cor personalizada da secção
   String footer;
   String? extractedText;
 
@@ -45,9 +48,12 @@ class LocalPage {
     this.lineType,
     this.lineSpacing,
     this.isFrozen = false,
+    this.isFavorite = false,
     this.isDeleted = false,
     List<Stroke>? strokes,
     this.title = '',
+    this.sectionTitle, 
+    this.sectionColor, 
     this.footer = '',
     this.extractedText,
     List<TextBlock>? textBlocks,
@@ -73,8 +79,12 @@ class LocalPage {
     String? lineType,
     double? lineSpacing,
     bool? isFrozen,
+    bool? isFavorite,
     bool? isDeleted,
     String? title,
+    String? sectionTitle,
+    String? sectionColor,
+    bool clearSection = false, // 🚀 Permitir limpar explicitamente
     String? footer,
     String? extractedText,
     List<Stroke>? strokes,
@@ -95,8 +105,11 @@ class LocalPage {
       lineType: lineType ?? this.lineType,
       lineSpacing: lineSpacing ?? this.lineSpacing,
       isFrozen: isFrozen ?? this.isFrozen,
+      isFavorite: isFavorite ?? this.isFavorite,
       isDeleted: isDeleted ?? this.isDeleted,
       title: title ?? this.title,
+      sectionTitle: clearSection ? null : (sectionTitle ?? this.sectionTitle),
+      sectionColor: clearSection ? null : (sectionColor ?? this.sectionColor),
       footer: footer ?? this.footer,
       extractedText: extractedText ?? this.extractedText,
       strokes: strokes ?? List.from(this.strokes),
@@ -105,6 +118,34 @@ class LocalPage {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
+    );
+  }
+
+  LocalPage clone({String? newClientId, int? newNotebookId, int? newPageNumber}) {
+    return LocalPage(
+      id: null,
+      serverId: null,
+      clientId: newClientId ?? const Uuid().v4(),
+      notebookId: newNotebookId ?? notebookId,
+      pageNumber: newPageNumber ?? pageNumber,
+      isLandscape: isLandscape,
+      paperSize: paperSize,
+      lineType: lineType,
+      lineSpacing: lineSpacing,
+      isFrozen: isFrozen,
+      isFavorite: isFavorite,
+      isDeleted: isDeleted,
+      title: title,
+      sectionTitle: sectionTitle,
+      sectionColor: sectionColor,
+      footer: footer,
+      extractedText: extractedText,
+      strokes: strokes.map((s) => s.clone(newPageNumber: newPageNumber ?? pageNumber)).toList(),
+      textBlocks: textBlocks.map((t) => t.clone(newPageNumber: newPageNumber ?? pageNumber)).toList(),
+      imageBlocks: imageBlocks.map((i) => i.clone(newPageNumber: newPageNumber ?? pageNumber)).toList(),
+      syncedWithCloud: 0,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
     );
   }
 
@@ -117,9 +158,11 @@ class LocalPage {
     final activeImages = imageBlocks.where((i) => !i.isDeleted).toList()..sort((a, b) => a.id.compareTo(b.id));
     for (var i in activeImages) components.add('i:${i.id}:${i.updatedAt}');
     components.add('f:${isFrozen ? 1 : 0}');
+    components.add('fav:${isFavorite ? 1 : 0}');
     components.add('ps:$paperSize');
     components.add('lt:${lineType ?? 'ruled'}');
     components.add('ls:${lineSpacing ?? '28'}');
+    if (sectionTitle != null) components.add('sc:$sectionTitle:$sectionColor');
     return components.join('|');
   }
 
@@ -134,9 +177,10 @@ class LocalPage {
       'line_type': lineType,
       'line_spacing': lineSpacing,
       'is_frozen': isFrozen ? 1 : 0,
+      'is_favorite': isFavorite ? 1 : 0,
       'is_deleted': isDeleted ? 1 : 0,
       'synced_with_cloud': syncedWithCloud,
-      'header_data': {'title': title},
+      'header_data': {'title': title, 'section': sectionTitle, 'section_color': sectionColor},
       'footer_data': {'title': footer},
       'extracted_text': extractedText,
       'stroke_data': strokes.map((s) => s.toJson()).toList(),
@@ -160,16 +204,17 @@ class LocalPage {
       'line_type': lineType,
       'line_spacing': lineSpacing,
       'is_frozen': isFrozen ? 1 : 0,
+      'is_favorite': isFavorite ? 1 : 0,
       'is_deleted': isDeleted ? 1 : 0,
       'synced_with_cloud': syncedWithCloud,
-      'header_data': {'title': title},
+      'header_data': {'title': title, 'section': sectionTitle, 'section_color': sectionColor},
       'footer_data': {'title': footer},
       'extracted_text': extractedText,
       'stroke_data': strokes.map((s) => s.toJson()).toList(),
       'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': asyncImages,
       'updated_at': updatedAt,
-      'version': 1,
+      'version': version,
     };
   }
 
@@ -184,12 +229,36 @@ class LocalPage {
           if (decoded is Map && decoded.containsKey('title')) current = decoded['title'];
           else break;
         } catch (_) { break; }
-      } else break;
+      } else {
+        break;
+      }
     }
     return current?.toString() ?? '';
   }
 
-  static String encodeMeta(String text) => jsonEncode({'title': text});
+  static String? parseSection(dynamic data) {
+    if (data == null) return null;
+    if (data is Map) return data['section']?.toString();
+    if (data is String && data.trim().startsWith('{')) {
+      try {
+        final decoded = jsonDecode(data);
+        if (decoded is Map) return decoded['section']?.toString();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  static String? parseSectionColor(dynamic data) {
+    if (data == null) return null;
+    if (data is Map) return data['section_color']?.toString();
+    if (data is String && data.trim().startsWith('{')) {
+      try {
+        final decoded = jsonDecode(data);
+        if (decoded is Map) return decoded['section_color']?.toString();
+      } catch (_) {}
+    }
+    return null;
+  }
 
   factory LocalPage.fromJson(Map<String, dynamic> json) {
     final List<dynamic> strokesList = json['stroke_data'] ?? [];
@@ -212,8 +281,11 @@ class LocalPage {
       lineType: json['line_type']?.toString(),
       lineSpacing: json['line_spacing'] != null ? double.tryParse(json['line_spacing'].toString()) : null,
       isFrozen: json['is_frozen'] == true || json['is_frozen'] == 1,
+      isFavorite: json['is_favorite'] == true || json['is_favorite'] == 1,
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
       title: parseMeta(json['header_data']),
+      sectionTitle: parseSection(json['header_data']),
+      sectionColor: parseSectionColor(json['header_data']),
       footer: parseMeta(json['footer_data']),
       extractedText: json['extracted_text']?.toString(),
       strokes: strokesList.map((s) => Stroke.fromJson(s)).toList(),

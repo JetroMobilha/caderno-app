@@ -54,12 +54,27 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
+    final themeColor = Theme.of(context).colorScheme.primary;
+    
     return Scaffold(
       backgroundColor: AppColors.paper,
       appBar: AppBar(
-        title: Text('Lixeira (30 dias)', style: GoogleFonts.lora(fontWeight: FontWeight.bold)),
+        title: Text('Lixeira (30 dias)', style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+        foregroundColor: Colors.white,
+        actions: [
+          if (!_isLoading && (_deletedSubjects.isNotEmpty || _deletedNotebooks.isNotEmpty))
+            IconButton(
+              icon: const Icon(Icons.delete_forever_rounded, color: Colors.white),
+              onPressed: () => _confirmEmptyTrash(),
+              tooltip: 'Esvaziar Lixeira',
+            ),
+        ],
         bottom: TabBar(
           controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [
             Tab(text: 'Pastas', icon: Icon(Icons.folder_delete_outlined)),
             Tab(text: 'Cadernos', icon: Icon(Icons.book_outlined)),
@@ -80,6 +95,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
 
   Widget _buildSubjectsList() {
     if (_deletedSubjects.isEmpty) return _buildEmptyState('Nenhuma pasta na lixeira.');
+    final themeColor = Theme.of(context).colorScheme.primary;
 
     return ListView.builder(
       itemCount: _deletedSubjects.length,
@@ -90,7 +106,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: ListTile(
-            leading: Icon(SubjectUtils.getSubjectIcon(sub.icon), color: Colors.grey),
+            leading: Icon(SubjectUtils.getSubjectIcon(sub.icon), color: themeColor),
             title: Text(sub.name, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('Elimina-se em $daysLeft dias'),
             trailing: Row(
@@ -114,6 +130,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
 
   Widget _buildNotebooksList() {
     if (_deletedNotebooks.isEmpty) return _buildEmptyState('Nenhum caderno na lixeira.');
+    final themeColor = Theme.of(context).colorScheme.primary;
 
     return ListView.builder(
       itemCount: _deletedNotebooks.length,
@@ -124,7 +141,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: ListTile(
-            leading: const Icon(Icons.book, color: Colors.grey),
+            leading: Icon(Icons.book, color: themeColor),
             title: Text(nb.title, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('Elimina-se em $daysLeft dias'),
             trailing: IconButton(
@@ -149,6 +166,30 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
           Icon(Icons.delete_outline_rounded, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           Text(message, style: GoogleFonts.inter(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  void _confirmEmptyTrash() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Esvaziar Lixeira?'),
+        content: const Text('Todos os itens serão eliminados permanentemente. Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(subjectsProvider.notifier).emptyTrash();
+              await ref.read(notebooksProvider.notifier).emptyTrash();
+              _loadTrash();
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lixeira esvaziada!')));
+            },
+            child: const Text('Eliminar Tudo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );

@@ -278,12 +278,29 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(subjects, subjects.isArchived);
           await m.addColumn(subjects, subjects.isFavorite);
         }
+        if (from < 23) {
+          // 🚀 Garantir colunas em todas as tabelas (Correção de migração incompleta v22)
+          await m.addColumn(users, users.isArchived);
+          await m.addColumn(users, users.isFavorite);
+          await m.addColumn(notebookUser, notebookUser.isArchived);
+          await m.addColumn(notebookUser, notebookUser.isFavorite);
+          await m.addColumn(payments, payments.isArchived);
+          await m.addColumn(payments, payments.isFavorite);
+          await m.addColumn(lessonRecordings, lessonRecordings.isArchived);
+          await m.addColumn(lessonRecordings, lessonRecordings.isFavorite);
+          
+          // Caso faltem nestas (redundância de segurança)
+          try { await m.addColumn(subjects, subjects.isArchived); } catch(_) {}
+          try { await m.addColumn(subjects, subjects.isFavorite); } catch(_) {}
+          try { await m.addColumn(notebooks, notebooks.isArchived); } catch(_) {}
+          try { await m.addColumn(notebooks, notebooks.isFavorite); } catch(_) {}
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

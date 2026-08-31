@@ -188,13 +188,13 @@ class Notebook {
       role: json['role'] ?? 'owner',
       alternativeTitle: json['alternative_title'],
       sharingType: json['sharing_type'] ?? 'full',
-      tags: _parseTags(json['tags']),
+      tags: parseTags(json['tags']),
       isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
       isFavorite: json['is_favorite'] == 1 || json['is_favorite'] == true,
     );
   }
 
-  static List<String> _parseTags(dynamic tagsJson) {
+  static List<String> parseTags(dynamic tagsJson) {
     if (tagsJson == null) return [];
     if (tagsJson is List) return tagsJson.map((e) => e.toString()).toList();
     if (tagsJson is String) {

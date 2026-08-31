@@ -130,12 +130,19 @@ class SyncService {
         // 1. Processar confirmações do PUSH
         for (var item in data['synced_subjects'] ?? []) {
           final String clientUuid = item['client_id'].toString();
-          final int serverId = item['id'] ?? item['server_id'];
+          final int? serverId = item['id'] ?? item['server_id'];
           final int serverTime = _parseSafeInt(item['updated_at_ms']) ?? _parseSafeInt(item['updated_at']) ?? TimeService().nowMs();
           
-          await (_db.update(_db.subjects)..where((t) => t.clientId.equals(clientUuid))).write(
-            SubjectsCompanion(serverId: Value(serverId), updatedAt: Value(serverTime), syncedWithCloud: const Value(1))
-          );
+          if (serverId != null) {
+            await (_db.update(_db.subjects)..where((t) => t.clientId.equals(clientUuid))).write(
+              SubjectsCompanion(serverId: Value(serverId), updatedAt: Value(serverTime), syncedWithCloud: const Value(1))
+            );
+          } else {
+            // Se o servidor confirmou mas não enviou ID (ex: já estava apagado), apenas marcamos como sincronizado
+            await (_db.update(_db.subjects)..where((t) => t.clientId.equals(clientUuid))).write(
+              const SubjectsCompanion(syncedWithCloud: Value(1))
+            );
+          }
         }
 
         // 2. Processar novidades do PULL rápido (Pular se pushOnly)
@@ -167,7 +174,9 @@ class SyncService {
 
     await _db.transaction(() async {
       for (var sub in updates) {
-        final int sId = sub['id'];
+        final int? sId = sub['id'] ?? sub['server_id'];
+        if (sId == null) continue;
+        
         final String cId = sub['client_id'] ?? uniqid();
         final int serverTime = _parseSafeInt(sub['updated_at_ms']) ?? _parseSafeInt(sub['updated_at']) ?? 0;
         
@@ -175,7 +184,9 @@ class SyncService {
           serverId: Value(sId), clientId: Value(cId), userId: localUserId, 
           name: sub['name'] ?? '', color: sub['color'] ?? '#0F4C5C', icon: Value(sub['icon']), 
           isDeleted: Value(sub['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), 
-          updatedAt: Value(serverTime)
+          updatedAt: Value(serverTime),
+          isArchived: Value(sub['is_archived'] == 1 || sub['is_archived'] == true ? 1 : 0),
+          isFavorite: Value(sub['is_favorite'] == 1 || sub['is_favorite'] == true ? 1 : 0),
         );
 
         final existing = await (_db.select(_db.subjects)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
@@ -215,10 +226,19 @@ class SyncService {
             final int localUserId = userQuery.first.id;
             await _db.transaction(() async {
               for (var sub in serverSubjects) {
-                final int sId = sub['id'] is int ? sub['id'] : int.parse(sub['id'].toString());
+                final int? sId = sub['id'] is int ? sub['id'] : int.tryParse(sub['id']?.toString() ?? '');
+                if (sId == null) continue;
+                
                 final String? cId = sub['client_id']?.toString();
                 final int serverTime = sub['updated_at_ms'] != null ? (sub['updated_at_ms'] as num).toInt() : (sub['updated_at'] != null ? DateTime.parse(sub['updated_at'].toString()).millisecondsSinceEpoch : 0);
-                final companion = SubjectsCompanion.insert(serverId: Value(sId), clientId: Value(cId ?? uniqid()), userId: localUserId, name: sub['name'] ?? '', color: sub['color'] ?? '#0F4C5C', icon: Value(sub['icon']), isDeleted: Value(sub['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), updatedAt: Value(serverTime));
+                final companion = SubjectsCompanion.insert(
+                  serverId: Value(sId), clientId: Value(cId ?? uniqid()), userId: localUserId, 
+                  name: sub['name'] ?? '', color: sub['color'] ?? '#0F4C5C', icon: Value(sub['icon']), 
+                  isDeleted: Value(sub['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), 
+                  updatedAt: Value(serverTime),
+                  isArchived: Value(sub['is_archived'] == 1 || sub['is_archived'] == true ? 1 : 0),
+                  isFavorite: Value(sub['is_favorite'] == 1 || sub['is_favorite'] == true ? 1 : 0),
+                );
                 final existing = await (_db.select(_db.subjects)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
                 if (existing != null) {
                   if (serverTime > existing.updatedAt) {
@@ -266,7 +286,15 @@ class SyncService {
           if (sub != null && sub.serverId != null) cloudSubId = sub.serverId;
         }
         final notebookObj = notebooks_model.Notebook(
-          id: row.id, serverId: row.serverId, clientId: effectiveUuid, subjectId: cloudSubId, title: row.title, coverType: row.coverType, color: row.color, coverImage: row.coverImage, templateType: row.templateType, collaborationMode: row.collaborationMode, isPublished: row.isPublished, price: row.price, description: row.description, authorName: row.authorName, syncedWithCloud: row.syncedWithCloud, isDeleted: row.isDeleted, updatedAt: row.updatedAt,
+          id: row.id, serverId: row.serverId, clientId: effectiveUuid, subjectId: cloudSubId, 
+          title: row.title, coverType: row.coverType, color: row.color, coverImage: row.coverImage, 
+          templateType: row.templateType, collaborationMode: row.collaborationMode, 
+          isPublished: row.isPublished, price: row.price, description: row.description, 
+          authorName: row.authorName, syncedWithCloud: row.syncedWithCloud, isDeleted: row.isDeleted, 
+          updatedAt: row.updatedAt,
+          tags: notebooks_model.Notebook.parseTags(row.tags),
+          isArchived: row.isArchived == 1,
+          isFavorite: row.isFavorite == 1,
         );
         payload.add(notebookObj.toJson());
       }
@@ -282,17 +310,24 @@ class SyncService {
         // 1. Confirmações
         for (var item in data['synced_notebooks'] ?? []) {
           final String clientUuid = item['client_id'].toString();
-          final int sId = item['id'] ?? item['server_id'];
+          final int? sId = item['id'] ?? item['server_id'];
           final localRow = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(clientUuid))).getSingleOrNull();
           if (localRow == null) continue;
 
-          final existing = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId) & t.id.equals(localRow.id).not())).getSingleOrNull();
-          if (existing != null) {
-            await (_db.delete(_db.notebooks)..where((t) => t.id.equals(localRow.id))).go();
+          if (sId != null) {
+            final existing = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId) & t.id.equals(localRow.id).not())).getSingleOrNull();
+            if (existing != null) {
+              await (_db.delete(_db.notebooks)..where((t) => t.id.equals(localRow.id))).go();
+            } else {
+              final int serverTime = _parseSafeInt(item['updated_at_ms']) ?? _parseSafeInt(item['updated_at']) ?? TimeService().nowMs();
+              await (_db.update(_db.notebooks)..where((t) => t.id.equals(localRow.id))).write(
+                NotebooksCompanion(serverId: Value(sId), updatedAt: Value(serverTime), syncedWithCloud: const Value(1))
+              );
+            }
           } else {
-            final int serverTime = _parseSafeInt(item['updated_at_ms']) ?? _parseSafeInt(item['updated_at']) ?? TimeService().nowMs();
+            // Confirmação sem ID (ex: apagado no servidor)
             await (_db.update(_db.notebooks)..where((t) => t.id.equals(localRow.id))).write(
-              NotebooksCompanion(serverId: Value(sId), updatedAt: Value(serverTime), syncedWithCloud: const Value(1))
+              const NotebooksCompanion(syncedWithCloud: Value(1))
             );
           }
         }
@@ -327,7 +362,9 @@ class SyncService {
 
     await _db.transaction(() async {
       for (var net in updates) {
-        final int sId = net['id'];
+        final int? sId = net['id'] is int ? net['id'] : int.tryParse(net['id']?.toString() ?? '');
+        if (sId == null) continue;
+        
         final String? cId = net['client_id'];
         final int? serverSubId = net['subject_id'] != null ? int.tryParse(net['subject_id'].toString()) : null;
         final int? localSubId = (serverSubId != null) ? subjectIdMap[serverSubId] : null;
@@ -340,6 +377,8 @@ class SyncService {
           isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0), price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
           isDeleted: Value(net['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), updatedAt: Value(serverTime), role: Value(net['role'] ?? 'viewer'),
           alternativeTitle: Value(net['alternative_title']), sharingType: Value(net['sharing_type'] ?? 'full'),
+          isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
+          isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
         );
 
         final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
@@ -349,6 +388,26 @@ class SyncService {
           }
         } else {
            await _db.into(_db.notebooks).insertOnConflictUpdate(companion);
+        }
+
+        // 🚀 NOVIDADE: Atualizar também a tabela de pivô para cadernos partilhados (Visibilidade imediata)
+        final localNb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+        final String? role = net['role']?.toString();
+        if (localNb != null && currentUserId > 0 && role != null) {
+          if (role != 'owner') {
+             await _db.into(_db.notebookUser).insertOnConflictUpdate(NotebookUserCompanion.insert(
+                notebookId: localNb.id, 
+                userId: currentUserId, 
+                role: Value(role), 
+                syncedWithCloud: const Value(1), 
+                updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+                isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
+                isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
+             ));
+          } else {
+             // Se agora sou dono (raro em update, mas possível), remover do pivô de partilhas
+             await (_db.delete(_db.notebookUser)..where((t) => t.notebookId.equals(localNb.id) & t.userId.equals(currentUserId))).go();
+          }
         }
       }
     });
@@ -377,7 +436,9 @@ class SyncService {
             final Map<int, int> subjectIdMap = {for (var s in allSubjects) if (s.serverId != null) s.serverId!: s.id};
             await _db.transaction(() async {
               for (var net in serverNotebooks) {
-                final int sId = net['id'] is int ? net['id'] : int.parse(net['id'].toString());
+                final int? sId = net['id'] is int ? net['id'] : int.tryParse(net['id']?.toString() ?? '');
+                if (sId == null) continue;
+                
                 receivedServerIds.add(sId);
                 final String? cId = net['client_id']?.toString();
                 final int? serverSubId = net['subject_id'] != null ? (net['subject_id'] is int ? net['subject_id'] : int.parse(net['subject_id'].toString())) : null;
@@ -395,6 +456,8 @@ class SyncService {
                   description: Value(net['description']), authorName: Value(net['author_name']), isDeleted: Value(net['deleted_at'] != null ? 1 : 0),
                   syncedWithCloud: const Value(1), updatedAt: Value(serverTime), role: Value(serverRole),
                   alternativeTitle: Value(net['alternative_title']), sharingType: Value(net['sharing_type'] ?? 'full'),
+                  isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
+                  isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
                 );
 
                 final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
@@ -438,7 +501,15 @@ class SyncService {
                 final localNbId = notebookIdMap[sId];
                 final String? role = net['role']?.toString();
                 if (localNbId != null && currentUserId > 0 && role != null && role != 'owner') {
-                  batch.insert(_db.notebookUser, NotebookUserCompanion.insert(notebookId: localNbId, userId: currentUserId, role: Value(role), syncedWithCloud: const Value(1), updatedAt: Value(DateTime.now().millisecondsSinceEpoch)), mode: InsertMode.insertOrReplace);
+                  batch.insert(_db.notebookUser, NotebookUserCompanion.insert(
+                    notebookId: localNbId, 
+                    userId: currentUserId, 
+                    role: Value(role), 
+                    syncedWithCloud: const Value(1), 
+                    updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+                    isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
+                    isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
+                  ), mode: InsertMode.insertOrReplace);
                 } else if (localNbId != null && currentUserId > 0 && role == 'owner') {
                   batch.deleteWhere(_db.notebookUser, (t) => t.notebookId.equals(localNbId) & t.userId.equals(currentUserId));
                 }

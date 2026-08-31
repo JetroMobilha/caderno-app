@@ -41,7 +41,8 @@ class CanvasToolbar extends ConsumerWidget {
 
     final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
     final bool isProfessor = docState.currentUserRole == 'owner';
-    final bool hideDrawingTools = !isProfessor || docState.currentUserRole == 'viewer';
+    final bool isEditor = docState.currentUserRole == 'editor';
+    final bool hideDrawingTools = !(isProfessor || isEditor) || docState.currentUserRole == 'viewer';
 
     if (hideDrawingTools) {
       return _buildCompactToolbar(context, docState);

@@ -49,16 +49,69 @@ class SubjectsController extends Notifier<List<Subject>> {
   }
 
   Future<void> updateSubject(Subject subject) async {
+    final notebookRepo = ref.read(notebookRepositoryProvider);
+    
+    // 1. Verificar se houve alteração no estado de arquivo
+    // Precisamos de buscar o estado atual no banco antes de atualizar
+    final currentSubjects = state;
+    final oldSubject = currentSubjects.firstWhere((s) => s.id == subject.id, orElse: () => subject);
+    
+    final bool wasArchived = oldSubject.isArchived;
+    final bool isNowArchived = subject.isArchived;
+
+    // 2. Aplicar a atualização no repositório
     await _repository.updateSubject(subject);
+
+    // 3. CASCATA DE ARQUIVO: Se mudou, aplicar aos cadernos
+    if (wasArchived != isNowArchived) {
+      debugPrint('📦 [SubjectArchive] Aplicando cascata para estado: $isNowArchived');
+      
+      // Obter cadernos (usando serverId se disponível para blindagem)
+      final notebooks = await notebookRepo.getNotebooksBySubject(subject.id!, subject.serverId);
+      
+      for (var nb in notebooks) {
+        if (nb.isArchived != isNowArchived) {
+          await notebookRepo.updateNotebook(nb.copyWith(isArchived: isNowArchived));
+        }
+      }
+    }
+    
+    // 🚀 Sincronizar para informar a nuvem
+    syncManuallyWithCloud();
   }
 
   Future<void> deleteSubject(Subject subject) async {
+    if (subject.id == null) return;
+    
+    // 1. Marcar a pasta como apagada
     await _repository.deleteSubject(subject);
+    
+    // 2. Marcar todos os cadernos associados como apagados (Cascata Local)
+    final notebookRepo = ref.read(notebookRepositoryProvider);
+    final notebooks = await notebookRepo.getNotebooksBySubject(subject.id!, subject.serverId);
+    for (var nb in notebooks) {
+      await notebookRepo.deleteNotebook(nb);
+    }
+    
+    // 🚀 Sincronizar para informar a nuvem
+    syncManuallyWithCloud();
   }
 
   Future<void> restoreSubject(Subject subject) async {
     if (subject.id == null) return;
+    
+    // 1. Restaurar a pasta
     await _repository.restoreSubject(subject.id!);
+    
+    // 2. Restaurar todos os cadernos que foram apagados junto com esta pasta
+    final notebookRepo = ref.read(notebookRepositoryProvider);
+    final allDeleted = await notebookRepo.getDeletedNotebooks();
+    final toRestore = allDeleted.where((n) => n.subjectId == subject.id);
+    
+    for (var nb in toRestore) {
+      await notebookRepo.restoreNotebook(nb.id!);
+    }
+    
     // 🚀 Sincronizar para informar a nuvem do restauro
     syncManuallyWithCloud();
   }
@@ -68,9 +121,29 @@ class SubjectsController extends Notifier<List<Subject>> {
   }
 
   Future<void> emptyTrash() async {
-    final deleted = await _repository.getDeletedSubjects();
-    for (var sub in deleted) {
-      if (sub.id != null) await _repository.hardDeleteSubject(sub.id!);
+    final notebookRepo = ref.read(notebookRepositoryProvider);
+    
+    // 1. Limpar pastas e os seus cadernos
+    final deletedSubs = await _repository.getDeletedSubjects();
+    for (var sub in deletedSubs) {
+      if (sub.id != null) {
+        // Hard delete notebooks of this subject (even if they were not marked as deleted, but subject is)
+        final nbs = await notebookRepo.getNotebooksBySubject(sub.id!, sub.serverId);
+        for (var nb in nbs) await notebookRepo.hardDeleteNotebook(nb.id!);
+        
+        // Also hard delete notebooks already in trash for this subject
+        final deletedNbs = await notebookRepo.getDeletedNotebooks();
+        final subNbsInTrash = deletedNbs.where((n) => n.subjectId == sub.id);
+        for (var nb in subNbsInTrash) await notebookRepo.hardDeleteNotebook(nb.id!);
+        
+        await _repository.hardDeleteSubject(sub.id!);
+      }
+    }
+    
+    // 2. Limpar cadernos avulsos que já estavam na lixeira
+    final remainingDeletedNbs = await notebookRepo.getDeletedNotebooks();
+    for (var nb in remainingDeletedNbs) {
+      if (nb.id != null) await notebookRepo.hardDeleteNotebook(nb.id!);
     }
   }
 

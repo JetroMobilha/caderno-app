@@ -1,5 +1,6 @@
-- [ ] Adicionar `initialTabIndex` ao `TrashScreen`
-- [ ] Adicionar botão de Lixeira no cabeçalho do `DrawerSubjectsList`
-- [ ] Remover atalho de Lixeira antigo da gaveta
-- [ ] Adicionar botão de Lixeira no `NotebooksListScreen`
-- [ ] Verificar navegação contextual da lixeira
+- [ ] Criar migração no Backend para adicionar colunas no pivô `notebook_user`
+- [ ] Executar migração no Backend (`php artisan migrate`)
+- [ ] Corrigir bug da role no `SyncController.pullNotebooks` (Backend)
+- [ ] Separar lógica de estados pessoais (Owner vs Shared) no `SyncController.pushNotebooks` (Backend)
+- [ ] Ajustar mapeamento de estados no `SyncController` (Backend) para enviar estados do pivô
+- [ ] Validar sincronização bidirecional no App

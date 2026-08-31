@@ -34,12 +34,6 @@ class NotebookGridItem extends ConsumerWidget {
             child: NotebookCover(
               notebook: notebook,
               onTap: () async {
-                if (notebook.isArchived) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Desarquiva o caderno para poder editar.')),
-                  );
-                  return;
-                }
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -160,7 +154,7 @@ class NotebookGridItem extends ConsumerWidget {
                         child: Row(children: [
                           Icon(notebook.isArchived ? Icons.unarchive_outlined : Icons.archive_outlined, size: 18, color: Colors.blueGrey), 
                           const SizedBox(width: 8), 
-                          Text(notebook.isArchived ? 'Desarquivar' : 'Arquivar', style: GoogleFonts.inter(fontSize: 13))
+                          Text(notebook.isArchived ? 'Desarquivar' : 'Enviar para o arquivo', style: GoogleFonts.inter(fontSize: 13))
                         ])
                       ),
                     if (isOwner || isEditor)

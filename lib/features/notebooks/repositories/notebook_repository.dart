@@ -113,6 +113,9 @@ class NotebookRepository {
       syncedWithCloud: const Value(0),
       isDeleted: const Value(0),
       updatedAt: Value(TimeService().nowMs()),
+      isArchived: Value(notebook.isArchived ? 1 : 0),
+      isFavorite: Value(notebook.isFavorite ? 1 : 0),
+      tags: Value(notebook.tags.join(',')),
     );
     return await _db.into(_db.notebooks).insert(companion);
   }
@@ -136,8 +139,30 @@ class NotebookRepository {
         authorName: Value(notebook.authorName),
         syncedWithCloud: const Value(0),
         updatedAt: Value(TimeService().nowMs()),
+        isArchived: Value(notebook.isArchived ? 1 : 0),
+        isFavorite: Value(notebook.isFavorite ? 1 : 0),
+        tags: Value(notebook.tags.join(',')),
       ),
     );
+
+    // 🚀 ATUALIZAÇÃO PERSONALIZADA PARA PARTILHADOS:
+    // Se não formos o dono, temos de atualizar o estado pessoal na tabela notebook_user
+    if (notebook.role != 'owner' && notebook.id != null) {
+      final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
+      if (userQuery.isNotEmpty) {
+        final int localUserId = userQuery.first.id;
+        await (_db.update(_db.notebookUser)
+              ..where((t) => t.notebookId.equals(notebook.id!) & t.userId.equals(localUserId)))
+            .write(
+          NotebookUserCompanion(
+            isArchived: Value(notebook.isArchived ? 1 : 0),
+            isFavorite: Value(notebook.isFavorite ? 1 : 0),
+            updatedAt: Value(TimeService().nowMs()),
+            syncedWithCloud: const Value(0),
+          ),
+        );
+      }
+    }
   }
 
   // =========================================================================

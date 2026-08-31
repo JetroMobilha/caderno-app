@@ -1,25 +1,24 @@
-# Walkthrough - Acesso Contextual à Lixeira
+# Walkthrough - Alinhamento Backend e Visibilidade de Partilhados
 
-Separei o acesso à lixeira para pastas (Subjects) e cadernos (Notebooks), colocando os botões nos seus respetivos contextos para uma navegação mais intuitiva.
+Implementei correções profundas tanto no **App** como no **Backend (Servidor)** para garantir que os cadernos partilhados apareçam corretamente, com as permissões certas e com suporte a estados pessoais (arquivo/favorito).
 
 ## Alterações Realizadas
 
-### 1. Lixeira Contextual
-- **[TrashScreen](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/trash/views/trash_screen.dart)**:
-    - Adicionado suporte a `initialTabIndex`. Agora é possível abrir a lixeira diretamente no separador de "Pastas" ou "Cadernos".
+### 1. Correções no Backend (Laravel)
+- **Migração de Base de Dados**: Criei uma migração no servidor para adicionar as colunas `is_archived` e `is_favorite` à tabela de partilhas (`notebook_user`). Isto permite que cada utilizador tenha o seu próprio estado de arquivo num caderno partilhado, sem afetar o dono ou outros convidados.
+- **Fix no `SyncController.pullNotebooks`**: Corrigi um bug onde o servidor forçava a role `viewer` para todos os convidados durante a sincronização total. Agora, o servidor consulta a role real (editor/viewer) no banco de dados.
+- **Lógica de Sincronização Inteligente**: Atualizei o `pushNotebooks` no servidor para distinguir entre atualizações do dono e de convidados.
+    - Se fores o **dono**, atualizas os dados globais do caderno.
+    - Se fores um **convidado**, as tuas alterações de "arquivar" ou "favoritar" são guardadas apenas no teu perfil pessoal (tabela de pivô).
 
-### 2. Gestão de Pastas (Drawer)
-- **[DrawerSubjectsList](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/shared/widgets/drawer/drawer_subjects_list.dart)**:
-    - Removido o item de menu "Lixeira" global que ficava no fundo do menu.
-    - Adicionado um novo botão de lixeira (vermelho) no cabeçalho das pastas, ao lado dos botões de arquivo e adição.
-    - Ao clicar, abre a lixeira focada em **Pastas**.
+### 2. Melhorias no App (Flutter)
+- **Sincronização de Roles**: O `SyncService` foi validado para processar corretamente as roles vindas do servidor.
+- **Persistência Local**: Garanti que os estados de arquivo e favorito são lidos e gravados na tabela `notebook_user` local para cadernos que não nos pertencem.
 
-### 3. Gestão de Cadernos
-- **[NotebooksListScreen](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/notebooks/views/notebooks_list_screen.dart)**:
-    - Adicionado um botão de lixeira no `AppBar`, ao lado do botão de arquivo.
-    - Ao clicar, abre a lixeira focada em **Cadernos**.
+### 3. Interface (Canvas)
+- **Desbloqueio de Ferramentas**: Corrigi o `CanvasToolbar` para que utilizadores com a role `editor` tenham acesso às ferramentas de desenho, que anteriormente estavam restritas apenas ao `owner`.
 
-## Verificação
-
-- **Navegação**: O acesso à lixeira é agora mais rápido e contextual. Se o utilizador está a gerir cadernos, o botão de lixo leva-o diretamente aos cadernos apagados.
-- **UI**: Os botões estão agrupados de forma lógica (Lixo, Arquivo, Adição), mantendo a interface limpa e organizada.
+## Verificação Realizada
+- **Migração Servidor**: Executada com sucesso via `php artisan migrate`.
+- **Fluxo de Dados**: Testada a comunicação entre App e Servidor; os campos de role e estados pessoais estão agora em total harmonia.
+- **Permissões**: Confirmado que convidados com permissão de edição já conseguem desenhar nos cadernos partilhados.

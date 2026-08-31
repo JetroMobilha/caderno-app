@@ -15,8 +15,6 @@ class SharedNotebookRepository {
 
     query.where(_db.notebookUser.userId.equals(currentUserId));
     query.where(_db.notebooks.isDeleted.equals(0));
-    // 🚀 FILTRAR APENAS PARTILHADOS: Remover cadernos onde sou o dono
-    query.where(_db.notebookUser.role.isNotValue('owner'));
     
     // Simular o GROUP BY n.id para evitar duplicados se o usuário tiver múltiplas roles
     query.groupBy([_db.notebooks.id]);
@@ -48,6 +46,9 @@ class SharedNotebookRepository {
         role: pivot.role, // 🚀 PRIORIDADE: O papel da partilha
         alternativeTitle: n.alternativeTitle,
         sharingType: n.sharingType ?? 'full',
+        tags: Notebook.parseTags(n.tags),
+        isArchived: n.isArchived == 1,
+        isFavorite: n.isFavorite == 1,
       );
     }).toList();
   }
@@ -62,8 +63,6 @@ class SharedNotebookRepository {
 
     query.where(_db.notebookUser.userId.equals(currentUserId));
     query.where(_db.notebooks.isDeleted.equals(0));
-    // 🚀 FILTRAR APENAS PARTILHADOS: Remover cadernos onde sou o dono
-    query.where(_db.notebookUser.role.isNotValue('owner'));
     
     query.groupBy([_db.notebooks.id]);
     query.orderBy([OrderingTerm(expression: _db.notebooks.updatedAt, mode: OrderingMode.desc)]);
@@ -92,6 +91,9 @@ class SharedNotebookRepository {
             role: pivot.role, // 🚀 PRIORIDADE: O papel da partilha
             alternativeTitle: n.alternativeTitle,
             sharingType: n.sharingType ?? 'full',
+            tags: Notebook.parseTags(n.tags),
+            isArchived: n.isArchived == 1,
+            isFavorite: n.isFavorite == 1,
           );
         }).toList());
   }

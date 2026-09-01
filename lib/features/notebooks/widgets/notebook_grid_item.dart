@@ -58,16 +58,11 @@ class NotebookGridItem extends ConsumerWidget {
           Positioned(
             top: 6,
             right: 4,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 onSelected: (value) async {
                   if (value == 'edit') {
                     NotebookDialogs.showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: true, notebookToEdit: notebook);
@@ -202,7 +197,6 @@ class NotebookGridItem extends ConsumerWidget {
                 },
               ),
             ),
-          ),
           if (notebook.tags.isNotEmpty)
             Positioned(
               bottom: 8,

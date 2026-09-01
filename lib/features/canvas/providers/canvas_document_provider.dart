@@ -118,7 +118,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       myUserId: userId ?? '',
     );
 
-    unawaited(_audioService.loadLessonRecordings(notebookId));
+    _audioService.loadLessonRecordings(notebookId);
 
     _collabService.onSyncRequested = () => _performCollectiveSync();
     _collabService.onExecuteAction = (d) => _handleRemoteAction(d);
@@ -171,13 +171,29 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       };
 
       for (var i = 0; i < activePages.length; i++) {
-        final existing = existingPagesMap[activePages[i].clientId];
+        final newPage = activePages[i];
+        final existing = existingPagesMap[newPage.clientId];
+        
         if (existing != null && existing.isContentLoaded) {
-          activePages[i].strokes = existing.strokes;
-          activePages[i].textBlocks = existing.textBlocks;
-          activePages[i].imageBlocks = existing.imageBlocks;
-          activePages[i].isContentLoaded = true;
-          activePages[i].version = existing.version;
+          // 🚀 REATIVIDADE DO CONTEÚDO: Se o timestamp da base de dados for mais recente,
+          // precisamos de recarregar o conteúdo pesado (strokes, etc) pois veio do Sync.
+          if (newPage.updatedAt > existing.updatedAt) {
+            debugPrint('🔄 [CanvasDoc] Página ${newPage.pageNumber} atualizada externamente. Recarregando conteúdo...');
+            // Não copiamos o conteúdo antigo; deixamos como não carregado para o ensurePageLoaded tratar
+            newPage.isContentLoaded = false;
+            // Se for a página que estamos a ver, disparamos o reload imediato
+            final currentIndex = ref.read(canvasViewportProvider).currentPageIndex;
+            if (i == currentIndex) {
+              unawaited(ensurePageLoaded(i));
+            }
+          } else {
+            // Caso contrário, mantemos o que já temos em memória (otimização de reordenamento)
+            newPage.strokes = existing.strokes;
+            newPage.textBlocks = existing.textBlocks;
+            newPage.imageBlocks = existing.imageBlocks;
+            newPage.isContentLoaded = true;
+            newPage.version = existing.version;
+          }
         }
       }
 

@@ -1924,6 +1924,60 @@ class $NotebooksTable extends Notebooks
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _originMeta = const VerificationMeta('origin');
+  @override
+  late final GeneratedColumn<String> origin = GeneratedColumn<String>(
+    'origin',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _participantsPreviewMeta =
+      const VerificationMeta('participantsPreview');
+  @override
+  late final GeneratedColumn<String> participantsPreview =
+      GeneratedColumn<String>(
+        'participants_preview',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastUpdatedByNameMeta = const VerificationMeta(
+    'lastUpdatedByName',
+  );
+  @override
+  late final GeneratedColumn<String> lastUpdatedByName =
+      GeneratedColumn<String>(
+        'last_updated_by_name',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _notificationsEnabledMeta =
+      const VerificationMeta('notificationsEnabled');
+  @override
+  late final GeneratedColumn<int> notificationsEnabled = GeneratedColumn<int>(
+    'notifications_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _configurationMeta = const VerificationMeta(
+    'configuration',
+  );
+  @override
+  late final GeneratedColumn<String> configuration = GeneratedColumn<String>(
+    'configuration',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1950,6 +2004,11 @@ class $NotebooksTable extends Notebooks
     tags,
     isArchived,
     isFavorite,
+    origin,
+    participantsPreview,
+    lastUpdatedByName,
+    notificationsEnabled,
+    configuration,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2129,6 +2188,48 @@ class $NotebooksTable extends Notebooks
         isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
       );
     }
+    if (data.containsKey('origin')) {
+      context.handle(
+        _originMeta,
+        origin.isAcceptableOrUnknown(data['origin']!, _originMeta),
+      );
+    }
+    if (data.containsKey('participants_preview')) {
+      context.handle(
+        _participantsPreviewMeta,
+        participantsPreview.isAcceptableOrUnknown(
+          data['participants_preview']!,
+          _participantsPreviewMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_updated_by_name')) {
+      context.handle(
+        _lastUpdatedByNameMeta,
+        lastUpdatedByName.isAcceptableOrUnknown(
+          data['last_updated_by_name']!,
+          _lastUpdatedByNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notifications_enabled')) {
+      context.handle(
+        _notificationsEnabledMeta,
+        notificationsEnabled.isAcceptableOrUnknown(
+          data['notifications_enabled']!,
+          _notificationsEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('configuration')) {
+      context.handle(
+        _configurationMeta,
+        configuration.isAcceptableOrUnknown(
+          data['configuration']!,
+          _configurationMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2234,6 +2335,26 @@ class $NotebooksTable extends Notebooks
         DriftSqlType.int,
         data['${effectivePrefix}is_favorite'],
       )!,
+      origin: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin'],
+      ),
+      participantsPreview: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}participants_preview'],
+      ),
+      lastUpdatedByName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_updated_by_name'],
+      ),
+      notificationsEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}notifications_enabled'],
+      )!,
+      configuration: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}configuration'],
+      ),
     );
   }
 
@@ -2268,6 +2389,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   final String? tags;
   final int isArchived;
   final int isFavorite;
+  final String? origin;
+  final String? participantsPreview;
+  final String? lastUpdatedByName;
+  final int notificationsEnabled;
+  final String? configuration;
   const Notebook({
     required this.id,
     this.serverId,
@@ -2293,6 +2419,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     this.tags,
     required this.isArchived,
     required this.isFavorite,
+    this.origin,
+    this.participantsPreview,
+    this.lastUpdatedByName,
+    required this.notificationsEnabled,
+    this.configuration,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2339,6 +2470,19 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     }
     map['is_archived'] = Variable<int>(isArchived);
     map['is_favorite'] = Variable<int>(isFavorite);
+    if (!nullToAbsent || origin != null) {
+      map['origin'] = Variable<String>(origin);
+    }
+    if (!nullToAbsent || participantsPreview != null) {
+      map['participants_preview'] = Variable<String>(participantsPreview);
+    }
+    if (!nullToAbsent || lastUpdatedByName != null) {
+      map['last_updated_by_name'] = Variable<String>(lastUpdatedByName);
+    }
+    map['notifications_enabled'] = Variable<int>(notificationsEnabled);
+    if (!nullToAbsent || configuration != null) {
+      map['configuration'] = Variable<String>(configuration);
+    }
     return map;
   }
 
@@ -2384,6 +2528,19 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
       isArchived: Value(isArchived),
       isFavorite: Value(isFavorite),
+      origin: origin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(origin),
+      participantsPreview: participantsPreview == null && nullToAbsent
+          ? const Value.absent()
+          : Value(participantsPreview),
+      lastUpdatedByName: lastUpdatedByName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastUpdatedByName),
+      notificationsEnabled: Value(notificationsEnabled),
+      configuration: configuration == null && nullToAbsent
+          ? const Value.absent()
+          : Value(configuration),
     );
   }
 
@@ -2417,6 +2574,17 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       tags: serializer.fromJson<String?>(json['tags']),
       isArchived: serializer.fromJson<int>(json['isArchived']),
       isFavorite: serializer.fromJson<int>(json['isFavorite']),
+      origin: serializer.fromJson<String?>(json['origin']),
+      participantsPreview: serializer.fromJson<String?>(
+        json['participantsPreview'],
+      ),
+      lastUpdatedByName: serializer.fromJson<String?>(
+        json['lastUpdatedByName'],
+      ),
+      notificationsEnabled: serializer.fromJson<int>(
+        json['notificationsEnabled'],
+      ),
+      configuration: serializer.fromJson<String?>(json['configuration']),
     );
   }
   @override
@@ -2447,6 +2615,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       'tags': serializer.toJson<String?>(tags),
       'isArchived': serializer.toJson<int>(isArchived),
       'isFavorite': serializer.toJson<int>(isFavorite),
+      'origin': serializer.toJson<String?>(origin),
+      'participantsPreview': serializer.toJson<String?>(participantsPreview),
+      'lastUpdatedByName': serializer.toJson<String?>(lastUpdatedByName),
+      'notificationsEnabled': serializer.toJson<int>(notificationsEnabled),
+      'configuration': serializer.toJson<String?>(configuration),
     };
   }
 
@@ -2475,6 +2648,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     Value<String?> tags = const Value.absent(),
     int? isArchived,
     int? isFavorite,
+    Value<String?> origin = const Value.absent(),
+    Value<String?> participantsPreview = const Value.absent(),
+    Value<String?> lastUpdatedByName = const Value.absent(),
+    int? notificationsEnabled,
+    Value<String?> configuration = const Value.absent(),
   }) => Notebook(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -2502,6 +2680,17 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     tags: tags.present ? tags.value : this.tags,
     isArchived: isArchived ?? this.isArchived,
     isFavorite: isFavorite ?? this.isFavorite,
+    origin: origin.present ? origin.value : this.origin,
+    participantsPreview: participantsPreview.present
+        ? participantsPreview.value
+        : this.participantsPreview,
+    lastUpdatedByName: lastUpdatedByName.present
+        ? lastUpdatedByName.value
+        : this.lastUpdatedByName,
+    notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    configuration: configuration.present
+        ? configuration.value
+        : this.configuration,
   );
   Notebook copyWithCompanion(NotebooksCompanion data) {
     return Notebook(
@@ -2551,6 +2740,19 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       isFavorite: data.isFavorite.present
           ? data.isFavorite.value
           : this.isFavorite,
+      origin: data.origin.present ? data.origin.value : this.origin,
+      participantsPreview: data.participantsPreview.present
+          ? data.participantsPreview.value
+          : this.participantsPreview,
+      lastUpdatedByName: data.lastUpdatedByName.present
+          ? data.lastUpdatedByName.value
+          : this.lastUpdatedByName,
+      notificationsEnabled: data.notificationsEnabled.present
+          ? data.notificationsEnabled.value
+          : this.notificationsEnabled,
+      configuration: data.configuration.present
+          ? data.configuration.value
+          : this.configuration,
     );
   }
 
@@ -2580,7 +2782,12 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           ..write('sharingType: $sharingType, ')
           ..write('tags: $tags, ')
           ..write('isArchived: $isArchived, ')
-          ..write('isFavorite: $isFavorite')
+          ..write('isFavorite: $isFavorite, ')
+          ..write('origin: $origin, ')
+          ..write('participantsPreview: $participantsPreview, ')
+          ..write('lastUpdatedByName: $lastUpdatedByName, ')
+          ..write('notificationsEnabled: $notificationsEnabled, ')
+          ..write('configuration: $configuration')
           ..write(')'))
         .toString();
   }
@@ -2611,6 +2818,11 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     tags,
     isArchived,
     isFavorite,
+    origin,
+    participantsPreview,
+    lastUpdatedByName,
+    notificationsEnabled,
+    configuration,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -2639,7 +2851,12 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           other.sharingType == this.sharingType &&
           other.tags == this.tags &&
           other.isArchived == this.isArchived &&
-          other.isFavorite == this.isFavorite);
+          other.isFavorite == this.isFavorite &&
+          other.origin == this.origin &&
+          other.participantsPreview == this.participantsPreview &&
+          other.lastUpdatedByName == this.lastUpdatedByName &&
+          other.notificationsEnabled == this.notificationsEnabled &&
+          other.configuration == this.configuration);
 }
 
 class NotebooksCompanion extends UpdateCompanion<Notebook> {
@@ -2667,6 +2884,11 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   final Value<String?> tags;
   final Value<int> isArchived;
   final Value<int> isFavorite;
+  final Value<String?> origin;
+  final Value<String?> participantsPreview;
+  final Value<String?> lastUpdatedByName;
+  final Value<int> notificationsEnabled;
+  final Value<String?> configuration;
   const NotebooksCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -2692,6 +2914,11 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.tags = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isFavorite = const Value.absent(),
+    this.origin = const Value.absent(),
+    this.participantsPreview = const Value.absent(),
+    this.lastUpdatedByName = const Value.absent(),
+    this.notificationsEnabled = const Value.absent(),
+    this.configuration = const Value.absent(),
   });
   NotebooksCompanion.insert({
     this.id = const Value.absent(),
@@ -2718,6 +2945,11 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.tags = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isFavorite = const Value.absent(),
+    this.origin = const Value.absent(),
+    this.participantsPreview = const Value.absent(),
+    this.lastUpdatedByName = const Value.absent(),
+    this.notificationsEnabled = const Value.absent(),
+    this.configuration = const Value.absent(),
   }) : title = Value(title),
        coverType = Value(coverType);
   static Insertable<Notebook> custom({
@@ -2745,6 +2977,11 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Expression<String>? tags,
     Expression<int>? isArchived,
     Expression<int>? isFavorite,
+    Expression<String>? origin,
+    Expression<String>? participantsPreview,
+    Expression<String>? lastUpdatedByName,
+    Expression<int>? notificationsEnabled,
+    Expression<String>? configuration,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2771,6 +3008,13 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       if (tags != null) 'tags': tags,
       if (isArchived != null) 'is_archived': isArchived,
       if (isFavorite != null) 'is_favorite': isFavorite,
+      if (origin != null) 'origin': origin,
+      if (participantsPreview != null)
+        'participants_preview': participantsPreview,
+      if (lastUpdatedByName != null) 'last_updated_by_name': lastUpdatedByName,
+      if (notificationsEnabled != null)
+        'notifications_enabled': notificationsEnabled,
+      if (configuration != null) 'configuration': configuration,
     });
   }
 
@@ -2799,6 +3043,11 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Value<String?>? tags,
     Value<int>? isArchived,
     Value<int>? isFavorite,
+    Value<String?>? origin,
+    Value<String?>? participantsPreview,
+    Value<String?>? lastUpdatedByName,
+    Value<int>? notificationsEnabled,
+    Value<String?>? configuration,
   }) {
     return NotebooksCompanion(
       id: id ?? this.id,
@@ -2825,6 +3074,11 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       tags: tags ?? this.tags,
       isArchived: isArchived ?? this.isArchived,
       isFavorite: isFavorite ?? this.isFavorite,
+      origin: origin ?? this.origin,
+      participantsPreview: participantsPreview ?? this.participantsPreview,
+      lastUpdatedByName: lastUpdatedByName ?? this.lastUpdatedByName,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      configuration: configuration ?? this.configuration,
     );
   }
 
@@ -2903,6 +3157,21 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     if (isFavorite.present) {
       map['is_favorite'] = Variable<int>(isFavorite.value);
     }
+    if (origin.present) {
+      map['origin'] = Variable<String>(origin.value);
+    }
+    if (participantsPreview.present) {
+      map['participants_preview'] = Variable<String>(participantsPreview.value);
+    }
+    if (lastUpdatedByName.present) {
+      map['last_updated_by_name'] = Variable<String>(lastUpdatedByName.value);
+    }
+    if (notificationsEnabled.present) {
+      map['notifications_enabled'] = Variable<int>(notificationsEnabled.value);
+    }
+    if (configuration.present) {
+      map['configuration'] = Variable<String>(configuration.value);
+    }
     return map;
   }
 
@@ -2932,7 +3201,12 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
           ..write('sharingType: $sharingType, ')
           ..write('tags: $tags, ')
           ..write('isArchived: $isArchived, ')
-          ..write('isFavorite: $isFavorite')
+          ..write('isFavorite: $isFavorite, ')
+          ..write('origin: $origin, ')
+          ..write('participantsPreview: $participantsPreview, ')
+          ..write('lastUpdatedByName: $lastUpdatedByName, ')
+          ..write('notificationsEnabled: $notificationsEnabled, ')
+          ..write('configuration: $configuration')
           ..write(')'))
         .toString();
   }
@@ -3168,6 +3442,17 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _backgroundConfigMeta = const VerificationMeta(
+    'backgroundConfig',
+  );
+  @override
+  late final GeneratedColumn<String> backgroundConfig = GeneratedColumn<String>(
+    'background_config',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3189,6 +3474,7 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     lineType,
     lineSpacing,
     backgroundPdfPath,
+    backgroundConfig,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3332,6 +3618,15 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         ),
       );
     }
+    if (data.containsKey('background_config')) {
+      context.handle(
+        _backgroundConfigMeta,
+        backgroundConfig.isAcceptableOrUnknown(
+          data['background_config']!,
+          _backgroundConfigMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -3417,6 +3712,10 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         DriftSqlType.string,
         data['${effectivePrefix}background_pdf_path'],
       ),
+      backgroundConfig: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}background_config'],
+      ),
     );
   }
 
@@ -3446,6 +3745,7 @@ class Page extends DataClass implements Insertable<Page> {
   final String? lineType;
   final double? lineSpacing;
   final String? backgroundPdfPath;
+  final String? backgroundConfig;
   const Page({
     required this.id,
     this.serverId,
@@ -3466,6 +3766,7 @@ class Page extends DataClass implements Insertable<Page> {
     this.lineType,
     this.lineSpacing,
     this.backgroundPdfPath,
+    this.backgroundConfig,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3504,6 +3805,9 @@ class Page extends DataClass implements Insertable<Page> {
     }
     if (!nullToAbsent || backgroundPdfPath != null) {
       map['background_pdf_path'] = Variable<String>(backgroundPdfPath);
+    }
+    if (!nullToAbsent || backgroundConfig != null) {
+      map['background_config'] = Variable<String>(backgroundConfig);
     }
     return map;
   }
@@ -3545,6 +3849,9 @@ class Page extends DataClass implements Insertable<Page> {
       backgroundPdfPath: backgroundPdfPath == null && nullToAbsent
           ? const Value.absent()
           : Value(backgroundPdfPath),
+      backgroundConfig: backgroundConfig == null && nullToAbsent
+          ? const Value.absent()
+          : Value(backgroundConfig),
     );
   }
 
@@ -3575,6 +3882,7 @@ class Page extends DataClass implements Insertable<Page> {
       backgroundPdfPath: serializer.fromJson<String?>(
         json['backgroundPdfPath'],
       ),
+      backgroundConfig: serializer.fromJson<String?>(json['backgroundConfig']),
     );
   }
   @override
@@ -3600,6 +3908,7 @@ class Page extends DataClass implements Insertable<Page> {
       'lineType': serializer.toJson<String?>(lineType),
       'lineSpacing': serializer.toJson<double?>(lineSpacing),
       'backgroundPdfPath': serializer.toJson<String?>(backgroundPdfPath),
+      'backgroundConfig': serializer.toJson<String?>(backgroundConfig),
     };
   }
 
@@ -3623,6 +3932,7 @@ class Page extends DataClass implements Insertable<Page> {
     Value<String?> lineType = const Value.absent(),
     Value<double?> lineSpacing = const Value.absent(),
     Value<String?> backgroundPdfPath = const Value.absent(),
+    Value<String?> backgroundConfig = const Value.absent(),
   }) => Page(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -3647,6 +3957,9 @@ class Page extends DataClass implements Insertable<Page> {
     backgroundPdfPath: backgroundPdfPath.present
         ? backgroundPdfPath.value
         : this.backgroundPdfPath,
+    backgroundConfig: backgroundConfig.present
+        ? backgroundConfig.value
+        : this.backgroundConfig,
   );
   Page copyWithCompanion(PagesCompanion data) {
     return Page(
@@ -3689,6 +4002,9 @@ class Page extends DataClass implements Insertable<Page> {
       backgroundPdfPath: data.backgroundPdfPath.present
           ? data.backgroundPdfPath.value
           : this.backgroundPdfPath,
+      backgroundConfig: data.backgroundConfig.present
+          ? data.backgroundConfig.value
+          : this.backgroundConfig,
     );
   }
 
@@ -3713,7 +4029,8 @@ class Page extends DataClass implements Insertable<Page> {
           ..write('paperSize: $paperSize, ')
           ..write('lineType: $lineType, ')
           ..write('lineSpacing: $lineSpacing, ')
-          ..write('backgroundPdfPath: $backgroundPdfPath')
+          ..write('backgroundPdfPath: $backgroundPdfPath, ')
+          ..write('backgroundConfig: $backgroundConfig')
           ..write(')'))
         .toString();
   }
@@ -3739,6 +4056,7 @@ class Page extends DataClass implements Insertable<Page> {
     lineType,
     lineSpacing,
     backgroundPdfPath,
+    backgroundConfig,
   );
   @override
   bool operator ==(Object other) =>
@@ -3762,7 +4080,8 @@ class Page extends DataClass implements Insertable<Page> {
           other.paperSize == this.paperSize &&
           other.lineType == this.lineType &&
           other.lineSpacing == this.lineSpacing &&
-          other.backgroundPdfPath == this.backgroundPdfPath);
+          other.backgroundPdfPath == this.backgroundPdfPath &&
+          other.backgroundConfig == this.backgroundConfig);
 }
 
 class PagesCompanion extends UpdateCompanion<Page> {
@@ -3785,6 +4104,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
   final Value<String?> lineType;
   final Value<double?> lineSpacing;
   final Value<String?> backgroundPdfPath;
+  final Value<String?> backgroundConfig;
   const PagesCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -3805,6 +4125,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.lineType = const Value.absent(),
     this.lineSpacing = const Value.absent(),
     this.backgroundPdfPath = const Value.absent(),
+    this.backgroundConfig = const Value.absent(),
   });
   PagesCompanion.insert({
     this.id = const Value.absent(),
@@ -3826,6 +4147,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.lineType = const Value.absent(),
     this.lineSpacing = const Value.absent(),
     this.backgroundPdfPath = const Value.absent(),
+    this.backgroundConfig = const Value.absent(),
   }) : notebookId = Value(notebookId),
        pageNumber = Value(pageNumber);
   static Insertable<Page> custom({
@@ -3848,6 +4170,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Expression<String>? lineType,
     Expression<double>? lineSpacing,
     Expression<String>? backgroundPdfPath,
+    Expression<String>? backgroundConfig,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3869,6 +4192,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
       if (lineType != null) 'line_type': lineType,
       if (lineSpacing != null) 'line_spacing': lineSpacing,
       if (backgroundPdfPath != null) 'background_pdf_path': backgroundPdfPath,
+      if (backgroundConfig != null) 'background_config': backgroundConfig,
     });
   }
 
@@ -3892,6 +4216,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Value<String?>? lineType,
     Value<double?>? lineSpacing,
     Value<String?>? backgroundPdfPath,
+    Value<String?>? backgroundConfig,
   }) {
     return PagesCompanion(
       id: id ?? this.id,
@@ -3913,6 +4238,7 @@ class PagesCompanion extends UpdateCompanion<Page> {
       lineType: lineType ?? this.lineType,
       lineSpacing: lineSpacing ?? this.lineSpacing,
       backgroundPdfPath: backgroundPdfPath ?? this.backgroundPdfPath,
+      backgroundConfig: backgroundConfig ?? this.backgroundConfig,
     );
   }
 
@@ -3976,6 +4302,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
     if (backgroundPdfPath.present) {
       map['background_pdf_path'] = Variable<String>(backgroundPdfPath.value);
     }
+    if (backgroundConfig.present) {
+      map['background_config'] = Variable<String>(backgroundConfig.value);
+    }
     return map;
   }
 
@@ -4000,7 +4329,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
           ..write('paperSize: $paperSize, ')
           ..write('lineType: $lineType, ')
           ..write('lineSpacing: $lineSpacing, ')
-          ..write('backgroundPdfPath: $backgroundPdfPath')
+          ..write('backgroundPdfPath: $backgroundPdfPath, ')
+          ..write('backgroundConfig: $backgroundConfig')
           ..write(')'))
         .toString();
   }
@@ -8288,6 +8618,1022 @@ class LessonRecordingsCompanion extends UpdateCompanion<LessonRecording> {
   }
 }
 
+class $NotebookTemplatesTable extends NotebookTemplates
+    with TableInfo<$NotebookTemplatesTable, NotebookTemplate> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NotebookTemplatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverMeta = const VerificationMeta('cover');
+  @override
+  late final GeneratedColumn<String> cover = GeneratedColumn<String>(
+    'cover',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isSystemMeta = const VerificationMeta(
+    'isSystem',
+  );
+  @override
+  late final GeneratedColumn<int> isSystem = GeneratedColumn<int>(
+    'is_system',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdByMeta = const VerificationMeta(
+    'createdBy',
+  );
+  @override
+  late final GeneratedColumn<int> createdBy = GeneratedColumn<int>(
+    'created_by',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    description,
+    category,
+    icon,
+    cover,
+    isSystem,
+    createdBy,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'notebook_templates';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NotebookTemplate> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
+      );
+    }
+    if (data.containsKey('cover')) {
+      context.handle(
+        _coverMeta,
+        cover.isAcceptableOrUnknown(data['cover']!, _coverMeta),
+      );
+    }
+    if (data.containsKey('is_system')) {
+      context.handle(
+        _isSystemMeta,
+        isSystem.isAcceptableOrUnknown(data['is_system']!, _isSystemMeta),
+      );
+    }
+    if (data.containsKey('created_by')) {
+      context.handle(
+        _createdByMeta,
+        createdBy.isAcceptableOrUnknown(data['created_by']!, _createdByMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  NotebookTemplate map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NotebookTemplate(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      ),
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      ),
+      cover: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover'],
+      ),
+      isSystem: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_system'],
+      )!,
+      createdBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_by'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $NotebookTemplatesTable createAlias(String alias) {
+    return $NotebookTemplatesTable(attachedDatabase, alias);
+  }
+}
+
+class NotebookTemplate extends DataClass
+    implements Insertable<NotebookTemplate> {
+  final int id;
+  final String name;
+  final String? description;
+  final String? category;
+  final String? icon;
+  final String? cover;
+  final int isSystem;
+  final int? createdBy;
+  final int createdAt;
+  final int updatedAt;
+  const NotebookTemplate({
+    required this.id,
+    required this.name,
+    this.description,
+    this.category,
+    this.icon,
+    this.cover,
+    required this.isSystem,
+    this.createdBy,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || category != null) {
+      map['category'] = Variable<String>(category);
+    }
+    if (!nullToAbsent || icon != null) {
+      map['icon'] = Variable<String>(icon);
+    }
+    if (!nullToAbsent || cover != null) {
+      map['cover'] = Variable<String>(cover);
+    }
+    map['is_system'] = Variable<int>(isSystem);
+    if (!nullToAbsent || createdBy != null) {
+      map['created_by'] = Variable<int>(createdBy);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  NotebookTemplatesCompanion toCompanion(bool nullToAbsent) {
+    return NotebookTemplatesCompanion(
+      id: Value(id),
+      name: Value(name),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      category: category == null && nullToAbsent
+          ? const Value.absent()
+          : Value(category),
+      icon: icon == null && nullToAbsent ? const Value.absent() : Value(icon),
+      cover: cover == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cover),
+      isSystem: Value(isSystem),
+      createdBy: createdBy == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdBy),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory NotebookTemplate.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NotebookTemplate(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      description: serializer.fromJson<String?>(json['description']),
+      category: serializer.fromJson<String?>(json['category']),
+      icon: serializer.fromJson<String?>(json['icon']),
+      cover: serializer.fromJson<String?>(json['cover']),
+      isSystem: serializer.fromJson<int>(json['isSystem']),
+      createdBy: serializer.fromJson<int?>(json['createdBy']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'description': serializer.toJson<String?>(description),
+      'category': serializer.toJson<String?>(category),
+      'icon': serializer.toJson<String?>(icon),
+      'cover': serializer.toJson<String?>(cover),
+      'isSystem': serializer.toJson<int>(isSystem),
+      'createdBy': serializer.toJson<int?>(createdBy),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  NotebookTemplate copyWith({
+    int? id,
+    String? name,
+    Value<String?> description = const Value.absent(),
+    Value<String?> category = const Value.absent(),
+    Value<String?> icon = const Value.absent(),
+    Value<String?> cover = const Value.absent(),
+    int? isSystem,
+    Value<int?> createdBy = const Value.absent(),
+    int? createdAt,
+    int? updatedAt,
+  }) => NotebookTemplate(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    description: description.present ? description.value : this.description,
+    category: category.present ? category.value : this.category,
+    icon: icon.present ? icon.value : this.icon,
+    cover: cover.present ? cover.value : this.cover,
+    isSystem: isSystem ?? this.isSystem,
+    createdBy: createdBy.present ? createdBy.value : this.createdBy,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  NotebookTemplate copyWithCompanion(NotebookTemplatesCompanion data) {
+    return NotebookTemplate(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      category: data.category.present ? data.category.value : this.category,
+      icon: data.icon.present ? data.icon.value : this.icon,
+      cover: data.cover.present ? data.cover.value : this.cover,
+      isSystem: data.isSystem.present ? data.isSystem.value : this.isSystem,
+      createdBy: data.createdBy.present ? data.createdBy.value : this.createdBy,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotebookTemplate(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('category: $category, ')
+          ..write('icon: $icon, ')
+          ..write('cover: $cover, ')
+          ..write('isSystem: $isSystem, ')
+          ..write('createdBy: $createdBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    description,
+    category,
+    icon,
+    cover,
+    isSystem,
+    createdBy,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NotebookTemplate &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.description == this.description &&
+          other.category == this.category &&
+          other.icon == this.icon &&
+          other.cover == this.cover &&
+          other.isSystem == this.isSystem &&
+          other.createdBy == this.createdBy &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class NotebookTemplatesCompanion extends UpdateCompanion<NotebookTemplate> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<String?> description;
+  final Value<String?> category;
+  final Value<String?> icon;
+  final Value<String?> cover;
+  final Value<int> isSystem;
+  final Value<int?> createdBy;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  const NotebookTemplatesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.description = const Value.absent(),
+    this.category = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.cover = const Value.absent(),
+    this.isSystem = const Value.absent(),
+    this.createdBy = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  NotebookTemplatesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    this.description = const Value.absent(),
+    this.category = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.cover = const Value.absent(),
+    this.isSystem = const Value.absent(),
+    this.createdBy = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+  }) : name = Value(name),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<NotebookTemplate> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? description,
+    Expression<String>? category,
+    Expression<String>? icon,
+    Expression<String>? cover,
+    Expression<int>? isSystem,
+    Expression<int>? createdBy,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (category != null) 'category': category,
+      if (icon != null) 'icon': icon,
+      if (cover != null) 'cover': cover,
+      if (isSystem != null) 'is_system': isSystem,
+      if (createdBy != null) 'created_by': createdBy,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  NotebookTemplatesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<String?>? description,
+    Value<String?>? category,
+    Value<String?>? icon,
+    Value<String?>? cover,
+    Value<int>? isSystem,
+    Value<int?>? createdBy,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+  }) {
+    return NotebookTemplatesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      icon: icon ?? this.icon,
+      cover: cover ?? this.cover,
+      isSystem: isSystem ?? this.isSystem,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
+    }
+    if (cover.present) {
+      map['cover'] = Variable<String>(cover.value);
+    }
+    if (isSystem.present) {
+      map['is_system'] = Variable<int>(isSystem.value);
+    }
+    if (createdBy.present) {
+      map['created_by'] = Variable<int>(createdBy.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotebookTemplatesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('category: $category, ')
+          ..write('icon: $icon, ')
+          ..write('cover: $cover, ')
+          ..write('isSystem: $isSystem, ')
+          ..write('createdBy: $createdBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $NotebookTemplateVersionsTable extends NotebookTemplateVersions
+    with TableInfo<$NotebookTemplateVersionsTable, NotebookTemplateVersion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $NotebookTemplateVersionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _templateIdMeta = const VerificationMeta(
+    'templateId',
+  );
+  @override
+  late final GeneratedColumn<int> templateId = GeneratedColumn<int>(
+    'template_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES notebook_templates (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _configurationMeta = const VerificationMeta(
+    'configuration',
+  );
+  @override
+  late final GeneratedColumn<String> configuration = GeneratedColumn<String>(
+    'configuration',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    templateId,
+    version,
+    configuration,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'notebook_template_versions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<NotebookTemplateVersion> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('template_id')) {
+      context.handle(
+        _templateIdMeta,
+        templateId.isAcceptableOrUnknown(data['template_id']!, _templateIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_templateIdMeta);
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_versionMeta);
+    }
+    if (data.containsKey('configuration')) {
+      context.handle(
+        _configurationMeta,
+        configuration.isAcceptableOrUnknown(
+          data['configuration']!,
+          _configurationMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_configurationMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  NotebookTemplateVersion map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return NotebookTemplateVersion(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      templateId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}template_id'],
+      )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
+      configuration: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}configuration'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $NotebookTemplateVersionsTable createAlias(String alias) {
+    return $NotebookTemplateVersionsTable(attachedDatabase, alias);
+  }
+}
+
+class NotebookTemplateVersion extends DataClass
+    implements Insertable<NotebookTemplateVersion> {
+  final int id;
+  final int templateId;
+  final int version;
+  final String configuration;
+  final int createdAt;
+  final int updatedAt;
+  const NotebookTemplateVersion({
+    required this.id,
+    required this.templateId,
+    required this.version,
+    required this.configuration,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['template_id'] = Variable<int>(templateId);
+    map['version'] = Variable<int>(version);
+    map['configuration'] = Variable<String>(configuration);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  NotebookTemplateVersionsCompanion toCompanion(bool nullToAbsent) {
+    return NotebookTemplateVersionsCompanion(
+      id: Value(id),
+      templateId: Value(templateId),
+      version: Value(version),
+      configuration: Value(configuration),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory NotebookTemplateVersion.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return NotebookTemplateVersion(
+      id: serializer.fromJson<int>(json['id']),
+      templateId: serializer.fromJson<int>(json['templateId']),
+      version: serializer.fromJson<int>(json['version']),
+      configuration: serializer.fromJson<String>(json['configuration']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'templateId': serializer.toJson<int>(templateId),
+      'version': serializer.toJson<int>(version),
+      'configuration': serializer.toJson<String>(configuration),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  NotebookTemplateVersion copyWith({
+    int? id,
+    int? templateId,
+    int? version,
+    String? configuration,
+    int? createdAt,
+    int? updatedAt,
+  }) => NotebookTemplateVersion(
+    id: id ?? this.id,
+    templateId: templateId ?? this.templateId,
+    version: version ?? this.version,
+    configuration: configuration ?? this.configuration,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  NotebookTemplateVersion copyWithCompanion(
+    NotebookTemplateVersionsCompanion data,
+  ) {
+    return NotebookTemplateVersion(
+      id: data.id.present ? data.id.value : this.id,
+      templateId: data.templateId.present
+          ? data.templateId.value
+          : this.templateId,
+      version: data.version.present ? data.version.value : this.version,
+      configuration: data.configuration.present
+          ? data.configuration.value
+          : this.configuration,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotebookTemplateVersion(')
+          ..write('id: $id, ')
+          ..write('templateId: $templateId, ')
+          ..write('version: $version, ')
+          ..write('configuration: $configuration, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, templateId, version, configuration, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NotebookTemplateVersion &&
+          other.id == this.id &&
+          other.templateId == this.templateId &&
+          other.version == this.version &&
+          other.configuration == this.configuration &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class NotebookTemplateVersionsCompanion
+    extends UpdateCompanion<NotebookTemplateVersion> {
+  final Value<int> id;
+  final Value<int> templateId;
+  final Value<int> version;
+  final Value<String> configuration;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  const NotebookTemplateVersionsCompanion({
+    this.id = const Value.absent(),
+    this.templateId = const Value.absent(),
+    this.version = const Value.absent(),
+    this.configuration = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  NotebookTemplateVersionsCompanion.insert({
+    this.id = const Value.absent(),
+    required int templateId,
+    required int version,
+    required String configuration,
+    required int createdAt,
+    required int updatedAt,
+  }) : templateId = Value(templateId),
+       version = Value(version),
+       configuration = Value(configuration),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<NotebookTemplateVersion> custom({
+    Expression<int>? id,
+    Expression<int>? templateId,
+    Expression<int>? version,
+    Expression<String>? configuration,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (templateId != null) 'template_id': templateId,
+      if (version != null) 'version': version,
+      if (configuration != null) 'configuration': configuration,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  NotebookTemplateVersionsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? templateId,
+    Value<int>? version,
+    Value<String>? configuration,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+  }) {
+    return NotebookTemplateVersionsCompanion(
+      id: id ?? this.id,
+      templateId: templateId ?? this.templateId,
+      version: version ?? this.version,
+      configuration: configuration ?? this.configuration,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (templateId.present) {
+      map['template_id'] = Variable<int>(templateId.value);
+    }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
+    if (configuration.present) {
+      map['configuration'] = Variable<String>(configuration.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('NotebookTemplateVersionsCompanion(')
+          ..write('id: $id, ')
+          ..write('templateId: $templateId, ')
+          ..write('version: $version, ')
+          ..write('configuration: $configuration, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -8306,6 +9652,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LessonRecordingsTable lessonRecordings = $LessonRecordingsTable(
     this,
   );
+  late final $NotebookTemplatesTable notebookTemplates =
+      $NotebookTemplatesTable(this);
+  late final $NotebookTemplateVersionsTable notebookTemplateVersions =
+      $NotebookTemplateVersionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -8321,6 +9671,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     notebookUser,
     payments,
     lessonRecordings,
+    notebookTemplates,
+    notebookTemplateVersions,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -8393,6 +9745,15 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('lesson_recordings', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'notebook_templates',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate('notebook_template_versions', kind: UpdateKind.delete),
+      ],
     ),
   ]);
 }
@@ -9685,6 +11046,11 @@ typedef $$NotebooksTableCreateCompanionBuilder =
       Value<String?> tags,
       Value<int> isArchived,
       Value<int> isFavorite,
+      Value<String?> origin,
+      Value<String?> participantsPreview,
+      Value<String?> lastUpdatedByName,
+      Value<int> notificationsEnabled,
+      Value<String?> configuration,
     });
 typedef $$NotebooksTableUpdateCompanionBuilder =
     NotebooksCompanion Function({
@@ -9712,6 +11078,11 @@ typedef $$NotebooksTableUpdateCompanionBuilder =
       Value<String?> tags,
       Value<int> isArchived,
       Value<int> isFavorite,
+      Value<String?> origin,
+      Value<String?> participantsPreview,
+      Value<String?> lastUpdatedByName,
+      Value<int> notificationsEnabled,
+      Value<String?> configuration,
     });
 
 final class $$NotebooksTableReferences
@@ -9914,6 +11285,31 @@ class $$NotebooksTableFilterComposer
 
   ColumnFilters<int> get isFavorite => $composableBuilder(
     column: $table.isFavorite,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get origin => $composableBuilder(
+    column: $table.origin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get participantsPreview => $composableBuilder(
+    column: $table.participantsPreview,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastUpdatedByName => $composableBuilder(
+    column: $table.lastUpdatedByName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get notificationsEnabled => $composableBuilder(
+    column: $table.notificationsEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get configuration => $composableBuilder(
+    column: $table.configuration,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10140,6 +11536,31 @@ class $$NotebooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get origin => $composableBuilder(
+    column: $table.origin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get participantsPreview => $composableBuilder(
+    column: $table.participantsPreview,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastUpdatedByName => $composableBuilder(
+    column: $table.lastUpdatedByName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get notificationsEnabled => $composableBuilder(
+    column: $table.notificationsEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SubjectsTableOrderingComposer get subjectId {
     final $$SubjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -10261,6 +11682,29 @@ class $$NotebooksTableAnnotationComposer
 
   GeneratedColumn<int> get isFavorite => $composableBuilder(
     column: $table.isFavorite,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get origin =>
+      $composableBuilder(column: $table.origin, builder: (column) => column);
+
+  GeneratedColumn<String> get participantsPreview => $composableBuilder(
+    column: $table.participantsPreview,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastUpdatedByName => $composableBuilder(
+    column: $table.lastUpdatedByName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get notificationsEnabled => $composableBuilder(
+    column: $table.notificationsEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get configuration => $composableBuilder(
+    column: $table.configuration,
     builder: (column) => column,
   );
 
@@ -10420,6 +11864,11 @@ class $$NotebooksTableTableManager
                 Value<String?> tags = const Value.absent(),
                 Value<int> isArchived = const Value.absent(),
                 Value<int> isFavorite = const Value.absent(),
+                Value<String?> origin = const Value.absent(),
+                Value<String?> participantsPreview = const Value.absent(),
+                Value<String?> lastUpdatedByName = const Value.absent(),
+                Value<int> notificationsEnabled = const Value.absent(),
+                Value<String?> configuration = const Value.absent(),
               }) => NotebooksCompanion(
                 id: id,
                 serverId: serverId,
@@ -10445,6 +11894,11 @@ class $$NotebooksTableTableManager
                 tags: tags,
                 isArchived: isArchived,
                 isFavorite: isFavorite,
+                origin: origin,
+                participantsPreview: participantsPreview,
+                lastUpdatedByName: lastUpdatedByName,
+                notificationsEnabled: notificationsEnabled,
+                configuration: configuration,
               ),
           createCompanionCallback:
               ({
@@ -10472,6 +11926,11 @@ class $$NotebooksTableTableManager
                 Value<String?> tags = const Value.absent(),
                 Value<int> isArchived = const Value.absent(),
                 Value<int> isFavorite = const Value.absent(),
+                Value<String?> origin = const Value.absent(),
+                Value<String?> participantsPreview = const Value.absent(),
+                Value<String?> lastUpdatedByName = const Value.absent(),
+                Value<int> notificationsEnabled = const Value.absent(),
+                Value<String?> configuration = const Value.absent(),
               }) => NotebooksCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -10497,6 +11956,11 @@ class $$NotebooksTableTableManager
                 tags: tags,
                 isArchived: isArchived,
                 isFavorite: isFavorite,
+                origin: origin,
+                participantsPreview: participantsPreview,
+                lastUpdatedByName: lastUpdatedByName,
+                notificationsEnabled: notificationsEnabled,
+                configuration: configuration,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -10665,6 +12129,7 @@ typedef $$PagesTableCreateCompanionBuilder =
       Value<String?> lineType,
       Value<double?> lineSpacing,
       Value<String?> backgroundPdfPath,
+      Value<String?> backgroundConfig,
     });
 typedef $$PagesTableUpdateCompanionBuilder =
     PagesCompanion Function({
@@ -10687,6 +12152,7 @@ typedef $$PagesTableUpdateCompanionBuilder =
       Value<String?> lineType,
       Value<double?> lineSpacing,
       Value<String?> backgroundPdfPath,
+      Value<String?> backgroundConfig,
     });
 
 final class $$PagesTableReferences
@@ -10865,6 +12331,11 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
 
   ColumnFilters<String> get backgroundPdfPath => $composableBuilder(
     column: $table.backgroundPdfPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backgroundConfig => $composableBuilder(
+    column: $table.backgroundConfig,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11066,6 +12537,11 @@ class $$PagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get backgroundConfig => $composableBuilder(
+    column: $table.backgroundConfig,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$NotebooksTableOrderingComposer get notebookId {
     final $$NotebooksTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -11168,6 +12644,11 @@ class $$PagesTableAnnotationComposer
 
   GeneratedColumn<String> get backgroundPdfPath => $composableBuilder(
     column: $table.backgroundPdfPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get backgroundConfig => $composableBuilder(
+    column: $table.backgroundConfig,
     builder: (column) => column,
   );
 
@@ -11323,6 +12804,7 @@ class $$PagesTableTableManager
                 Value<String?> lineType = const Value.absent(),
                 Value<double?> lineSpacing = const Value.absent(),
                 Value<String?> backgroundPdfPath = const Value.absent(),
+                Value<String?> backgroundConfig = const Value.absent(),
               }) => PagesCompanion(
                 id: id,
                 serverId: serverId,
@@ -11343,6 +12825,7 @@ class $$PagesTableTableManager
                 lineType: lineType,
                 lineSpacing: lineSpacing,
                 backgroundPdfPath: backgroundPdfPath,
+                backgroundConfig: backgroundConfig,
               ),
           createCompanionCallback:
               ({
@@ -11365,6 +12848,7 @@ class $$PagesTableTableManager
                 Value<String?> lineType = const Value.absent(),
                 Value<double?> lineSpacing = const Value.absent(),
                 Value<String?> backgroundPdfPath = const Value.absent(),
+                Value<String?> backgroundConfig = const Value.absent(),
               }) => PagesCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -11385,6 +12869,7 @@ class $$PagesTableTableManager
                 lineType: lineType,
                 lineSpacing: lineSpacing,
                 backgroundPdfPath: backgroundPdfPath,
+                backgroundConfig: backgroundConfig,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -14398,6 +15883,783 @@ typedef $$LessonRecordingsTableProcessedTableManager =
       LessonRecording,
       PrefetchHooks Function({bool notebookId})
     >;
+typedef $$NotebookTemplatesTableCreateCompanionBuilder =
+    NotebookTemplatesCompanion Function({
+      Value<int> id,
+      required String name,
+      Value<String?> description,
+      Value<String?> category,
+      Value<String?> icon,
+      Value<String?> cover,
+      Value<int> isSystem,
+      Value<int?> createdBy,
+      required int createdAt,
+      required int updatedAt,
+    });
+typedef $$NotebookTemplatesTableUpdateCompanionBuilder =
+    NotebookTemplatesCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<String?> description,
+      Value<String?> category,
+      Value<String?> icon,
+      Value<String?> cover,
+      Value<int> isSystem,
+      Value<int?> createdBy,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+    });
+
+final class $$NotebookTemplatesTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $NotebookTemplatesTable,
+          NotebookTemplate
+        > {
+  $$NotebookTemplatesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $NotebookTemplateVersionsTable,
+    List<NotebookTemplateVersion>
+  >
+  _notebookTemplateVersionsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.notebookTemplateVersions,
+        aliasName:
+            'notebook_templates__id__notebook_template_versions__template_id',
+      );
+
+  $$NotebookTemplateVersionsTableProcessedTableManager
+  get notebookTemplateVersionsRefs {
+    final manager = $$NotebookTemplateVersionsTableTableManager(
+      $_db,
+      $_db.notebookTemplateVersions,
+    ).filter((f) => f.templateId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _notebookTemplateVersionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$NotebookTemplatesTableFilterComposer
+    extends Composer<_$AppDatabase, $NotebookTemplatesTable> {
+  $$NotebookTemplatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cover => $composableBuilder(
+    column: $table.cover,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isSystem => $composableBuilder(
+    column: $table.isSystem,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdBy => $composableBuilder(
+    column: $table.createdBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> notebookTemplateVersionsRefs(
+    Expression<bool> Function($$NotebookTemplateVersionsTableFilterComposer f)
+    f,
+  ) {
+    final $$NotebookTemplateVersionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.notebookTemplateVersions,
+          getReferencedColumn: (t) => t.templateId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$NotebookTemplateVersionsTableFilterComposer(
+                $db: $db,
+                $table: $db.notebookTemplateVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$NotebookTemplatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $NotebookTemplatesTable> {
+  $$NotebookTemplatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cover => $composableBuilder(
+    column: $table.cover,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isSystem => $composableBuilder(
+    column: $table.isSystem,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdBy => $composableBuilder(
+    column: $table.createdBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$NotebookTemplatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NotebookTemplatesTable> {
+  $$NotebookTemplatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<String> get cover =>
+      $composableBuilder(column: $table.cover, builder: (column) => column);
+
+  GeneratedColumn<int> get isSystem =>
+      $composableBuilder(column: $table.isSystem, builder: (column) => column);
+
+  GeneratedColumn<int> get createdBy =>
+      $composableBuilder(column: $table.createdBy, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> notebookTemplateVersionsRefs<T extends Object>(
+    Expression<T> Function($$NotebookTemplateVersionsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$NotebookTemplateVersionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.notebookTemplateVersions,
+          getReferencedColumn: (t) => t.templateId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$NotebookTemplateVersionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.notebookTemplateVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$NotebookTemplatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NotebookTemplatesTable,
+          NotebookTemplate,
+          $$NotebookTemplatesTableFilterComposer,
+          $$NotebookTemplatesTableOrderingComposer,
+          $$NotebookTemplatesTableAnnotationComposer,
+          $$NotebookTemplatesTableCreateCompanionBuilder,
+          $$NotebookTemplatesTableUpdateCompanionBuilder,
+          (NotebookTemplate, $$NotebookTemplatesTableReferences),
+          NotebookTemplate,
+          PrefetchHooks Function({bool notebookTemplateVersionsRefs})
+        > {
+  $$NotebookTemplatesTableTableManager(
+    _$AppDatabase db,
+    $NotebookTemplatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NotebookTemplatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$NotebookTemplatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$NotebookTemplatesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String?> category = const Value.absent(),
+                Value<String?> icon = const Value.absent(),
+                Value<String?> cover = const Value.absent(),
+                Value<int> isSystem = const Value.absent(),
+                Value<int?> createdBy = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => NotebookTemplatesCompanion(
+                id: id,
+                name: name,
+                description: description,
+                category: category,
+                icon: icon,
+                cover: cover,
+                isSystem: isSystem,
+                createdBy: createdBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                Value<String?> description = const Value.absent(),
+                Value<String?> category = const Value.absent(),
+                Value<String?> icon = const Value.absent(),
+                Value<String?> cover = const Value.absent(),
+                Value<int> isSystem = const Value.absent(),
+                Value<int?> createdBy = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+              }) => NotebookTemplatesCompanion.insert(
+                id: id,
+                name: name,
+                description: description,
+                category: category,
+                icon: icon,
+                cover: cover,
+                isSystem: isSystem,
+                createdBy: createdBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$NotebookTemplatesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({notebookTemplateVersionsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (notebookTemplateVersionsRefs) db.notebookTemplateVersions,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (notebookTemplateVersionsRefs)
+                    await $_getPrefetchedData<
+                      NotebookTemplate,
+                      $NotebookTemplatesTable,
+                      NotebookTemplateVersion
+                    >(
+                      currentTable: table,
+                      referencedTable: $$NotebookTemplatesTableReferences
+                          ._notebookTemplateVersionsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$NotebookTemplatesTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).notebookTemplateVersionsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.templateId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$NotebookTemplatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NotebookTemplatesTable,
+      NotebookTemplate,
+      $$NotebookTemplatesTableFilterComposer,
+      $$NotebookTemplatesTableOrderingComposer,
+      $$NotebookTemplatesTableAnnotationComposer,
+      $$NotebookTemplatesTableCreateCompanionBuilder,
+      $$NotebookTemplatesTableUpdateCompanionBuilder,
+      (NotebookTemplate, $$NotebookTemplatesTableReferences),
+      NotebookTemplate,
+      PrefetchHooks Function({bool notebookTemplateVersionsRefs})
+    >;
+typedef $$NotebookTemplateVersionsTableCreateCompanionBuilder =
+    NotebookTemplateVersionsCompanion Function({
+      Value<int> id,
+      required int templateId,
+      required int version,
+      required String configuration,
+      required int createdAt,
+      required int updatedAt,
+    });
+typedef $$NotebookTemplateVersionsTableUpdateCompanionBuilder =
+    NotebookTemplateVersionsCompanion Function({
+      Value<int> id,
+      Value<int> templateId,
+      Value<int> version,
+      Value<String> configuration,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+    });
+
+final class $$NotebookTemplateVersionsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $NotebookTemplateVersionsTable,
+          NotebookTemplateVersion
+        > {
+  $$NotebookTemplateVersionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $NotebookTemplatesTable _templateIdTable(_$AppDatabase db) =>
+      db.notebookTemplates.createAlias(
+        'notebook_template_versions__template_id__notebook_templates__id',
+      );
+
+  $$NotebookTemplatesTableProcessedTableManager get templateId {
+    final $_column = $_itemColumn<int>('template_id')!;
+
+    final manager = $$NotebookTemplatesTableTableManager(
+      $_db,
+      $_db.notebookTemplates,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_templateIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$NotebookTemplateVersionsTableFilterComposer
+    extends Composer<_$AppDatabase, $NotebookTemplateVersionsTable> {
+  $$NotebookTemplateVersionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$NotebookTemplatesTableFilterComposer get templateId {
+    final $$NotebookTemplatesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.templateId,
+      referencedTable: $db.notebookTemplates,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebookTemplatesTableFilterComposer(
+            $db: $db,
+            $table: $db.notebookTemplates,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$NotebookTemplateVersionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $NotebookTemplateVersionsTable> {
+  $$NotebookTemplateVersionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$NotebookTemplatesTableOrderingComposer get templateId {
+    final $$NotebookTemplatesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.templateId,
+      referencedTable: $db.notebookTemplates,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NotebookTemplatesTableOrderingComposer(
+            $db: $db,
+            $table: $db.notebookTemplates,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$NotebookTemplateVersionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $NotebookTemplateVersionsTable> {
+  $$NotebookTemplateVersionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<String> get configuration => $composableBuilder(
+    column: $table.configuration,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$NotebookTemplatesTableAnnotationComposer get templateId {
+    final $$NotebookTemplatesTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.templateId,
+          referencedTable: $db.notebookTemplates,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$NotebookTemplatesTableAnnotationComposer(
+                $db: $db,
+                $table: $db.notebookTemplates,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$NotebookTemplateVersionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $NotebookTemplateVersionsTable,
+          NotebookTemplateVersion,
+          $$NotebookTemplateVersionsTableFilterComposer,
+          $$NotebookTemplateVersionsTableOrderingComposer,
+          $$NotebookTemplateVersionsTableAnnotationComposer,
+          $$NotebookTemplateVersionsTableCreateCompanionBuilder,
+          $$NotebookTemplateVersionsTableUpdateCompanionBuilder,
+          (NotebookTemplateVersion, $$NotebookTemplateVersionsTableReferences),
+          NotebookTemplateVersion,
+          PrefetchHooks Function({bool templateId})
+        > {
+  $$NotebookTemplateVersionsTableTableManager(
+    _$AppDatabase db,
+    $NotebookTemplateVersionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$NotebookTemplateVersionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$NotebookTemplateVersionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$NotebookTemplateVersionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> templateId = const Value.absent(),
+                Value<int> version = const Value.absent(),
+                Value<String> configuration = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => NotebookTemplateVersionsCompanion(
+                id: id,
+                templateId: templateId,
+                version: version,
+                configuration: configuration,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int templateId,
+                required int version,
+                required String configuration,
+                required int createdAt,
+                required int updatedAt,
+              }) => NotebookTemplateVersionsCompanion.insert(
+                id: id,
+                templateId: templateId,
+                version: version,
+                configuration: configuration,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$NotebookTemplateVersionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({templateId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (templateId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.templateId,
+                                referencedTable:
+                                    $$NotebookTemplateVersionsTableReferences
+                                        ._templateIdTable(db),
+                                referencedColumn:
+                                    $$NotebookTemplateVersionsTableReferences
+                                        ._templateIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$NotebookTemplateVersionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $NotebookTemplateVersionsTable,
+      NotebookTemplateVersion,
+      $$NotebookTemplateVersionsTableFilterComposer,
+      $$NotebookTemplateVersionsTableOrderingComposer,
+      $$NotebookTemplateVersionsTableAnnotationComposer,
+      $$NotebookTemplateVersionsTableCreateCompanionBuilder,
+      $$NotebookTemplateVersionsTableUpdateCompanionBuilder,
+      (NotebookTemplateVersion, $$NotebookTemplateVersionsTableReferences),
+      NotebookTemplateVersion,
+      PrefetchHooks Function({bool templateId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -14422,4 +16684,11 @@ class $AppDatabaseManager {
       $$PaymentsTableTableManager(_db, _db.payments);
   $$LessonRecordingsTableTableManager get lessonRecordings =>
       $$LessonRecordingsTableTableManager(_db, _db.lessonRecordings);
+  $$NotebookTemplatesTableTableManager get notebookTemplates =>
+      $$NotebookTemplatesTableTableManager(_db, _db.notebookTemplates);
+  $$NotebookTemplateVersionsTableTableManager get notebookTemplateVersions =>
+      $$NotebookTemplateVersionsTableTableManager(
+        _db,
+        _db.notebookTemplateVersions,
+      );
 }

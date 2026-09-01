@@ -32,6 +32,7 @@ class AudioSessionService extends ChangeNotifier {
 
   db.LessonRecording? currentlyPlayingRecording;
   List<db.LessonRecording> lessonRecordings = [];
+  StreamSubscription? _recordingsSubscription;
 
   bool isRecording = false;
   bool isLessonRecording = false;
@@ -86,11 +87,17 @@ class AudioSessionService extends ChangeNotifier {
   Duration get audioDuration => _currentAudioDuration ?? Duration.zero;
   Duration get recordingDuration => _recordingStartTime != null ? TimeService().now().difference(_recordingStartTime!) : Duration.zero;
 
-  Future<void> loadLessonRecordings(int notebookId) async {
+  void loadLessonRecordings(int notebookId) {
+    _recordingsSubscription?.cancel();
     final d = db.AppDatabase.instance;
-    final rows = await (d.select(d.lessonRecordings)..where((t) => t.notebookId.equals(notebookId))).get();
-    lessonRecordings = rows;
-    safeNotify();
+    _recordingsSubscription = (d.select(d.lessonRecordings)
+          ..where((t) => t.notebookId.equals(notebookId))
+          ..orderBy([(t) => drift.OrderingTerm(expression: t.updatedAt, mode: drift.OrderingMode.desc)]))
+        .watch()
+        .listen((rows) {
+      lessonRecordings = rows;
+      safeNotify();
+    });
   }
 
   Future<void> pauseAudio() async { await _audioPlayer.pause(); safeNotify(); }
@@ -174,7 +181,7 @@ class AudioSessionService extends ChangeNotifier {
           durationSeconds: drift.Value(duration),
           updatedAt: drift.Value(TimeService().nowMs()),
         ));
-        await loadLessonRecordings(notebookId);
+        loadLessonRecordings(notebookId);
 
         if (liveNotebookSid != null && liveNotebookSid != 0) {
           final bytes = await io.File(permanentPath).readAsBytes();
@@ -194,7 +201,7 @@ class AudioSessionService extends ChangeNotifier {
                 syncedWithCloud: const drift.Value(1),
               )
             );
-            await loadLessonRecordings(notebookId);
+            loadLessonRecordings(notebookId);
           }
         }
       }
@@ -420,6 +427,7 @@ class AudioSessionService extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _recordingsSubscription?.cancel();
     _audioPlayer.dispose();
     _audioRecorderInstance?.dispose();
     _segmentTimer?.cancel();

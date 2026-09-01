@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../notebooks/models/notebook_configuration.dart';
 import '../models/stroke_model.dart';
+import 'background_engine.dart';
 
 Path buildPath(List<Offset> points) {
   final path = Path();
@@ -23,66 +25,59 @@ Path buildPath(List<Offset> points) {
 }
 
 class BackgroundPainter extends CustomPainter {
-  final String lineType;
-  final double lineSpacing;
+  final NotebookConfiguration? notebookConfig;
+  final BackgroundConfig? bgConfig;
+  
+  // 🚀 FALLBACK para compatibilidade com código antigo
+  final String? lineType;
+  final double? lineSpacing;
 
-  BackgroundPainter({required this.lineType, required this.lineSpacing});
+  BackgroundPainter({
+    this.notebookConfig, 
+    this.bgConfig,
+    this.lineType,
+    this.lineSpacing,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (notebookConfig != null && bgConfig != null) {
+      BackgroundEngine.draw(canvas, size, notebookConfig!, bgConfig!);
+      return;
+    }
+
+    // 🚀 LÓGICA DE LEGACY (Se não houver config rica)
+    final type = bgConfig?.type ?? lineType ?? 'ruled';
+    final spacing = bgConfig?.spacing ?? lineSpacing ?? 28.0;
+
     final bgPaint = Paint()
       ..color = const Color(0xFF1B365D).withOpacity(0.18)
       ..strokeWidth = 1.0;
 
-    if (lineType == 'ruled') {
+    if (type == 'ruled') {
       canvas.drawLine(
           const Offset(60, 0),
           Offset(60, size.height),
           Paint()
             ..color = Colors.redAccent.withOpacity(0.4)
             ..strokeWidth = 1.5);
-      for (double y = 90; y < size.height - 60; y += lineSpacing) {
+      for (double y = 90; y < size.height - 60; y += spacing) {
         canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
       }
-    } else if (lineType == 'grid') {
-      for (double y = 90; y < size.height - 60; y += lineSpacing) {
+    } else if (type == 'grid') {
+      for (double y = 90; y < size.height - 60; y += spacing) {
         canvas.drawLine(Offset(20, y), Offset(size.width - 20, y), bgPaint);
       }
-      for (double x = 20; x < size.width - 20; x += lineSpacing) {
+      for (double x = 20; x < size.width - 20; x += spacing) {
         canvas.drawLine(Offset(x, 90), Offset(x, size.height - 60), bgPaint);
       }
-    } else if (lineType == 'dots') {
-      for (double y = 90; y < size.height - 60; y += lineSpacing) {
-        for (double x = 20; x < size.width - 20; x += lineSpacing) {
+    } else if (type == 'dots') {
+      for (double y = 90; y < size.height - 60; y += spacing) {
+        for (double x = 20; x < size.width - 20; x += spacing) {
           canvas.drawCircle(Offset(x, y), 1.2, bgPaint);
         }
       }
-    } else if (lineType == 'oblique') {
-      canvas.drawLine(
-          const Offset(60, 0),
-          Offset(60, size.height),
-          Paint()
-            ..color = Colors.redAccent.withOpacity(0.4)
-            ..strokeWidth = 1.5);
-      for (double y = 90; y < size.height - 60; y += lineSpacing) {
-        canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
-      }
-      final slantPaint = Paint()
-        ..color = const Color(0xFF1B365D).withOpacity(0.08)
-        ..strokeWidth = 1.0;
-      for (double x = -400; x < size.width; x += lineSpacing * 1.6) {
-        canvas.drawLine(Offset(x, 0), Offset(x + size.height * 0.35, size.height), slantPaint);
-      }
-    } else if (lineType == 'cornell') {
-      // Linha Vertical (Cue Column)
-      canvas.drawLine(const Offset(160, 0), Offset(160, size.height - 120), Paint()..color = Colors.redAccent.withOpacity(0.3)..strokeWidth = 1.5);
-      // Linha Horizontal (Summary)
-      canvas.drawLine(Offset(0, size.height - 120), Offset(size.width, size.height - 120), Paint()..color = Colors.redAccent.withOpacity(0.3)..strokeWidth = 1.5);
-      
-      for (double y = 60; y < size.height - 120; y += lineSpacing) {
-        canvas.drawLine(Offset(160, y), Offset(size.width - 20, y), bgPaint);
-      }
-    } else if (lineType == 'engineering') {
+    } else if (type == 'engineering') {
       final minorPaint = Paint()..color = const Color(0xFF1B365D).withOpacity(0.08)..strokeWidth = 0.5;
       final majorPaint = Paint()..color = const Color(0xFF1B365D).withOpacity(0.2)..strokeWidth = 1.0;
 
@@ -97,7 +92,9 @@ class BackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(BackgroundPainter oldDelegate) =>
-      oldDelegate.lineType != lineType || oldDelegate.lineSpacing != lineSpacing;
+      oldDelegate.lineType != lineType || 
+      oldDelegate.lineSpacing != lineSpacing ||
+      oldDelegate.bgConfig != bgConfig;
 }
 
 class StrokesPainter extends CustomPainter {

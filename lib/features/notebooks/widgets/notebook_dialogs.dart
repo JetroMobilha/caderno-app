@@ -6,15 +6,19 @@ import 'package:caderno_digital_app/core/theme/app_colors.dart';
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import '../models/notebook_model.dart';
+import '../models/notebook_template.dart';
 import '../controllers/notebooks_controller.dart';
+import '../../shared/widgets/color_engine_widget.dart';
 
 class NotebookDialogs {
   static void showNotebookModal(BuildContext context, WidgetRef ref, Subject? activeSubject, Color themeColor, {required bool isEditing, Notebook? notebookToEdit}) {
     final titleController = TextEditingController(text: isEditing ? notebookToEdit!.title : '');
     final tagsController = TextEditingController(text: isEditing ? notebookToEdit!.tags.join(', ') : '');
     final formKey = GlobalKey<FormState>();
-    String selectedTemplate = isEditing ? (notebookToEdit!.templateType) : 'study';
+    String selectedTemplate = isEditing ? (notebookToEdit!.templateType) : NotebookTemplateType.blank.name;
     bool isFavorite = isEditing ? notebookToEdit!.isFavorite : false;
+    bool showTemplatesList = !isEditing; // 🚀 Esconder por padrão se estiver a editar
+
     final List<String> availableColors = [
       '#8B0000', '#0F4C5C', '#1F4E79', '#3F51B5',
       '#6C3483', '#9B59B6', '#D81B60', '#E91E63',
@@ -28,98 +32,126 @@ class NotebookDialogs {
       builder: (contextDialog) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: Theme.of(context).colorScheme.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Row(
             children: [
-              Icon(isEditing ? Icons.edit_note_rounded : Icons.library_add_rounded, color: themeColor),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(isEditing ? 'Editar Caderno' : 'Novo Caderno', 
-                  style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: themeColor),
-                  overflow: TextOverflow.ellipsis,
-                ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: themeColor.withOpacity(0.1), shape: BoxShape.circle),
+                child: Icon(isEditing ? Icons.edit_note_rounded : Icons.library_add_rounded, color: themeColor, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Text(isEditing ? 'Editar Caderno' : 'Novo Caderno', 
+                style: GoogleFonts.lora(fontWeight: FontWeight.bold, fontSize: 18, color: themeColor),
               ),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextFormField(
-                    controller: titleController,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      labelText: 'Título do Caderno',
-                      border: const OutlineInputBorder(),
-                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: themeColor, width: 1.5)),
+          content: SizedBox(
+            width: 450,
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: titleController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        labelText: 'Título do Caderno',
+                        hintText: 'ex: Matemática, Diário...',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        prefixIcon: Icon(Icons.book_outlined, color: themeColor, size: 20),
+                      ),
+                      validator: (value) => value == null || value.trim().isEmpty ? 'Introduz o título' : null,
                     ),
-                    validator: (value) => value == null || value.trim().isEmpty ? 'Introduz o título' : null,
-                  ),
-                  const SizedBox(height: 20),
-                  TextFormField(
-                    controller: tagsController,
-                    decoration: InputDecoration(
-                      labelText: 'Etiquetas (Tags)',
-                      hintText: 'ex: Faculdade, Urgente, Projeto',
-                      helperText: 'Separa as tags por vírgula',
-                      border: const OutlineInputBorder(),
-                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: themeColor, width: 1.5)),
-                      prefixIcon: Icon(Icons.tag_rounded, color: themeColor, size: 20),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('Marcar como Favorito', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: themeColor)),
-                    subtitle: const Text('Fixar no topo da lista', style: TextStyle(fontSize: 12)),
-                    secondary: Icon(Icons.star_rounded, color: isFavorite ? Colors.orange : Colors.grey),
-                    value: isFavorite,
-                    activeColor: Colors.orange,
-                    onChanged: (val) => setModalState(() => isFavorite = val),
-                  ),
-                  const SizedBox(height: 20),
-                  Text('Propósito do Caderno:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: themeColor)),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildTemplateCard(context, 'Pessoal / Estudo', Icons.school_rounded, 'study', selectedTemplate, themeColor, () => setModalState(() => selectedTemplate = 'study')),
-                      const SizedBox(width: 8),
-                      _buildTemplateCard(context, 'Técnico', Icons.engineering_rounded, 'technical', selectedTemplate, Colors.blueGrey, () => setModalState(() => selectedTemplate = 'technical')),
-                      const SizedBox(width: 8),
-                      _buildTemplateCard(context, 'Formal', Icons.business_center_rounded, 'formal', selectedTemplate, const Color(0xFF2C3E50), () => setModalState(() => selectedTemplate = 'formal')),
-                      const SizedBox(width: 8),
-                      _buildTemplateCard(context, 'Criativo', Icons.palette_rounded, 'creative', selectedTemplate, const Color(0xFFD81B60), () => setModalState(() => selectedTemplate = 'creative')),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text('Cor da Capa:', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 10, runSpacing: 10,
-                    children: availableColors.map((hex) {
-                      final isSelected = pickedColorHex == hex;
-                      final colorValue = Color(int.parse(hex.replaceFirst('#', '0xFF')));
-                      return GestureDetector(
-                        onTap: () => setModalState(() => pickedColorHex = hex),
-                        child: CircleAvatar(
-                          backgroundColor: colorValue,
-                          radius: 14,
-                          child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                    const SizedBox(height: 24),
+                    
+                    // 🚀 SELETOR DE TEMPLATE (COMPACTO NA EDIÇÃO)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Modelo do Caderno', 
+                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)
                         ),
-                      );
-                    }).toList(),
-                  )
-                ],
+                        if (isEditing)
+                          TextButton.icon(
+                            onPressed: () => setModalState(() => showTemplatesList = !showTemplatesList),
+                            icon: Icon(showTemplatesList ? Icons.expand_less : Icons.swap_horiz_rounded, size: 16),
+                            label: Text(showTemplatesList ? 'Recolher' : 'Alterar', style: const TextStyle(fontSize: 12)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    if (!showTemplatesList)
+                      _buildSelectedTemplatePreview(selectedTemplate, themeColor)
+                    else
+                      _buildTemplatesGrid(selectedTemplate, (typeName, suggestedColor) {
+                        setModalState(() {
+                          selectedTemplate = typeName;
+                          pickedColorHex = suggestedColor;
+                          if (!isEditing) showTemplatesList = true; // Mantém aberto na criação
+                        });
+                      }),
+
+                    const SizedBox(height: 24),
+                    
+                    // 🚀 TAGS E FAVORITO
+                    Text('Organização', 
+                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: tagsController,
+                      decoration: InputDecoration(
+                        labelText: 'Etiquetas (Tags)',
+                        hintText: 'Faculdade, Urgente...',
+                        helperText: 'Separa por vírgulas',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        prefixIcon: const Icon(Icons.tag_rounded, size: 20),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Adicionar aos Favoritos', style: TextStyle(fontSize: 14)),
+                      secondary: Icon(Icons.star_rounded, color: isFavorite ? Colors.orange : Colors.grey.shade300),
+                      value: isFavorite,
+                      activeColor: Colors.orange,
+                      onChanged: (val) => setModalState(() => isFavorite = val),
+                    ),
+
+                    Text('Cor da Capa', 
+                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)
+                    ),
+                    const SizedBox(height: 12),
+                    ColorEngineWidget(
+                      selectedColorHex: pickedColorHex,
+                      onColorSelected: (hex) => setModalState(() => pickedColorHex = hex),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(contextDialog), child: const Text('Cancelar', style: TextStyle(color: Colors.black45))),
+            TextButton(
+              onPressed: () => Navigator.pop(contextDialog), 
+              child: const Text('CANCELAR', style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold))
+            ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: themeColor),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: themeColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               onPressed: () async {
                 if (formKey.currentState!.validate()) {
                   final notifier = ref.read(notebooksProvider.notifier);
@@ -149,18 +181,11 @@ class NotebookDialogs {
                     newNotebook.id = await notifier.addNotebook(newNotebook, activeSubject?.serverId);
                     if (contextDialog.mounted) {
                       Navigator.pop(contextDialog);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Caderno "${newNotebook.title}" criado com sucesso! 📓'),
-                          backgroundColor: themeColor,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
                     }
                   }
                 }
               },
-              child: Text(isEditing ? 'Atualizar' : 'Criar', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text(isEditing ? 'GUARDAR' : 'CRIAR', style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -168,27 +193,85 @@ class NotebookDialogs {
     );
   }
 
-  static Widget _buildTemplateCard(BuildContext context, String label, IconData icon, String type, String selected, Color color, VoidCallback onTap) {
-    final isSelected = selected == type;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-          decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: isSelected ? 2 : 1),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  static Widget _buildSelectedTemplatePreview(String templateTypeName, Color themeColor) {
+    final type = NotebookTemplateType.values.firstWhere((e) => e.name == templateTypeName, orElse: () => NotebookTemplateType.blank);
+    final config = NotebookTemplateConfig.templates[type]!;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: config.suggestedColor.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: config.suggestedColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(config.icon, color: config.suggestedColor, size: 24),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: isSelected ? color : Colors.grey, size: 24),
-              const SizedBox(height: 6),
-              Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? color : Colors.grey)),
+              Text(config.label, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+              Text('Modelo selecionado', style: GoogleFonts.inter(fontSize: 11, color: Colors.black38)),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildTemplatesGrid(String selectedTemplate, Function(String, String) onSelect) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Center( // Centralizar a grelha
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center, // Garantir equilíbrio
+          children: NotebookTemplateConfig.templates.entries.map((entry) {
+            final type = entry.key;
+            final config = entry.value;
+            final isSelected = selectedTemplate == type.name;
+            
+            return GestureDetector(
+              onTap: () => onSelect(type.name, '#${config.suggestedColor.value.toRadixString(16).substring(2).toUpperCase()}'),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 105, // 🚀 Ajustado para caber 3 colunas em ~350-400px
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                decoration: BoxDecoration(
+                  color: isSelected ? config.suggestedColor.withOpacity(0.1) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected ? config.suggestedColor : Colors.black.withOpacity(0.05), 
+                    width: isSelected ? 2 : 1
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(config.icon, 
+                      color: isSelected ? config.suggestedColor : Colors.grey, 
+                      size: 22
+                    ),
+                    const SizedBox(height: 8),
+                    Text(config.label, 
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 10, 
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, 
+                        color: isSelected ? config.suggestedColor : Colors.black87
+                      )
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );

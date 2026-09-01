@@ -6,6 +6,7 @@ import 'package:caderno_digital_app/core/network/time_service.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_service.dart';
 import '../models/notebook_model.dart';
+import '../models/notebook_configuration.dart';
 
 class NotebookRepository {
   final AppDatabase _db;
@@ -28,7 +29,41 @@ class NotebookRepository {
           ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
         .get();
 
-    return rows.map((row) => Notebook(
+    // 🚀 Lógica de Mapeamento com Contagem Dinâmica (Folhas) e Física (Participantes)
+    final List<Notebook> notebooks = [];
+    for (final row in rows) {
+      final pageCount = await _getPageCount(row.id);
+      notebooks.add(_mapNotebook(row, pageCount));
+    }
+    return notebooks;
+  }
+
+  Future<int> _getPageCount(int notebookId) async {
+    final countExp = _db.pages.id.count();
+    final query = _db.selectOnly(_db.pages)
+      ..addColumns([countExp])
+      ..where(_db.pages.notebookId.equals(notebookId))
+      ..where(_db.pages.isDeleted.equals(0));
+    final result = await query.getSingle();
+    return result.read(countExp) ?? 0;
+  }
+
+  Notebook _mapNotebook(dynamic row, int pCount) {
+    List<ParticipantPreview> parts = [];
+    int totalParts = 0;
+    int oCount = 0;
+    if (row.participantsPreview != null) {
+      try {
+        final map = jsonDecode(row.participantsPreview);
+        totalParts = map['total'] ?? 0;
+        oCount = map['online_count'] ?? 0;
+        if (map['list'] is List) {
+          parts = (map['list'] as List).map((e) => ParticipantPreview.fromJson(e)).toList();
+        }
+      } catch (_) {}
+    }
+
+    return Notebook(
       id: row.id,
       serverId: row.serverId,
       clientId: row.clientId,
@@ -51,7 +86,15 @@ class NotebookRepository {
       tags: _parseTags(row.tags),
       isArchived: row.isArchived == 1,
       isFavorite: row.isFavorite == 1,
-    )).toList();
+      origin: row.origin,
+      pageCount: pCount,
+      participants: parts,
+      participantsTotal: totalParts,
+      onlineCount: oCount,
+      lastUpdatedByName: row.lastUpdatedByName,
+      notificationsEnabled: row.notificationsEnabled == 1,
+      configuration: row.configuration != null ? NotebookConfiguration.fromJson(jsonDecode(row.configuration)) : null,
+    );
   }
 
   static List<String> _parseTags(String? tagsStr) {
@@ -63,34 +106,28 @@ class NotebookRepository {
   // 📡 ASSINAR CADERNOS DA DISCIPLINA (REATIVO)
   // =========================================================================
   Stream<List<Notebook>> watchNotebooksBySubject(int subjectId) {
-    return (_db.select(_db.notebooks)
+    final notebooksStream = (_db.select(_db.notebooks)
           ..where((t) => t.isDeleted.equals(0) & t.subjectId.equals(subjectId))
           ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
-        .watch()
-        .map((rows) => rows.map((row) => Notebook(
-              id: row.id,
-              serverId: row.serverId,
-              clientId: row.clientId,
-              subjectId: row.subjectId,
-              title: row.title,
-              coverType: row.coverType,
-              color: row.color,
-              coverImage: row.coverImage,
-              templateType: row.templateType,
-              isPublished: row.isPublished,
-              price: row.price,
-              description: row.description,
-              authorName: row.authorName,
-              isDeleted: row.isDeleted,
-              syncedWithCloud: row.syncedWithCloud,
-              updatedAt: row.updatedAt,
-              role: row.role ?? 'owner',
-              alternativeTitle: row.alternativeTitle,
-              sharingType: row.sharingType ?? 'full',
-              tags: _parseTags(row.tags),
-              isArchived: row.isArchived == 1,
-              isFavorite: row.isFavorite == 1,
-            )).toList());
+        .watch();
+
+    return notebooksStream.asyncMap((rows) async {
+      final List<Notebook> notebooks = [];
+      for (final row in rows) {
+        final pCount = await _getPageCount(row.id);
+        notebooks.add(_mapNotebook(row, pCount));
+      }
+      return notebooks;
+    });
+  }
+
+  Future<int> _getParticipantCount(int notebookId) async {
+    final countExp = _db.notebookUser.id.count();
+    final query = _db.selectOnly(_db.notebookUser)
+      ..addColumns([countExp])
+      ..where(_db.notebookUser.notebookId.equals(notebookId));
+    final result = await query.getSingle();
+    return result.read(countExp) ?? 0;
   }
 
   // =========================================================================
@@ -116,6 +153,14 @@ class NotebookRepository {
       isArchived: Value(notebook.isArchived ? 1 : 0),
       isFavorite: Value(notebook.isFavorite ? 1 : 0),
       tags: Value(notebook.tags.join(',')),
+      origin: Value(notebook.origin),
+      participantsPreview: Value(jsonEncode({
+        'total': notebook.participantsTotal,
+        'list': notebook.participants.map((e) => e.toJson()).toList(),
+      })),
+      lastUpdatedByName: Value(notebook.lastUpdatedByName),
+      notificationsEnabled: Value(notebook.notificationsEnabled ? 1 : 0),
+      configuration: Value(notebook.configuration?.toJsonString()),
     );
     return await _db.into(_db.notebooks).insert(companion);
   }
@@ -142,6 +187,14 @@ class NotebookRepository {
         isArchived: Value(notebook.isArchived ? 1 : 0),
         isFavorite: Value(notebook.isFavorite ? 1 : 0),
         tags: Value(notebook.tags.join(',')),
+        origin: Value(notebook.origin),
+        participantsPreview: Value(jsonEncode({
+          'total': notebook.participantsTotal,
+          'list': notebook.participants.map((e) => e.toJson()).toList(),
+        })),
+        lastUpdatedByName: Value(notebook.lastUpdatedByName),
+        notificationsEnabled: Value(notebook.notificationsEnabled ? 1 : 0),
+        configuration: Value(notebook.configuration?.toJsonString()),
       ),
     );
 
@@ -188,30 +241,12 @@ class NotebookRepository {
           ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
         .get();
 
-    return rows.map((row) => Notebook(
-      id: row.id,
-      serverId: row.serverId,
-      clientId: row.clientId,
-      subjectId: row.subjectId,
-      title: row.title,
-      coverType: row.coverType,
-      color: row.color,
-      coverImage: row.coverImage,
-      templateType: row.templateType,
-      isPublished: row.isPublished,
-      price: row.price,
-      description: row.description,
-      authorName: row.authorName,
-      isDeleted: row.isDeleted,
-      syncedWithCloud: row.syncedWithCloud,
-      updatedAt: row.updatedAt,
-      role: row.role ?? 'owner',
-      alternativeTitle: row.alternativeTitle,
-      sharingType: row.sharingType ?? 'full',
-      tags: _parseTags(row.tags),
-      isArchived: row.isArchived == 1,
-      isFavorite: row.isFavorite == 1,
-    )).toList();
+    final List<Notebook> notebooks = [];
+    for (final row in rows) {
+      final pCount = await _getPageCount(row.id);
+      notebooks.add(_mapNotebook(row, pCount));
+    }
+    return notebooks;
   }
 
   Future<void> restoreNotebook(int id) async {
@@ -337,30 +372,12 @@ class NotebookRepository {
           ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
         .get();
 
-    return rows.map((row) => Notebook(
-      id: row.id,
-      serverId: row.serverId,
-      clientId: row.clientId,
-      subjectId: row.subjectId,
-      title: row.title,
-      coverType: row.coverType,
-      color: row.color,
-      coverImage: row.coverImage,
-      templateType: row.templateType,
-      isPublished: row.isPublished,
-      price: row.price,
-      description: row.description,
-      authorName: row.authorName,
-      isDeleted: row.isDeleted,
-      syncedWithCloud: row.syncedWithCloud,
-      updatedAt: row.updatedAt,
-      role: row.role ?? 'owner',
-      alternativeTitle: row.alternativeTitle,
-      sharingType: row.sharingType ?? 'full',
-      tags: _parseTags(row.tags),
-      isArchived: row.isArchived == 1,
-      isFavorite: row.isFavorite == 1,
-    )).toList();
+    final List<Notebook> notebooks = [];
+    for (final row in rows) {
+      final pCount = await _getPageCount(row.id);
+      notebooks.add(_mapNotebook(row, pCount));
+    }
+    return notebooks;
   }
 }
 

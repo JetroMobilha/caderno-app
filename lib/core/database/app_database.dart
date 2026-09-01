@@ -63,6 +63,11 @@ class Notebooks extends Table {
   TextColumn get tags => text().nullable()(); // 🚀 v20: Tags separadas por vírgula
   IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v20
   IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v20
+  TextColumn get origin => text().nullable()(); // 🚀 v24
+  TextColumn get participantsPreview => text().nullable()(); // 🚀 v24 (JSON)
+  TextColumn get lastUpdatedByName => text().nullable()(); // 🚀 v24
+  IntColumn get notificationsEnabled => integer().withDefault(const Constant(1))(); // 🚀 v24
+  TextColumn get configuration => text().nullable()(); // 🚀 v25 (JSON)
 }
 
 class Pages extends Table {
@@ -85,6 +90,7 @@ class Pages extends Table {
   TextColumn get lineType => text().nullable()();
   RealColumn get lineSpacing => real().nullable()();
   TextColumn get backgroundPdfPath => text().nullable()();
+  TextColumn get backgroundConfig => text().nullable()(); // 🚀 v25 (JSON)
 }
 
 class CanvasStrokes extends Table {
@@ -184,9 +190,32 @@ class LessonRecordings extends Table {
   IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
 }
 
+class NotebookTemplates extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  TextColumn get description => text().nullable()();
+  TextColumn get category => text().nullable()();
+  TextColumn get icon => text().nullable()();
+  TextColumn get cover => text().nullable()();
+  IntColumn get isSystem => integer().withDefault(const Constant(0))();
+  IntColumn get createdBy => integer().nullable()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+}
+
+class NotebookTemplateVersions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get templateId => integer().references(NotebookTemplates, #id, onDelete: KeyAction.cascade)();
+  IntColumn get version => integer()();
+  TextColumn get configuration => text()(); // JSON
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+}
+
 @DriftDatabase(tables: [
   Users, Subjects, Notebooks, Pages, CanvasStrokes,
-  CanvasTextBlocks, CanvasImageBlocks, NotebookUser, Payments, LessonRecordings
+  CanvasTextBlocks, CanvasImageBlocks, NotebookUser, Payments, LessonRecordings,
+  NotebookTemplates, NotebookTemplateVersions
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase._privateConstructor() : super(driftDatabase(
@@ -295,12 +324,24 @@ class AppDatabase extends _$AppDatabase {
           try { await m.addColumn(notebooks, notebooks.isArchived); } catch(_) {}
           try { await m.addColumn(notebooks, notebooks.isFavorite); } catch(_) {}
         }
+        if (from < 24) {
+          await m.addColumn(notebooks, notebooks.origin);
+          await m.addColumn(notebooks, notebooks.participantsPreview);
+          await m.addColumn(notebooks, notebooks.lastUpdatedByName);
+          await m.addColumn(notebooks, notebooks.notificationsEnabled);
+        }
+        if (from < 25) {
+          try { await m.addColumn(notebooks, notebooks.configuration); } catch(_) {}
+          try { await m.addColumn(pages, pages.backgroundConfig); } catch(_) {}
+          try { await m.createTable(notebookTemplates); } catch(_) {}
+          try { await m.createTable(notebookTemplateVersions); } catch(_) {}
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 25;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

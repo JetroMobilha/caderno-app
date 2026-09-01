@@ -379,6 +379,10 @@ class SyncService {
           alternativeTitle: Value(net['alternative_title']), sharingType: Value(net['sharing_type'] ?? 'full'),
           isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
           isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
+          origin: Value(net['origin']),
+          lastUpdatedByName: Value(net['last_updated_by_name']),
+          notificationsEnabled: Value((net['notifications_enabled'] == 1 || net['notifications_enabled'] == true) ? 1 : 0),
+          participantsPreview: Value(net['participants_preview'] != null ? jsonEncode(net['participants_preview']) : null),
         );
 
         final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
@@ -458,6 +462,10 @@ class SyncService {
                   alternativeTitle: Value(net['alternative_title']), sharingType: Value(net['sharing_type'] ?? 'full'),
                   isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
                   isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
+                  origin: Value(net['origin']),
+                  lastUpdatedByName: Value(net['last_updated_by_name']),
+                  notificationsEnabled: Value((net['notifications_enabled'] == 1 || net['notifications_enabled'] == true) ? 1 : 0),
+                  participantsPreview: Value(net['participants_preview'] != null ? jsonEncode(net['participants_preview']) : null),
                 );
 
                 final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
@@ -479,7 +487,11 @@ class SyncService {
                       NotebooksCompanion(
                         serverId: companion.serverId, subjectId: companion.subjectId, title: companion.title, coverType: companion.coverType, 
                         color: net['color'] != null ? Value(net['color']) : const Value.absent(),
-                        coverImage: companion.coverImage,templateType: companion.templateType, collaborationMode: companion.collaborationMode, isPublished: companion.isPublished, price: companion.price, description: companion.description, authorName: companion.authorName, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: companion.updatedAt, role: companion.role, alternativeTitle: companion.alternativeTitle, sharingType: companion.sharingType,
+                        coverImage: companion.coverImage,templateType: companion.templateType, collaborationMode: companion.collaborationMode, isPublished: companion.isPublished, price: companion.price, description: companion.description, authorName: companion.authorName, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: Value(serverTime), role: companion.role, alternativeTitle: companion.alternativeTitle, sharingType: companion.sharingType,
+                        origin: companion.origin,
+                        lastUpdatedByName: companion.lastUpdatedByName,
+                        notificationsEnabled: companion.notificationsEnabled,
+                        participantsPreview: companion.participantsPreview,
                       )
                     );
                   }

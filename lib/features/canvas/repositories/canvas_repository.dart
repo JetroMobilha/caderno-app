@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_service.dart';
-import '../../../core/network/time_service.dart'; // 🚀
+import '../../../core/network/time_service.dart';
+import '../../notebooks/models/notebook_configuration.dart';
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
@@ -98,6 +99,7 @@ class CanvasRepository {
       strokes: strokes,
       textBlocks: textBlocks,
       imageBlocks: imageBlocks,
+      backgroundConfig: pRow.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(pRow.backgroundConfig!)) : null,
       syncedWithCloud: pRow.syncedWithCloud,
       updatedAt: pRow.updatedAt,
     );
@@ -177,6 +179,7 @@ class CanvasRepository {
         strokes: strokes,
         textBlocks: textBlocks,
         imageBlocks: imageBlocks,
+        backgroundConfig: pRow.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(pRow.backgroundConfig!)) : null,
         syncedWithCloud: pRow.syncedWithCloud,
         updatedAt: pRow.updatedAt,
       ));
@@ -362,6 +365,7 @@ class CanvasRepository {
       isFrozen: Value((pageData['is_frozen'] == true || pageData['is_frozen'] == 1) ? 1 : 0),
       isFavorite: Value((pageData['is_favorite'] == true || pageData['is_favorite'] == 1) ? 1 : 0),
       isDeleted: Value((pageData['is_deleted'] == true || pageData['is_deleted'] == 1) ? 1 : 0),
+      backgroundConfig: Value(pageData['background_config'] != null ? jsonEncode(pageData['background_config']) : null),
       updatedAt: Value(_parseSafeInt(pageData['updated_at_ms']) ?? _parseSafeInt(pageData['updated_at']) ?? TimeService().nowMs()),
       syncedWithCloud: Value(isLocalEdit ? 0 : 1), // 🚀 CONTROLO DE SYNC
     );
@@ -475,13 +479,22 @@ class CanvasRepository {
 
   Future<void> markPageAsUnsynced(String pageClientId) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
-    if (page == null || page.syncedWithCloud == 0) return; // 🚀 Evitar loops: já está suja!
+    if (page == null) return;
 
+    final now = TimeService().nowMs();
     debugPrint('🚩 [CanvasRepo] Marcando página como SUJA: $pageClientId');
+    
     await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId)))
         .write(PagesCompanion(
           syncedWithCloud: const Value(0),
-          updatedAt: Value(TimeService().nowMs()),
+          updatedAt: Value(now),
+        ));
+
+    // 🚀 ATUALIZAÇÃO DO PAI: O caderno também mudou
+    await (_db.update(_db.notebooks)..where((t) => t.id.equals(page.notebookId)))
+        .write(NotebooksCompanion(
+          updatedAt: Value(now),
+          syncedWithCloud: const Value(0),
         ));
   }
 

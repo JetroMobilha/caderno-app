@@ -6,6 +6,7 @@ import 'package:caderno_digital_app/features/notebooks/repositories/notebook_rep
 import 'package:caderno_digital_app/features/notebooks/repositories/shared_notebook_repository.dart';
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
+import 'package:caderno_digital_app/features/notebooks/models/notebook_template.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'package:uuid/uuid.dart';
@@ -141,6 +142,36 @@ class NotebooksController extends Notifier<NotebooksState> {
 
   Future<int> addNotebook(Notebook notebook, int? subjectServerId) async {
     final int generatedId = await _repository.insertNotebook(notebook);
+    
+    // 🚀 AUTOMAÇÃO DE TEMPLATE: Criar a primeira folha baseada no template ou config
+    try {
+      final config = notebook.configuration ?? (() {
+        final templateType = NotebookTemplateType.values.firstWhere(
+          (e) => e.name == notebook.templateType,
+          orElse: () => NotebookTemplateType.blank,
+        );
+        return NotebookTemplateConfig.templates[templateType]!.config;
+      })();
+      
+      final firstPage = LocalPage(
+        notebookId: generatedId,
+        pageNumber: 1,
+        isLandscape: config.page.orientation == 'landscape',
+        paperSize: config.page.paperSize,
+        lineType: config.background.type == 'blank' ? null : config.background.type,
+        lineSpacing: config.background.spacing,
+        backgroundConfig: config.background, // 🚀 NOVO
+        title: config.header.enabled ? (config.header.fields.isNotEmpty ? config.header.fields.join(' / ') : '') : '',
+        footer: config.footer.enabled ? (config.footer.fields.isNotEmpty ? config.footer.fields.join(' / ') : '') : '',
+        updatedAt: TimeService().nowMs(),
+      );
+
+      await _canvasRepository.savePage(firstPage, notebook.serverId);
+      debugPrint('📄 [Notebooks] Primeira folha criada automaticamente (${config.background.type}/${config.background.subType})');
+    } catch (e) {
+      debugPrint('⚠️ [Notebooks] Falha ao criar folha inicial automática: $e');
+    }
+
     return generatedId;
   }
 

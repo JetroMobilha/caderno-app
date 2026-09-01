@@ -7,6 +7,7 @@ import 'package:caderno_digital_app/features/shared/widgets/app_drawer.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 import 'package:caderno_digital_app/features/trash/views/trash_screen.dart';
+import 'notebook_creation_screen.dart';
 import '../widgets/notebook_grid_item.dart';
 import '../widgets/notebook_dialogs.dart';
 import '../widgets/notebook_empty_states.dart';
@@ -86,7 +87,10 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
       floatingActionButton: activeSubject == null || showArchived
           ? null
           : FloatingActionButton(
-              onPressed: () => NotebookDialogs.showNotebookModal(context, ref, activeSubject, dynamicColor, isEditing: false),
+              onPressed: () => Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (context) => NotebookCreationScreen(activeSubject: activeSubject))
+              ),
               child: const Icon(Icons.add),
             ),
     );

@@ -4,6 +4,7 @@ import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'image_block_model.dart';
 import 'stroke_model.dart';
 import 'text_block_model.dart';
+import '../../notebooks/models/notebook_configuration.dart';
 
 class LocalPage {
   int? id;
@@ -26,6 +27,7 @@ class LocalPage {
   String? sectionColor; // 🚀 v20: Cor personalizada da secção
   String footer;
   String? extractedText;
+  BackgroundConfig? backgroundConfig; // 🚀 v25
 
   List<Stroke> strokes;
   List<TextBlock> textBlocks;
@@ -58,6 +60,7 @@ class LocalPage {
     this.extractedText,
     List<TextBlock>? textBlocks,
     List<ImageBlock>? imageBlocks,
+    this.backgroundConfig,
     this.syncedWithCloud = 0,
     int? updatedAt,
     this.version = 1,
@@ -90,6 +93,7 @@ class LocalPage {
     List<Stroke>? strokes,
     List<TextBlock>? textBlocks,
     List<ImageBlock>? imageBlocks,
+    BackgroundConfig? backgroundConfig,
     int? syncedWithCloud,
     int? updatedAt,
     int? version,
@@ -115,6 +119,7 @@ class LocalPage {
       strokes: strokes ?? List.from(this.strokes),
       textBlocks: textBlocks ?? List.from(this.textBlocks),
       imageBlocks: imageBlocks ?? List.from(this.imageBlocks),
+      backgroundConfig: backgroundConfig ?? this.backgroundConfig,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
@@ -143,6 +148,7 @@ class LocalPage {
       strokes: strokes.map((s) => s.clone(newPageNumber: newPageNumber ?? pageNumber)).toList(),
       textBlocks: textBlocks.map((t) => t.clone(newPageNumber: newPageNumber ?? pageNumber)).toList(),
       imageBlocks: imageBlocks.map((i) => i.clone(newPageNumber: newPageNumber ?? pageNumber)).toList(),
+      backgroundConfig: backgroundConfig != null ? BackgroundConfig.fromJson(backgroundConfig!.toJson()) : null,
       syncedWithCloud: 0,
       updatedAt: TimeService().nowMs(),
       version: 1,
@@ -186,6 +192,7 @@ class LocalPage {
       'stroke_data': strokes.map((s) => s.toJson()).toList(),
       'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': imageBlocks.map((img) => img.toJson()).toList(),
+      'background_config': backgroundConfig?.toJson(),
       'updated_at': updatedAt,
       'version': 1,
     };
@@ -213,6 +220,7 @@ class LocalPage {
       'stroke_data': strokes.map((s) => s.toJson()).toList(),
       'text_data': textBlocks.map((t) => t.toJson()).toList(),
       'image_data': asyncImages,
+      'background_config': backgroundConfig?.toJson(),
       'updated_at': updatedAt,
       'version': version,
     };
@@ -291,6 +299,7 @@ class LocalPage {
       strokes: strokesList.map((s) => Stroke.fromJson(s)).toList(),
       textBlocks: textList.map((t) => TextBlock.fromJson(t)).toList(),
       imageBlocks: imageList.map((img) => ImageBlock.fromJson(img)).toList(),
+      backgroundConfig: json['background_config'] != null ? BackgroundConfig.fromJson(json['background_config']) : null,
       syncedWithCloud: 1,
       updatedAt: upAt,
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,

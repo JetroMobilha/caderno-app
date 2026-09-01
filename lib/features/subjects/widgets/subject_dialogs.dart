@@ -5,6 +5,7 @@ import 'package:caderno_digital_app/core/theme/app_colors.dart';
 import 'package:caderno_digital_app/features/auth/models/user_model.dart';
 import 'package:caderno_digital_app/features/subjects/models/subject_model.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
+import '../../shared/widgets/color_engine_widget.dart';
 
 class SubjectDialogs {
   static void confirmDeleteSubject(BuildContext context, WidgetRef ref, Subject subject) {
@@ -150,30 +151,11 @@ class SubjectDialogs {
                           }).toList(),
                         ),
                         const SizedBox(height: 24),
-                        Text('Cor de Destaque (16 Tons)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                        Text('Cor de Destaque', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
                         const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: availableColors.map((hex) {
-                            final isSelected = pickedColorHex == hex;
-                            final colorValue = Color(int.parse(hex.replaceFirst('#', '0xFF')));
-                            return GestureDetector(
-                              onTap: () => setModalState(() => pickedColorHex = hex),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: isSelected ? 36 : 30,
-                                height: isSelected ? 36 : 30,
-                                decoration: BoxDecoration(
-                                  color: colorValue,
-                                  shape: BoxShape.circle,
-                                  border: isSelected ? Border.all(color: AppColors.paper, width: 2) : null,
-                                  boxShadow: isSelected ? [BoxShadow(color: colorValue.withOpacity(0.5), blurRadius: 8, offset: const Offset(0, 3))] : null,
-                                ),
-                                child: isSelected ? const Icon(Icons.check, size: 18, color: Colors.white) : null,
-                              ),
-                            );
-                          }).toList(),
+                        ColorEngineWidget(
+                          selectedColorHex: pickedColorHex,
+                          onColorSelected: (hex) => setModalState(() => pickedColorHex = hex),
                         ),
                       ],
                     ),

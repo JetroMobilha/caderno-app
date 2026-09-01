@@ -1,5 +1,44 @@
 import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
+import 'dart:convert';
+import 'notebook_configuration.dart';
+
+class ParticipantPreview {
+  final int id;
+  final String name;
+  final String? avatar;
+  final String role;
+
+  ParticipantPreview({
+    required this.id,
+    required this.name,
+    this.avatar,
+    required this.role,
+  });
+
+  String? get fullAvatarUrl {
+    if (avatar == null || avatar!.isEmpty) return null;
+    if (avatar!.startsWith('http')) return avatar;
+    // 🚀 Fallback para o domínio de dev se for relativo
+    return 'https://appcaderno.duckdns.org:9000/storage/$avatar';
+  }
+
+  factory ParticipantPreview.fromJson(Map<String, dynamic> json) {
+    return ParticipantPreview(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      avatar: json['avatar'] as String?,
+      role: json['role'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'avatar': avatar,
+    'role': role,
+  };
+}
 
 class Notebook {
   int? id;
@@ -32,6 +71,16 @@ class Notebook {
   final bool isArchived;
   final bool isFavorite;
 
+  // 🚀 v24: Metadados Detalhados
+  final String? origin;
+  final List<ParticipantPreview> participants;
+  final int participantsTotal;
+  final int onlineCount; // 🚀
+  final String? lastUpdatedByName;
+  final bool notificationsEnabled;
+  final int pageCount; // Mantido para UI (computado ou sync)
+  final NotebookConfiguration? configuration; // 🚀 v25
+
   Notebook({
     this.id,
     this.serverId,
@@ -41,7 +90,7 @@ class Notebook {
     required this.coverType,
     this.color,
     this.coverImage,
-    this.templateType = 'study',
+    this.templateType = 'blank',
     this.collaborationMode = 'study_group',
     this.isPublished = 0,
     this.price = 0.00,
@@ -57,6 +106,14 @@ class Notebook {
     this.tags = const [],
     this.isArchived = false,
     this.isFavorite = false,
+    this.origin,
+    this.participants = const [],
+    this.participantsTotal = 0,
+    this.onlineCount = 0,
+    this.lastUpdatedByName,
+    this.notificationsEnabled = true,
+    this.pageCount = 0,
+    this.configuration,
   }) : clientId = clientId ?? const Uuid().v4(),
        updatedAt = updatedAt ?? TimeService().nowMs();
 
@@ -88,6 +145,14 @@ class Notebook {
     List<String>? tags,
     bool? isArchived,
     bool? isFavorite,
+    String? origin,
+    int? pageCount,
+    List<ParticipantPreview>? participants,
+    int? participantsTotal,
+    int? onlineCount,
+    String? lastUpdatedByName,
+    bool? notificationsEnabled,
+    NotebookConfiguration? configuration,
   }) {
     return Notebook(
       id: id ?? this.id,
@@ -114,6 +179,14 @@ class Notebook {
       tags: tags ?? this.tags,
       isArchived: isArchived ?? this.isArchived,
       isFavorite: isFavorite ?? this.isFavorite,
+      origin: origin ?? this.origin,
+      pageCount: pageCount ?? this.pageCount,
+      participants: participants ?? this.participants,
+      participantsTotal: participantsTotal ?? this.participantsTotal,
+      onlineCount: onlineCount ?? this.onlineCount,
+      lastUpdatedByName: lastUpdatedByName ?? this.lastUpdatedByName,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      configuration: configuration ?? this.configuration,
     );
   }
 
@@ -146,14 +219,20 @@ class Notebook {
       'tags': tags, // 🚀 v20: Enviado como List (JSON Array no HTTP)
       'is_archived': isArchived ? 1 : 0, // 🚀 v20
       'is_favorite': isFavorite ? 1 : 0, // 🚀 v20
+      'origin': origin,
+      'participants_preview': {
+        'total': participantsTotal,
+        'list': participants.map((e) => e.toJson()).toList(),
+        'online_count': onlineCount,
+      },
+      'last_updated_by_name': lastUpdatedByName,
+      'notifications_enabled': notificationsEnabled ? 1 : 0,
+      'configuration': configuration?.toJson(),
     };
   }
 
   // Receber do Laravel (JSON)
   factory Notebook.fromJson(Map<String, dynamic> json) {
-    // 🛡️ CORREÇÃO DE COMPATIBILIDADE: 'lines' vindo do servidor -> 'ruled' no Flutter
-    String lineType = json['line_type'] ?? 'ruled';
-    if (lineType == 'lines') lineType = 'ruled';
 
     int? upAt;
     if (json['updated_at_ms'] != null) {
@@ -165,6 +244,19 @@ class Notebook {
       } else if (val is String) {
         upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
       }
+    }
+
+    final preview = json['participants_preview'];
+    List<ParticipantPreview> parts = [];
+    int totalParts = 0;
+    int oCount = 0;
+    
+    if (preview != null && preview is Map) {
+       totalParts = int.tryParse(preview['total']?.toString() ?? '0') ?? 0;
+       oCount = int.tryParse(preview['online_count']?.toString() ?? '0') ?? 0;
+       if (preview['list'] is List) {
+         parts = (preview['list'] as List).map((e) => ParticipantPreview.fromJson(e)).toList();
+       }
     }
 
     return Notebook(
@@ -191,6 +283,13 @@ class Notebook {
       tags: parseTags(json['tags']),
       isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
       isFavorite: json['is_favorite'] == 1 || json['is_favorite'] == true,
+      origin: json['origin'],
+      participants: parts,
+      participantsTotal: totalParts,
+      onlineCount: oCount,
+      lastUpdatedByName: json['last_updated_by_name'],
+      notificationsEnabled: json['notifications_enabled'] == 1 || json['notifications_enabled'] == true || json['notifications_enabled'] == null,
+      configuration: json['configuration'] != null ? NotebookConfiguration.fromJson(json['configuration'] is String ? jsonDecode(json['configuration']) : json['configuration']) : null,
     );
   }
 
@@ -229,6 +328,13 @@ class Notebook {
       tags: List.from(tags),
       isArchived: false,
       isFavorite: false,
+      origin: origin ?? 'Cópia Local',
+      pageCount: pageCount,
+      participants: const [],
+      participantsTotal: 1, // Apenas eu
+      lastUpdatedByName: null,
+      notificationsEnabled: true,
+      configuration: configuration != null ? NotebookConfiguration.fromJson(configuration!.toJson()) : null,
     );
   }
 }

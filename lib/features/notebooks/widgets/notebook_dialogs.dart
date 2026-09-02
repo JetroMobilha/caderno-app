@@ -32,6 +32,7 @@ class NotebookDialogs {
       builder: (contextDialog) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: Theme.of(context).colorScheme.surface,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24), // 🚀 Preencher mais horizontal em mobile
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Row(
             children: [
@@ -129,9 +130,36 @@ class NotebookDialogs {
                       style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)
                     ),
                     const SizedBox(height: 12),
-                    ColorEngineWidget(
-                      selectedColorHex: pickedColorHex,
-                      onColorSelected: (hex) => setModalState(() => pickedColorHex = hex),
+                    InkWell(
+                      onTap: () async {
+                        final newColor = await ColorEngine.show(
+                          context, 
+                          initialColor: pickedColorHex,
+                          title: 'Cor da Capa',
+                          showNotebookPreview: true,
+                        );
+                        if (newColor != null) {
+                          setModalState(() => pickedColorHex = newColor);
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.black.withOpacity(0.05)),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(backgroundColor: Color(int.parse(pickedColorHex.replaceFirst('#', '0xFF'))), radius: 12),
+                            const SizedBox(width: 12),
+                            Text('Alterar Cor...', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: const Color(0xFF0F4C5C))),
+                            const Spacer(),
+                            const Icon(Icons.palette_outlined, size: 20, color: Color(0xFF0F4C5C)),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -227,52 +255,59 @@ class NotebookDialogs {
         color: Colors.black.withOpacity(0.02),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Center( // Centralizar a grelha
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center, // Garantir equilíbrio
-          children: NotebookTemplateConfig.templates.entries.map((entry) {
-            final type = entry.key;
-            final config = entry.value;
-            final isSelected = selectedTemplate == type.name;
-            
-            return GestureDetector(
-              onTap: () => onSelect(type.name, '#${config.suggestedColor.value.toRadixString(16).substring(2).toUpperCase()}'),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 105, // 🚀 Ajustado para caber 3 colunas em ~350-400px
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-                decoration: BoxDecoration(
-                  color: isSelected ? config.suggestedColor.withOpacity(0.1) : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected ? config.suggestedColor : Colors.black.withOpacity(0.05), 
-                    width: isSelected ? 2 : 1
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 🚀 GRELHA DE 3 COLUNAS FIXA
+          final double itemWidth = (constraints.maxWidth - (8 * 2)) / 3;
+
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: NotebookTemplateConfig.templates.entries.map((entry) {
+              final type = entry.key;
+              final config = entry.value;
+              final isSelected = selectedTemplate == type.name;
+              
+              return GestureDetector(
+                onTap: () => onSelect(type.name, '#${config.suggestedColor.value.toRadixString(16).substring(2).toUpperCase()}'),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: itemWidth, 
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: isSelected ? config.suggestedColor.withOpacity(0.1) : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isSelected ? config.suggestedColor : Colors.black.withOpacity(0.05), 
+                      width: isSelected ? 2 : 1
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(config.icon, 
+                        color: isSelected ? config.suggestedColor : Colors.grey, 
+                        size: 22
+                      ),
+                      const SizedBox(height: 8),
+                      Text(config.label, 
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 9, 
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, 
+                          color: isSelected ? config.suggestedColor : Colors.black87
+                        )
+                      ),
+                    ],
                   ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(config.icon, 
-                      color: isSelected ? config.suggestedColor : Colors.grey, 
-                      size: 22
-                    ),
-                    const SizedBox(height: 8),
-                    Text(config.label, 
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        fontSize: 10, 
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, 
-                        color: isSelected ? config.suggestedColor : Colors.black87
-                      )
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
+              );
+            }).toList(),
+          );
+        }
       ),
     );
   }

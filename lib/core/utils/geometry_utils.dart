@@ -10,6 +10,20 @@ class GeometryUtils {
 
   static Size getPaperSize(String key) => paperSizes[key] ?? paperSizes['A4']!;
 
+  /// 🚀 Retorna o nível de hierarquia do papel (0 é superior/infinito, 6 é o menor)
+  static int getPaperLevel(String size, {bool isInfinite = false}) {
+    if (isInfinite) return 0;
+    switch (size) {
+      case 'A0': return 1;
+      case 'A1': return 2;
+      case 'A2': return 3;
+      case 'A3': return 4;
+      case 'A4': return 5;
+      case 'A5': return 6;
+      default: return 5; // A4 default
+    }
+  }
+
   /// Simplifica uma lista de pontos usando o algoritmo de Ramer-Douglas-Peucker.
   /// [epsilon] é a tolerância de distância. Valores maiores simplificam mais.
   static List<Offset> simplifyPoints(List<Offset> points, {double epsilon = 1.0}) {

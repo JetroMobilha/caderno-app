@@ -1,0 +1,24 @@
+# Task: Evolução da Estrutura de Página
+
+- `[x]` Criar classe base `PageObject`
+- `[x]` Refatorar `Stroke` para estender `PageObject` (incluindo metadados de sync)
+- `[x]` Refatorar `TextBlock` para estender `PageObject` (incluindo metadados de sync)
+- `[x]` Refatorar `ImageBlock` para estender `PageObject` (incluindo metadados de sync)
+- `[x]` Atualizar `LocalPage` para suportar lista unificada de objetos
+- `[x]` Implementar migração/compatibilidade de dados em `LocalPage.fromJson`
+- `[x]` Atualizar `CanvasAction` para ações genéricas
+- `[x]` Criar `ObjectRenderer` e atualizar View do Canvas
+- `[x]` Implementar Ferramenta de Seleção Universal
+- `[x]` Adicionar suporte a dimensões físicas (A5-A0) e orientação
+- `[x]` Expandir `BackgroundConfig` com propriedades dinâmicas
+- `[x]` Implementar Configuração de Página em Tempo Real
+    - `[x]` Adicionar `updatePageSettings` em `CanvasDocumentNotifier`
+    - `[x]` Criar `PageSettingsDialog`
+    - `[x]` Integrar em `CanvasPageDrawer`
+- `[x]` Implementar Restrições de Layout e Melhorias na UI
+    - `[x]` Adicionar lógica de nível de papel em `GeometryUtils`
+    - `[x]` Adicionar `hasData` em `LocalPage`
+    - `[x]` Integrar `BackgroundSelectorSheet` no `AddPageDialog`
+    - `[x]` Implementar aviso de confirmação para redução de tamanho (se houver dados)
+    - `[x]` Implementar aviso de confirmação para mudança de orientação (se houver dados)
+    - `[x]` Remover restrições de tamanho na criação de novas páginas

@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/notebook_configuration.dart';
 import 'background_selector_sheet.dart';
+import '../../canvas/models/local_page_model.dart'; 
+import '../../../core/utils/geometry_utils.dart'; 
 
 class PageConfigurationForm extends StatefulWidget {
   final NotebookConfiguration config;
   final Function(NotebookConfiguration) onChanged;
+  final LocalPage? page; 
+  final int? minPaperLevel; 
 
   const PageConfigurationForm({
     super.key,
     required this.config,
     required this.onChanged,
+    this.page,
+    this.minPaperLevel,
   });
 
   @override
@@ -19,7 +25,7 @@ class PageConfigurationForm extends StatefulWidget {
 
 class _PageConfigurationFormState extends State<PageConfigurationForm> {
   int? _openSectionIndex = 0; 
-  final Map<int, ExpansionTileController> _controllers = {}; // 🚀 CONTROLO PRECISO
+  final Map<int, ExpansionTileController> _controllers = {}; 
 
   final List<String> _masterFields = [
     'Disciplina', 'Professor', 'Aluno', 'Turma', 'Data', 'Tema', 
@@ -29,136 +35,145 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView( // 🚀 Corrigir overflow
-      child: Column(
-        children: [
-          _buildSection(
-            index: 0,
-            title: 'Papel e Formato',
-            icon: Icons.description_outlined,
-            children: [
-              const SizedBox(height: 16), // 🚀 Espaço aumentado entre título e input
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildSection(
+          index: 0,
+          title: 'Papel e Formato',
+          icon: Icons.description_outlined,
+          children: [
+            const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Página Infinita', style: TextStyle(fontSize: 14)),
+              subtitle: const Text('Espaço de trabalho ilimitado', style: TextStyle(fontSize: 12)),
+              value: widget.config.page.isInfinite,
+              onChanged: (val) => _updateInfiniteMode(val),
+            ),
+            if (!widget.config.page.isInfinite) ...[
+              const SizedBox(height: 16),
               _buildPaperSizeSelector(),
               const SizedBox(height: 24),
               _buildOrientationSelector(),
-              const SizedBox(height: 8),
             ],
-          ),
-          _buildSection(
-            index: 1,
-            title: 'Estilo de Fundo',
-            icon: Icons.palette_outlined,
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('Fundo Atual', style: GoogleFonts.inter(fontSize: 14)),
-                  subtitle: Text(widget.config.background.subType ?? widget.config.background.type, style: const TextStyle(fontSize: 12)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _showBackgroundSelector(context),
-                ),
-              ),
-            ],
-          ),
-          _buildSection(
-            index: 2,
-            title: 'Margens (mm)',
-            icon: Icons.square_foot_rounded,
-            children: [
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: _buildMarginInput('Topo', widget.config.margins.top, (v) => _updateMargins(top: v))),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildMarginInput('Base', widget.config.margins.bottom, (v) => _updateMargins(bottom: v))),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(child: _buildMarginInput('Esquerda', widget.config.margins.left, (v) => _updateMargins(left: v))),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildMarginInput('Direita', widget.config.margins.right, (v) => _updateMargins(right: v))),
-                ],
-              ),
-            ],
-          ),
-          _buildSection(
-            index: 3,
-            title: 'Cabeçalho e Rodapé',
-            icon: Icons.vertical_align_top_rounded,
-            children: [
-              _buildHeaderFooterToggle(true),
-              if (widget.config.header.enabled) ...[
-                const Divider(),
-                _buildFieldPicker(true),
-              ],
-              const SizedBox(height: 16),
-              _buildHeaderFooterToggle(false),
-              if (widget.config.footer.enabled) ...[
-                const Divider(),
-                _buildFieldPicker(false),
-              ],
-            ],
-          ),
-          _buildSection(
-            index: 4,
-            title: 'Numeração',
-            icon: Icons.format_list_numbered_rounded,
-            children: [
-               SwitchListTile(
+            const SizedBox(height: 8),
+          ],
+        ),
+        _buildSection(
+          index: 1,
+          title: 'Estilo de Fundo',
+          icon: Icons.palette_outlined,
+          children: [
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Ativar Numeração', style: TextStyle(fontSize: 14)),
-                value: widget.config.numbering.enabled,
-                onChanged: (val) => _updateNumbering(enabled: val),
+                title: Text('Fundo Atual', style: GoogleFonts.inter(fontSize: 14)),
+                subtitle: Text(widget.config.background.subType ?? widget.config.background.type, style: const TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showBackgroundSelector(context),
               ),
-              if (widget.config.numbering.enabled) ...[
-                const SizedBox(height: 8),
-                _buildNumberingFormatSelector(),
+            ),
+          ],
+        ),
+        _buildSection(
+          index: 2,
+          title: 'Margens (mm)',
+          icon: Icons.square_foot_rounded,
+          children: [
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _buildMarginInput('Topo', widget.config.margins.top, (v) => _updateMargins(top: v))),
+                const SizedBox(width: 12),
+                Expanded(child: _buildMarginInput('Base', widget.config.margins.bottom, (v) => _updateMargins(bottom: v))),
               ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildMarginInput('Esquerda', widget.config.margins.left, (v) => _updateMargins(left: v))),
+                const SizedBox(width: 12),
+                Expanded(child: _buildMarginInput('Direita', widget.config.margins.right, (v) => _updateMargins(right: v))),
+              ],
+            ),
+          ],
+        ),
+        _buildSection(
+          index: 3,
+          title: 'Cabeçalho e Rodapé',
+          icon: Icons.vertical_align_top_rounded,
+          children: [
+            _buildHeaderFooterToggle(true),
+            if (widget.config.header.enabled) ...[
+              const Divider(),
+              _buildFieldPicker(true),
             ],
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
+            const SizedBox(height: 16),
+            _buildHeaderFooterToggle(false),
+            if (widget.config.footer.enabled) ...[
+              const Divider(),
+              _buildFieldPicker(false),
+            ],
+          ],
+        ),
+        _buildSection(
+          index: 4,
+          title: 'Numeração',
+          icon: Icons.format_list_numbered_rounded,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Ativar Numeração', style: TextStyle(fontSize: 14)),
+              value: widget.config.numbering.enabled,
+              onChanged: (val) => _updateNumbering(enabled: val),
+            ),
+            if (widget.config.numbering.enabled) ...[
+              const SizedBox(height: 8),
+              _buildNumberingFormatSelector(),
+            ],
+          ],
+        ),
+        const SizedBox(height: 20),
+      ],
     );
   }
 
   Widget _buildSection({required int index, required String title, required IconData icon, required List<Widget> children}) {
     final controller = _controllers.putIfAbsent(index, () => ExpansionTileController());
+    final bool isOpen = _openSectionIndex == index;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.05)),
-        boxShadow: [
-          if (_openSectionIndex == index)
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4)),
-        ],
-      ),
       child: Material(
-        color: Colors.transparent,
+        color: Colors.white,
+        elevation: isOpen ? 2 : 0,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isOpen ? const Color(0xFF0F4C5C).withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05),
+            width: isOpen ? 1.5 : 1,
+          ),
+        ),
         child: ExpansionTile(
           controller: controller,
-          initiallyExpanded: _openSectionIndex == index,
+          initiallyExpanded: isOpen,
           leading: Icon(icon, 
-            color: _openSectionIndex == index ? const Color(0xFF0F4C5C) : Colors.black38, 
+            color: isOpen ? const Color(0xFF0F4C5C) : Colors.black38, 
             size: 22
           ),
           title: Text(title, 
             style: GoogleFonts.inter(
-              fontWeight: _openSectionIndex == index ? FontWeight.bold : FontWeight.w600, 
+              fontWeight: isOpen ? FontWeight.bold : FontWeight.w600, 
               fontSize: 14,
-              color: _openSectionIndex == index ? const Color(0xFF0F4C5C) : Colors.black87,
+              color: isOpen ? const Color(0xFF0F4C5C) : Colors.black87,
             )
           ),
           onExpansionChanged: (isExpanded) {
             if (isExpanded) {
               setState(() => _openSectionIndex = index);
-              // Fechar todos os outros manualmente
               _controllers.forEach((idx, ctrl) {
                 if (idx != index) ctrl.collapse();
               });
@@ -168,7 +183,7 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
           },
           shape: const RoundedRectangleBorder(side: BorderSide.none),
           collapsedShape: const RoundedRectangleBorder(side: BorderSide.none),
-          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20), // 🚀 Padding interno aumentado
+          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           expandedCrossAxisAlignment: CrossAxisAlignment.start,
           children: children,
         ),
@@ -185,24 +200,86 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
       ),
-      items: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-      onChanged: (val) {
-        if (val == null) return;
-        double w = 210, h = 297;
-        switch (val) {
-          case 'A0': w = 841; h = 1189; break;
-          case 'A1': w = 594; h = 841; break;
-          case 'A2': w = 420; h = 594; break;
-          case 'A3': w = 297; h = 420; break;
-          case 'A4': w = 210; h = 297; break;
-          case 'A5': w = 148; h = 210; break;
-        }
-        if (widget.config.page.orientation == 'landscape') {
-          final temp = w; w = h; h = temp;
-        }
-        widget.onChanged(widget.config.copyWith(page: PageConfig(width: w, height: h, orientation: widget.config.page.orientation)));
-      },
+      items: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((s) {
+        return DropdownMenuItem(
+          value: s, 
+          child: Text(s),
+        );
+      }).toList(),
+      onChanged: (val) => _handlePaperSizeChange(val),
     );
+  }
+
+  void _handlePaperSizeChange(String? val) async {
+    if (val == null) return;
+    
+    if (widget.page != null && widget.page!.hasData) {
+      final int currentLevel = GeometryUtils.getPaperLevel(widget.page!.paperSize, isInfinite: widget.page!.isInfinite);
+      final int newLevel = GeometryUtils.getPaperLevel(val);
+      
+      if (newLevel > currentLevel) {
+        final bool? confirm = await _showDataLossWarning('Mudar Tamanho?', 'Reduzir o tamanho da folha pode cortar ou ocultar o conteúdo existente.');
+        if (confirm != true) return;
+      }
+    }
+
+    double w = 210, h = 297;
+    switch (val) {
+      case 'A0': w = 841; h = 1189; break;
+      case 'A1': w = 594; h = 841; break;
+      case 'A2': w = 420; h = 594; break;
+      case 'A3': w = 297; h = 420; break;
+      case 'A4': w = 210; h = 297; break;
+      case 'A5': w = 148; h = 210; break;
+    }
+    if (widget.config.page.orientation == 'landscape') {
+      final temp = w; w = h; h = temp;
+    }
+    widget.onChanged(widget.config.copyWith(page: PageConfig(
+      width: w, 
+      height: h, 
+      orientation: widget.config.page.orientation,
+      paperSize: val,
+      isInfinite: false,
+    )));
+  }
+
+  Future<bool?> _showDataLossWarning(String title, String content) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCELAR')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true), 
+            child: const Text('CONFIRMAR', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateOrientation(String orientation) async {
+    if (widget.config.page.orientation == orientation) return;
+    
+    if (widget.page != null && widget.page!.hasData) {
+      final bool? confirm = await _showDataLossWarning('Mudar Orientação?', 'Alterar a orientação da folha pode desposicionar o conteúdo existente.');
+      if (confirm != true) return;
+    }
+
+    // Calcular novas dimensões baseadas na troca
+    final double newWidth = widget.config.page.height;
+    final double newHeight = widget.config.page.width;
+
+    widget.onChanged(widget.config.copyWith(page: PageConfig(
+      width: newWidth, 
+      height: newHeight, 
+      orientation: orientation,
+      isInfinite: widget.config.page.isInfinite,
+      paperSize: widget.config.page.paperSize,
+    )));
   }
 
   Widget _buildOrientationSelector() {
@@ -238,7 +315,7 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.1) : Colors.transparent,
+            color: isSelected ? const Color(0xFF0F4C5C).withValues(alpha: 0.1) : Colors.transparent,
             border: Border.all(
               color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12,
               width: isSelected ? 1.5 : 1,
@@ -292,7 +369,7 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: Colors.black.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -310,7 +387,11 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
               return InkWell(
                 onTap: () {
                    final List<String> newFields = List.from(hf.fields);
-                   if (isSelected) newFields.remove(field); else newFields.add(field);
+                   if (isSelected) {
+                     newFields.remove(field);
+                   } else {
+                     newFields.add(field);
+                   }
                    _updateHeaderFooter(isHeader: isHeader, fields: newFields);
                 },
                 borderRadius: BorderRadius.circular(12),
@@ -349,9 +430,16 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
     );
   }
 
-  void _updateOrientation(String orientation) {
-    if (widget.config.page.orientation == orientation) return;
-    widget.onChanged(widget.config.copyWith(page: PageConfig(width: widget.config.page.height, height: widget.config.page.width, orientation: orientation)));
+  void _updateInfiniteMode(bool isInfinite) {
+    widget.onChanged(widget.config.copyWith(
+      page: PageConfig(
+        width: isInfinite ? 5000 : 210,
+        height: isInfinite ? 5000 : 297,
+        orientation: widget.config.page.orientation,
+        isInfinite: isInfinite,
+        paperSize: widget.config.page.paperSize,
+      ),
+    ));
   }
 
   void _updateMargins({double? top, double? bottom, double? left, double? right}) {
@@ -384,15 +472,31 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
       'roman': 'Romano (I)',
     };
 
+    String? currentFormat;
+    final String target = widget.config.numbering.format.toString();
+    
+    for (var key in formats.keys) {
+      if (key == target) {
+        currentFormat = key;
+        break;
+      }
+    }
+    
+    currentFormat ??= 'numeric';
+
     return DropdownButtonFormField<String>(
-      value: widget.config.numbering.format,
+      value: currentFormat,
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Formato da Numeração', 
         isDense: true, 
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))
       ),
       items: formats.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-      onChanged: (val) => _updateNumbering(format: val),
+      onChanged: (val) {
+        if (val != null) _updateNumbering(format: val);
+      },
     );
   }
 

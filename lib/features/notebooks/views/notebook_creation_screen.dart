@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../shared/widgets/color_engine_widget.dart';
 import '../models/notebook_model.dart';
 import '../models/notebook_template.dart';
 import '../models/notebook_configuration.dart';
@@ -93,9 +94,13 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
         leading: IconButton(
           icon: Icon(_currentStep == 0 ? Icons.close : Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () {
-            if (_currentStep == 0) Navigator.pop(context);
-            else if (_currentStep == lastStepIdx && !_isCustomizing) setState(() => _currentStep = 1);
-            else setState(() => _currentStep--);
+            if (_currentStep == 0) {
+              Navigator.pop(context);
+            } else if (_currentStep == lastStepIdx && !_isCustomizing) {
+              setState(() => _currentStep = 1);
+            } else {
+              setState(() => _currentStep--);
+            }
           },
         ),
         actions: [
@@ -300,93 +305,35 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isWide = screenWidth > 900;
     
-    final Map<String, List<NotebookTemplateType>> categorizedTemplates = {
-      'Geral': [NotebookTemplateType.blank],
-      'Educação': [NotebookTemplateType.school, NotebookTemplateType.university, NotebookTemplateType.study],
-      'Técnico': [NotebookTemplateType.engineering, NotebookTemplateType.accounting, NotebookTemplateType.laboratory],
-      'Criativo': [NotebookTemplateType.drawing, NotebookTemplateType.music],
-      'Gestão': [NotebookTemplateType.planner, NotebookTemplateType.project, NotebookTemplateType.meeting],
-      'Pessoal': [NotebookTemplateType.diary],
-    };
-
-    return ListView.builder(
-      padding: EdgeInsets.all(isWide ? 32 : 16),
-      itemCount: categorizedTemplates.length + 1, // +1 for 'Personalizado'
-      itemBuilder: (context, index) {
-        if (index == categorizedTemplates.length) {
-          return _buildCustomTemplateSection();
-        }
-
-        final category = categorizedTemplates.keys.elementAt(index);
-        final types = categorizedTemplates[category]!;
-        
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: Text(
-                category.toUpperCase(),
-                style: GoogleFonts.inter(
-                  fontSize: 12, 
-                  fontWeight: FontWeight.bold, 
-                  color: Colors.black38,
-                  letterSpacing: 1.2
-                ),
-              ),
-            ),
-            _buildTemplateGrid(types),
-            const SizedBox(height: 16),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTemplateGrid(List<NotebookTemplateType> types) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    int crossAxisCount = 2;
-    if (screenWidth > 1200) crossAxisCount = 5;
-    else if (screenWidth > 800) crossAxisCount = 4;
-    else if (screenWidth > 500) crossAxisCount = 3;
+    // 🚀 GRELHA DINÂMICA E DENSA
+    int crossAxisCount = 2; // 🚀 Mínimo 3 colunas conforme solicitado
+    if (screenWidth > 1200) {
+      crossAxisCount = 6;
+    } else if (screenWidth > 800) {
+      crossAxisCount = 5;
+    }
+    else if (screenWidth > 600) {
+      crossAxisCount = 4;
+    }
+    else if (screenWidth > 400) {
+      crossAxisCount = 3;
+    }
 
     return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.all(isWide ? 32 : 16),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 1.1,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.88, // 🚀 Ajustado para evitar overflow em conteúdos longos
       ),
-      itemCount: types.length,
-      itemBuilder: (context, idx) {
-        final type = types[idx];
+      itemCount: NotebookTemplateType.values.length,
+      itemBuilder: (context, index) {
+        final type = NotebookTemplateType.values[index];
         final template = NotebookTemplateConfig.templates[type]!;
         return _buildTemplateCard(type, template);
       },
     );
-  }
-
-  Widget _buildCustomTemplateSection() {
-     return Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         const Divider(height: 64),
-         Text(
-           'OUTROS',
-           style: GoogleFonts.inter(
-             fontSize: 12, 
-             fontWeight: FontWeight.bold, 
-             color: Colors.black38,
-             letterSpacing: 1.2
-           ),
-         ),
-         const SizedBox(height: 16),
-         _buildTemplateGrid([NotebookTemplateType.custom]),
-         const SizedBox(height: 64),
-       ],
-     );
   }
 
   Widget _buildTemplateCard(NotebookTemplateType type, NotebookTemplateConfig template) {
@@ -417,6 +364,7 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
               Text(
                 template.label, 
                 textAlign: TextAlign.center,
+                  maxLines:1,
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.bold, 
                   fontSize: isDesktop ? 13 : 14
@@ -427,7 +375,7 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
                 Text(
                   template.description, 
                   textAlign: TextAlign.center,
-                  maxLines: 2,
+                  maxLines:2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(fontSize: 10, color: Colors.black38),
                 ),
@@ -458,17 +406,21 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
           flex: 2,
           child: Container(
             color: Colors.white,
-            child: Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 500),
-                child: PageConfigurationForm( // 🚀 NOVO: Form Reutilizável
-                  config: _currentConfig,
-                  onChanged: (newConfig) {
-                    setState(() {
-                      _currentConfig = newConfig;
-                      _lastCustomBackground = newConfig.background; // 🚀 Guardar na memória
-                    });
-                  },
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: PageConfigurationForm( 
+                    config: _currentConfig,
+                    onChanged: (newConfig) {
+                      setState(() {
+                        _currentConfig = newConfig;
+                        _lastCustomBackground = newConfig.background; 
+                      });
+                    },
+                  ),
                 ),
               ),
             ),
@@ -586,66 +538,9 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
     );
   }
 
-  Widget _buildOptionsList() {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        Text('Configurações da Página', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18)),
-        const SizedBox(height: 24),
-        _buildOptionHeader('Tamanho e Orientação'),
-        _buildPaperSizeSelector(),
-        const SizedBox(height: 16),
-        _buildOrientationSelector(),
-        const Divider(height: 40),
-        _buildOptionHeader('Fundo e Linhas'),
-        Material(
-          color: Colors.transparent,
-          child: _buildBackgroundTypeSelector(),
-        ),
-        const Divider(height: 40),
-        _buildOptionHeader('Cabeçalho e Rodapé'),
-        Material(
-          color: Colors.transparent,
-          child: Column(
-            children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Cabeçalho'),
-                value: _currentConfig.header.enabled,
-                onChanged: (val) => _updateHeaderFooter(true, enabled: val),
-              ),
-              if (_currentConfig.header.enabled)
-                _buildFieldSelector(true),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Rodapé'),
-                value: _currentConfig.footer.enabled,
-                onChanged: (val) => _updateHeaderFooter(false, enabled: val),
-              ),
-              if (_currentConfig.footer.enabled)
-                _buildFieldSelector(false),
-            ],
-          ),
-        ),
-        const Divider(height: 40),
-        _buildOptionHeader('Numeração'),
-        Material(
-          color: Colors.transparent,
-          child: SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Numeração de Páginas'),
-            value: _currentConfig.numbering.enabled,
-            onChanged: (val) => _updateNumbering(enabled: val),
-          ),
-        ),
-        const SizedBox(height: 100),
-      ],
-    );
-  }
-
   Widget _buildMetadata() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(24),
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 600),
@@ -655,31 +550,125 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
               Text('Quase lá!', style: GoogleFonts.lora(fontSize: 28, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('Dê um nome e uma identidade ao seu novo caderno.', style: GoogleFonts.inter(color: Colors.black54)),
-              const SizedBox(height: 40),
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Título do Caderno',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.book_outlined),
-                ),
+              const SizedBox(height: 32),
+              
+              // 🚀 SECÇÃO 1: IDENTIDADE
+              _buildMetadataSection(
+                title: 'Identidade do Caderno',
+                icon: Icons.badge_outlined,
+                children: [
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _titleController,
+                    decoration: InputDecoration(
+                      labelText: 'Título do Caderno',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.book_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _descriptionController,
+                    maxLines: 6,
+                    decoration: InputDecoration(
+                      labelText: 'Descrição (Opcional)',
+                      alignLabelWithHint: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.description_outlined),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _descriptionController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Descrição (Opcional)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.description_outlined),
-                ),
+
+              // 🚀 SECÇÃO 2: APARÊNCIA
+              _buildMetadataSection(
+                title: 'Aparência da Capa',
+                icon: Icons.palette_outlined,
+                children: [
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: () async {
+                      final newColor = await ColorEngine.show(
+                        context, 
+                        initialColor: _selectedColorHex,
+                        title: 'Cor da Capa',
+                        showNotebookPreview: true,
+                      );
+                      if (newColor != null) {
+                        setState(() => _selectedColorHex = newColor);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.black.withOpacity(0.08)),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Color(int.parse(_selectedColorHex.replaceFirst('#', '0xFF'))),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                            ),
+                            child: const Icon(Icons.palette_outlined, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Escolher Tom', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+                              Text(_selectedColorHex.toUpperCase(), style: GoogleFonts.inter(fontSize: 12, color: Colors.black38)),
+                            ],
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.chevron_right_rounded, color: Colors.black26),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 40),
-              Text('Cor da Capa', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              _buildColorPicker(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetadataSection({required String title, required IconData icon, required List<Widget> children}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+           BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: const Color(0xFF0F4C5C), size: 22),
+                const SizedBox(width: 12),
+                Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15, color: const Color(0xFF0F4C5C))),
+              ],
+            ),
+            ...children,
+          ],
         ),
       ),
     );
@@ -804,7 +793,13 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
 
       setState(() {
         _currentConfig = NotebookConfiguration(
-          page: PageConfig(width: w, height: h, unit: 'mm', orientation: _currentConfig.page.orientation),
+          page: PageConfig(
+            width: w, 
+            height: h, 
+            unit: 'mm', 
+            orientation: _currentConfig.page.orientation,
+            paperSize: val,
+          ),
           background: _currentConfig.background,
           margins: _currentConfig.margins,
           header: _currentConfig.header,
@@ -854,25 +849,6 @@ class _NotebookCreationScreenState extends ConsumerState<NotebookCreationScreen>
       subtitle: Text(_currentConfig.background.subType ?? _currentConfig.background.type),
       trailing: const Icon(Icons.chevron_right),
       onTap: _showBackgroundSelector,
-    );
-  }
-
-  Widget _buildColorPicker() {
-    final List<String> availableColors = [
-      '#8B0000', '#0F4C5C', '#1F4E79', '#3F51B5',
-      '#6C3483', '#9B59B6', '#D81B60', '#E91E63',
-      '#E67E22', '#D35400', '#F1C40F', '#1E8449',
-    ];
-    return Wrap(
-      spacing: 12, runSpacing: 12,
-      children: availableColors.map((hex) => GestureDetector(
-        onTap: () => setState(() => _selectedColorHex = hex),
-        child: CircleAvatar(
-          backgroundColor: Color(int.parse(hex.replaceFirst('#', '0xFF'))),
-          radius: 20,
-          child: _selectedColorHex == hex ? const Icon(Icons.check, color: Colors.white) : null,
-        ),
-      )).toList(),
     );
   }
 

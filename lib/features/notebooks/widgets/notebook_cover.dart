@@ -151,13 +151,36 @@ class _NotebookCoverState extends ConsumerState<NotebookCover> with SingleTicker
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.book_rounded, color: Colors.white, size: 18),
+                          Icon(
+                            isPublished ? Icons.storefront_rounded : Icons.book_rounded, 
+                            color: isPublished ? Colors.white : Colors.white, 
+                            size: 18
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              widget.notebook.alternativeTitle ?? widget.notebook.title,
-                              maxLines: 2, overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.lora(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, height: 1.1),
+                            child: RichText(
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: widget.notebook.alternativeTitle ?? widget.notebook.title,
+                                    style: GoogleFonts.lora(
+                                      fontSize: 14, 
+                                      fontWeight: FontWeight.bold, 
+                                      color: Colors.white, 
+                                      height: 1.1
+                                    ),
+                                  ),
+                                  if (isPublished)
+                                    WidgetSpan(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 4.0),
+                                        child: Icon(Icons.verified_user_rounded, color: Colors.greenAccent.shade100, size: 12),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ],

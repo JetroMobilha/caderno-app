@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SelectionOverlay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
@@ -14,9 +14,11 @@ import '../widgets/canvas_page_drawer.dart';
 import '../widgets/canvas_toolbar.dart';
 import '../widgets/layers/drawing_layer.dart';
 import '../widgets/layers/interaction_layer.dart';
-import '../widgets/layers/text_layer.dart';
+import '../widgets/layers/live_text_edit_layer.dart'; // 🚀 Renomeado
 import '../widgets/layers/image_layer.dart';
-import '../../explanations/widgets/explanation_layer.dart'; // 🚀 Novo
+import '../widgets/page_canvas.dart'; 
+import '../widgets/selection_overlay.dart'; // 🚀 NOVO
+import '../../explanations/widgets/explanation_layer.dart'; 
 import '../widgets/dialogs/color_studio_dialog.dart';
 import '../widgets/dialogs/thickness_studio_dialog.dart';
 import '../widgets/dialogs/paper_style_dialog.dart';
@@ -234,6 +236,10 @@ class _CanvasPageView extends ConsumerWidget {
         final toolState = ref.watch(canvasToolProvider);
         final toolNotifier = ref.read(canvasToolProvider.notifier);
         
+        // 🚀 OBTENÇÃO DINÂMICA DE DIMENSÕES EM PIXELS
+        final double pageWidth = page.pageWidthPx;
+        final double pageHeight = page.pageHeightPx;
+        
         return LayoutBuilder(
           builder: (context, constraints) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -250,7 +256,9 @@ class _CanvasPageView extends ConsumerWidget {
               interactionEndFrictionCoefficient: 0.01,
               child: Center(
                 child: Container(
-                  width: 595, height: 842, 
+                  width: pageWidth, 
+                  height: pageHeight, 
+                  key: ValueKey('page_container_${page.clientId}_${page.updatedAt}'), // 🚀 FORÇAR REBUILD EM TEMPO REAL
                   decoration: BoxDecoration(
                     color: const Color(0xFFFDFBF7),
                     boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 4))],
@@ -258,21 +266,42 @@ class _CanvasPageView extends ConsumerWidget {
                   child: ClipRect(
                     child: Stack(
                       children: [
-                        ImageLayer(page: page),
-                        ExplanationLayer(pageSize: const Size(595, 842)),
+                        // 🚀 NOVA ARQUITETURA UNIFICADA
+                        PageCanvas(
+                          page: page, 
+                          pageSize: Size(pageWidth, pageHeight),
+                        ),
+                        
+                        SelectionOverlay(
+                          page: page,
+                          pageSize: Size(pageWidth, pageHeight),
+                        ),
+                        
+                        // Camadas Temporárias/Interativas que ainda não foram unificadas ou são voláteis
+                        ExplanationLayer(pageSize: Size(pageWidth, pageHeight)),
+                        
                         InteractionLayer(
                           page: page,
                           isBlocked: page.isFrozen,
                           onFinishEditing: () => toolNotifier.clearTextEditing(),
                           onAddTextBlock: (pos) {
-                            final newBlock = TextBlock(text: '', position: pos, textColorHex: toolState.selectedColorHex);
+                            final newBlock = TextBlock(
+                              text: '', 
+                              position: pos, 
+                              textColorHex: toolState.selectedColorHex,
+                              zIndex: page.objects.length, // Adicionar ao topo
+                            );
                             ref.read(canvasDocumentProvider.notifier).addTextBlock(page, newBlock);
                             toolNotifier.setTextEditing(InlineTarget.block, newBlock);
                             textController.text = '';
                             textFocusNode.requestFocus();
                           },
                         ),
-                        TextLayer(
+                        
+                        // O TextLayer atual ainda é necessário para o TextField de edição "ao vivo"
+                        // Mas o TextLayer original também renderizava textos estáticos.
+                        // Devemos remover a renderização estática do TextLayer se o PageCanvas já faz.
+                        LiveTextEditLayer(
                           page: page,
                           textController: textController,
                           textFocusNode: textFocusNode,
@@ -281,13 +310,7 @@ class _CanvasPageView extends ConsumerWidget {
                             textController.text = page.title;
                             textFocusNode.requestFocus();
                           },
-                          onTextBlockTap: (p, b) {
-                            toolNotifier.setTextEditing(InlineTarget.block, b);
-                            textController.text = b.text;
-                            textFocusNode.requestFocus();
-                          },
                         ),
-                        DrawingLayer(page: page, pageSize: const Size(595, 842)),
                       ],
                     ),
                   ),

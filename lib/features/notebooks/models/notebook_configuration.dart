@@ -44,7 +44,7 @@ class NotebookConfiguration {
   String toJsonString() => jsonEncode(toJson());
 
   factory NotebookConfiguration.defaultBlank() => NotebookConfiguration(
-    page: PageConfig(width: 210, height: 297, unit: 'mm', orientation: 'portrait'),
+    page: PageConfig(width: 210, height: 297, unit: 'mm', orientation: 'portrait', paperSize: 'A4'),
     background: BackgroundConfig(type: 'blank'),
     margins: MarginsConfig(top: 0, right: 0, bottom: 0, left: 0),
     header: HeaderFooterConfig(enabled: false),
@@ -58,20 +58,42 @@ class PageConfig {
   final double height;
   final String unit;
   final String orientation;
+  final bool isInfinite; 
+  final String paperSize; // 🚀 TRANSFORMADO EM CAMPO
 
-  PageConfig({required this.width, required this.height, this.unit = 'mm', this.orientation = 'portrait'});
+  PageConfig({
+    required this.width, 
+    required this.height, 
+    this.unit = 'mm', 
+    this.orientation = 'portrait',
+    this.isInfinite = false,
+    this.paperSize = 'A4',
+  });
 
-  factory PageConfig.fromJson(Map<String, dynamic> json) => PageConfig(
-    width: (json['width'] ?? 210).toDouble(),
-    height: (json['height'] ?? 297).toDouble(),
-    unit: json['unit'] ?? 'mm',
-    orientation: json['orientation'] ?? 'portrait',
-  );
+  factory PageConfig.fromJson(Map<String, dynamic> json) {
+    final double w = (json['width'] ?? 210).toDouble();
+    final double h = (json['height'] ?? 297).toDouble();
+    
+    return PageConfig(
+      width: w,
+      height: h,
+      unit: json['unit'] ?? 'mm',
+      orientation: json['orientation'] ?? 'portrait',
+      isInfinite: json['is_infinite'] == true || json['is_infinite'] == 1,
+      paperSize: json['paper_size'] ?? _inferPaperSize(w, h),
+    );
+  }
 
-  Map<String, dynamic> toJson() => {'width': width, 'height': height, 'unit': unit, 'orientation': orientation};
+  Map<String, dynamic> toJson() => {
+    'width': width, 
+    'height': height, 
+    'unit': unit, 
+    'orientation': orientation,
+    'is_infinite': isInfinite ? 1 : 0,
+    'paper_size': paperSize,
+  };
 
-  String get paperSize {
-    // 🚀 Lógica robusta para detectar tamanhos ISO (A0 a A5)
+  static String _inferPaperSize(double width, double height) {
     final double w = width < height ? width : height;
     final double h = width < height ? height : width;
 
@@ -82,7 +104,7 @@ class PageConfig {
     if (w == 210 && h == 297) return 'A4';
     if (w == 148 && h == 210) return 'A5';
     
-    return 'A4'; // Padrão
+    return 'A4';
   }
 }
 
@@ -95,6 +117,7 @@ class BackgroundConfig {
   final String? marginColor;
   final bool showRedMargin;
   final double opacity;
+  final double lineWidth; // 🚀 NOVO
 
   BackgroundConfig({
     required this.type,
@@ -105,6 +128,7 @@ class BackgroundConfig {
     this.marginColor,
     this.showRedMargin = false,
     this.opacity = 1.0,
+    this.lineWidth = 0.3, // Padrão fino
   });
 
   factory BackgroundConfig.fromJson(Map<String, dynamic> json) => BackgroundConfig(
@@ -116,6 +140,7 @@ class BackgroundConfig {
     marginColor: json['margin_color'],
     showRedMargin: json['show_red_margin'] == true || json['show_red_margin'] == 1,
     opacity: (json['opacity'] ?? 1.0).toDouble(),
+    lineWidth: (json['line_width'] ?? 0.3).toDouble(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -127,6 +152,7 @@ class BackgroundConfig {
     'margin_color': marginColor,
     'show_red_margin': showRedMargin,
     'opacity': opacity,
+    'line_width': lineWidth,
   };
 }
 
@@ -179,8 +205,8 @@ class NumberingConfig {
 
   factory NumberingConfig.fromJson(Map<String, dynamic> json) => NumberingConfig(
     enabled: json['enabled'] ?? false,
-    format: json['format'] ?? 'numeric',
-    position: json['position'] ?? 'bottom-right',
+    format: json['format']?.toString() ?? 'numeric', // 🚀 Forçar String
+    position: json['position']?.toString() ?? 'bottom-right',
     startFrom: json['start_from'] ?? 1,
   );
 

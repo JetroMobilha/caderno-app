@@ -294,13 +294,14 @@ class _PublishNotebookSheetState extends ConsumerState<PublishNotebookSheet> {
         authorName: _isPublished ? _authorController.text.trim() : widget.notebook.authorName,
         description: _isPublished ? _descController.text.trim() : widget.notebook.description,
         price: price,
+        updatedAt: DateTime.now().millisecondsSinceEpoch, // 🚀 Garantir que o Sync detete a mudança
       );
 
       // 2. Gravamos no SQLite local e marcamos para sincronizar
       await notebooksNotifier.updateNotebook(cadernoAtualizado);
 
       // 3. Disparamos a sincronização para enviar a novidade logo para o servidor do Laravel!
-      await subjectsNotifier.syncManuallyWithCloud();
+      ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
 
       if (mounted) {
         Navigator.pop(context);

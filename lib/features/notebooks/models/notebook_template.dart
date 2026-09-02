@@ -85,7 +85,7 @@ class NotebookTemplateConfig {
       icon: Icons.auto_stories_outlined,
       suggestedColor: const Color(0xFF8B4513),
       config: NotebookConfiguration(
-        page: PageConfig(width: 148, height: 210, unit: 'mm', orientation: 'portrait'), // A5
+        page: PageConfig(width: 148, height: 210, unit: 'mm', orientation: 'portrait', paperSize: 'A5'), // A5
         background: BackgroundConfig(type: 'lines', spacing: 9.0),
         margins: MarginsConfig(top: 30, right: 25, bottom: 30, left: 25),
         header: HeaderFooterConfig(enabled: true, fields: ['Data']),
@@ -113,7 +113,7 @@ class NotebookTemplateConfig {
       icon: Icons.calculate_outlined,
       suggestedColor: Colors.indigo,
       config: NotebookConfiguration(
-        page: PageConfig(width: 297, height: 210, unit: 'mm', orientation: 'landscape'),
+        page: PageConfig(width: 297, height: 210, unit: 'mm', orientation: 'landscape', paperSize: 'A4'),
         background: BackgroundConfig(type: 'grid', spacing: 5.0),
         margins: MarginsConfig(top: 20, right: 20, bottom: 20, left: 20),
         header: HeaderFooterConfig(enabled: true, fields: ['Empresa', 'Balanço', 'Data']),
@@ -155,7 +155,7 @@ class NotebookTemplateConfig {
       icon: Icons.palette_outlined,
       suggestedColor: Colors.pink,
       config: NotebookConfiguration(
-        page: PageConfig(width: 297, height: 420, unit: 'mm', orientation: 'landscape'), // A3
+        page: PageConfig(width: 297, height: 420, unit: 'mm', orientation: 'landscape', paperSize: 'A3'), // A3
         background: BackgroundConfig(type: 'blank'),
         margins: MarginsConfig(top: 0, right: 0, bottom: 0, left: 0),
         header: HeaderFooterConfig(enabled: false),
@@ -198,7 +198,7 @@ class NotebookTemplateConfig {
       icon: Icons.calculate_outlined,
       suggestedColor: Colors.indigo,
       config: NotebookConfiguration(
-        page: PageConfig(width: 297, height: 210, unit: 'mm', orientation: 'landscape'),
+        page: PageConfig(width: 297, height: 210, unit: 'mm', orientation: 'landscape', paperSize: 'A4'),
         background: BackgroundConfig(type: 'grid', spacing: 5.0),
         margins: MarginsConfig(top: 20, right: 20, bottom: 20, left: 20),
         header: HeaderFooterConfig(enabled: true, fields: ['Empresa', 'Balanço', 'Data']),
@@ -226,7 +226,7 @@ class NotebookTemplateConfig {
       icon: Icons.palette_outlined,
       suggestedColor: Colors.pink,
       config: NotebookConfiguration(
-        page: PageConfig(width: 297, height: 420, unit: 'mm', orientation: 'landscape'), // A3
+        page: PageConfig(width: 297, height: 420, unit: 'mm', orientation: 'landscape', paperSize: 'A3'), // A3
         background: BackgroundConfig(type: 'blank'),
         margins: MarginsConfig(top: 0, right: 0, bottom: 0, left: 0),
         header: HeaderFooterConfig(enabled: false),
@@ -296,7 +296,7 @@ class NotebookTemplateConfig {
       icon: Icons.auto_stories_outlined,
       suggestedColor: const Color(0xFF8B4513),
       config: NotebookConfiguration(
-        page: PageConfig(width: 148, height: 210, unit: 'mm', orientation: 'portrait'), // A5
+        page: PageConfig(width: 148, height: 210, unit: 'mm', orientation: 'portrait', paperSize: 'A5'), // A5
         background: BackgroundConfig(type: 'lines', spacing: 9.0),
         margins: MarginsConfig(top: 30, right: 25, bottom: 30, left: 25),
         header: HeaderFooterConfig(enabled: true, fields: ['Data']),

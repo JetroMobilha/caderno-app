@@ -151,25 +151,6 @@ class StrokesPainter extends CustomPainter {
         canvas.translate(selectionDelta.dx, selectionDelta.dy);
       }
 
-      if (isSelected && stroke.points.isNotEmpty) {
-        double minX = stroke.points.first.dx, maxX = stroke.points.first.dx;
-        double minY = stroke.points.first.dy, maxY = stroke.points.first.dy;
-        for (var pt in stroke.points) {
-          if (pt.dx < minX) minX = pt.dx;
-          if (pt.dx > maxX) maxX = pt.dx;
-          if (pt.dy < minY) minY = pt.dy;
-          if (pt.dy > maxY) maxY = pt.dy;
-        }
-        final Rect bounds = Rect.fromLTRB(minX - 6, minY - 6, maxX + 6, maxY + 6);
-        canvas.drawRect(bounds, Paint()..color = const Color(0x1F1976D2)..style = PaintingStyle.fill);
-        canvas.drawRect(
-            bounds,
-            Paint()
-              ..color = const Color(0xFF1976D2)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.0);
-      }
-
       canvas.drawPath(buildPath(stroke.points), paint);
       canvas.restore();
     }

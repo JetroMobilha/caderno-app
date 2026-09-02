@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/canvas_document_provider.dart';
+import '../../models/local_page_model.dart'; 
+import '../../../../core/utils/geometry_utils.dart'; 
+import '../../../notebooks/widgets/background_selector_sheet.dart'; 
+import '../../../notebooks/models/notebook_configuration.dart'; 
+import '../../../notebooks/widgets/page_preview.dart'; 
 
 class AddPageDialog extends StatefulWidget {
   final String defaultLineType;
   final double defaultLineSpacing;
-  final int? insertIndex; // 🚀 Posição de inserção opcional
+  final int? insertIndex; 
 
   const AddPageDialog({
     super.key,
@@ -22,31 +27,23 @@ class AddPageDialog extends StatefulWidget {
 class _AddPageDialogState extends State<AddPageDialog> {
   String _selectedSize = 'A4';
   bool _isLandscape = false;
-  late String _selectedLineType;
+  bool _isInfinite = false; 
+  late BackgroundConfig _selectedBackground; 
   final TextEditingController _sectionController = TextEditingController();
-  int _quantity = 1; // 🚀 Quantidade padrão
+  int _quantity = 1; 
   
   final List<String> _sizes = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'];
-  
-  final List<Map<String, dynamic>> _lineTypes = [
-    {'id': 'ruled', 'label': 'Pautado', 'icon': Icons.view_headline},
-    {'id': 'grid', 'label': 'Quadriculado', 'icon': Icons.grid_4x4},
-    {'id': 'dots', 'label': 'Pontilhado', 'icon': Icons.more_horiz},
-    {'id': 'blank', 'label': 'Liso', 'icon': Icons.check_box_outline_blank},
-    {'id': 'cornell', 'label': 'Cornell', 'icon': Icons.description_outlined},
-    {'id': 'engineering', 'label': 'Engenharia', 'icon': Icons.grid_on_rounded},
-  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedBackground = BackgroundConfig(type: widget.defaultLineType, spacing: widget.defaultLineSpacing);
+  }
 
   @override
   void dispose() {
     _sectionController.dispose();
     super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedLineType = widget.defaultLineType;
   }
 
   @override
@@ -56,122 +53,153 @@ class _AddPageDialogState extends State<AddPageDialog> {
         return AlertDialog(
           backgroundColor: const Color(0xFFFDFBF7),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24), 
           title: Text(
             'Nova Folha',
             style: GoogleFonts.lora(fontWeight: FontWeight.bold, color: const Color(0xFF0F4C5C)),
           ),
           content: Container(
-            // 🚀 RESPONSIVIDADE: Define um tamanho máximo para o modal não esticar em telas grandes
-            width: MediaQuery.of(context).size.width > 600 ? 450 : double.maxFinite,
-            constraints: const BoxConstraints(maxWidth: 500),
+            width: MediaQuery.of(context).size.width > 600 ? 500 : MediaQuery.of(context).size.width * 0.95,
+            constraints: const BoxConstraints(maxWidth: 600),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Orientação
-                  Text('Orientação', style: _sectionStyle()),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildOptionCard(
-                        label: 'Vertical',
-                        icon: Icons.stay_current_portrait_rounded,
-                        isSelected: !_isLandscape,
-                        onTap: () => setState(() => _isLandscape = false),
-                      ),
-                      const SizedBox(width: 12),
-                      _buildOptionCard(
-                        label: 'Horizontal',
-                        icon: Icons.stay_current_landscape_rounded,
-                        isSelected: _isLandscape,
-                        onTap: () => setState(() => _isLandscape = true),
-                      ),
-                    ],
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Página Infinita', style: _sectionStyle()),
+                    subtitle: const Text('Espaço de trabalho ilimitado', style: TextStyle(fontSize: 10)),
+                    value: _isInfinite,
+                    onChanged: (val) {
+                      setState(() {
+                        _isInfinite = val;
+                        if (val) _selectedSize = 'A4'; 
+                      });
+                    },
+                    activeColor: const Color(0xFF0F4C5C),
                   ),
-                  const SizedBox(height: 24),
-
-                  // 2. Tamanho
-                  Text('Tamanho do Papel', style: _sectionStyle()),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _sizes.map((size) {
-                      final bool isSelected = _selectedSize == size;
-                      return ChoiceChip(
-                        label: Text(size),
-                        selected: isSelected,
-                        onSelected: (val) => setState(() => _selectedSize = size),
-                        selectedColor: const Color(0xFF0F4C5C).withOpacity(0.15),
-                        labelStyle: TextStyle(
-                          color: isSelected ? const Color(0xFF0F4C5C) : Colors.black87,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+
+                  if (!_isInfinite) ...[
+                    Text('Orientação', style: _sectionStyle()),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _buildOptionCard(
+                          label: 'Vertical',
+                          icon: Icons.stay_current_portrait_rounded,
+                          isSelected: !_isLandscape,
+                          onTap: () => setState(() => _isLandscape = false),
                         ),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
+                        const SizedBox(width: 12),
+                        _buildOptionCard(
+                          label: 'Horizontal',
+                          icon: Icons.stay_current_landscape_rounded,
+                          isSelected: _isLandscape,
+                          onTap: () => setState(() => _isLandscape = true),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
 
-                  // 3. Estilo de Pauta
-                  Text('Estilo de Pauta', style: _sectionStyle()),
+                    Text('Tamanho do Papel', style: _sectionStyle()),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _sizes.map((size) {
+                        final bool isSelected = _selectedSize == size;
+                        
+                        return ChoiceChip(
+                          label: Text(size),
+                          selected: isSelected,
+                          onSelected: (val) => setState(() => _selectedSize = size),
+                          selectedColor: const Color(0xFF0F4C5C).withValues(alpha: 0.15),
+                          labelStyle: TextStyle(
+                            color: isSelected ? const Color(0xFF0F4C5C) : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  Text('Estilo de Fundo', style: _sectionStyle()),
                   const SizedBox(height: 12),
-                  Center(
-                    child: Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      alignment: WrapAlignment.start,
-                      children: _lineTypes.map((type) {
-                        final bool isSelected = _selectedLineType == type['id'];
-                        return InkWell(
-                          onTap: () => setState(() => _selectedLineType = type['id']),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            width: 110, // 🚀 Tamanho fixo para evitar estiramento
-                            height: 80,
+                  InkWell(
+                    onTap: () => _showBackgroundSelector(context),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF0F4C5C), width: 2.0), 
+                        boxShadow: [BoxShadow(color: const Color(0xFF0F4C5C).withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 54, height: 70, 
                             decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.1) : Colors.transparent,
-                              border: Border.all(
-                                color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12,
-                                width: isSelected ? 2 : 1,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)],
                             ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: PagePreview(
+                                isVibrant: true,
+                                config: NotebookConfiguration(
+                                  page: PageConfig(width: 210, height: 297, paperSize: 'A4'),
+                                  background: _selectedBackground,
+                                  margins: MarginsConfig(),
+                                  header: HeaderFooterConfig(),
+                                  footer: HeaderFooterConfig(),
+                                  numbering: NumberingConfig(),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  type['icon'],
-                                  color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54,
-                                  size: 16, // 🚀 Reduzido de 24
+                                Text(_selectedBackground.type.toUpperCase(), 
+                                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF0F4C5C))
+                                ),
+                                Text(_selectedBackground.subType ?? 'Padrão', 
+                                  style: const TextStyle(fontSize: 11, color: Colors.black45)
                                 ),
                                 const SizedBox(height: 6),
-                                Text(
-                                  type['label'],
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54,
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F4C5C).withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
+                                  child: const Text('ALTERAR ESTILO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF0F4C5C), letterSpacing: 0.5)),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      }).toList(),
+                          const Icon(Icons.swap_horiz_rounded, color: Color(0xFF0F4C5C), size: 22),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // 4. Quantidade (NOVO)
                   Text('Quantidade de Folhas', style: _sectionStyle()),
                   const SizedBox(height: 12),
                   _buildQuantitySelector(),
                   const SizedBox(height: 24),
 
-                  // 5. Secção
                   Text('Secção (Opcional)', style: _sectionStyle()),
                   const SizedBox(height: 12),
                   _buildSectionAutocomplete(ref),
@@ -190,8 +218,9 @@ class _AddPageDialogState extends State<AddPageDialog> {
                 ref.read(canvasDocumentProvider.notifier).addNewPage(
                   isLandscape: _isLandscape,
                   paperSize: _selectedSize,
-                  lineType: _selectedLineType,
-                  lineSpacing: widget.defaultLineSpacing,
+                  isInfinite: _isInfinite,
+                  lineType: _selectedBackground.type,
+                  lineSpacing: _selectedBackground.spacing,
                   sectionTitle: _sectionController.text.trim().isEmpty ? null : _sectionController.text.trim(),
                   count: _quantity,
                   insertIndex: widget.insertIndex,
@@ -211,6 +240,17 @@ class _AddPageDialogState extends State<AddPageDialog> {
     );
   }
 
+  void _showBackgroundSelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BackgroundSelectorSheet(
+        onSelected: (bg) => setState(() => _selectedBackground = bg),
+      ),
+    );
+  }
+
   TextStyle _sectionStyle() => GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.bold,
@@ -222,7 +262,7 @@ class _AddPageDialogState extends State<AddPageDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: Colors.black.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -256,13 +296,13 @@ class _AddPageDialogState extends State<AddPageDialog> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.all(6), // 🚀 Reduzido de 8
+        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)],
         ),
-        child: Icon(icon, size: 16, color: const Color(0xFF0F4C5C)), // 🚀 Reduzido de 20
+        child: Icon(icon, size: 16, color: const Color(0xFF0F4C5C)),
       ),
     );
   }
@@ -278,7 +318,6 @@ class _AddPageDialogState extends State<AddPageDialog> {
 
     return Autocomplete<String>(
       optionsBuilder: (TextEditingValue textEditingValue) {
-        // 🚀 Mostrar todas as opções se o campo estiver vazio
         if (textEditingValue.text.isEmpty) {
           return existingSections;
         }
@@ -294,16 +333,10 @@ class _AddPageDialogState extends State<AddPageDialog> {
           controller: fieldController,
           focusNode: focusNode,
           onChanged: (val) => _sectionController.text = val,
-          onTap: () {
-            // 🚀 Ao clicar, se estiver vazio, forçar a abertura do menu
-            if (fieldController.text.isEmpty) {
-              fieldController.text = ''; 
-            }
-          },
           decoration: InputDecoration(
             hintText: 'Ex: Resumo Aula 1',
             filled: true,
-            fillColor: Colors.black.withOpacity(0.03),
+            fillColor: Colors.black.withValues(alpha: 0.03),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -356,7 +389,7 @@ class _AddPageDialogState extends State<AddPageDialog> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.1) : Colors.transparent,
+            color: isSelected ? const Color(0xFF0F4C5C).withValues(alpha: 0.1) : Colors.transparent,
             border: Border.all(
               color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12,
               width: isSelected ? 2 : 1,
@@ -365,12 +398,12 @@ class _AddPageDialogState extends State<AddPageDialog> {
           ),
           child: Column(
             children: [
-              Icon(icon, size: 18, color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54), // 🚀 Reduzido para 18
+              Icon(icon, size: 18, color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54),
               const SizedBox(height: 8),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 12, // 🚀 Pequeno ajuste na fonte para acompanhar
+                  fontSize: 12, 
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   color: isSelected ? const Color(0xFF0F4C5C) : Colors.black54,
                 ),

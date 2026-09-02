@@ -167,9 +167,7 @@ class LocalDatabaseService {
         title: pRow.headerData ?? '',
         footer: pRow.footerData ?? '',
         syncedWithCloud: pRow.syncedWithCloud,
-        strokes: strokes,
-        textBlocks: textBlocks,
-        imageBlocks: safeImages,
+        objects: [...strokes, ...textBlocks, ...safeImages],
       ));
     }
 

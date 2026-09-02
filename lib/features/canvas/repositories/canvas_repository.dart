@@ -96,9 +96,7 @@ class CanvasRepository {
       extractedText: pRow.extractedText,
       isFrozen: pRow.isFrozen == 1,
       isFavorite: pRow.isFavorite == 1,
-      strokes: strokes,
-      textBlocks: textBlocks,
-      imageBlocks: imageBlocks,
+      objects: [...strokes, ...textBlocks, ...imageBlocks],
       backgroundConfig: pRow.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(pRow.backgroundConfig!)) : null,
       syncedWithCloud: pRow.syncedWithCloud,
       updatedAt: pRow.updatedAt,
@@ -176,9 +174,7 @@ class CanvasRepository {
         extractedText: pRow.extractedText,
         isFrozen: pRow.isFrozen == 1,
         isFavorite: pRow.isFavorite == 1,
-        strokes: strokes,
-        textBlocks: textBlocks,
-        imageBlocks: imageBlocks,
+        objects: [...strokes, ...textBlocks, ...imageBlocks],
         backgroundConfig: pRow.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(pRow.backgroundConfig!)) : null,
         syncedWithCloud: pRow.syncedWithCloud,
         updatedAt: pRow.updatedAt,
@@ -210,9 +206,7 @@ class CanvasRepository {
         isFrozen: row.isFrozen == 1,
         isFavorite: row.isFavorite == 1,
         isDeleted: row.isDeleted == 1,
-        strokes: [], // Lazy loaded
-        textBlocks: [], // Lazy loaded
-        imageBlocks: [], // Lazy loaded
+        objects: [], // Lazy loaded
         syncedWithCloud: row.syncedWithCloud,
         updatedAt: row.updatedAt,
       )).toList();
@@ -243,9 +237,7 @@ class CanvasRepository {
       isFrozen: row.isFrozen == 1,
       isFavorite: row.isFavorite == 1,
       isDeleted: true,
-      strokes: [],
-      textBlocks: [],
-      imageBlocks: [],
+      objects: [],
       syncedWithCloud: row.syncedWithCloud,
       updatedAt: row.updatedAt,
     )).toList();

@@ -336,12 +336,17 @@ class AppDatabase extends _$AppDatabase {
           try { await m.createTable(notebookTemplates); } catch(_) {}
           try { await m.createTable(notebookTemplateVersions); } catch(_) {}
         }
+        if (from < 26) {
+          // 🚀 REFORÇO v26: Garantir que as colunas críticas existem se o v25 falhou
+          try { await m.addColumn(notebooks, notebooks.configuration); } catch(_) {}
+          try { await m.addColumn(pages, pages.backgroundConfig); } catch(_) {}
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

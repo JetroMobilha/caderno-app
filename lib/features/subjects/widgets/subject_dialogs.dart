@@ -92,6 +92,7 @@ class SubjectDialogs {
               return AlertDialog(
                 backgroundColor: AppColors.paper,
                 surfaceTintColor: Colors.transparent,
+                insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24), // 🚀 Preencher mais horizontal em mobile
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 title: Row(
                   children: [
@@ -153,9 +154,36 @@ class SubjectDialogs {
                         const SizedBox(height: 24),
                         Text('Cor de Destaque', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
                         const SizedBox(height: 12),
-                        ColorEngineWidget(
-                          selectedColorHex: pickedColorHex,
-                          onColorSelected: (hex) => setModalState(() => pickedColorHex = hex),
+                        InkWell(
+                          onTap: () async {
+                            final newColor = await ColorEngine.show(
+                              context, 
+                              initialColor: pickedColorHex,
+                              title: 'Cor da Pasta',
+                              showNotebookPreview: false,
+                            );
+                            if (newColor != null) {
+                              setModalState(() => pickedColorHex = newColor);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(backgroundColor: Color(int.parse(pickedColorHex.replaceFirst('#', '0xFF'))), radius: 12),
+                                const SizedBox(width: 12),
+                                Text('Selecionar Cor...', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: themeColor)),
+                                const Spacer(),
+                                Icon(Icons.palette_outlined, size: 20, color: themeColor),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),

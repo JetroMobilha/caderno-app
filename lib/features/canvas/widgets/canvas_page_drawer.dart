@@ -11,6 +11,7 @@ import '../providers/canvas_ui_provider.dart'; // 🚀 NOVO
 import '../views/page_overview_screen.dart';
 import 'dialogs/add_page_dialog.dart';
 import 'dialogs/select_notebook_dialog.dart';
+import 'dialogs/page_settings_dialog.dart'; // 🚀 NOVO
 
 class CanvasPageDrawer extends ConsumerWidget {
   final Notebook notebook;
@@ -255,7 +256,7 @@ class CanvasPageDrawer extends ConsumerWidget {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.8,
+            childAspectRatio: 0.75, // 🚀 Ajustado para acomodar thumbnails retangulares
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
           ),
@@ -413,6 +414,7 @@ class CanvasPageDrawer extends ConsumerWidget {
     
     switch (action) {
       case 'rename': _showRenameDialog(context, ref, page); break;
+      case 'settings': _showSettingsDialog(context, ref, page); break; // 🚀 NOVO
       case 'section': _showSectionDialog(context, ref, page); break;
       case 'remove_section': ref.read(canvasDocumentProvider.notifier).updatePageSection(page, null); break;
       case 'add_before': _showAddPageDialog(context, ref, insertIndex: index); break;
@@ -463,6 +465,13 @@ class CanvasPageDrawer extends ConsumerWidget {
         defaultLineSpacing: 28.0,
         insertIndex: insertIndex,
       )
+    );
+  }
+
+  void _showSettingsDialog(BuildContext context, WidgetRef ref, LocalPage page) {
+    showDialog(
+      context: context,
+      builder: (_) => PageSettingsDialog(page: page),
     );
   }
 
@@ -696,6 +705,8 @@ class _PageGridTile extends StatelessWidget {
                       padding: const EdgeInsets.all(8.0),
                       child: _PageThumbnail(
                         lineType: page.lineType ?? 'ruled',
+                        isLandscape: page.isLandscape,
+                        isInfinite: page.isInfinite,
                         index: index + 1,
                         isSelected: isCurrent,
                         themeColor: themeColor,
@@ -733,6 +744,7 @@ class _PageGridTile extends StatelessWidget {
                 onSelected: onAction,
                 itemBuilder: (context) => [
                   _menuItem('rename', Icons.edit_outlined, 'Renomear'),
+                  _menuItem('settings', Icons.settings_outlined, 'Configurar'), // 🚀 NOVO
                   _menuItem('section', Icons.folder_outlined, 'Mudar Secção'),
                   if (page.sectionTitle != null)
                     _menuItem('remove_section', Icons.folder_off_outlined, 'Remover da Secção'),
@@ -812,6 +824,8 @@ class _PageListTile extends StatelessWidget {
             children: [
               _PageThumbnail(
                 lineType: page.lineType ?? 'ruled',
+                isLandscape: page.isLandscape,
+                isInfinite: page.isInfinite,
                 index: index + 1,
                 isSelected: isCurrent,
                 themeColor: page.isFavorite ? Colors.orange : themeColor,
@@ -848,7 +862,7 @@ class _PageListTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _getPageSubtitle(page.lineType),
+                      _getPageSubtitle(page), // 🚀 MUDANÇA
                       style: const TextStyle(fontSize: 10, color: Colors.black38),
                     ),
                   ],
@@ -860,6 +874,7 @@ class _PageListTile extends StatelessWidget {
                 onSelected: onAction,
                 itemBuilder: (context) => [
                   _menuItem('rename', Icons.edit_outlined, 'Renomear'),
+                  _menuItem('settings', Icons.settings_outlined, 'Configurar'), // 🚀 NOVO
                   _menuItem('section', Icons.folder_outlined, 'Mudar Secção'),
                   if (page.sectionTitle != null)
                     _menuItem('remove_section', Icons.folder_off_outlined, 'Remover da Secção'),
@@ -895,27 +910,39 @@ class _PageListTile extends StatelessWidget {
     );
   }
 
-  String _getPageSubtitle(String? type) {
-    switch (type) {
-      case 'ruled': return 'Pautado';
-      case 'grid': return 'Quadriculado';
-      case 'blank': return 'Liso';
-      case 'cornell': return 'Cornell Notes';
-      case 'engineering': return 'Engenharia';
-      default: return 'Folha Normal';
+  String _getPageSubtitle(LocalPage page) {
+    if (page.isInfinite) return 'Página Infinita';
+    
+    final String size = page.paperSize;
+    final String orientation = page.isLandscape ? 'Horizontal' : 'Vertical';
+    String typeLabel = 'Folha Normal';
+    
+    switch (page.lineType) {
+      case 'ruled': typeLabel = 'Pautado'; break;
+      case 'grid': typeLabel = 'Quadriculado'; break;
+      case 'blank': typeLabel = 'Liso'; break;
+      case 'cornell': typeLabel = 'Cornell'; break;
+      case 'engineering': typeLabel = 'Engenharia'; break;
+      case 'dots': typeLabel = 'Pontilhado'; break;
     }
+    
+    return '$size $orientation • $typeLabel';
   }
 }
 
 
 class _PageThumbnail extends StatelessWidget {
   final String lineType;
+  final bool isLandscape;
+  final bool isInfinite;
   final int index;
   final bool isSelected;
   final Color themeColor;
 
   const _PageThumbnail({
     required this.lineType,
+    this.isLandscape = false,
+    this.isInfinite = false,
     required this.index,
     required this.isSelected,
     required this.themeColor,
@@ -923,12 +950,20 @@ class _PageThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 🚀 AJUSTE DE PROPORÇÃO DINÂMICO
+    double width = 38, height = 50;
+    if (isInfinite) {
+      width = 45; height = 45; // Mais quadrado
+    } else if (isLandscape) {
+      width = 50; height = 38; // Inverter
+    }
+
     return Container(
-      width: 38,
-      height: 50,
+      width: width,
+      height: height,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(isInfinite ? 10 : 6),
         border: Border.all(
           color: isSelected ? themeColor : Colors.black12,
           width: isSelected ? 1.5 : 0.8,
@@ -940,16 +975,19 @@ class _PageThumbnail extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: CustomPaint(
-              painter: _ThumbnailPainter(lineType: lineType),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(isInfinite ? 10 : 6),
+              child: CustomPaint(
+                painter: _ThumbnailPainter(lineType: lineType),
+              ),
             ),
           ),
           Center(
             child: Text(
-              '$index',
+              isInfinite ? '∞' : '$index',
               style: TextStyle(
                 color: isSelected ? themeColor : Colors.black26,
-                fontSize: 10,
+                fontSize: isInfinite ? 14 : 10,
                 fontWeight: FontWeight.bold,
               ),
             ),

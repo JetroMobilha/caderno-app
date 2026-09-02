@@ -11,10 +11,12 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:caderno_digital_app/core/database/app_database.dart';
 import 'package:caderno_digital_app/core/utils/rdp_simplifier.dart';
 import 'package:caderno_digital_app/core/utils/stroke_utils.dart';
+import '../../notebooks/models/notebook_configuration.dart'; // 🚀 NOVO
 import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../models/image_block_model.dart';
+import '../models/page_object.dart'; // 🚀 NOVO
 import '../models/canvas_action_model.dart';
 import '../repositories/canvas_repository.dart';
 import '../../../core/network/realtime_service.dart';
@@ -188,9 +190,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
             }
           } else {
             // Caso contrário, mantemos o que já temos em memória (otimização de reordenamento)
-            newPage.strokes = existing.strokes;
-            newPage.textBlocks = existing.textBlocks;
-            newPage.imageBlocks = existing.imageBlocks;
+            newPage.objects = existing.objects;
             newPage.isContentLoaded = true;
             newPage.version = existing.version;
           }
@@ -210,9 +210,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       final content = await _repository.loadPageContent(page.id!, pageNumber: page.pageNumber);
       final updatedPages = List<LocalPage>.from(state.pages);
       updatedPages[index] = page.copyWith(
-        strokes: content['strokes'],
-        textBlocks: content['textBlocks'],
-        imageBlocks: content['imageBlocks'],
+        objects: [...content['strokes'], ...content['textBlocks'], ...content['imageBlocks']],
       )..isContentLoaded = true;
       state = state.copyWith(pages: updatedPages);
     } catch (e) {
@@ -325,11 +323,18 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       if (action is AddStrokeAction) await _repository.saveSingleStroke(cid, action.stroke, pageId: pid);
       else if (action is AddTextAction) await _repository.saveSingleTextBlock(cid, action.block, pageId: pid);
       else if (action is AddImageAction) await _repository.saveSingleImageBlock(cid, action.block, pageId: pid);
-      else if (action is UpdateTextAction) await _repository.saveSingleTextBlock(cid, action.newState, pageId: pid);
-      else if (action is UpdateImageAction) await _repository.saveSingleImageBlock(cid, action.newState, pageId: pid);
+      else if (action is UpdateObjectAction) {
+        final type = action.newState['type'];
+        if (type == 'text') await _repository.saveSingleTextBlock(cid, TextBlock.fromJson(action.newState), pageId: pid);
+        else if (type == 'image') await _repository.saveSingleImageBlock(cid, ImageBlock.fromJson(action.newState), pageId: pid);
+        else if (type == 'stroke') await _repository.saveSingleStroke(cid, Stroke.fromJson(action.newState), pageId: pid);
+      }
       else if (action is DeleteAction) { 
-        for (var s in action.strokes) await _repository.deleteSingleStroke(s.id); 
-        for (var t in action.texts) await _repository.deleteSingleTextBlock(t.id); 
+        for (var oid in action.objectIds) {
+          final obj = target.objects.cast<PageObject?>().firstWhere((o) => o?.id == oid, orElse: () => null);
+          if (obj is Stroke) await _repository.deleteSingleStroke(oid);
+          else if (obj is TextBlock) await _repository.deleteSingleTextBlock(oid);
+        }
       }
     } catch (e) { debugPrint('🚨 Persist Error: $e'); }
   }
@@ -337,7 +342,11 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   void _broadcastAction(CanvasAction action) {
     if (!state.isCollaborationEnabled || state.liveNotebookSid == null) return;
     if (action is DeleteAction) {
-      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'strokes': action.strokes.map((s) => {'id': s.id, 'is_deleted': true}).toList()});
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 
+        'page_number': action.pageNumber, 
+        'strokes': action.objectIds.map((id) => {'id': id, 'is_deleted': true}).toList()
+      });
     } else if (action is AddStrokeAction) {
       _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'strokes': [action.stroke.toJson()]});
     } else if (action is AddTextAction) {
@@ -348,6 +357,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   Future<void> addNewPage({
     required bool isLandscape, 
     String paperSize = 'A4', 
+    bool isInfinite = false, // 🚀 NOVO
     String? lineType, 
     double? lineSpacing, 
     String? sectionTitle,
@@ -380,6 +390,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
         pageNumber: startPageNumber + i,
         isLandscape: isLandscape,
         paperSize: paperSize,
+        isInfinite: isInfinite, // 🚀 NOVO
         lineType: lineType,
         lineSpacing: lineSpacing,
         sectionTitle: sectionTitle,
@@ -398,9 +409,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     if (!source.isContentLoaded && source.id != null) {
       final content = await _repository.loadPageContent(source.id!);
       source = source.copyWith(
-        strokes: content['strokes'],
-        textBlocks: content['textBlocks'],
-        imageBlocks: content['imageBlocks'],
+        objects: [...content['strokes'], ...content['textBlocks'], ...content['imageBlocks']],
       )..isContentLoaded = true;
     }
 
@@ -454,6 +463,36 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       _collabService.broadcastPageEvent('reorder', {});
       // 🚀 DISPARAR SYNC IMEDIATO
       unawaited(_syncService.pushPages(onlyNotebookId: state.currentNotebookId));
+    }
+  }
+
+  Future<void> updatePageSettings(LocalPage page, NotebookConfiguration newConfig) async {
+    if (page.id == null) return;
+    
+    final updated = page.copyWith(
+      isLandscape: newConfig.page.orientation == 'landscape',
+      paperSize: newConfig.page.paperSize,
+      isInfinite: newConfig.page.isInfinite,
+      backgroundConfig: newConfig.background,
+      lineType: newConfig.background.type,
+      lineSpacing: newConfig.background.spacing,
+      title: newConfig.header.enabled ? (newConfig.header.fields.isNotEmpty ? newConfig.header.fields.join(' / ') : page.title) : page.title,
+      footer: newConfig.footer.enabled ? (newConfig.footer.fields.isNotEmpty ? newConfig.footer.fields.join(' / ') : page.footer) : page.footer,
+      updatedAt: TimeService().nowMs(),
+    );
+
+    await _repository.savePage(updated, state.liveNotebookSid);
+    
+    // 🚀 ATUALIZAÇÃO IMEDIATA DO ESTADO EM MEMÓRIA
+    final updatedPages = List<LocalPage>.from(state.pages);
+    final idx = updatedPages.indexWhere((p) => p.clientId == page.clientId);
+    if (idx != -1) {
+      updatedPages[idx] = updated;
+      state = state.copyWith(pages: updatedPages);
+    }
+
+    if (state.liveNotebookSid != null) {
+      _collabService.broadcastPageEvent('update_settings', {'page_client_id': page.clientId});
     }
   }
 
@@ -570,9 +609,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     if (!page.isContentLoaded && page.id != null) {
       final content = await _repository.loadPageContent(page.id!, pageNumber: page.pageNumber);
       page = page.copyWith(
-        strokes: content['strokes'],
-        textBlocks: content['textBlocks'],
-        imageBlocks: content['imageBlocks'],
+        objects: [...content['strokes'], ...content['textBlocks'], ...content['imageBlocks']],
       )..isContentLoaded = true;
     }
 
@@ -605,7 +642,12 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
 
   Future<void> moveSelection(LocalPage page, {required List<String> strokeIds, required List<String> textIds, required List<String> imageIds, required Offset delta}) async {
     if (page.isFrozen || delta == Offset.zero) return;
-    final action = MoveAction(pageClientId: page.clientId, pageNumber: page.pageNumber, strokeIds: strokeIds, textIds: textIds, imageIds: imageIds, delta: delta);
+    final action = MoveAction(
+      pageClientId: page.clientId, 
+      pageNumber: page.pageNumber, 
+      objectIds: [...strokeIds, ...textIds, ...imageIds], 
+      delta: delta
+    );
     await _executeAction(action, targetPage: page);
   }
 

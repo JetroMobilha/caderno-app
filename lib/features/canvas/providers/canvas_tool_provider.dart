@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/canvas_enums.dart';
+import '../models/image_block_model.dart';
+import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../models/local_page_model.dart';
 
@@ -124,26 +126,36 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
     state = state.copyWith(
       selectionRectStart: start,
       selectionRectEnd: end,
-      lassoPath: null, // Resetar lasso se usar rect
+      lassoPath: null,
     );
 
     if (start != null && end != null && page != null) {
       final rect = Rect.fromPoints(start, end);
       final newStrokeIds = <String>{};
-      for (var s in page.strokes) {
-        if (!s.isDeleted && s.points.any((pt) => rect.contains(pt))) {
-          newStrokeIds.add(s.id);
-        }
-      }
       final newTextIds = <String>{};
-      for (var t in page.textBlocks) {
-        if (!t.isDeleted && rect.contains(t.position)) {
-          newTextIds.add(t.id);
+      final newImageIds = <String>{};
+      
+      for (var obj in page.objects) {
+        if (obj.isDeleted) continue;
+        
+        bool intersects = false;
+        if (obj is Stroke) {
+          intersects = obj.points.any((pt) => rect.contains(pt));
+          if (intersects) newStrokeIds.add(obj.id);
+        } else {
+          final objRect = obj.position & obj.size;
+          intersects = rect.overlaps(objRect);
+          if (intersects) {
+            if (obj is TextBlock) newTextIds.add(obj.id);
+            else if (obj is ImageBlock) newImageIds.add(obj.id);
+          }
         }
       }
+
       state = state.copyWith(
         selectedStrokeIds: newStrokeIds,
         selectedTextIds: newTextIds,
+        selectedImageIds: newImageIds,
       );
     }
   }
@@ -157,20 +169,29 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
 
     if (path != null && path.length > 3 && page != null) {
       final newStrokeIds = <String>{};
-      for (var s in page.strokes) {
-        if (!s.isDeleted && s.points.any((pt) => _isPointInPolygon(pt, path))) {
-          newStrokeIds.add(s.id);
-        }
-      }
       final newTextIds = <String>{};
-      for (var t in page.textBlocks) {
-        if (!t.isDeleted && _isPointInPolygon(t.position, path)) {
-          newTextIds.add(t.id);
+      final newImageIds = <String>{};
+
+      for (var obj in page.objects) {
+        if (obj.isDeleted) continue;
+
+        bool intersects = false;
+        if (obj is Stroke) {
+          intersects = obj.points.any((pt) => _isPointInPolygon(pt, path));
+          if (intersects) newStrokeIds.add(obj.id);
+        } else {
+          intersects = _isPointInPolygon(obj.position, path);
+          if (intersects) {
+            if (obj is TextBlock) newTextIds.add(obj.id);
+            else if (obj is ImageBlock) newImageIds.add(obj.id);
+          }
         }
       }
+
       state = state.copyWith(
         selectedStrokeIds: newStrokeIds,
         selectedTextIds: newTextIds,
+        selectedImageIds: newImageIds,
       );
     }
   }

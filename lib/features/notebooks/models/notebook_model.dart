@@ -117,6 +117,9 @@ class Notebook {
   }) : clientId = clientId ?? const Uuid().v4(),
        updatedAt = updatedAt ?? TimeService().nowMs();
 
+  // 🚀 AUXILIAR: Obter nome para exibição na loja
+  String get displayAuthor => authorName ?? (participants.isNotEmpty ? participants.first.name : 'Autor Académico');
+
   Notebook copyWith({
     int? id,
     int? serverId,

@@ -72,69 +72,123 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 ),
               ),
 
-              // --- LISTA DE CADERNOS PAGINADA ---
+              // --- LISTA DE CADERNOS PAGINADA (GRELHA) ---
               Expanded(
                 child: state.isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : state.notebooks.isEmpty
-                    ? Center(child: Text('Nenhum caderno encontrado na loja.', style: GoogleFonts.inter(color: AppColors.textMuted)))
-                    : ListView.builder(
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off_rounded, size: 64, color: Colors.black12),
+                            const SizedBox(height: 16),
+                            Text('Nenhum caderno encontrado na loja.', 
+                              style: GoogleFonts.inter(color: AppColors.textMuted)
+                            ),
+                          ],
+                        ),
+                      )
+                    : GridView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.only(left: 16, right: 16, bottom: 80),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: MediaQuery.of(context).size.width > 900 ? 4 : (MediaQuery.of(context).size.width > 600 ? 3 : 2),
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 0.72,
+                  ),
                   itemCount: state.notebooks.length + (state.isLoadingMore ? 1 : 0),
                   itemBuilder: (context, index) {
-                    // Se chegámos ao fim da lista e está a carregar mais, mostra o indicador
                     if (index == state.notebooks.length) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
+                      return const Center(child: CircularProgressIndicator());
                     }
 
                     final notebook = state.notebooks[index];
                     final isFree = notebook.price == 0;
+                    final Color coverColor = Color(int.tryParse(notebook.color?.replaceFirst('#', '0xFF') ?? '0xFF0F4C5C') ?? 0xFF0F4C5C);
 
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: 2,
+                      shadowColor: Colors.black12,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      color: AppColors.paper,
-                      elevation: 0,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Container(
-                          width: 50,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: Color(int.tryParse(notebook.color?.replaceFirst('#', '0xFF') ?? '0xFF0F4C5C') ?? 0xFF0F4C5C),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
-                          ),
-                          child: const Icon(Icons.book, color: Colors.white),
-                        ),
-                        title: Text(notebook.title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
-                        subtitle: Column(
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _handleAcquire(notebook),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 4),
-                            Text(notebook.authorName ?? 'Autor Anónimo', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
-                            if (notebook.description != null && notebook.description!.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(notebook.description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textDark)),
-                            ],
+                            // 🚀 CAPA MINIATURA
+                            Expanded(
+                              flex: 5,
+                              child: Container(
+                                width: double.infinity,
+                                color: coverColor.withOpacity(0.9),
+                                child: Stack(
+                                  children: [
+                                    Positioned(left: 0, top: 0, bottom: 0, width: 10, child: Container(color: Colors.black.withOpacity(0.1))),
+                                    Center(
+                                      child: Icon(
+                                        _getIconForTemplate(notebook.templateType), 
+                                        color: Colors.white.withOpacity(0.5), 
+                                        size: 40
+                                      ),
+                                    ),
+                                    if (!isFree)
+                                      Positioned(
+                                        top: 8, right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+                                          child: Text('${notebook.price.toStringAsFixed(0)} Kz', 
+                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // 🚀 INFORMAÇÕES
+                            Expanded(
+                              flex: 4,
+                              child: Padding(
+                                padding: const EdgeInsets.all(10.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(notebook.title, 
+                                      maxLines: 2, overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, height: 1.2)
+                                    ),
+                                    const Spacer(),
+                                    Text(notebook.displayAuthor, // 🚀 FIX: Usar getter inteligente
+                                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.textMuted)
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 32,
+                                      child: ElevatedButton(
+                                        onPressed: () => _handleAcquire(notebook),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isFree ? AppColors.accent : AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: EdgeInsets.zero,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                        child: Text(isFree ? 'GRÁTIS' : 'COMPRAR', 
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
-                        ),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isFree ? AppColors.accent : AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () => _handleAcquire(notebook),
-                          child: Text(
-                            isFree ? 'OBTER' : '${notebook.price.toStringAsFixed(0)} Kz',
-                            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
                         ),
                       ),
                     );
@@ -168,6 +222,24 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         ],
       ),
     );
+  }
+
+  IconData _getIconForTemplate(String template) {
+    switch (template) {
+      case 'school': return Icons.school_outlined;
+      case 'university': return Icons.account_balance_outlined;
+      case 'engineering': return Icons.architecture_outlined;
+      case 'laboratory': return Icons.science_outlined;
+      case 'music': return Icons.music_note_outlined;
+      case 'accounting': return Icons.calculate_outlined;
+      case 'drawing': return Icons.palette_outlined;
+      case 'diary': return Icons.auto_stories_outlined;
+      case 'meeting': return Icons.groups_outlined;
+      case 'project': return Icons.assignment_outlined;
+      case 'planner': return Icons.calendar_today_outlined;
+      case 'study': return Icons.auto_stories_rounded;
+      default: return Icons.book_outlined;
+    }
   }
 
   Future<void> _handleAcquire(Notebook notebook) async {

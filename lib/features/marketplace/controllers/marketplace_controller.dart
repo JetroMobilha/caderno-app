@@ -102,30 +102,14 @@ class MarketplaceNotifier extends StateNotifier<MarketplaceState> {
     state = state.copyWith(isAcquiring: true);
     
     try {
-      // 1. Primeiro garantimos que temos as matérias atualizadas da nuvem
-      // (Para garantir que a matéria "Matérias Adquiridas" existe localmente)
-      await ref.read(appSyncServiceProvider).pullSubjects();
-
-      // 2. Chamar a API de aquisição
+      // 1. Chamar a API de aquisição. O servidor trata de clonar tudo 
+      // e organizar na pasta "Matérias Adquiridas 🛒".
       final clonedNotebook = await _repository.acquireNotebook(serverId);
       
       if (clonedNotebook != null) {
-        // 3. Mapear o subject_id (servidor) para o subject_id (local)
-        final db = AppDatabase.instance;
-        final serverSubId = clonedNotebook.subjectId; // Isto veio do JSON como server_id
-        
-        int? localSubId;
-        if (serverSubId != null) {
-          final sub = await (db.select(db.subjects)..where((t) => t.serverId.equals(serverSubId))).getSingleOrNull();
-          localSubId = sub?.id;
-        }
-
-        final notebookToSave = clonedNotebook.copyWith(subjectId: localSubId);
-
-        // 4. Inserir no SQLite local imediatamente
-        await ref.read(notebooksProvider.notifier).insertExternalNotebook(notebookToSave);
-        
-        // 5. Disparar sincronização total para baixar as folhas do caderno adquirido
+        // 2. Disparar sincronização total. 
+        // O motor de Sync detetará a nova pasta e o novo caderno no servidor
+        // e descarregará tudo de forma atómica para o SQLite local.
         ref.read(subjectsProvider.notifier).syncManuallyWithCloud();
         
         state = state.copyWith(isAcquiring: false);

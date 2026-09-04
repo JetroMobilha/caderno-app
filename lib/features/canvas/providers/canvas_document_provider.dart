@@ -12,8 +12,14 @@ import 'package:caderno_digital_app/core/database/app_database.dart';
 import 'package:caderno_digital_app/core/utils/rdp_simplifier.dart';
 import 'package:caderno_digital_app/core/utils/stroke_utils.dart';
 import '../../notebooks/models/notebook_configuration.dart'; // 🚀 NOVO
+import '../models/animation_object_model.dart';
+import '../models/attachment_model.dart';
+import '../models/audio_block_model.dart';
+import '../models/link_model.dart';
 import '../models/local_page_model.dart';
+import '../models/shape_model.dart';
 import '../models/stroke_model.dart';
+import '../models/table_model.dart';
 import '../models/text_block_model.dart';
 import '../models/image_block_model.dart';
 import '../models/page_object.dart'; // 🚀 NOVO
@@ -140,15 +146,13 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       final List<LocalPage> activePages = newPagesFromDb.where((p) => !p.isDeleted).toList();
       activePages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
 
+      // 🚀 COMPARAÇÃO INTELIGENTE PARA EVITAR REBUILDS DESNECESSÁRIOS
       if (state.pages.length == activePages.length) {
         bool listIdentical = true;
         for (int i = 0; i < activePages.length; i++) {
           if (activePages[i].clientId != state.pages[i].clientId || 
-              activePages[i].syncedWithCloud != state.pages[i].syncedWithCloud ||
-              activePages[i].isFavorite != state.pages[i].isFavorite ||
-              activePages[i].sectionTitle != state.pages[i].sectionTitle ||
-              activePages[i].title != state.pages[i].title ||
-              activePages[i].updatedAt != state.pages[i].updatedAt) {
+              activePages[i].updatedAt != state.pages[i].updatedAt ||
+              activePages[i].syncedWithCloud != state.pages[i].syncedWithCloud) {
             listIdentical = false;
             break;
           }
@@ -157,16 +161,6 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       }
       
       final bool wasEmpty = state.pages.isEmpty;
-
-      if (activePages.isEmpty && notebookSid != null && !state.isGlobalSyncing) {
-        state = state.copyWith(isGlobalSyncing: true);
-        unawaited(_syncService.pullPages(onlyNotebookId: notebookSid).then((_) {
-          state = state.copyWith(isGlobalSyncing: false);
-        }).catchError((e) {
-          state = state.copyWith(isGlobalSyncing: false);
-        }));
-        return; 
-      }
 
       final Map<String, LocalPage> existingPagesMap = {
         for (var p in state.pages) p.clientId: p
@@ -177,20 +171,22 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
         final existing = existingPagesMap[newPage.clientId];
         
         if (existing != null && existing.isContentLoaded) {
-          // 🚀 REATIVIDADE DO CONTEÚDO: Se o timestamp da base de dados for mais recente,
-          // precisamos de recarregar o conteúdo pesado (strokes, etc) pois veio do Sync.
-          if (newPage.updatedAt > existing.updatedAt) {
-            debugPrint('🔄 [CanvasDoc] Página ${newPage.pageNumber} atualizada externamente. Recarregando conteúdo...');
-            // Não copiamos o conteúdo antigo; deixamos como não carregado para o ensurePageLoaded tratar
+          // 🚀 RESILIÊNCIA AUMENTADA: Só recarregar se a mudança for externa e significativa
+          final bool isExternalUpdate = newPage.syncedWithCloud == 1 && existing.syncedWithCloud == 0;
+          final bool isRemoteChange = newPage.updatedAt > (existing.updatedAt + 1000); // 1s de tolerância
+
+          if (isExternalUpdate || (isRemoteChange && newPage.syncedWithCloud == 1)) {
+            debugPrint('🔄 [CanvasDoc] Reload Externo detectado para p${newPage.pageNumber}');
             newPage.isContentLoaded = false;
-            // Se for a página que estamos a ver, disparamos o reload imediato
             final currentIndex = ref.read(canvasViewportProvider).currentPageIndex;
-            if (i == currentIndex) {
-              unawaited(ensurePageLoaded(i));
-            }
+            if (i == currentIndex) unawaited(ensurePageLoaded(i));
           } else {
-            // Caso contrário, mantemos o que já temos em memória (otimização de reordenamento)
+            // MANTÉM CONTEÚDO VIVO EM MEMÓRIA
             newPage.objects = existing.objects;
+            // Preservar estados de UI
+            newPage.viewportMatrix ??= existing.viewportMatrix;
+            newPage.backgroundConfig ??= existing.backgroundConfig;
+            
             newPage.isContentLoaded = true;
             newPage.version = existing.version;
           }
@@ -210,7 +206,17 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       final content = await _repository.loadPageContent(page.id!, pageNumber: page.pageNumber);
       final updatedPages = List<LocalPage>.from(state.pages);
       updatedPages[index] = page.copyWith(
-        objects: [...content['strokes'], ...content['textBlocks'], ...content['imageBlocks']],
+        objects: [
+          ...content['strokes'], 
+          ...content['textBlocks'], 
+          ...content['imageBlocks'],
+          ...content['shapes'],
+          ...content['audios'],
+          ...content['animations'],
+          ...content['tables'],
+          ...content['links'],
+          ...content['attachments'],
+        ],
       )..isContentLoaded = true;
       state = state.copyWith(pages: updatedPages);
     } catch (e) {
@@ -220,27 +226,110 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
 
   Future<void> addStroke(LocalPage p, Stroke s) async {
     final simplifiedPoints = RdpSimplifier.simplify(s.points, 0.2);
-    final ns = Stroke(id: s.id, color: s.color, thickness: s.thickness, points: simplifiedPoints, creatorId: state.myUserId, pageNumber: p.pageNumber, isHighlighter: s.isHighlighter);
+    final ns = Stroke(
+      id: s.id, 
+      color: s.color, 
+      thickness: s.thickness, 
+      points: simplifiedPoints, 
+      creatorId: state.myUserId, 
+      pageNumber: p.pageNumber, 
+      isHighlighter: s.isHighlighter,
+      layerId: 'drawings', // 🚀 v28
+    );
     final action = AddStrokeAction(pageClientId: p.clientId, pageNumber: p.pageNumber, stroke: ns);
     await _executeAction(action, targetPage: p);
   }
 
   Future<void> addTextBlock(LocalPage page, TextBlock block) async {
+    block.layerId = 'text'; 
     final action = AddTextAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: block);
     await _executeAction(action, targetPage: page);
   }
 
+  // 🚀 NOVOS MÉTODOS v28
+  Future<void> addShape(LocalPage page, ShapeObject shape) async {
+    shape.layerId = 'drawings';
+    final action = AddShapeAction(pageClientId: page.clientId, pageNumber: page.pageNumber, shape: shape);
+    await _executeAction(action, targetPage: page);
+  }
+
+  Future<void> addAudioBlock(LocalPage page, AudioBlock audio) async {
+    audio.layerId = 'default';
+    final action = AddAudioAction(pageClientId: page.clientId, pageNumber: page.pageNumber, audio: audio);
+    await _executeAction(action, targetPage: page);
+  }
+
+  Future<void> addAnimation(LocalPage page, AnimationObject anim) async {
+    anim.layerId = 'drawings';
+    final action = AddAnimationAction(pageClientId: page.clientId, pageNumber: page.pageNumber, animation: anim);
+    await _executeAction(action, targetPage: page);
+  }
+
+  Future<void> addTable(LocalPage page, TableObject table) async {
+    table.layerId = 'default';
+    final action = AddTableAction(pageClientId: page.clientId, pageNumber: page.pageNumber, table: table);
+    await _executeAction(action, targetPage: page);
+  }
+
+  Future<void> addLink(LocalPage page, LinkObject link) async {
+    link.layerId = 'default';
+    final action = AddLinkAction(pageClientId: page.clientId, pageNumber: page.pageNumber, link: link);
+    await _executeAction(action, targetPage: page);
+  }
+
+  Future<void> addAttachment(LocalPage page, AttachmentObject attach) async {
+    attach.layerId = 'default';
+    final action = AddAttachmentAction(pageClientId: page.clientId, pageNumber: page.pageNumber, attach: attach);
+    await _executeAction(action, targetPage: page);
+  }
+
+  Future<void> updateLayerVisibility(LocalPage page, String layerId, bool isVisible) async {
+    final updatedLayers = page.layers.map((l) {
+      if (l.id == layerId) return l.copyWith(isVisible: isVisible);
+      return l;
+    }).toList();
+    _applyLayerChange(page, updatedLayers);
+  }
+
+  Future<void> updateLayerLock(LocalPage page, String layerId, bool isLocked) async {
+    final updatedLayers = page.layers.map((l) {
+      if (l.id == layerId) return l.copyWith(isLocked: isLocked);
+      return l;
+    }).toList();
+    _applyLayerChange(page, updatedLayers);
+  }
+
+  Future<void> addNewLayer(LocalPage page, String name) async {
+    final newLayer = LayerDefinition(id: const Uuid().v4(), name: name);
+    final updatedLayers = List<LayerDefinition>.from(page.layers)..add(newLayer);
+    _applyLayerChange(page, updatedLayers);
+  }
+
+  Future<void> _applyLayerChange(LocalPage page, List<LayerDefinition> layers) async {
+    final updatedPage = page.copyWith(layers: layers);
+    await _repository.savePage(updatedPage, state.liveNotebookSid);
+    
+    final updatedList = List<LocalPage>.from(state.pages);
+    final idx = updatedList.indexWhere((p) => p.clientId == page.clientId);
+    if (idx != -1) {
+      updatedList[idx] = updatedPage;
+      state = state.copyWith(pages: updatedList);
+    }
+  }
+
   Future<void> updateStrokesColor(LocalPage page, Set<String> strokeIds, String colorHex) async {
     final List<Stroke> updatedStrokes = [];
+    final now = TimeService().nowMs();
     for (var s in page.strokes) {
       if (strokeIds.contains(s.id)) {
-        final updated = s.clone()..color = colorHex..updatedAt = TimeService().nowMs();
+        final updated = s.clone()..color = colorHex..updatedAt = now;
         updatedStrokes.add(updated);
-        await _repository.saveSingleStroke(page.clientId, updated, pageId: page.id);
+        await _repository.saveSingleStroke(page.clientId, updated, pageId: page.id, updatedAt: now);
       }
     }
     if (updatedStrokes.isNotEmpty) {
       page.version++;
+      page.updatedAt = now; // 🚀 SINCRONIZAR
       state = state.copyWith(pages: List.from(state.pages));
       for (var s in updatedStrokes) {
         _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {'page_client_id': page.clientId, 'page_number': page.pageNumber, 'strokes': [s.toJson()]});
@@ -252,6 +341,8 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     bool changed = false;
     final List<Stroke> toAdd = [];
     final List<String> toDelete = [];
+    final now = TimeService().nowMs();
+
     for (var s in page.strokes) {
       if (s.isDeleted) continue;
       final result = StrokeUtils.erasePartOfStroke(s, eraserPos, radius);
@@ -266,10 +357,11 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
         page.strokes.firstWhere((s) => s.id == id).isDeleted = true;
       }
       for (var s in toAdd) {
-        await _repository.saveSingleStroke(page.clientId, s, pageId: page.id);
+        await _repository.saveSingleStroke(page.clientId, s, pageId: page.id, updatedAt: now);
         page.strokes.add(s);
       }
       page.version++;
+      page.updatedAt = now; // 🚀 SINCRONIZAR
       state = state.copyWith(pages: List.from(state.pages));
       if (state.liveNotebookSid != null) {
         _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {'page_client_id': page.clientId, 'strokes': toDelete.map((id) => {'id': id, 'is_deleted': true}).toList()});
@@ -279,14 +371,19 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   }
 
   Future<void> _executeAction(CanvasAction action, {bool isRemote = false, LocalPage? targetPage}) async {
-    final target = targetPage ?? state.pages.firstWhere((p) => p.clientId == action.pageClientId);
-    if (target.isFrozen && !isRemote) return;
+    final target = targetPage ?? state.pages.cast<LocalPage?>().firstWhere((p) => p?.clientId == action.pageClientId, orElse: () => null);
+    if (target == null || (target.isFrozen && !isRemote)) return;
+
+    final now = TimeService().nowMs();
     target.version++;
+    if (!isRemote) target.updatedAt = now; // 🚀 ATUALIZAÇÃO ANTECIPADA (Importante)
+
     action.execute(target);
     final newUndoStack = List<CanvasAction>.from(state.undoStack)..add(action);
     if (newUndoStack.length > 50) newUndoStack.removeAt(0);
     state = state.copyWith(pages: List.from(state.pages), undoStack: newUndoStack, redoStack: []);
-    unawaited(_persistIncrementalAction(target, action));
+    
+    unawaited(_persistIncrementalAction(target, action, updatedAt: isRemote ? null : now));
     if (!isRemote) _broadcastAction(action);
   }
 
@@ -316,18 +413,30 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: data);
   }
 
-  Future<void> _persistIncrementalAction(LocalPage target, CanvasAction action) async {
+  Future<void> _persistIncrementalAction(LocalPage target, CanvasAction action, {int? updatedAt}) async {
     final String cid = target.clientId;
     final int? pid = target.id;
     try {
-      if (action is AddStrokeAction) await _repository.saveSingleStroke(cid, action.stroke, pageId: pid);
-      else if (action is AddTextAction) await _repository.saveSingleTextBlock(cid, action.block, pageId: pid);
-      else if (action is AddImageAction) await _repository.saveSingleImageBlock(cid, action.block, pageId: pid);
+      if (action is AddStrokeAction) await _repository.saveSingleStroke(cid, action.stroke, pageId: pid, updatedAt: updatedAt);
+      else if (action is AddTextAction) await _repository.saveSingleTextBlock(cid, action.block, pageId: pid, updatedAt: updatedAt);
+      else if (action is AddImageAction) await _repository.saveSingleImageBlock(cid, action.block, pageId: pid, updatedAt: updatedAt);
+      else if (action is AddShapeAction) await _repository.saveSingleShape(cid, action.shape, pageId: pid, updatedAt: updatedAt); 
+      else if (action is AddAudioAction) await _repository.saveSingleAudioBlock(cid, action.audio, pageId: pid, updatedAt: updatedAt);
+      else if (action is AddAnimationAction) await _repository.saveSingleAnimationObject(cid, action.animation, pageId: pid, updatedAt: updatedAt);
+      else if (action is AddTableAction) await _repository.saveSingleTable(cid, action.table, pageId: pid, updatedAt: updatedAt); // 🚀 v29
+      else if (action is AddLinkAction) await _repository.saveSingleLink(cid, action.link, pageId: pid, updatedAt: updatedAt); // 🚀 v29
+      else if (action is AddAttachmentAction) await _repository.saveSingleAttachment(cid, action.attach, pageId: pid, updatedAt: updatedAt); // 🚀 v29
       else if (action is UpdateObjectAction) {
         final type = action.newState['type'];
-        if (type == 'text') await _repository.saveSingleTextBlock(cid, TextBlock.fromJson(action.newState), pageId: pid);
-        else if (type == 'image') await _repository.saveSingleImageBlock(cid, ImageBlock.fromJson(action.newState), pageId: pid);
-        else if (type == 'stroke') await _repository.saveSingleStroke(cid, Stroke.fromJson(action.newState), pageId: pid);
+        if (type == 'text') await _repository.saveSingleTextBlock(cid, TextBlock.fromJson(action.newState), pageId: pid, updatedAt: updatedAt);
+        else if (type == 'image') await _repository.saveSingleImageBlock(cid, ImageBlock.fromJson(action.newState), pageId: pid, updatedAt: updatedAt);
+        else if (type == 'stroke') await _repository.saveSingleStroke(cid, Stroke.fromJson(action.newState), pageId: pid, updatedAt: updatedAt);
+        else if (type == 'shape') await _repository.saveSingleShape(cid, ShapeObject.fromJson(action.newState), pageId: pid, updatedAt: updatedAt);
+        else if (type == 'audio') await _repository.saveSingleAudioBlock(cid, AudioBlock.fromJson(action.newState), pageId: pid, updatedAt: updatedAt);
+        else if (type == 'animation') await _repository.saveSingleAnimationObject(cid, AnimationObject.fromJson(action.newState), pageId: pid, updatedAt: updatedAt);
+        else if (type == 'table') await _repository.saveSingleTable(cid, TableObject.fromJson(action.newState), pageId: pid, updatedAt: updatedAt); // 🚀 v29
+        else if (type == 'link') await _repository.saveSingleLink(cid, LinkObject.fromJson(action.newState), pageId: pid, updatedAt: updatedAt); // 🚀 v29
+        else if (type == 'attachment') await _repository.saveSingleAttachment(cid, AttachmentObject.fromJson(action.newState), pageId: pid, updatedAt: updatedAt); // 🚀 v29
       }
       else if (action is DeleteAction) { 
         for (var oid in action.objectIds) {
@@ -335,6 +444,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
           if (obj is Stroke) await _repository.deleteSingleStroke(oid);
           else if (obj is TextBlock) await _repository.deleteSingleTextBlock(oid);
         }
+        await _repository.markPageAsUnsynced(cid, updatedAt: updatedAt);
       }
     } catch (e) { debugPrint('🚨 Persist Error: $e'); }
   }
@@ -351,6 +461,30 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'strokes': [action.stroke.toJson()]});
     } else if (action is AddTextAction) {
       _realtimeService.broadcastTextBlock(notebookId: state.liveNotebookSid!, textData: {'sender_id': state.myUserId, 'page_number': action.pageNumber, 'block': action.block.toJson(), 'is_editing': false});
+    } else if (action is AddShapeAction) { // 🚀 v28
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'shapes': [action.shape.toJson()]
+      });
+    } else if (action is AddAudioAction) { // 🚀 v28
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'audios': [action.audio.toJson()]
+      });
+    } else if (action is AddAnimationAction) { // 🚀 v28
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'animations': [action.animation.toJson()]
+      });
+    } else if (action is AddTableAction) { // 🚀 v29
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'tables': [action.table.toJson()]
+      });
+    } else if (action is AddLinkAction) { // 🚀 v29
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'links': [action.link.toJson()]
+      });
+    } else if (action is AddAttachmentAction) { // 🚀 v29
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'attachments': [action.attach.toJson()]
+      });
     }
   }
 
@@ -420,14 +554,18 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
 
     await _repository.savePage(clonedPage, state.liveNotebookSid);
     
-    for (var s in clonedPage.strokes) {
-      await _repository.saveSingleStroke(clonedPage.clientId, s, pageId: null);
-    }
-    for (var t in clonedPage.textBlocks) {
-      await _repository.saveSingleTextBlock(clonedPage.clientId, t, pageId: null);
-    }
-    for (var i in clonedPage.imageBlocks) {
-      await _repository.saveSingleImageBlock(clonedPage.clientId, i, pageId: null);
+    for (var s in clonedPage.strokes) await _repository.saveSingleStroke(clonedPage.clientId, s, pageId: null);
+    for (var t in clonedPage.textBlocks) await _repository.saveSingleTextBlock(clonedPage.clientId, t, pageId: null);
+    for (var i in clonedPage.imageBlocks) await _repository.saveSingleImageBlock(clonedPage.clientId, i, pageId: null);
+    
+    // 🚀 v29: Clonagem de Novos Objetos
+    for (var obj in clonedPage.objects) {
+      if (obj is ShapeObject) await _repository.saveSingleShape(clonedPage.clientId, obj, pageId: null);
+      else if (obj is TableObject) await _repository.saveSingleTable(clonedPage.clientId, obj, pageId: null);
+      else if (obj is LinkObject) await _repository.saveSingleLink(clonedPage.clientId, obj, pageId: null);
+      else if (obj is AttachmentObject) await _repository.saveSingleAttachment(clonedPage.clientId, obj, pageId: null);
+      else if (obj is AudioBlock) await _repository.saveSingleAudioBlock(clonedPage.clientId, obj, pageId: null);
+      else if (obj is AnimationObject) await _repository.saveSingleAnimationObject(clonedPage.clientId, obj, pageId: null);
     }
     
     await _repository.reindexPages(state.currentNotebookId);
@@ -504,6 +642,34 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       isLocalEdit: true,
     );
     unawaited(_syncService.pushPages(onlyNotebookId: state.currentNotebookId));
+  }
+
+  /// 🚀 PERSISTIR VIEWPORT: Salva zoom e posição da folha
+  Future<void> updatePageViewport(String clientId, Matrix4 matrix) async {
+    final idx = state.pages.indexWhere((p) => p.clientId == clientId);
+    if (idx == -1) return;
+
+    final page = state.pages[idx];
+    final now = TimeService().nowMs();
+    
+    // 🚀 OTIMIZAÇÃO: Preservar a lista de objetos e sincronizar updatedAt
+    final updated = page.copyWith(
+      viewportMatrix: matrix,
+      objects: page.objects, 
+      updatedAt: now, // 🚀 SINCRONIZAR COM DB
+    );
+    
+    // Atualizar apenas em memória primeiro para rapidez
+    final newList = List<LocalPage>.from(state.pages);
+    newList[idx] = updated;
+    state = state.copyWith(pages: newList);
+
+    // Persistir no banco silenciosamente
+    await _repository.savePageFromMap(
+      updated.toJson(), 
+      state.liveNotebookSid, 
+      isLocalEdit: true
+    );
   }
 
   Future<void> updatePageSection(LocalPage page, String? sectionTitle, {String? sectionColor}) async {
@@ -640,12 +806,21 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     return await _repository.getDeletedPages(state.currentNotebookId);
   }
 
-  Future<void> moveSelection(LocalPage page, {required List<String> strokeIds, required List<String> textIds, required List<String> imageIds, required Offset delta}) async {
+  Future<void> moveSelection(
+    LocalPage page, {
+    required List<String> strokeIds, 
+    required List<String> textIds, 
+    required List<String> imageIds, 
+    required List<String> shapeIds, 
+    required List<String> audioIds, 
+    required List<String> animationIds, 
+    required Offset delta
+  }) async {
     if (page.isFrozen || delta == Offset.zero) return;
     final action = MoveAction(
       pageClientId: page.clientId, 
       pageNumber: page.pageNumber, 
-      objectIds: [...strokeIds, ...textIds, ...imageIds], 
+      objectIds: [...strokeIds, ...textIds, ...imageIds, ...shapeIds, ...audioIds, ...animationIds], 
       delta: delta
     );
     await _executeAction(action, targetPage: page);
@@ -733,7 +908,10 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   }
 
   void _startSmoothTransition(Matrix4 target) {
-    final controller = ref.read(canvasViewportProvider.notifier).transformationController;
+    final viewportState = ref.read(canvasViewportProvider);
+    if (viewportState.currentPageClientId == null) return;
+    
+    final controller = ref.read(canvasViewportProvider.notifier).getControllerFor(viewportState.currentPageClientId!);
     Timer.periodic(const Duration(milliseconds: 16), (t) {
       final current = controller.value;
       final next = Matrix4.identity();

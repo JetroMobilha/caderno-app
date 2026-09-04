@@ -178,6 +178,9 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                             strokeIds: toolState.selectedStrokeIds.toList(),
                             textIds: toolState.selectedTextIds.toList(),
                             imageIds: toolState.selectedImageIds.toList(),
+                            shapeIds: toolState.selectedShapeIds.toList(),
+                            audioIds: toolState.selectedAudioIds.toList(),
+                            animationIds: toolState.selectedAnimationIds.toList(),
                             delta: toolState.totalSelectionDelta,
                           );
                           toolNotifier.resetSelectionDelta();

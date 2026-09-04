@@ -44,8 +44,37 @@ O diálogo `AddPageDialog` foi modernizado:
 *   **Subtítulos Detalhados**: A lista de páginas agora exibe informações completas de layout, por exemplo: "A4 Vertical • Pautado".
 *   **Seletor de Fundo Evidenciado**: No diálogo de nova folha, o fundo selecionado agora é mostrado com uma pré-visualização real do papel e estilo, em vez de apenas um ícone genérico, facilitando a decisão do utilizador.
 
+### 5. Zoom Independente e Estabilidade Visual
+*   **Isolamento por Página**: Cada folha possui agora o seu próprio motor de zoom independente na memória RAM. Isto permite ter zooms diferentes em cada página (ex: Pág 1 a 50%, Pág 2 a 200%) sem qualquer interferência ou resets ao navegar.
+*   **Zero Flicker (Sem Piscadelas)**: Otimizámos a renderização para que os desenhos nunca desapareçam durante o zoom. Ao remover dependências de tempo da chave visual da página, garantimos que o conteúdo permaneça sólido e visível 100% do tempo.
+*   **Zoom de Precisão**: Os botões `+` e `-` agora operam com saltos suaves de 10%, mantendo sempre o ponto central do que você está a ver fixo no ecrã.
+
+### 6. Indicador de Zoom Direto e Amplitude Aumentada
+*   **Escuta Direta**: O indicador de percentagem (%) agora lê os dados diretamente do motor de zoom da página ativa. Isto elimina qualquer erro de "informação falsa" ao trocar de página ou ao fazer zoom rápido.
+*   **Afastamento Livre (Zoom Out)**: Aumentámos a amplitude de zoom para permitir afastar a folha até **5%** do seu tamanho original. Isto resolve o problema do indicador ficar preso nos 22% (A2) ou 63% (A4), permitindo uma visão panorâmica completa do seu trabalho.
+*   **Reset Inteligente**: Ao tocar na percentagem na barra de ferramentas, a folha volta instantaneamente ao centro e ao tamanho ideal de leitura, facilitando a navegação rápida em documentos grandes (A2/A1).
+
+### 7. Estabilidade de Dados e Persistência
+*   **Sincronização Invisível**: As confirmações de salvamento do servidor agora ocorrem em segundo plano sem invalidar a memória local. Isto garante que a sua escrita nunca seja interrompida por recarregamentos forçados.
+*   **Isolamento de Erros**: Implementámos guardas de segurança que evitam erros fatais ao alternar rapidamente entre páginas ou cadernos em sincronização ativa.
+
 > [!TIP]
 > O "Modo Infinito" pode ser ativado definindo `isInfinite: true` no modelo da página, o que expande o canvas para uma área de 5000x5000 pixels por padrão.
 
 > [!IMPORTANT]
 > A migração de dados é automática: ao abrir uma página antiga, o sistema converte as listas `stroke_data`, `text_data` e `image_data` para a nova estrutura `objects_data`.
+
+## Evolução Fase 2: Objetos Avançados e Camadas
+
+### 1. Formas Geométricas Atómicas (`ShapeObject`)
+- Adicionado suporte para **Retângulos, Círculos, Linhas, Setas e Triângulos** perfeitos.
+- Estes objetos são independentes dos traços manuais, permitindo redimensionamento e alteração de cores de preenchimento/borda futuramente.
+
+### 2. Integração de Áudio e Animações no Canvas
+- **Áudio Blocks**: Agora é possível posicionar ícones de áudio interativos na página. Ao clicar, o sistema reproduz a gravação associada àquele ponto da nota.
+- **Animações e Ilustrações**: Criámos o `AnimationObject`, que permite integrar animações interativas (ex: engrenagens de engenharia, funções matemáticas dinâmicas) diretamente na superfície de trabalho.
+
+### 3. Gestão de Camadas (Layers)
+- A página agora suporta uma hierarquia de camadas: **Geral, Fundo, Desenhos e Texto**.
+- **Controlo de Visibilidade**: Implementámos a lógica para ocultar camadas inteiras (ex: ocultar todos os desenhos para ler apenas o texto).
+- **Isolamento**: Novos traços são automaticamente atribuídos à camada "Desenhos" e textos à camada "Texto".

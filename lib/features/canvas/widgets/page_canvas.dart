@@ -22,8 +22,17 @@ class PageCanvas extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Sort objects by zIndex
-    final sortedObjects = page.objects.where((o) => !o.isDeleted).toList()
+    // 1. Map de visibilidade/bloqueio das camadas para acesso rápido
+    final Map<String, bool> layerVisibility = {
+      for (var l in page.layers) l.id: l.isVisible
+    };
+
+    // 2. Sort objects by zIndex and filter by visibility
+    final sortedObjects = page.objects.where((o) {
+      if (o.isDeleted) return false;
+      final bool layerVisible = layerVisibility[o.layerId ?? 'default'] ?? true;
+      return layerVisible && o.isVisible;
+    }).toList()
       ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
 
     // 🚀 OTIMIZAÇÃO: Agrupar strokes consecutivos para melhor performance
@@ -66,20 +75,20 @@ class PageCanvas extends ConsumerWidget {
       height: pageSize.height,
       color: Colors.white,
       child: Stack(
+        fit: StackFit.expand, 
         children: [
-          // Background Layer
-          RepaintBoundary(
-            child: CustomPaint(
-              size: pageSize,
-              painter: BackgroundPainter(
-                bgConfig: page.backgroundConfig,
-                lineType: page.lineType,
-                lineSpacing: page.lineSpacing,
-              ),
+          // 🚀 REMOVIDO RepaintBoundary para evitar limites de textura GPU em folhas gigantes
+          CustomPaint(
+            size: pageSize,
+            painter: BackgroundPainter(
+              notebookConfig: page.toConfig, 
+              bgConfig: page.backgroundConfig,
+              lineType: page.lineType,
+              lineSpacing: page.lineSpacing,
             ),
           ),
           
-          // Objects Layer
+          // Layer de Objetos
           ...renderList,
         ],
       ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide SelectionOverlay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,25 +8,24 @@ import '../providers/audio_session_provider.dart';
 import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
 import '../providers/canvas_tool_provider.dart';
-import '../providers/canvas_ui_provider.dart'; // 🚀 NOVO
+import '../providers/canvas_ui_provider.dart'; 
 import '../models/canvas_enums.dart';
 import '../widgets/canvas_app_bar.dart';
 import '../widgets/canvas_page_drawer.dart';
 import '../widgets/canvas_toolbar.dart';
-import '../widgets/layers/drawing_layer.dart';
 import '../widgets/layers/interaction_layer.dart';
-import '../widgets/layers/live_text_edit_layer.dart'; // 🚀 Renomeado
-import '../widgets/layers/image_layer.dart';
+import '../widgets/layers/live_text_edit_layer.dart'; 
 import '../widgets/page_canvas.dart'; 
-import '../widgets/selection_overlay.dart'; // 🚀 NOVO
+import '../widgets/selection_overlay.dart'; 
 import '../../explanations/widgets/explanation_layer.dart'; 
 import '../widgets/dialogs/color_studio_dialog.dart';
 import '../widgets/dialogs/thickness_studio_dialog.dart';
 import '../widgets/dialogs/paper_style_dialog.dart';
-import '../widgets/dialogs/add_page_dialog.dart'; // 🚀 Novo
+import '../widgets/dialogs/add_page_dialog.dart'; 
 import '../widgets/collaboration_center_sheet.dart'; 
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../models/local_page_model.dart';
 
 class CanvasScreen extends ConsumerStatefulWidget {
   final Notebook notebook;
@@ -46,7 +46,6 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = ref.read(authProvider).currentUser;
       
-      // 🚀 Inicializar Notifier (Novo)
       ref.read(canvasDocumentProvider.notifier).initNotebook(
         widget.notebook.id ?? 0,
         widget.notebook.serverId,
@@ -55,11 +54,16 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         templateType: widget.notebook.templateType,
       );
 
-      // 🚀 Inicializar Serviços (Colaboração e Áudio)
       final collabService = ref.read(collaborationProvider);
       collabService.getPages = () => ref.read(canvasDocumentProvider).pages;
       collabService.getCurrentPageIndex = () => ref.read(canvasViewportProvider).currentPageIndex;
-      collabService.getCurrentScale = () => ref.read(canvasViewportProvider.notifier).transformationController.value.getMaxScaleOnAxis();
+      collabService.getCurrentScale = () {
+        final state = ref.read(canvasViewportProvider);
+        if (state.currentPageClientId == null) return 1.0;
+        return ref.read(canvasViewportProvider.notifier)
+            .getControllerFor(state.currentPageClientId!)
+            .value.getMaxScaleOnAxis();
+      };
 
       collabService.init(
         widget.notebook.serverId ?? 0,
@@ -81,21 +85,20 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   @override
   Widget build(BuildContext context) {
     final docState = ref.watch(canvasDocumentProvider);
-    final viewportState = ref.watch(canvasViewportProvider);
+    // 🚀 PERSISTÊNCIA DO VIEWPORT: watch(select) garante que o provider não seja auto-disposed
+    // e mantém o zoom na RAM por página sem causar rebuilds globais por movimento.
+    ref.watch(canvasViewportProvider.select((s) => s.currentPageClientId)); 
+    
+    final bool isFocusMode = ref.watch(canvasViewportProvider.select((s) => s.isFocusMode));
     final toolState = ref.watch(canvasToolProvider);
     
-    // 🚀 PERSISTÊNCIA DA UI: Assistir ao provider aqui garante que o estado da gaveta
-    // (grelha, secções fechadas) se mantenha vivo enquanto o caderno estiver aberto.
     ref.watch(canvasUiProvider); 
 
-    // 🚀 OTIMIZAÇÃO: Ouvir quando as páginas carregam ou mudam de ordem
     ref.listen<CanvasDocumentState>(canvasDocumentProvider, (previous, next) {
       if (next.pages.isNotEmpty) {
-        // 1. Garantir lazy load se necessário
         if (previous == null || previous.pages.isEmpty) {
           ref.read(canvasDocumentProvider.notifier).ensurePageLoaded(0);
         }
-        // 2. ⚓ Sincronizar índice do Viewport com os IDs (Âncora)
         ref.read(canvasViewportProvider.notifier).syncIndexWithId(
           next.pages.map((p) => p.clientId).toList()
         );
@@ -103,13 +106,14 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     });
 
     final bool hasPages = docState.pages.isNotEmpty;
-    // 🚀 SEGURANÇA: Garantir que o index está sempre dentro dos limites para evitar RangeError
-    final int safeIndex = hasPages ? viewportState.currentPageIndex.clamp(0, docState.pages.length - 1) : 0;
+    // 🚀 Selecionar apenas o index para evitar rebuild global por zoom (%)
+    final int currentPageIndex = ref.watch(canvasViewportProvider.select((s) => s.currentPageIndex));
+    final int safeIndex = hasPages ? currentPageIndex.clamp(0, docState.pages.length - 1) : 0;
     final currentPage = hasPages ? docState.pages[safeIndex] : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFD6D6D6),
-      appBar: viewportState.isFocusMode ? null : CanvasAppBar(
+      appBar: isFocusMode ? null : CanvasAppBar(
         notebook: widget.notebook,
         onCollaborationTap: () => showModalBottomSheet(
           context: context,
@@ -133,7 +137,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.note_add_rounded, size: 64, color: Colors.black.withOpacity(0.1)),
+                Icon(Icons.note_add_rounded, size: 64, color: Colors.black.withValues(alpha: 0.1)),
                 const SizedBox(height: 16),
                 Text(
                   'Este caderno ainda não tem folhas.',
@@ -166,14 +170,13 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
           ) 
         : Stack(
         children: [
-          // 🚀 ESTABILIDADE SUPREMA: Excluímos as páginas da árvore de semântica global 
           ExcludeSemantics(
             child: _CanvasPageView(
               textController: _textController,
               textFocusNode: _textFocusNode,
             ),
           ),
-          if (!viewportState.isFocusMode)
+          if (!ref.watch(canvasViewportProvider.select((s) => s.isFocusMode)))
             Positioned(
               bottom: 20, left: 0, right: 0,
               child: Center(
@@ -219,107 +222,159 @@ class _CanvasPageView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final docState = ref.watch(canvasDocumentProvider);
     final viewportNotifier = ref.read(canvasViewportProvider.notifier);
-
+    final int pageCount = ref.watch(canvasDocumentProvider.select((s) => s.pages.length));
+    
     return PageView.builder(
       controller: viewportNotifier.pageController,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: docState.pages.length,
+      itemCount: pageCount,
       onPageChanged: (index) {
-        final String cid = docState.pages[index].clientId;
-        viewportNotifier.setPageIndex(index, clientId: cid);
+        final page = ref.read(canvasDocumentProvider).pages[index];
+        viewportNotifier.setPageIndex(index, clientId: page.clientId, initialMatrix: page.viewportMatrix);
         ref.read(canvasDocumentProvider.notifier).ensurePageLoaded(index);
       },
       itemBuilder: (context, index) {
-        final page = docState.pages[index];
-        final toolState = ref.watch(canvasToolProvider);
-        final toolNotifier = ref.read(canvasToolProvider.notifier);
-        
-        // 🚀 OBTENÇÃO DINÂMICA DE DIMENSÕES EM PIXELS
-        final double pageWidth = page.pageWidthPx;
-        final double pageHeight = page.pageHeightPx;
-        
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              viewportNotifier.updateViewport(
-                screenSize: Size(constraints.maxWidth, constraints.maxHeight),
-              );
-            });
+        return Consumer(
+          builder: (context, ref, _) {
+            final page = ref.watch(canvasDocumentProvider.select((s) => s.pages[index]));
+            final toolState = ref.watch(canvasToolProvider);
+            final toolNotifier = ref.read(canvasToolProvider.notifier);
+            
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final Size screenSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-            return InteractiveViewer(
-              transformationController: viewportNotifier.transformationController,
-              boundaryMargin: const EdgeInsets.symmetric(horizontal: 500, vertical: 800),
-              minScale: 0.1,
-              maxScale: 6.0,
-              interactionEndFrictionCoefficient: 0.01,
-              child: Center(
-                child: Container(
-                  width: pageWidth, 
-                  height: pageHeight, 
-                  key: ValueKey('page_container_${page.clientId}_${page.updatedAt}'), // 🚀 FORÇAR REBUILD EM TEMPO REAL
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDFBF7),
-                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                  child: ClipRect(
-                    child: Stack(
-                      children: [
-                        // 🚀 NOVA ARQUITETURA UNIFICADA
-                        PageCanvas(
-                          page: page, 
-                          pageSize: Size(pageWidth, pageHeight),
-                        ),
-                        
-                        SelectionOverlay(
-                          page: page,
-                          pageSize: Size(pageWidth, pageHeight),
-                        ),
-                        
-                        // Camadas Temporárias/Interativas que ainda não foram unificadas ou são voláteis
-                        ExplanationLayer(pageSize: Size(pageWidth, pageHeight)),
-                        
-                        InteractionLayer(
-                          page: page,
-                          isBlocked: page.isFrozen,
-                          onFinishEditing: () => toolNotifier.clearTextEditing(),
-                          onAddTextBlock: (pos) {
-                            final newBlock = TextBlock(
-                              text: '', 
-                              position: pos, 
-                              textColorHex: toolState.selectedColorHex,
-                              zIndex: page.objects.length, // Adicionar ao topo
-                            );
-                            ref.read(canvasDocumentProvider.notifier).addTextBlock(page, newBlock);
-                            toolNotifier.setTextEditing(InlineTarget.block, newBlock);
-                            textController.text = '';
-                            textFocusNode.requestFocus();
-                          },
-                        ),
-                        
-                        // O TextLayer atual ainda é necessário para o TextField de edição "ao vivo"
-                        // Mas o TextLayer original também renderizava textos estáticos.
-                        // Devemos remover a renderização estática do TextLayer se o PageCanvas já faz.
-                        LiveTextEditLayer(
-                          page: page,
-                          textController: textController,
-                          textFocusNode: textFocusNode,
-                          onTitleTap: () {
-                            toolNotifier.setTextEditing(InlineTarget.title);
-                            textController.text = page.title;
-                            textFocusNode.requestFocus();
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+                return _IsolateViewportItem(
+                  page: page,
+                  screenSize: screenSize,
+                  toolState: toolState,
+                  toolNotifier: toolNotifier,
+                  textController: textController,
+                  textFocusNode: textFocusNode,
+                  viewportNotifier: viewportNotifier,
+                );
+              },
             );
           },
         );
       },
+    );
+  }
+}
+
+class _IsolateViewportItem extends ConsumerStatefulWidget {
+  final LocalPage page;
+  final Size screenSize;
+  final CanvasToolState toolState;
+  final CanvasToolNotifier toolNotifier;
+  final TextEditingController textController;
+  final FocusNode textFocusNode;
+  final CanvasViewportNotifier viewportNotifier;
+
+  const _IsolateViewportItem({
+    required this.page,
+    required this.screenSize,
+    required this.toolState,
+    required this.toolNotifier,
+    required this.textController,
+    required this.textFocusNode,
+    required this.viewportNotifier,
+  });
+
+  @override
+  ConsumerState<_IsolateViewportItem> createState() => _IsolateViewportItemState();
+}
+
+class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.viewportNotifier.updateViewport(screenSize: widget.screenSize);
+        if (!widget.viewportNotifier.isPageInitialized(widget.page.clientId)) {
+          widget.viewportNotifier.restorePageMatrix(widget.page, widget.screenSize);
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.viewportNotifier.getControllerFor(widget.page.clientId);
+
+    return InteractiveViewer(
+      key: ValueKey('viewport_${widget.page.clientId}'), 
+      transformationController: controller,
+      onInteractionEnd: (_) {
+        // 🚀 REMOVIDO: Não salvar no DB durante o zoom para evitar flicker
+      },
+      boundaryMargin: const EdgeInsets.all(5000.0), 
+      minScale: 0.05, // 🚀 AUMENTADA AMPLITUDE (Permite zoom out até 5%)
+      maxScale: 6.0,
+      constrained: false, 
+      interactionEndFrictionCoefficient: 0.01,
+      child: SizedBox(
+        width: widget.page.pageWidthPx,
+        height: widget.page.pageHeightPx,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: widget.page.pageWidthPx, 
+              height: widget.page.pageHeightPx, 
+              key: ValueKey('page_container_${widget.page.clientId}'),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDFBF7),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.26), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: ClipRect(
+                child: Stack(
+                  children: [
+                    PageCanvas(
+                      page: widget.page, 
+                      pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
+                    ),
+                    SelectionOverlay(
+                      page: widget.page,
+                      pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
+                    ),
+                    ExplanationLayer(pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx)),
+                    InteractionLayer(
+                      page: widget.page,
+                      isBlocked: widget.page.isFrozen,
+                      onFinishEditing: () => widget.toolNotifier.clearTextEditing(),
+                      onAddTextBlock: (pos) {
+                        final newBlock = TextBlock(
+                          text: '', 
+                          position: pos, 
+                          textColorHex: widget.toolState.selectedColorHex,
+                          zIndex: widget.page.objects.length,
+                        );
+                        ref.read(canvasDocumentProvider.notifier).addTextBlock(widget.page, newBlock);
+                        widget.toolNotifier.setTextEditing(InlineTarget.block, newBlock);
+                        widget.textController.text = '';
+                        widget.textFocusNode.requestFocus();
+                      },
+                    ),
+                    LiveTextEditLayer(
+                      page: widget.page,
+                      textController: widget.textController,
+                      textFocusNode: widget.textFocusNode,
+                      onTitleTap: () {
+                        widget.toolNotifier.setTextEditing(InlineTarget.title);
+                        widget.textController.text = widget.page.title;
+                        widget.textFocusNode.requestFocus();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

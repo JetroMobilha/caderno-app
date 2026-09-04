@@ -47,6 +47,9 @@ class ImageBlock implements PageObject {
   bool isLocked;
   @override
   bool isVisible;
+  
+  @override
+  String? layerId;
 
   ImageBlock({
     String? id,
@@ -65,6 +68,7 @@ class ImageBlock implements PageObject {
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
+    this.layerId,
   }) : id = id ?? const Uuid().v4(),
        updatedAt = updatedAt ?? TimeService().nowMs();
 
@@ -97,6 +101,7 @@ class ImageBlock implements PageObject {
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
+      'layer_id': layerId,
     };
   }
 
@@ -151,6 +156,7 @@ class ImageBlock implements PageObject {
       zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == true || json['is_locked'] == 1,
       isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),
+      layerId: json['layer_id']?.toString(),
     );
   }
 

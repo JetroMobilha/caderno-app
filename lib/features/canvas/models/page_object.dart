@@ -42,6 +42,9 @@ abstract class PageObject {
 
   String? get creatorId;
 
+  String? get layerId;
+  set layerId(String? value);
+
   Map<String, dynamic> toJson();
   
   PageObject clone({String? newId, int? newPageNumber});

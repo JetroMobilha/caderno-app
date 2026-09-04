@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/animation_object_model.dart';
+import '../models/audio_block_model.dart';
 import '../models/canvas_enums.dart';
 import '../models/image_block_model.dart';
+import '../models/shape_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../models/local_page_model.dart';
@@ -15,9 +18,12 @@ class CanvasToolState {
   final Set<String> selectedStrokeIds;
   final Set<String> selectedTextIds;
   final Set<String> selectedImageIds;
+  final Set<String> selectedShapeIds; // 🚀 v28
+  final Set<String> selectedAudioIds; // 🚀 v28
+  final Set<String> selectedAnimationIds; // 🚀 v28
   final Offset? selectionRectStart;
   final Offset? selectionRectEnd;
-  final List<Offset>? lassoPath; // 🚀 Novo
+  final List<Offset>? lassoPath; 
   final bool isTransformMode;
   final bool isHighlighter;
   final Offset totalSelectionDelta;
@@ -32,9 +38,12 @@ class CanvasToolState {
     this.selectedStrokeIds = const {},
     this.selectedTextIds = const {},
     this.selectedImageIds = const {},
+    this.selectedShapeIds = const {},
+    this.selectedAudioIds = const {},
+    this.selectedAnimationIds = const {},
     this.selectionRectStart,
     this.selectionRectEnd,
-    this.lassoPath, // 🚀
+    this.lassoPath, 
     this.isTransformMode = false,
     this.isHighlighter = false,
     this.totalSelectionDelta = Offset.zero,
@@ -50,9 +59,12 @@ class CanvasToolState {
     Set<String>? selectedStrokeIds,
     Set<String>? selectedTextIds,
     Set<String>? selectedImageIds,
+    Set<String>? selectedShapeIds,
+    Set<String>? selectedAudioIds,
+    Set<String>? selectedAnimationIds,
     Offset? selectionRectStart,
     Offset? selectionRectEnd,
-    List<Offset>? lassoPath, // 🚀
+    List<Offset>? lassoPath, 
     bool? isTransformMode,
     bool? isHighlighter,
     Offset? totalSelectionDelta,
@@ -67,9 +79,12 @@ class CanvasToolState {
       selectedStrokeIds: selectedStrokeIds ?? this.selectedStrokeIds,
       selectedTextIds: selectedTextIds ?? this.selectedTextIds,
       selectedImageIds: selectedImageIds ?? this.selectedImageIds,
+      selectedShapeIds: selectedShapeIds ?? this.selectedShapeIds,
+      selectedAudioIds: selectedAudioIds ?? this.selectedAudioIds,
+      selectedAnimationIds: selectedAnimationIds ?? this.selectedAnimationIds,
       selectionRectStart: selectionRectStart ?? this.selectionRectStart,
       selectionRectEnd: selectionRectEnd ?? this.selectionRectEnd,
-      lassoPath: lassoPath ?? this.lassoPath, // 🚀
+      lassoPath: lassoPath ?? this.lassoPath, 
       isTransformMode: isTransformMode ?? this.isTransformMode,
       isHighlighter: isHighlighter ?? this.isHighlighter,
       totalSelectionDelta: totalSelectionDelta ?? this.totalSelectionDelta,
@@ -134,10 +149,17 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       final newStrokeIds = <String>{};
       final newTextIds = <String>{};
       final newImageIds = <String>{};
+      final newShapeIds = <String>{};
+      final newAudioIds = <String>{};
+      final newAnimationIds = <String>{};
       
       for (var obj in page.objects) {
         if (obj.isDeleted) continue;
         
+        // Verificar se a camada do objeto está bloqueada
+        final layer = page.layers.cast<LayerDefinition?>().firstWhere((l) => l?.id == (obj.layerId ?? 'default'), orElse: () => null);
+        if (layer?.isLocked ?? false) continue;
+
         bool intersects = false;
         if (obj is Stroke) {
           intersects = obj.points.any((pt) => rect.contains(pt));
@@ -148,6 +170,9 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
           if (intersects) {
             if (obj is TextBlock) newTextIds.add(obj.id);
             else if (obj is ImageBlock) newImageIds.add(obj.id);
+            else if (obj is ShapeObject) newShapeIds.add(obj.id);
+            else if (obj is AudioBlock) newAudioIds.add(obj.id);
+            else if (obj is AnimationObject) newAnimationIds.add(obj.id);
           }
         }
       }
@@ -156,6 +181,9 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
         selectedStrokeIds: newStrokeIds,
         selectedTextIds: newTextIds,
         selectedImageIds: newImageIds,
+        selectedShapeIds: newShapeIds,
+        selectedAudioIds: newAudioIds,
+        selectedAnimationIds: newAnimationIds,
       );
     }
   }
@@ -171,19 +199,31 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       final newStrokeIds = <String>{};
       final newTextIds = <String>{};
       final newImageIds = <String>{};
+      final newShapeIds = <String>{};
+      final newAudioIds = <String>{};
+      final newAnimationIds = <String>{};
 
       for (var obj in page.objects) {
         if (obj.isDeleted) continue;
+
+        final layer = page.layers.cast<LayerDefinition?>().firstWhere((l) => l?.id == (obj.layerId ?? 'default'), orElse: () => null);
+        if (layer?.isLocked ?? false) continue;
 
         bool intersects = false;
         if (obj is Stroke) {
           intersects = obj.points.any((pt) => _isPointInPolygon(pt, path));
           if (intersects) newStrokeIds.add(obj.id);
         } else {
-          intersects = _isPointInPolygon(obj.position, path);
+          // Para objetos retangulares, verificamos a posição (âncora) e o centro
+          final center = obj.position + Offset(obj.size.width / 2, obj.size.height / 2);
+          intersects = _isPointInPolygon(obj.position, path) || _isPointInPolygon(center, path);
+          
           if (intersects) {
             if (obj is TextBlock) newTextIds.add(obj.id);
             else if (obj is ImageBlock) newImageIds.add(obj.id);
+            else if (obj is ShapeObject) newShapeIds.add(obj.id);
+            else if (obj is AudioBlock) newAudioIds.add(obj.id);
+            else if (obj is AnimationObject) newAnimationIds.add(obj.id);
           }
         }
       }
@@ -192,6 +232,9 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
         selectedStrokeIds: newStrokeIds,
         selectedTextIds: newTextIds,
         selectedImageIds: newImageIds,
+        selectedShapeIds: newShapeIds,
+        selectedAudioIds: newAudioIds,
+        selectedAnimationIds: newAnimationIds,
       );
     }
   }
@@ -214,9 +257,12 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       selectedStrokeIds: {},
       selectedTextIds: {},
       selectedImageIds: {},
+      selectedShapeIds: {},
+      selectedAudioIds: {},
+      selectedAnimationIds: {},
       selectionRectStart: null,
       selectionRectEnd: null,
-      lassoPath: null, // 🚀
+      lassoPath: null, 
       isTransformMode: false,
       totalSelectionDelta: Offset.zero,
     );
@@ -234,11 +280,17 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
     Set<String>? strokeIds,
     Set<String>? textIds,
     Set<String>? imageIds,
+    Set<String>? shapeIds,
+    Set<String>? audioIds,
+    Set<String>? animationIds,
   }) {
     state = state.copyWith(
       selectedStrokeIds: strokeIds ?? state.selectedStrokeIds,
       selectedTextIds: textIds ?? state.selectedTextIds,
       selectedImageIds: imageIds ?? state.selectedImageIds,
+      selectedShapeIds: shapeIds ?? state.selectedShapeIds,
+      selectedAudioIds: audioIds ?? state.selectedAudioIds,
+      selectedAnimationIds: animationIds ?? state.selectedAnimationIds,
     );
   }
 }

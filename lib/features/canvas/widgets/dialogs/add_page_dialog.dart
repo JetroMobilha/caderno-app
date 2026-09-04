@@ -246,6 +246,7 @@ class _AddPageDialogState extends State<AddPageDialog> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => BackgroundSelectorSheet(
+        initialConfig: _selectedBackground, // 🚀 PASSAR ATUAL
         onSelected: (bg) => setState(() => _selectedBackground = bg),
       ),
     );

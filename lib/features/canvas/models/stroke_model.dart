@@ -38,6 +38,9 @@ class Stroke implements PageObject {
   bool isLocked;
   @override
   bool isVisible;
+  
+  @override
+  String? layerId;
 
   Stroke({
     String? id,
@@ -55,6 +58,7 @@ class Stroke implements PageObject {
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
+    this.layerId,
   }) : id = id ?? const Uuid().v4(),
        updatedAt = updatedAt ?? TimeService().nowMs();
 
@@ -130,6 +134,7 @@ class Stroke implements PageObject {
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
+      'layer_id': layerId,
       if (pageNumber != null) 'page_number': pageNumber,
       if (includePoints) 'points': points.map((p) => {
         'dx': double.parse(p.dx.toStringAsFixed(1)),
@@ -154,6 +159,7 @@ class Stroke implements PageObject {
       zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == true || json['is_locked'] == 1,
       isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),
+      layerId: json['layer_id']?.toString(),
       points: json['points'] != null
           ? (json['points'] as List)
           .map((p) => Offset((p['dx'] as num).toDouble(), (p['dy'] as num).toDouble()))

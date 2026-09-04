@@ -1,38 +1,27 @@
-# Plano de Implementação - Testes Unitários para Configuração de Páginas
+# Plano de Manutenção: OCR e Reconhecimento de Escrita (v29)
 
-Criar um conjunto robusto de testes unitários para diagnosticar e prevenir problemas na evolução da estrutura de páginas e nas suas configurações em tempo real.
+Garantir que a funcionalidade de transformar desenhos em texto de máquina (OCR) continue operacional após a migração para o sistema de objetos unificados (`objects_data`).
 
-## Revisão do Utilizador Necessária
+## Diagnóstico
+O motor de OCR atual (`ProcessPageOcr.php`) procura os traços na coluna `stroke_data`. Com a unificação, os novos traços estarão dentro de `objects_data` com o tipo `stroke`. Precisamos de adaptar o Job para extrair os dados do local correto.
 
-> [!IMPORTANT]
-> **Foco do Diagnóstico**: Os testes focarão na integridade da lista unificada de objetos, na conversão entre unidades (mm/pixels) e na persistência de configurações de layout (orientação, modo infinito).
+## Mudanças Propostas - Backend (Laravel)
 
-## Mudanças Propostas
+### 1. Modelo de Página (`Page.php`)
+- **[MODIFY] [Page.php](file:///C:/xampp/htdocs/caderno-backend/app/Models/Page.php)**:
+    - Adicionar um método auxiliar `getStrokes()` que tenta ler de `objects_data` (filtrando por `type: stroke`) e, se vazio, recorre ao antigo `stroke_data`. Isto garante que o OCR funcione tanto para cadernos novos como legados.
 
-### 1. Testes de Modelo (`LocalPage`)
+### 2. Job de Processamento (`ProcessPageOcr.php`)
+- **[MODIFY] [ProcessPageOcr.php](file:///C:/xampp/htdocs/caderno-backend/app/Jobs/ProcessPageOcr.php)**:
+    - Atualizar a lógica de extração de traços para utilizar o novo método `getStrokes()`.
 
-#### [NEW] [page_model_test.dart](file:///C:/Users/HP/StudioProjects/caderno-app/test/features/canvas/models/page_model_test.dart)
-- Testar serialização JSON para garantir que a lista `objects` é preservada.
-- Testar `copyWith` e `clone` para validar se campos como `isInfinite` e `backgroundConfig` são copiados corretamente.
-- Validar os getters `pageWidthPx` e `pageHeightPx` em diferentes orientações.
-
-### 2. Testes de Provedor (`CanvasDocumentNotifier`)
-
-#### [MODIFY] [canvas_document_test.dart](file:///C:/Users/HP/StudioProjects/caderno-app/test/features/canvas/providers/canvas_document_test.dart)
-- Adicionar teste para `updatePageSettings`, verificando se o estado da página em memória é atualizado imediatamente.
-- Adicionar teste para `addNewPage` com o parâmetro `isInfinite`.
-
-### 3. Testes de Configuração (`NotebookConfiguration`)
-
-#### [NEW] [config_logic_test.dart](file:///C:/Users/HP/StudioProjects/caderno-app/test/features/notebooks/models/config_logic_test.dart)
-- Validar a lógica de inferência de `paperSize` baseada em dimensões.
-- Testar a consistência do `BackgroundConfig` rico.
+### 3. Sincronização Inteligente (`SyncService.php`)
+- **[MODIFY] [SyncService.php](file:///C:/xampp/htdocs/caderno-backend/app/Services/SyncService.php)**:
+    - Garantir que, ao receber `objects_data`, o gatilho para o `ProcessPageOcr` seja disparado se houver traços novos na lista.
 
 ## Plano de Verificação
 
-### Execução de Testes
-- Correr `flutter test test/features/canvas/models/page_model_test.dart`
-- Correr `flutter test test/features/canvas/providers/canvas_document_test.dart`
-- Correr `flutter test test/features/notebooks/models/config_logic_test.dart`
-
-O resultado de cada teste ajudará a identificar se o problema está na **Lógica de Memória**, na **Persistência** ou na **Renderização**.
+### Verificação Manual
+1. **Desenho para Texto**: Desenhar uma palavra legível no App, sincronizar e verificar nos logs do Laravel se o Job `ProcessPageOcr` foi disparado com sucesso.
+2. **Confirmação no Banco**: Verificar se a coluna `extracted_text` é preenchida corretamente no MySQL após o processamento.
+3. **Legado**: Abrir uma página antiga e confirmar que o OCR ainda consegue ler os dados da coluna `stroke_data` original.

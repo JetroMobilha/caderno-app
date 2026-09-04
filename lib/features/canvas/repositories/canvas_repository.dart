@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:vector_math/vector_math_64.dart';
 import '../../../core/database/app_database.dart' hide User, Subject, Notebook, Page;
 import '../../../core/network/api_service.dart';
 import '../../../core/network/time_service.dart';
@@ -12,6 +13,14 @@ import '../models/local_page_model.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../models/image_block_model.dart';
+import '../models/shape_model.dart'; // 🚀 NOVO
+import '../models/audio_block_model.dart'; 
+import '../models/animation_object_model.dart'; 
+import '../models/table_model.dart'; // 🚀 NOVO
+import '../models/link_model.dart'; // 🚀 NOVO
+import '../models/attachment_model.dart'; // 🚀 NOVO
+import 'package:caderno_digital_app/core/network/time_service.dart';
+import 'package:vector_math/vector_math_64.dart';
 
 class CanvasRepository {
   final AppDatabase _db;
@@ -75,9 +84,30 @@ class CanvasRepository {
       'is_deleted': i.isDeleted == 1,
       'deleted_in_session': i.deletedInSession == 1,
       'creator_id': i.creatorId,
+      'layer_id': i.layerId,
       'synced_with_cloud': i.syncedWithCloud == 1,
       'page_number': pRow.pageNumber,
     })).toList();
+
+    // 🚀 v28: Novos Objetos
+    final shapeRows = await (_db.select(_db.canvasShapes)..where((t) => t.pageId.equals(pageId))).get();
+    final shapes = shapeRows.map((s) => ShapeObject.fromJson(jsonDecode(s.shapeData))).toList();
+
+    final audioRows = await (_db.select(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId))).get();
+    final audios = audioRows.map((a) => AudioBlock.fromJson(jsonDecode(a.audioData))).toList();
+
+    final animRows = await (_db.select(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId))).get();
+    final animations = animRows.map((a) => AnimationObject.fromJson(jsonDecode(a.animationData))).toList();
+
+    // 🚀 v29: Novos Objetos
+    final tableRows = await (_db.select(_db.canvasTables)..where((t) => t.pageId.equals(pageId))).get();
+    final tables = tableRows.map((t) => TableObject.fromJson(jsonDecode(t.tableData))).toList();
+
+    final linkRows = await (_db.select(_db.canvasLinks)..where((t) => t.pageId.equals(pageId))).get();
+    final links = linkRows.map((l) => LinkObject.fromJson(jsonDecode(l.linkData))).toList();
+
+    final attachRows = await (_db.select(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId))).get();
+    final attachments = attachRows.map((a) => AttachmentObject.fromJson(jsonDecode(a.attachmentData))).toList();
 
     return LocalPage(
       id: pRow.id,
@@ -96,8 +126,15 @@ class CanvasRepository {
       extractedText: pRow.extractedText,
       isFrozen: pRow.isFrozen == 1,
       isFavorite: pRow.isFavorite == 1,
-      objects: [...strokes, ...textBlocks, ...imageBlocks],
+      objects: [
+        ...strokes, ...textBlocks, ...imageBlocks, ...shapes, ...audios, ...animations,
+        ...tables, ...links, ...attachments
+      ],
       backgroundConfig: pRow.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(pRow.backgroundConfig!)) : null,
+      viewportMatrix: pRow.viewportMatrix != null ? Matrix4.fromList(List<double>.from(jsonDecode(pRow.viewportMatrix!))) : null,
+      layers: pRow.layers != null 
+          ? (jsonDecode(pRow.layers!) as List).map((l) => LayerDefinition.fromJson(l)).toList() 
+          : null,
       syncedWithCloud: pRow.syncedWithCloud,
       updatedAt: pRow.updatedAt,
     );
@@ -153,9 +190,30 @@ class CanvasRepository {
         'is_deleted': i.isDeleted == 1,
         'deleted_in_session': i.deletedInSession == 1,
         'creator_id': i.creatorId,
+        'layer_id': i.layerId,
         'synced_with_cloud': i.syncedWithCloud == 1,
         'page_number': pRow.pageNumber,
       })).toList();
+
+      // 🚀 v28: Novos Objetos
+      final shapeRows = await (_db.select(_db.canvasShapes)..where((t) => t.pageId.equals(pageId))).get();
+      final shapes = shapeRows.map((s) => ShapeObject.fromJson(jsonDecode(s.shapeData))).toList();
+
+      final audioRows = await (_db.select(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId))).get();
+      final audios = audioRows.map((a) => AudioBlock.fromJson(jsonDecode(a.audioData))).toList();
+
+      final animRows = await (_db.select(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId))).get();
+      final animations = animRows.map((a) => AnimationObject.fromJson(jsonDecode(a.animationData))).toList();
+
+      // 🚀 v29: Novos Objetos
+      final tableRows = await (_db.select(_db.canvasTables)..where((t) => t.pageId.equals(pageId))).get();
+      final tables = tableRows.map((t) => TableObject.fromJson(jsonDecode(t.tableData))).toList();
+
+      final linkRows = await (_db.select(_db.canvasLinks)..where((t) => t.pageId.equals(pageId))).get();
+      final links = linkRows.map((l) => LinkObject.fromJson(jsonDecode(l.linkData))).toList();
+
+      final attachRows = await (_db.select(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId))).get();
+      final attachments = attachRows.map((a) => AttachmentObject.fromJson(jsonDecode(a.attachmentData))).toList();
 
       pages.add(LocalPage(
         id: pRow.id,
@@ -174,8 +232,15 @@ class CanvasRepository {
         extractedText: pRow.extractedText,
         isFrozen: pRow.isFrozen == 1,
         isFavorite: pRow.isFavorite == 1,
-        objects: [...strokes, ...textBlocks, ...imageBlocks],
+        objects: [
+          ...strokes, ...textBlocks, ...imageBlocks, ...shapes, ...audios, ...animations,
+          ...tables, ...links, ...attachments
+        ],
         backgroundConfig: pRow.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(pRow.backgroundConfig!)) : null,
+        viewportMatrix: pRow.viewportMatrix != null ? Matrix4.fromList(List<double>.from(jsonDecode(pRow.viewportMatrix!))) : null,
+        layers: pRow.layers != null 
+            ? (jsonDecode(pRow.layers!) as List).map((l) => LayerDefinition.fromJson(l)).toList() 
+            : null,
         syncedWithCloud: pRow.syncedWithCloud,
         updatedAt: pRow.updatedAt,
       ));
@@ -207,6 +272,11 @@ class CanvasRepository {
         isFavorite: row.isFavorite == 1,
         isDeleted: row.isDeleted == 1,
         objects: [], // Lazy loaded
+        backgroundConfig: row.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(row.backgroundConfig!)) : null,
+        viewportMatrix: row.viewportMatrix != null ? Matrix4.fromList(List<double>.from(jsonDecode(row.viewportMatrix!))) : null,
+        layers: row.layers != null 
+            ? (jsonDecode(row.layers!) as List).map((l) => LayerDefinition.fromJson(l)).toList() 
+            : null,
         syncedWithCloud: row.syncedWithCloud,
         updatedAt: row.updatedAt,
       )).toList();
@@ -302,14 +372,66 @@ class CanvasRepository {
       'is_deleted': i.isDeleted == 1,
       'deleted_in_session': i.deletedInSession == 1,
       'creator_id': i.creatorId,
+      'layer_id': i.layerId,
       'synced_with_cloud': i.syncedWithCloud == 1,
       'page_number': pageNumber,
+    })).toList();
+
+    // 🚀 v28: Novos Objetos
+    final shapeRows = await (_db.select(_db.canvasShapes)..where((t) => t.pageId.equals(pageId))).get();
+    final shapes = shapeRows.map((s) => ShapeObject.fromJson({
+      ...jsonDecode(s.shapeData),
+      'layer_id': s.layerId,
+      'updated_at': s.updatedAt,
+      'version': s.version,
+    })).toList();
+
+    final audioRows = await (_db.select(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId))).get();
+    final audios = audioRows.map((a) => AudioBlock.fromJson({
+      ...jsonDecode(a.audioData),
+      'layer_id': a.layerId,
+      'updated_at': a.updatedAt,
+    })).toList();
+
+    final animRows = await (_db.select(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId))).get();
+    final animations = animRows.map((a) => AnimationObject.fromJson({
+      ...jsonDecode(a.animationData),
+      'layer_id': a.layerId,
+      'updated_at': a.updatedAt,
+    })).toList();
+
+    // 🚀 v29: Novos Objetos
+    final tableRows = await (_db.select(_db.canvasTables)..where((t) => t.pageId.equals(pageId))).get();
+    final tables = tableRows.map((t) => TableObject.fromJson({
+      ...jsonDecode(t.tableData),
+      'layer_id': t.layerId,
+      'updated_at': t.updatedAt,
+    })).toList();
+
+    final linkRows = await (_db.select(_db.canvasLinks)..where((t) => t.pageId.equals(pageId))).get();
+    final links = linkRows.map((l) => LinkObject.fromJson({
+      ...jsonDecode(l.linkData),
+      'layer_id': l.layerId,
+      'updated_at': l.updatedAt,
+    })).toList();
+
+    final attachRows = await (_db.select(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId))).get();
+    final attachments = attachRows.map((a) => AttachmentObject.fromJson({
+      ...jsonDecode(a.attachmentData),
+      'layer_id': a.layerId,
+      'updated_at': a.updatedAt,
     })).toList();
 
     return {
       'strokes': strokes,
       'textBlocks': textBlocks,
       'imageBlocks': imageBlocks,
+      'shapes': shapes,
+      'audios': audios,
+      'animations': animations,
+      'tables': tables,
+      'links': links,
+      'attachments': attachments,
     };
   }
 
@@ -358,8 +480,9 @@ class CanvasRepository {
       isFavorite: Value((pageData['is_favorite'] == true || pageData['is_favorite'] == 1) ? 1 : 0),
       isDeleted: Value((pageData['is_deleted'] == true || pageData['is_deleted'] == 1) ? 1 : 0),
       backgroundConfig: Value(pageData['background_config'] != null ? jsonEncode(pageData['background_config']) : null),
+      viewportMatrix: Value(pageData['viewport_matrix'] != null ? jsonEncode(pageData['viewport_matrix']) : null), // 🚀 v27
       updatedAt: Value(_parseSafeInt(pageData['updated_at_ms']) ?? _parseSafeInt(pageData['updated_at']) ?? TimeService().nowMs()),
-      syncedWithCloud: Value(isLocalEdit ? 0 : 1), // 🚀 CONTROLO DE SYNC
+      syncedWithCloud: Value(isLocalEdit ? 0 : 1), 
     );
 
     int finalId = await _db.into(_db.pages).insertOnConflictUpdate(companion);
@@ -378,7 +501,7 @@ class CanvasRepository {
     return finalId;
   }
 
-  Future<void> saveSingleStroke(String pageClientId, Stroke s, {int? pageId}) async {
+  Future<void> saveSingleStroke(String pageClientId, Stroke s, {int? pageId, int? updatedAt}) async {
     int? targetPageId = pageId;
     if (targetPageId == null) {
       final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
@@ -387,7 +510,6 @@ class CanvasRepository {
     }
 
     try {
-      // 🚀 CONSISTÊNCIA: Garantir que o strokeData JSON reflete o estado syncedWithCloud correto antes de salvar
       final strokeMap = s.toJson();
       
       await _db.into(_db.canvasStrokes).insertOnConflictUpdate(CanvasStrokesCompanion.insert(
@@ -401,16 +523,14 @@ class CanvasRepository {
         syncedWithCloud: Value(s.syncedWithCloud ? 1 : 0),
       ));
       
-      // 🚀 GATILHO DE SYNC: Marcar a página como não sincronizada para o SyncService detectá-la
-      if (!s.syncedWithCloud) {
-        await markPageAsUnsynced(pageClientId);
-      }
+      // 🚀 GATILHO DE SYNC COM TIMESTAMP CONTROLADO
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
     } catch (e) {
       debugPrint('🚨 [CanvasRepo] Falha ao salvar traço: $e');
     }
   }
 
-  Future<void> saveSingleTextBlock(String pageClientId, TextBlock t, {int? pageId}) async {
+  Future<void> saveSingleTextBlock(String pageClientId, TextBlock t, {int? pageId, int? updatedAt}) async {
     int? targetPageId = pageId;
     if (targetPageId == null) {
       final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
@@ -432,13 +552,11 @@ class CanvasRepository {
         syncedWithCloud: Value(t.syncedWithCloud ? 1 : 0),
       ));
 
-      if (!t.syncedWithCloud) {
-        await markPageAsUnsynced(pageClientId);
-      }
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
     } catch (e) {}
   }
 
-  Future<void> saveSingleImageBlock(String pageClientId, ImageBlock i, {int? pageId}) async {
+  Future<void> saveSingleImageBlock(String pageClientId, ImageBlock i, {int? pageId, int? updatedAt}) async {
     int? targetPageId = pageId;
     if (targetPageId == null) {
       final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
@@ -463,18 +581,136 @@ class CanvasRepository {
         syncedWithCloud: Value(i.syncedWithCloud ? 1 : 0),
       ));
 
-      if (!i.syncedWithCloud) {
-        await markPageAsUnsynced(pageClientId);
-      }
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
     } catch (e) {}
   }
 
-  Future<void> markPageAsUnsynced(String pageClientId) async {
+  Future<void> saveSingleShape(String pageClientId, ShapeObject s, {int? pageId, int? updatedAt}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
+    try {
+      await _db.into(_db.canvasShapes).insertOnConflictUpdate(CanvasShapesCompanion.insert(
+        clientShapeId: s.id,
+        pageId: targetPageId,
+        shapeData: jsonEncode(s.toJson()),
+        isDeleted: Value(s.isDeleted ? 1 : 0),
+        updatedAt: Value(s.updatedAt),
+        layerId: Value(s.layerId),
+      ));
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
+    } catch (e) {}
+  }
+
+  Future<void> saveSingleAudioBlock(String pageClientId, AudioBlock a, {int? pageId, int? updatedAt}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
+    try {
+      await _db.into(_db.canvasAudioBlocks).insertOnConflictUpdate(CanvasAudioBlocksCompanion.insert(
+        clientAudioId: a.id,
+        pageId: targetPageId,
+        audioData: jsonEncode(a.toJson()),
+        isDeleted: Value(a.isDeleted ? 1 : 0),
+        updatedAt: Value(a.updatedAt),
+        layerId: Value(a.layerId),
+      ));
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
+    } catch (e) {}
+  }
+
+  Future<void> saveSingleAnimationObject(String pageClientId, AnimationObject a, {int? pageId, int? updatedAt}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
+    try {
+      await _db.into(_db.canvasAnimations).insertOnConflictUpdate(CanvasAnimationsCompanion.insert(
+        clientAnimationId: a.id,
+        pageId: targetPageId,
+        animationData: jsonEncode(a.toJson()),
+        isDeleted: Value(a.isDeleted ? 1 : 0),
+        updatedAt: Value(a.updatedAt),
+        layerId: Value(a.layerId),
+      ));
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
+    } catch (e) {}
+  }
+
+  Future<void> saveSingleTable(String pageClientId, TableObject t, {int? pageId, int? updatedAt}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
+    try {
+      await _db.into(_db.canvasTables).insertOnConflictUpdate(CanvasTablesCompanion.insert(
+        clientTableId: t.id,
+        pageId: targetPageId,
+        tableData: jsonEncode(t.toJson()),
+        isDeleted: Value(t.isDeleted ? 1 : 0),
+        updatedAt: Value(t.updatedAt),
+        layerId: Value(t.layerId),
+      ));
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
+    } catch (e) {}
+  }
+
+  Future<void> saveSingleLink(String pageClientId, LinkObject l, {int? pageId, int? updatedAt}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
+    try {
+      await _db.into(_db.canvasLinks).insertOnConflictUpdate(CanvasLinksCompanion.insert(
+        clientLinkId: l.id,
+        pageId: targetPageId,
+        linkData: jsonEncode(l.toJson()),
+        isDeleted: Value(l.isDeleted ? 1 : 0),
+        updatedAt: Value(l.updatedAt),
+        layerId: Value(l.layerId),
+      ));
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
+    } catch (e) {}
+  }
+
+  Future<void> saveSingleAttachment(String pageClientId, AttachmentObject a, {int? pageId, int? updatedAt}) async {
+    int? targetPageId = pageId;
+    if (targetPageId == null) {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
+      if (page == null) return;
+      targetPageId = page.id;
+    }
+    try {
+      await _db.into(_db.canvasAttachments).insertOnConflictUpdate(CanvasAttachmentsCompanion.insert(
+        clientAttachmentId: a.id,
+        pageId: targetPageId,
+        attachmentData: jsonEncode(a.toJson()),
+        isDeleted: Value(a.isDeleted ? 1 : 0),
+        updatedAt: Value(a.updatedAt),
+        layerId: Value(a.layerId),
+      ));
+      await markPageAsUnsynced(pageClientId, updatedAt: updatedAt);
+    } catch (e) {}
+  }
+
+  Future<void> markPageAsUnsynced(String pageClientId, {int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
     if (page == null) return;
 
-    final now = TimeService().nowMs();
-    debugPrint('🚩 [CanvasRepo] Marcando página como SUJA: $pageClientId');
+    final now = updatedAt ?? TimeService().nowMs();
+    debugPrint('🚩 [CanvasRepo] Marcando página como SUJA: $pageClientId (Time: $now)');
     
     await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId)))
         .write(PagesCompanion(

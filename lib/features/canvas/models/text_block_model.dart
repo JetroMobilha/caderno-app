@@ -45,6 +45,9 @@ class TextBlock implements PageObject {
   bool isVisible;
   @override
   double rotation;
+  
+  @override
+  String? layerId;
 
   TextBlock({
     String? id,
@@ -68,6 +71,7 @@ class TextBlock implements PageObject {
     this.isLocked = false,
     this.isVisible = true,
     this.rotation = 0.0,
+    this.layerId,
   }) : id = id ?? const Uuid().v4(),
        checkedLineIndices = checkedLineIndices ?? [],
        updatedAt = updatedAt ?? TimeService().nowMs();
@@ -109,6 +113,7 @@ class TextBlock implements PageObject {
     'is_locked': isLocked ? 1 : 0,
     'is_visible': isVisible ? 1 : 0,
     'rotation': rotation,
+    'layer_id': layerId,
   };
 
   factory TextBlock.fromJson(Map<String, dynamic> json) => TextBlock(
@@ -136,6 +141,7 @@ class TextBlock implements PageObject {
     isLocked: json['is_locked'] == true || json['is_locked'] == 1,
     isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),
     rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
+    layerId: json['layer_id']?.toString(),
   );
 
   TextBlock clone({String? newId, int? newPageNumber}) {

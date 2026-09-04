@@ -91,6 +91,8 @@ class Pages extends Table {
   RealColumn get lineSpacing => real().nullable()();
   TextColumn get backgroundPdfPath => text().nullable()();
   TextColumn get backgroundConfig => text().nullable()(); // 🚀 v25 (JSON)
+  TextColumn get viewportMatrix => text().nullable()(); // 🚀 v27 (JSON Matrix4)
+  TextColumn get layers => text().nullable()(); // 🚀 v28 (JSON LayerDefinition list)
 }
 
 class CanvasStrokes extends Table {
@@ -104,7 +106,7 @@ class CanvasStrokes extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
-  TextColumn get layerId => text().nullable()();
+  TextColumn get layerId => text().nullable()(); 
   @override
   Set<Column> get primaryKey => {clientStrokeId};
 }
@@ -120,6 +122,7 @@ class CanvasTextBlocks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
+  TextColumn get layerId => text().nullable()(); // 🚀 v28
   @override
   Set<Column> get primaryKey => {clientTextId};
 }
@@ -140,8 +143,76 @@ class CanvasImageBlocks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
+  TextColumn get layerId => text().nullable()(); // 🚀 v28
   @override
   Set<Column> get primaryKey => {clientImageId};
+}
+
+class CanvasShapes extends Table {
+  TextColumn get clientShapeId => text()();
+  IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
+  TextColumn get shapeData => text()(); // JSON completo do objeto
+  IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  IntColumn get version => integer().withDefault(const Constant(1))();
+  TextColumn get layerId => text().nullable()();
+  @override
+  Set<Column> get primaryKey => {clientShapeId};
+}
+
+class CanvasAudioBlocks extends Table {
+  TextColumn get clientAudioId => text()();
+  IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
+  TextColumn get audioData => text()();
+  IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  TextColumn get layerId => text().nullable()();
+  @override
+  Set<Column> get primaryKey => {clientAudioId};
+}
+
+class CanvasAnimations extends Table {
+  TextColumn get clientAnimationId => text()();
+  IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
+  TextColumn get animationData => text()();
+  IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  TextColumn get layerId => text().nullable()();
+  @override
+  Set<Column> get primaryKey => {clientAnimationId};
+}
+
+class CanvasTables extends Table {
+  TextColumn get clientTableId => text()();
+  IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
+  TextColumn get tableData => text()();
+  IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  TextColumn get layerId => text().nullable()();
+  @override
+  Set<Column> get primaryKey => {clientTableId};
+}
+
+class CanvasLinks extends Table {
+  TextColumn get clientLinkId => text()();
+  IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
+  TextColumn get linkData => text()();
+  IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  TextColumn get layerId => text().nullable()();
+  @override
+  Set<Column> get primaryKey => {clientLinkId};
+}
+
+class CanvasAttachments extends Table {
+  TextColumn get clientAttachmentId => text()();
+  IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
+  TextColumn get attachmentData => text()();
+  IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  TextColumn get layerId => text().nullable()();
+  @override
+  Set<Column> get primaryKey => {clientAttachmentId};
 }
 
 class NotebookUser extends Table {
@@ -214,7 +285,9 @@ class NotebookTemplateVersions extends Table {
 
 @DriftDatabase(tables: [
   Users, Subjects, Notebooks, Pages, CanvasStrokes,
-  CanvasTextBlocks, CanvasImageBlocks, NotebookUser, Payments, LessonRecordings,
+  CanvasTextBlocks, CanvasImageBlocks, CanvasShapes, CanvasAudioBlocks, 
+  CanvasAnimations, CanvasTables, CanvasLinks, CanvasAttachments,
+  NotebookUser, Payments, LessonRecordings,
   NotebookTemplates, NotebookTemplateVersions
 ])
 class AppDatabase extends _$AppDatabase {
@@ -336,17 +409,31 @@ class AppDatabase extends _$AppDatabase {
           try { await m.createTable(notebookTemplates); } catch(_) {}
           try { await m.createTable(notebookTemplateVersions); } catch(_) {}
         }
-        if (from < 26) {
-          // 🚀 REFORÇO v26: Garantir que as colunas críticas existem se o v25 falhou
-          try { await m.addColumn(notebooks, notebooks.configuration); } catch(_) {}
-          try { await m.addColumn(pages, pages.backgroundConfig); } catch(_) {}
+        if (from < 27) {
+          // 🚀 v27: Memória de Zoom/Viewport por página
+          try { await m.addColumn(pages, pages.viewportMatrix); } catch(_) {}
+        }
+        if (from < 28) {
+          // 🚀 v28: Formas, Áudio, Animações e Camadas
+          try { await m.addColumn(pages, pages.layers); } catch(_) {}
+          try { await m.addColumn(canvasImageBlocks, canvasImageBlocks.layerId); } catch(_) {}
+          try { await m.addColumn(canvasTextBlocks, canvasTextBlocks.layerId); } catch(_) {}
+          try { await m.createTable(canvasShapes); } catch(_) {}
+          try { await m.createTable(canvasAudioBlocks); } catch(_) {}
+          try { await m.createTable(canvasAnimations); } catch(_) {}
+        }
+        if (from < 29) {
+          // 🚀 v29: Tabelas, Links e Anexos
+          try { await m.createTable(canvasTables); } catch(_) {}
+          try { await m.createTable(canvasLinks); } catch(_) {}
+          try { await m.createTable(canvasAttachments); } catch(_) {}
         }
       },
     );
   }
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 29;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

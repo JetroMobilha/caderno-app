@@ -67,8 +67,8 @@ class PageConfig {
     this.unit = 'mm', 
     this.orientation = 'portrait',
     this.isInfinite = false,
-    this.paperSize = 'A4',
-  });
+    String? paperSize,
+  }) : paperSize = paperSize ?? _inferPaperSize(width, height);
 
   factory PageConfig.fromJson(Map<String, dynamic> json) {
     final double w = (json['width'] ?? 210).toDouble();

@@ -3453,6 +3453,26 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _viewportMatrixMeta = const VerificationMeta(
+    'viewportMatrix',
+  );
+  @override
+  late final GeneratedColumn<String> viewportMatrix = GeneratedColumn<String>(
+    'viewport_matrix',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _layersMeta = const VerificationMeta('layers');
+  @override
+  late final GeneratedColumn<String> layers = GeneratedColumn<String>(
+    'layers',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3475,6 +3495,8 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
     lineSpacing,
     backgroundPdfPath,
     backgroundConfig,
+    viewportMatrix,
+    layers,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3627,6 +3649,21 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         ),
       );
     }
+    if (data.containsKey('viewport_matrix')) {
+      context.handle(
+        _viewportMatrixMeta,
+        viewportMatrix.isAcceptableOrUnknown(
+          data['viewport_matrix']!,
+          _viewportMatrixMeta,
+        ),
+      );
+    }
+    if (data.containsKey('layers')) {
+      context.handle(
+        _layersMeta,
+        layers.isAcceptableOrUnknown(data['layers']!, _layersMeta),
+      );
+    }
     return context;
   }
 
@@ -3716,6 +3753,14 @@ class $PagesTable extends Pages with TableInfo<$PagesTable, Page> {
         DriftSqlType.string,
         data['${effectivePrefix}background_config'],
       ),
+      viewportMatrix: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}viewport_matrix'],
+      ),
+      layers: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layers'],
+      ),
     );
   }
 
@@ -3746,6 +3791,8 @@ class Page extends DataClass implements Insertable<Page> {
   final double? lineSpacing;
   final String? backgroundPdfPath;
   final String? backgroundConfig;
+  final String? viewportMatrix;
+  final String? layers;
   const Page({
     required this.id,
     this.serverId,
@@ -3767,6 +3814,8 @@ class Page extends DataClass implements Insertable<Page> {
     this.lineSpacing,
     this.backgroundPdfPath,
     this.backgroundConfig,
+    this.viewportMatrix,
+    this.layers,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3808,6 +3857,12 @@ class Page extends DataClass implements Insertable<Page> {
     }
     if (!nullToAbsent || backgroundConfig != null) {
       map['background_config'] = Variable<String>(backgroundConfig);
+    }
+    if (!nullToAbsent || viewportMatrix != null) {
+      map['viewport_matrix'] = Variable<String>(viewportMatrix);
+    }
+    if (!nullToAbsent || layers != null) {
+      map['layers'] = Variable<String>(layers);
     }
     return map;
   }
@@ -3852,6 +3907,12 @@ class Page extends DataClass implements Insertable<Page> {
       backgroundConfig: backgroundConfig == null && nullToAbsent
           ? const Value.absent()
           : Value(backgroundConfig),
+      viewportMatrix: viewportMatrix == null && nullToAbsent
+          ? const Value.absent()
+          : Value(viewportMatrix),
+      layers: layers == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layers),
     );
   }
 
@@ -3883,6 +3944,8 @@ class Page extends DataClass implements Insertable<Page> {
         json['backgroundPdfPath'],
       ),
       backgroundConfig: serializer.fromJson<String?>(json['backgroundConfig']),
+      viewportMatrix: serializer.fromJson<String?>(json['viewportMatrix']),
+      layers: serializer.fromJson<String?>(json['layers']),
     );
   }
   @override
@@ -3909,6 +3972,8 @@ class Page extends DataClass implements Insertable<Page> {
       'lineSpacing': serializer.toJson<double?>(lineSpacing),
       'backgroundPdfPath': serializer.toJson<String?>(backgroundPdfPath),
       'backgroundConfig': serializer.toJson<String?>(backgroundConfig),
+      'viewportMatrix': serializer.toJson<String?>(viewportMatrix),
+      'layers': serializer.toJson<String?>(layers),
     };
   }
 
@@ -3933,6 +3998,8 @@ class Page extends DataClass implements Insertable<Page> {
     Value<double?> lineSpacing = const Value.absent(),
     Value<String?> backgroundPdfPath = const Value.absent(),
     Value<String?> backgroundConfig = const Value.absent(),
+    Value<String?> viewportMatrix = const Value.absent(),
+    Value<String?> layers = const Value.absent(),
   }) => Page(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -3960,6 +4027,10 @@ class Page extends DataClass implements Insertable<Page> {
     backgroundConfig: backgroundConfig.present
         ? backgroundConfig.value
         : this.backgroundConfig,
+    viewportMatrix: viewportMatrix.present
+        ? viewportMatrix.value
+        : this.viewportMatrix,
+    layers: layers.present ? layers.value : this.layers,
   );
   Page copyWithCompanion(PagesCompanion data) {
     return Page(
@@ -4005,6 +4076,10 @@ class Page extends DataClass implements Insertable<Page> {
       backgroundConfig: data.backgroundConfig.present
           ? data.backgroundConfig.value
           : this.backgroundConfig,
+      viewportMatrix: data.viewportMatrix.present
+          ? data.viewportMatrix.value
+          : this.viewportMatrix,
+      layers: data.layers.present ? data.layers.value : this.layers,
     );
   }
 
@@ -4030,13 +4105,15 @@ class Page extends DataClass implements Insertable<Page> {
           ..write('lineType: $lineType, ')
           ..write('lineSpacing: $lineSpacing, ')
           ..write('backgroundPdfPath: $backgroundPdfPath, ')
-          ..write('backgroundConfig: $backgroundConfig')
+          ..write('backgroundConfig: $backgroundConfig, ')
+          ..write('viewportMatrix: $viewportMatrix, ')
+          ..write('layers: $layers')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     serverId,
     clientId,
@@ -4057,7 +4134,9 @@ class Page extends DataClass implements Insertable<Page> {
     lineSpacing,
     backgroundPdfPath,
     backgroundConfig,
-  );
+    viewportMatrix,
+    layers,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4081,7 +4160,9 @@ class Page extends DataClass implements Insertable<Page> {
           other.lineType == this.lineType &&
           other.lineSpacing == this.lineSpacing &&
           other.backgroundPdfPath == this.backgroundPdfPath &&
-          other.backgroundConfig == this.backgroundConfig);
+          other.backgroundConfig == this.backgroundConfig &&
+          other.viewportMatrix == this.viewportMatrix &&
+          other.layers == this.layers);
 }
 
 class PagesCompanion extends UpdateCompanion<Page> {
@@ -4105,6 +4186,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
   final Value<double?> lineSpacing;
   final Value<String?> backgroundPdfPath;
   final Value<String?> backgroundConfig;
+  final Value<String?> viewportMatrix;
+  final Value<String?> layers;
   const PagesCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -4126,6 +4209,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.lineSpacing = const Value.absent(),
     this.backgroundPdfPath = const Value.absent(),
     this.backgroundConfig = const Value.absent(),
+    this.viewportMatrix = const Value.absent(),
+    this.layers = const Value.absent(),
   });
   PagesCompanion.insert({
     this.id = const Value.absent(),
@@ -4148,6 +4233,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     this.lineSpacing = const Value.absent(),
     this.backgroundPdfPath = const Value.absent(),
     this.backgroundConfig = const Value.absent(),
+    this.viewportMatrix = const Value.absent(),
+    this.layers = const Value.absent(),
   }) : notebookId = Value(notebookId),
        pageNumber = Value(pageNumber);
   static Insertable<Page> custom({
@@ -4171,6 +4258,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Expression<double>? lineSpacing,
     Expression<String>? backgroundPdfPath,
     Expression<String>? backgroundConfig,
+    Expression<String>? viewportMatrix,
+    Expression<String>? layers,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -4193,6 +4282,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
       if (lineSpacing != null) 'line_spacing': lineSpacing,
       if (backgroundPdfPath != null) 'background_pdf_path': backgroundPdfPath,
       if (backgroundConfig != null) 'background_config': backgroundConfig,
+      if (viewportMatrix != null) 'viewport_matrix': viewportMatrix,
+      if (layers != null) 'layers': layers,
     });
   }
 
@@ -4217,6 +4308,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
     Value<double?>? lineSpacing,
     Value<String?>? backgroundPdfPath,
     Value<String?>? backgroundConfig,
+    Value<String?>? viewportMatrix,
+    Value<String?>? layers,
   }) {
     return PagesCompanion(
       id: id ?? this.id,
@@ -4239,6 +4332,8 @@ class PagesCompanion extends UpdateCompanion<Page> {
       lineSpacing: lineSpacing ?? this.lineSpacing,
       backgroundPdfPath: backgroundPdfPath ?? this.backgroundPdfPath,
       backgroundConfig: backgroundConfig ?? this.backgroundConfig,
+      viewportMatrix: viewportMatrix ?? this.viewportMatrix,
+      layers: layers ?? this.layers,
     );
   }
 
@@ -4305,6 +4400,12 @@ class PagesCompanion extends UpdateCompanion<Page> {
     if (backgroundConfig.present) {
       map['background_config'] = Variable<String>(backgroundConfig.value);
     }
+    if (viewportMatrix.present) {
+      map['viewport_matrix'] = Variable<String>(viewportMatrix.value);
+    }
+    if (layers.present) {
+      map['layers'] = Variable<String>(layers.value);
+    }
     return map;
   }
 
@@ -4330,7 +4431,9 @@ class PagesCompanion extends UpdateCompanion<Page> {
           ..write('lineType: $lineType, ')
           ..write('lineSpacing: $lineSpacing, ')
           ..write('backgroundPdfPath: $backgroundPdfPath, ')
-          ..write('backgroundConfig: $backgroundConfig')
+          ..write('backgroundConfig: $backgroundConfig, ')
+          ..write('viewportMatrix: $viewportMatrix, ')
+          ..write('layers: $layers')
           ..write(')'))
         .toString();
   }
@@ -5130,6 +5233,17 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientTextId,
@@ -5142,6 +5256,7 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     updatedAt,
     version,
     creatorId,
+    layerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5230,6 +5345,12 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         creatorId.isAcceptableOrUnknown(data['creator_id']!, _creatorIdMeta),
       );
     }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
     return context;
   }
 
@@ -5279,6 +5400,10 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         DriftSqlType.string,
         data['${effectivePrefix}creator_id'],
       ),
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
     );
   }
 
@@ -5299,6 +5424,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
   final int updatedAt;
   final int version;
   final String? creatorId;
+  final String? layerId;
   const CanvasTextBlock({
     required this.clientTextId,
     this.serverId,
@@ -5310,6 +5436,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     required this.updatedAt,
     required this.version,
     this.creatorId,
+    this.layerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5327,6 +5454,9 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || creatorId != null) {
       map['creator_id'] = Variable<String>(creatorId);
+    }
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
     }
     return map;
   }
@@ -5347,6 +5477,9 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       creatorId: creatorId == null && nullToAbsent
           ? const Value.absent()
           : Value(creatorId),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
     );
   }
 
@@ -5366,6 +5499,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
     );
   }
   @override
@@ -5382,6 +5516,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
+      'layerId': serializer.toJson<String?>(layerId),
     };
   }
 
@@ -5396,6 +5531,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     int? updatedAt,
     int? version,
     Value<String?> creatorId = const Value.absent(),
+    Value<String?> layerId = const Value.absent(),
   }) => CanvasTextBlock(
     clientTextId: clientTextId ?? this.clientTextId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -5407,6 +5543,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
+    layerId: layerId.present ? layerId.value : this.layerId,
   );
   CanvasTextBlock copyWithCompanion(CanvasTextBlocksCompanion data) {
     return CanvasTextBlock(
@@ -5426,6 +5563,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
     );
   }
 
@@ -5441,7 +5579,8 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('creatorId: $creatorId')
+          ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId')
           ..write(')'))
         .toString();
   }
@@ -5458,6 +5597,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     updatedAt,
     version,
     creatorId,
+    layerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -5472,7 +5612,8 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.creatorId == this.creatorId);
+          other.creatorId == this.creatorId &&
+          other.layerId == this.layerId);
 }
 
 class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
@@ -5486,6 +5627,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> creatorId;
+  final Value<String?> layerId;
   final Value<int> rowid;
   const CanvasTextBlocksCompanion({
     this.clientTextId = const Value.absent(),
@@ -5498,6 +5640,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasTextBlocksCompanion.insert({
@@ -5511,6 +5654,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientTextId = Value(clientTextId),
        pageId = Value(pageId),
@@ -5526,6 +5670,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? creatorId,
+    Expression<String>? layerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5539,6 +5684,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
+      if (layerId != null) 'layer_id': layerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5554,6 +5700,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? creatorId,
+    Value<String?>? layerId,
     Value<int>? rowid,
   }) {
     return CanvasTextBlocksCompanion(
@@ -5567,6 +5714,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
+      layerId: layerId ?? this.layerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5604,6 +5752,9 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     if (creatorId.present) {
       map['creator_id'] = Variable<String>(creatorId.value);
     }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5623,6 +5774,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5798,6 +5950,17 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientImageId,
@@ -5815,6 +5978,7 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     updatedAt,
     version,
     creatorId,
+    layerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5943,6 +6107,12 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         creatorId.isAcceptableOrUnknown(data['creator_id']!, _creatorIdMeta),
       );
     }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
     return context;
   }
 
@@ -6012,6 +6182,10 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         DriftSqlType.string,
         data['${effectivePrefix}creator_id'],
       ),
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
     );
   }
 
@@ -6038,6 +6212,7 @@ class CanvasImageBlock extends DataClass
   final int updatedAt;
   final int version;
   final String? creatorId;
+  final String? layerId;
   const CanvasImageBlock({
     required this.clientImageId,
     this.serverId,
@@ -6054,6 +6229,7 @@ class CanvasImageBlock extends DataClass
     required this.updatedAt,
     required this.version,
     this.creatorId,
+    this.layerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6076,6 +6252,9 @@ class CanvasImageBlock extends DataClass
     map['version'] = Variable<int>(version);
     if (!nullToAbsent || creatorId != null) {
       map['creator_id'] = Variable<String>(creatorId);
+    }
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
     }
     return map;
   }
@@ -6101,6 +6280,9 @@ class CanvasImageBlock extends DataClass
       creatorId: creatorId == null && nullToAbsent
           ? const Value.absent()
           : Value(creatorId),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
     );
   }
 
@@ -6125,6 +6307,7 @@ class CanvasImageBlock extends DataClass
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
     );
   }
   @override
@@ -6146,6 +6329,7 @@ class CanvasImageBlock extends DataClass
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
+      'layerId': serializer.toJson<String?>(layerId),
     };
   }
 
@@ -6165,6 +6349,7 @@ class CanvasImageBlock extends DataClass
     int? updatedAt,
     int? version,
     Value<String?> creatorId = const Value.absent(),
+    Value<String?> layerId = const Value.absent(),
   }) => CanvasImageBlock(
     clientImageId: clientImageId ?? this.clientImageId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -6181,6 +6366,7 @@ class CanvasImageBlock extends DataClass
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
+    layerId: layerId.present ? layerId.value : this.layerId,
   );
   CanvasImageBlock copyWithCompanion(CanvasImageBlocksCompanion data) {
     return CanvasImageBlock(
@@ -6205,6 +6391,7 @@ class CanvasImageBlock extends DataClass
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
     );
   }
 
@@ -6225,7 +6412,8 @@ class CanvasImageBlock extends DataClass
           ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('creatorId: $creatorId')
+          ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId')
           ..write(')'))
         .toString();
   }
@@ -6247,6 +6435,7 @@ class CanvasImageBlock extends DataClass
     updatedAt,
     version,
     creatorId,
+    layerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -6266,7 +6455,8 @@ class CanvasImageBlock extends DataClass
           other.syncedWithCloud == this.syncedWithCloud &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.creatorId == this.creatorId);
+          other.creatorId == this.creatorId &&
+          other.layerId == this.layerId);
 }
 
 class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
@@ -6285,6 +6475,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> creatorId;
+  final Value<String?> layerId;
   final Value<int> rowid;
   const CanvasImageBlocksCompanion({
     this.clientImageId = const Value.absent(),
@@ -6302,6 +6493,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasImageBlocksCompanion.insert({
@@ -6320,6 +6512,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
+    this.layerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientImageId = Value(clientImageId),
        pageId = Value(pageId),
@@ -6345,6 +6538,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? creatorId,
+    Expression<String>? layerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -6363,6 +6557,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
+      if (layerId != null) 'layer_id': layerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -6383,6 +6578,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? creatorId,
+    Value<String?>? layerId,
     Value<int>? rowid,
   }) {
     return CanvasImageBlocksCompanion(
@@ -6401,6 +6597,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
+      layerId: layerId ?? this.layerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -6453,6 +6650,9 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     if (creatorId.present) {
       map['creator_id'] = Variable<String>(creatorId.value);
     }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -6477,6 +6677,2613 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
+          ..write('layerId: $layerId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CanvasShapesTable extends CanvasShapes
+    with TableInfo<$CanvasShapesTable, CanvasShape> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CanvasShapesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientShapeIdMeta = const VerificationMeta(
+    'clientShapeId',
+  );
+  @override
+  late final GeneratedColumn<String> clientShapeId = GeneratedColumn<String>(
+    'client_shape_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pageIdMeta = const VerificationMeta('pageId');
+  @override
+  late final GeneratedColumn<int> pageId = GeneratedColumn<int>(
+    'page_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _shapeDataMeta = const VerificationMeta(
+    'shapeData',
+  );
+  @override
+  late final GeneratedColumn<String> shapeData = GeneratedColumn<String>(
+    'shape_data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<int> isDeleted = GeneratedColumn<int>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    clientShapeId,
+    pageId,
+    shapeData,
+    isDeleted,
+    updatedAt,
+    version,
+    layerId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'canvas_shapes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CanvasShape> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_shape_id')) {
+      context.handle(
+        _clientShapeIdMeta,
+        clientShapeId.isAcceptableOrUnknown(
+          data['client_shape_id']!,
+          _clientShapeIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientShapeIdMeta);
+    }
+    if (data.containsKey('page_id')) {
+      context.handle(
+        _pageIdMeta,
+        pageId.isAcceptableOrUnknown(data['page_id']!, _pageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageIdMeta);
+    }
+    if (data.containsKey('shape_data')) {
+      context.handle(
+        _shapeDataMeta,
+        shapeData.isAcceptableOrUnknown(data['shape_data']!, _shapeDataMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_shapeDataMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientShapeId};
+  @override
+  CanvasShape map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CanvasShape(
+      clientShapeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_shape_id'],
+      )!,
+      pageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_id'],
+      )!,
+      shapeData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shape_data'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
+    );
+  }
+
+  @override
+  $CanvasShapesTable createAlias(String alias) {
+    return $CanvasShapesTable(attachedDatabase, alias);
+  }
+}
+
+class CanvasShape extends DataClass implements Insertable<CanvasShape> {
+  final String clientShapeId;
+  final int pageId;
+  final String shapeData;
+  final int isDeleted;
+  final int updatedAt;
+  final int version;
+  final String? layerId;
+  const CanvasShape({
+    required this.clientShapeId,
+    required this.pageId,
+    required this.shapeData,
+    required this.isDeleted,
+    required this.updatedAt,
+    required this.version,
+    this.layerId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_shape_id'] = Variable<String>(clientShapeId);
+    map['page_id'] = Variable<int>(pageId);
+    map['shape_data'] = Variable<String>(shapeData);
+    map['is_deleted'] = Variable<int>(isDeleted);
+    map['updated_at'] = Variable<int>(updatedAt);
+    map['version'] = Variable<int>(version);
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
+    }
+    return map;
+  }
+
+  CanvasShapesCompanion toCompanion(bool nullToAbsent) {
+    return CanvasShapesCompanion(
+      clientShapeId: Value(clientShapeId),
+      pageId: Value(pageId),
+      shapeData: Value(shapeData),
+      isDeleted: Value(isDeleted),
+      updatedAt: Value(updatedAt),
+      version: Value(version),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
+    );
+  }
+
+  factory CanvasShape.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CanvasShape(
+      clientShapeId: serializer.fromJson<String>(json['clientShapeId']),
+      pageId: serializer.fromJson<int>(json['pageId']),
+      shapeData: serializer.fromJson<String>(json['shapeData']),
+      isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      version: serializer.fromJson<int>(json['version']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientShapeId': serializer.toJson<String>(clientShapeId),
+      'pageId': serializer.toJson<int>(pageId),
+      'shapeData': serializer.toJson<String>(shapeData),
+      'isDeleted': serializer.toJson<int>(isDeleted),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'version': serializer.toJson<int>(version),
+      'layerId': serializer.toJson<String?>(layerId),
+    };
+  }
+
+  CanvasShape copyWith({
+    String? clientShapeId,
+    int? pageId,
+    String? shapeData,
+    int? isDeleted,
+    int? updatedAt,
+    int? version,
+    Value<String?> layerId = const Value.absent(),
+  }) => CanvasShape(
+    clientShapeId: clientShapeId ?? this.clientShapeId,
+    pageId: pageId ?? this.pageId,
+    shapeData: shapeData ?? this.shapeData,
+    isDeleted: isDeleted ?? this.isDeleted,
+    updatedAt: updatedAt ?? this.updatedAt,
+    version: version ?? this.version,
+    layerId: layerId.present ? layerId.value : this.layerId,
+  );
+  CanvasShape copyWithCompanion(CanvasShapesCompanion data) {
+    return CanvasShape(
+      clientShapeId: data.clientShapeId.present
+          ? data.clientShapeId.value
+          : this.clientShapeId,
+      pageId: data.pageId.present ? data.pageId.value : this.pageId,
+      shapeData: data.shapeData.present ? data.shapeData.value : this.shapeData,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      version: data.version.present ? data.version.value : this.version,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasShape(')
+          ..write('clientShapeId: $clientShapeId, ')
+          ..write('pageId: $pageId, ')
+          ..write('shapeData: $shapeData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
+          ..write('layerId: $layerId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    clientShapeId,
+    pageId,
+    shapeData,
+    isDeleted,
+    updatedAt,
+    version,
+    layerId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CanvasShape &&
+          other.clientShapeId == this.clientShapeId &&
+          other.pageId == this.pageId &&
+          other.shapeData == this.shapeData &&
+          other.isDeleted == this.isDeleted &&
+          other.updatedAt == this.updatedAt &&
+          other.version == this.version &&
+          other.layerId == this.layerId);
+}
+
+class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
+  final Value<String> clientShapeId;
+  final Value<int> pageId;
+  final Value<String> shapeData;
+  final Value<int> isDeleted;
+  final Value<int> updatedAt;
+  final Value<int> version;
+  final Value<String?> layerId;
+  final Value<int> rowid;
+  const CanvasShapesCompanion({
+    this.clientShapeId = const Value.absent(),
+    this.pageId = const Value.absent(),
+    this.shapeData = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CanvasShapesCompanion.insert({
+    required String clientShapeId,
+    required int pageId,
+    required String shapeData,
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : clientShapeId = Value(clientShapeId),
+       pageId = Value(pageId),
+       shapeData = Value(shapeData);
+  static Insertable<CanvasShape> custom({
+    Expression<String>? clientShapeId,
+    Expression<int>? pageId,
+    Expression<String>? shapeData,
+    Expression<int>? isDeleted,
+    Expression<int>? updatedAt,
+    Expression<int>? version,
+    Expression<String>? layerId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientShapeId != null) 'client_shape_id': clientShapeId,
+      if (pageId != null) 'page_id': pageId,
+      if (shapeData != null) 'shape_data': shapeData,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (version != null) 'version': version,
+      if (layerId != null) 'layer_id': layerId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CanvasShapesCompanion copyWith({
+    Value<String>? clientShapeId,
+    Value<int>? pageId,
+    Value<String>? shapeData,
+    Value<int>? isDeleted,
+    Value<int>? updatedAt,
+    Value<int>? version,
+    Value<String?>? layerId,
+    Value<int>? rowid,
+  }) {
+    return CanvasShapesCompanion(
+      clientShapeId: clientShapeId ?? this.clientShapeId,
+      pageId: pageId ?? this.pageId,
+      shapeData: shapeData ?? this.shapeData,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+      layerId: layerId ?? this.layerId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientShapeId.present) {
+      map['client_shape_id'] = Variable<String>(clientShapeId.value);
+    }
+    if (pageId.present) {
+      map['page_id'] = Variable<int>(pageId.value);
+    }
+    if (shapeData.present) {
+      map['shape_data'] = Variable<String>(shapeData.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<int>(isDeleted.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasShapesCompanion(')
+          ..write('clientShapeId: $clientShapeId, ')
+          ..write('pageId: $pageId, ')
+          ..write('shapeData: $shapeData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
+          ..write('layerId: $layerId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CanvasAudioBlocksTable extends CanvasAudioBlocks
+    with TableInfo<$CanvasAudioBlocksTable, CanvasAudioBlock> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CanvasAudioBlocksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientAudioIdMeta = const VerificationMeta(
+    'clientAudioId',
+  );
+  @override
+  late final GeneratedColumn<String> clientAudioId = GeneratedColumn<String>(
+    'client_audio_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pageIdMeta = const VerificationMeta('pageId');
+  @override
+  late final GeneratedColumn<int> pageId = GeneratedColumn<int>(
+    'page_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _audioDataMeta = const VerificationMeta(
+    'audioData',
+  );
+  @override
+  late final GeneratedColumn<String> audioData = GeneratedColumn<String>(
+    'audio_data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<int> isDeleted = GeneratedColumn<int>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    clientAudioId,
+    pageId,
+    audioData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'canvas_audio_blocks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CanvasAudioBlock> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_audio_id')) {
+      context.handle(
+        _clientAudioIdMeta,
+        clientAudioId.isAcceptableOrUnknown(
+          data['client_audio_id']!,
+          _clientAudioIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientAudioIdMeta);
+    }
+    if (data.containsKey('page_id')) {
+      context.handle(
+        _pageIdMeta,
+        pageId.isAcceptableOrUnknown(data['page_id']!, _pageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageIdMeta);
+    }
+    if (data.containsKey('audio_data')) {
+      context.handle(
+        _audioDataMeta,
+        audioData.isAcceptableOrUnknown(data['audio_data']!, _audioDataMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_audioDataMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientAudioId};
+  @override
+  CanvasAudioBlock map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CanvasAudioBlock(
+      clientAudioId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_audio_id'],
+      )!,
+      pageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_id'],
+      )!,
+      audioData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}audio_data'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
+    );
+  }
+
+  @override
+  $CanvasAudioBlocksTable createAlias(String alias) {
+    return $CanvasAudioBlocksTable(attachedDatabase, alias);
+  }
+}
+
+class CanvasAudioBlock extends DataClass
+    implements Insertable<CanvasAudioBlock> {
+  final String clientAudioId;
+  final int pageId;
+  final String audioData;
+  final int isDeleted;
+  final int updatedAt;
+  final String? layerId;
+  const CanvasAudioBlock({
+    required this.clientAudioId,
+    required this.pageId,
+    required this.audioData,
+    required this.isDeleted,
+    required this.updatedAt,
+    this.layerId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_audio_id'] = Variable<String>(clientAudioId);
+    map['page_id'] = Variable<int>(pageId);
+    map['audio_data'] = Variable<String>(audioData);
+    map['is_deleted'] = Variable<int>(isDeleted);
+    map['updated_at'] = Variable<int>(updatedAt);
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
+    }
+    return map;
+  }
+
+  CanvasAudioBlocksCompanion toCompanion(bool nullToAbsent) {
+    return CanvasAudioBlocksCompanion(
+      clientAudioId: Value(clientAudioId),
+      pageId: Value(pageId),
+      audioData: Value(audioData),
+      isDeleted: Value(isDeleted),
+      updatedAt: Value(updatedAt),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
+    );
+  }
+
+  factory CanvasAudioBlock.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CanvasAudioBlock(
+      clientAudioId: serializer.fromJson<String>(json['clientAudioId']),
+      pageId: serializer.fromJson<int>(json['pageId']),
+      audioData: serializer.fromJson<String>(json['audioData']),
+      isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientAudioId': serializer.toJson<String>(clientAudioId),
+      'pageId': serializer.toJson<int>(pageId),
+      'audioData': serializer.toJson<String>(audioData),
+      'isDeleted': serializer.toJson<int>(isDeleted),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'layerId': serializer.toJson<String?>(layerId),
+    };
+  }
+
+  CanvasAudioBlock copyWith({
+    String? clientAudioId,
+    int? pageId,
+    String? audioData,
+    int? isDeleted,
+    int? updatedAt,
+    Value<String?> layerId = const Value.absent(),
+  }) => CanvasAudioBlock(
+    clientAudioId: clientAudioId ?? this.clientAudioId,
+    pageId: pageId ?? this.pageId,
+    audioData: audioData ?? this.audioData,
+    isDeleted: isDeleted ?? this.isDeleted,
+    updatedAt: updatedAt ?? this.updatedAt,
+    layerId: layerId.present ? layerId.value : this.layerId,
+  );
+  CanvasAudioBlock copyWithCompanion(CanvasAudioBlocksCompanion data) {
+    return CanvasAudioBlock(
+      clientAudioId: data.clientAudioId.present
+          ? data.clientAudioId.value
+          : this.clientAudioId,
+      pageId: data.pageId.present ? data.pageId.value : this.pageId,
+      audioData: data.audioData.present ? data.audioData.value : this.audioData,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasAudioBlock(')
+          ..write('clientAudioId: $clientAudioId, ')
+          ..write('pageId: $pageId, ')
+          ..write('audioData: $audioData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    clientAudioId,
+    pageId,
+    audioData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CanvasAudioBlock &&
+          other.clientAudioId == this.clientAudioId &&
+          other.pageId == this.pageId &&
+          other.audioData == this.audioData &&
+          other.isDeleted == this.isDeleted &&
+          other.updatedAt == this.updatedAt &&
+          other.layerId == this.layerId);
+}
+
+class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
+  final Value<String> clientAudioId;
+  final Value<int> pageId;
+  final Value<String> audioData;
+  final Value<int> isDeleted;
+  final Value<int> updatedAt;
+  final Value<String?> layerId;
+  final Value<int> rowid;
+  const CanvasAudioBlocksCompanion({
+    this.clientAudioId = const Value.absent(),
+    this.pageId = const Value.absent(),
+    this.audioData = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CanvasAudioBlocksCompanion.insert({
+    required String clientAudioId,
+    required int pageId,
+    required String audioData,
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : clientAudioId = Value(clientAudioId),
+       pageId = Value(pageId),
+       audioData = Value(audioData);
+  static Insertable<CanvasAudioBlock> custom({
+    Expression<String>? clientAudioId,
+    Expression<int>? pageId,
+    Expression<String>? audioData,
+    Expression<int>? isDeleted,
+    Expression<int>? updatedAt,
+    Expression<String>? layerId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientAudioId != null) 'client_audio_id': clientAudioId,
+      if (pageId != null) 'page_id': pageId,
+      if (audioData != null) 'audio_data': audioData,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (layerId != null) 'layer_id': layerId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CanvasAudioBlocksCompanion copyWith({
+    Value<String>? clientAudioId,
+    Value<int>? pageId,
+    Value<String>? audioData,
+    Value<int>? isDeleted,
+    Value<int>? updatedAt,
+    Value<String?>? layerId,
+    Value<int>? rowid,
+  }) {
+    return CanvasAudioBlocksCompanion(
+      clientAudioId: clientAudioId ?? this.clientAudioId,
+      pageId: pageId ?? this.pageId,
+      audioData: audioData ?? this.audioData,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
+      layerId: layerId ?? this.layerId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientAudioId.present) {
+      map['client_audio_id'] = Variable<String>(clientAudioId.value);
+    }
+    if (pageId.present) {
+      map['page_id'] = Variable<int>(pageId.value);
+    }
+    if (audioData.present) {
+      map['audio_data'] = Variable<String>(audioData.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<int>(isDeleted.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasAudioBlocksCompanion(')
+          ..write('clientAudioId: $clientAudioId, ')
+          ..write('pageId: $pageId, ')
+          ..write('audioData: $audioData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CanvasAnimationsTable extends CanvasAnimations
+    with TableInfo<$CanvasAnimationsTable, CanvasAnimation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CanvasAnimationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientAnimationIdMeta = const VerificationMeta(
+    'clientAnimationId',
+  );
+  @override
+  late final GeneratedColumn<String> clientAnimationId =
+      GeneratedColumn<String>(
+        'client_animation_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _pageIdMeta = const VerificationMeta('pageId');
+  @override
+  late final GeneratedColumn<int> pageId = GeneratedColumn<int>(
+    'page_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _animationDataMeta = const VerificationMeta(
+    'animationData',
+  );
+  @override
+  late final GeneratedColumn<String> animationData = GeneratedColumn<String>(
+    'animation_data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<int> isDeleted = GeneratedColumn<int>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    clientAnimationId,
+    pageId,
+    animationData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'canvas_animations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CanvasAnimation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_animation_id')) {
+      context.handle(
+        _clientAnimationIdMeta,
+        clientAnimationId.isAcceptableOrUnknown(
+          data['client_animation_id']!,
+          _clientAnimationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientAnimationIdMeta);
+    }
+    if (data.containsKey('page_id')) {
+      context.handle(
+        _pageIdMeta,
+        pageId.isAcceptableOrUnknown(data['page_id']!, _pageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageIdMeta);
+    }
+    if (data.containsKey('animation_data')) {
+      context.handle(
+        _animationDataMeta,
+        animationData.isAcceptableOrUnknown(
+          data['animation_data']!,
+          _animationDataMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_animationDataMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientAnimationId};
+  @override
+  CanvasAnimation map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CanvasAnimation(
+      clientAnimationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_animation_id'],
+      )!,
+      pageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_id'],
+      )!,
+      animationData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}animation_data'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
+    );
+  }
+
+  @override
+  $CanvasAnimationsTable createAlias(String alias) {
+    return $CanvasAnimationsTable(attachedDatabase, alias);
+  }
+}
+
+class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
+  final String clientAnimationId;
+  final int pageId;
+  final String animationData;
+  final int isDeleted;
+  final int updatedAt;
+  final String? layerId;
+  const CanvasAnimation({
+    required this.clientAnimationId,
+    required this.pageId,
+    required this.animationData,
+    required this.isDeleted,
+    required this.updatedAt,
+    this.layerId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_animation_id'] = Variable<String>(clientAnimationId);
+    map['page_id'] = Variable<int>(pageId);
+    map['animation_data'] = Variable<String>(animationData);
+    map['is_deleted'] = Variable<int>(isDeleted);
+    map['updated_at'] = Variable<int>(updatedAt);
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
+    }
+    return map;
+  }
+
+  CanvasAnimationsCompanion toCompanion(bool nullToAbsent) {
+    return CanvasAnimationsCompanion(
+      clientAnimationId: Value(clientAnimationId),
+      pageId: Value(pageId),
+      animationData: Value(animationData),
+      isDeleted: Value(isDeleted),
+      updatedAt: Value(updatedAt),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
+    );
+  }
+
+  factory CanvasAnimation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CanvasAnimation(
+      clientAnimationId: serializer.fromJson<String>(json['clientAnimationId']),
+      pageId: serializer.fromJson<int>(json['pageId']),
+      animationData: serializer.fromJson<String>(json['animationData']),
+      isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientAnimationId': serializer.toJson<String>(clientAnimationId),
+      'pageId': serializer.toJson<int>(pageId),
+      'animationData': serializer.toJson<String>(animationData),
+      'isDeleted': serializer.toJson<int>(isDeleted),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'layerId': serializer.toJson<String?>(layerId),
+    };
+  }
+
+  CanvasAnimation copyWith({
+    String? clientAnimationId,
+    int? pageId,
+    String? animationData,
+    int? isDeleted,
+    int? updatedAt,
+    Value<String?> layerId = const Value.absent(),
+  }) => CanvasAnimation(
+    clientAnimationId: clientAnimationId ?? this.clientAnimationId,
+    pageId: pageId ?? this.pageId,
+    animationData: animationData ?? this.animationData,
+    isDeleted: isDeleted ?? this.isDeleted,
+    updatedAt: updatedAt ?? this.updatedAt,
+    layerId: layerId.present ? layerId.value : this.layerId,
+  );
+  CanvasAnimation copyWithCompanion(CanvasAnimationsCompanion data) {
+    return CanvasAnimation(
+      clientAnimationId: data.clientAnimationId.present
+          ? data.clientAnimationId.value
+          : this.clientAnimationId,
+      pageId: data.pageId.present ? data.pageId.value : this.pageId,
+      animationData: data.animationData.present
+          ? data.animationData.value
+          : this.animationData,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasAnimation(')
+          ..write('clientAnimationId: $clientAnimationId, ')
+          ..write('pageId: $pageId, ')
+          ..write('animationData: $animationData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    clientAnimationId,
+    pageId,
+    animationData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CanvasAnimation &&
+          other.clientAnimationId == this.clientAnimationId &&
+          other.pageId == this.pageId &&
+          other.animationData == this.animationData &&
+          other.isDeleted == this.isDeleted &&
+          other.updatedAt == this.updatedAt &&
+          other.layerId == this.layerId);
+}
+
+class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
+  final Value<String> clientAnimationId;
+  final Value<int> pageId;
+  final Value<String> animationData;
+  final Value<int> isDeleted;
+  final Value<int> updatedAt;
+  final Value<String?> layerId;
+  final Value<int> rowid;
+  const CanvasAnimationsCompanion({
+    this.clientAnimationId = const Value.absent(),
+    this.pageId = const Value.absent(),
+    this.animationData = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CanvasAnimationsCompanion.insert({
+    required String clientAnimationId,
+    required int pageId,
+    required String animationData,
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : clientAnimationId = Value(clientAnimationId),
+       pageId = Value(pageId),
+       animationData = Value(animationData);
+  static Insertable<CanvasAnimation> custom({
+    Expression<String>? clientAnimationId,
+    Expression<int>? pageId,
+    Expression<String>? animationData,
+    Expression<int>? isDeleted,
+    Expression<int>? updatedAt,
+    Expression<String>? layerId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientAnimationId != null) 'client_animation_id': clientAnimationId,
+      if (pageId != null) 'page_id': pageId,
+      if (animationData != null) 'animation_data': animationData,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (layerId != null) 'layer_id': layerId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CanvasAnimationsCompanion copyWith({
+    Value<String>? clientAnimationId,
+    Value<int>? pageId,
+    Value<String>? animationData,
+    Value<int>? isDeleted,
+    Value<int>? updatedAt,
+    Value<String?>? layerId,
+    Value<int>? rowid,
+  }) {
+    return CanvasAnimationsCompanion(
+      clientAnimationId: clientAnimationId ?? this.clientAnimationId,
+      pageId: pageId ?? this.pageId,
+      animationData: animationData ?? this.animationData,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
+      layerId: layerId ?? this.layerId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientAnimationId.present) {
+      map['client_animation_id'] = Variable<String>(clientAnimationId.value);
+    }
+    if (pageId.present) {
+      map['page_id'] = Variable<int>(pageId.value);
+    }
+    if (animationData.present) {
+      map['animation_data'] = Variable<String>(animationData.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<int>(isDeleted.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasAnimationsCompanion(')
+          ..write('clientAnimationId: $clientAnimationId, ')
+          ..write('pageId: $pageId, ')
+          ..write('animationData: $animationData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CanvasTablesTable extends CanvasTables
+    with TableInfo<$CanvasTablesTable, CanvasTable> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CanvasTablesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientTableIdMeta = const VerificationMeta(
+    'clientTableId',
+  );
+  @override
+  late final GeneratedColumn<String> clientTableId = GeneratedColumn<String>(
+    'client_table_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pageIdMeta = const VerificationMeta('pageId');
+  @override
+  late final GeneratedColumn<int> pageId = GeneratedColumn<int>(
+    'page_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _tableDataMeta = const VerificationMeta(
+    'tableData',
+  );
+  @override
+  late final GeneratedColumn<String> tableData = GeneratedColumn<String>(
+    'table_data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<int> isDeleted = GeneratedColumn<int>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    clientTableId,
+    pageId,
+    tableData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'canvas_tables';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CanvasTable> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_table_id')) {
+      context.handle(
+        _clientTableIdMeta,
+        clientTableId.isAcceptableOrUnknown(
+          data['client_table_id']!,
+          _clientTableIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientTableIdMeta);
+    }
+    if (data.containsKey('page_id')) {
+      context.handle(
+        _pageIdMeta,
+        pageId.isAcceptableOrUnknown(data['page_id']!, _pageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageIdMeta);
+    }
+    if (data.containsKey('table_data')) {
+      context.handle(
+        _tableDataMeta,
+        tableData.isAcceptableOrUnknown(data['table_data']!, _tableDataMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tableDataMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientTableId};
+  @override
+  CanvasTable map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CanvasTable(
+      clientTableId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_table_id'],
+      )!,
+      pageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_id'],
+      )!,
+      tableData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}table_data'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
+    );
+  }
+
+  @override
+  $CanvasTablesTable createAlias(String alias) {
+    return $CanvasTablesTable(attachedDatabase, alias);
+  }
+}
+
+class CanvasTable extends DataClass implements Insertable<CanvasTable> {
+  final String clientTableId;
+  final int pageId;
+  final String tableData;
+  final int isDeleted;
+  final int updatedAt;
+  final String? layerId;
+  const CanvasTable({
+    required this.clientTableId,
+    required this.pageId,
+    required this.tableData,
+    required this.isDeleted,
+    required this.updatedAt,
+    this.layerId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_table_id'] = Variable<String>(clientTableId);
+    map['page_id'] = Variable<int>(pageId);
+    map['table_data'] = Variable<String>(tableData);
+    map['is_deleted'] = Variable<int>(isDeleted);
+    map['updated_at'] = Variable<int>(updatedAt);
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
+    }
+    return map;
+  }
+
+  CanvasTablesCompanion toCompanion(bool nullToAbsent) {
+    return CanvasTablesCompanion(
+      clientTableId: Value(clientTableId),
+      pageId: Value(pageId),
+      tableData: Value(tableData),
+      isDeleted: Value(isDeleted),
+      updatedAt: Value(updatedAt),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
+    );
+  }
+
+  factory CanvasTable.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CanvasTable(
+      clientTableId: serializer.fromJson<String>(json['clientTableId']),
+      pageId: serializer.fromJson<int>(json['pageId']),
+      tableData: serializer.fromJson<String>(json['tableData']),
+      isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientTableId': serializer.toJson<String>(clientTableId),
+      'pageId': serializer.toJson<int>(pageId),
+      'tableData': serializer.toJson<String>(tableData),
+      'isDeleted': serializer.toJson<int>(isDeleted),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'layerId': serializer.toJson<String?>(layerId),
+    };
+  }
+
+  CanvasTable copyWith({
+    String? clientTableId,
+    int? pageId,
+    String? tableData,
+    int? isDeleted,
+    int? updatedAt,
+    Value<String?> layerId = const Value.absent(),
+  }) => CanvasTable(
+    clientTableId: clientTableId ?? this.clientTableId,
+    pageId: pageId ?? this.pageId,
+    tableData: tableData ?? this.tableData,
+    isDeleted: isDeleted ?? this.isDeleted,
+    updatedAt: updatedAt ?? this.updatedAt,
+    layerId: layerId.present ? layerId.value : this.layerId,
+  );
+  CanvasTable copyWithCompanion(CanvasTablesCompanion data) {
+    return CanvasTable(
+      clientTableId: data.clientTableId.present
+          ? data.clientTableId.value
+          : this.clientTableId,
+      pageId: data.pageId.present ? data.pageId.value : this.pageId,
+      tableData: data.tableData.present ? data.tableData.value : this.tableData,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasTable(')
+          ..write('clientTableId: $clientTableId, ')
+          ..write('pageId: $pageId, ')
+          ..write('tableData: $tableData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    clientTableId,
+    pageId,
+    tableData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CanvasTable &&
+          other.clientTableId == this.clientTableId &&
+          other.pageId == this.pageId &&
+          other.tableData == this.tableData &&
+          other.isDeleted == this.isDeleted &&
+          other.updatedAt == this.updatedAt &&
+          other.layerId == this.layerId);
+}
+
+class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
+  final Value<String> clientTableId;
+  final Value<int> pageId;
+  final Value<String> tableData;
+  final Value<int> isDeleted;
+  final Value<int> updatedAt;
+  final Value<String?> layerId;
+  final Value<int> rowid;
+  const CanvasTablesCompanion({
+    this.clientTableId = const Value.absent(),
+    this.pageId = const Value.absent(),
+    this.tableData = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CanvasTablesCompanion.insert({
+    required String clientTableId,
+    required int pageId,
+    required String tableData,
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : clientTableId = Value(clientTableId),
+       pageId = Value(pageId),
+       tableData = Value(tableData);
+  static Insertable<CanvasTable> custom({
+    Expression<String>? clientTableId,
+    Expression<int>? pageId,
+    Expression<String>? tableData,
+    Expression<int>? isDeleted,
+    Expression<int>? updatedAt,
+    Expression<String>? layerId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientTableId != null) 'client_table_id': clientTableId,
+      if (pageId != null) 'page_id': pageId,
+      if (tableData != null) 'table_data': tableData,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (layerId != null) 'layer_id': layerId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CanvasTablesCompanion copyWith({
+    Value<String>? clientTableId,
+    Value<int>? pageId,
+    Value<String>? tableData,
+    Value<int>? isDeleted,
+    Value<int>? updatedAt,
+    Value<String?>? layerId,
+    Value<int>? rowid,
+  }) {
+    return CanvasTablesCompanion(
+      clientTableId: clientTableId ?? this.clientTableId,
+      pageId: pageId ?? this.pageId,
+      tableData: tableData ?? this.tableData,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
+      layerId: layerId ?? this.layerId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientTableId.present) {
+      map['client_table_id'] = Variable<String>(clientTableId.value);
+    }
+    if (pageId.present) {
+      map['page_id'] = Variable<int>(pageId.value);
+    }
+    if (tableData.present) {
+      map['table_data'] = Variable<String>(tableData.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<int>(isDeleted.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasTablesCompanion(')
+          ..write('clientTableId: $clientTableId, ')
+          ..write('pageId: $pageId, ')
+          ..write('tableData: $tableData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CanvasLinksTable extends CanvasLinks
+    with TableInfo<$CanvasLinksTable, CanvasLink> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CanvasLinksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientLinkIdMeta = const VerificationMeta(
+    'clientLinkId',
+  );
+  @override
+  late final GeneratedColumn<String> clientLinkId = GeneratedColumn<String>(
+    'client_link_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pageIdMeta = const VerificationMeta('pageId');
+  @override
+  late final GeneratedColumn<int> pageId = GeneratedColumn<int>(
+    'page_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _linkDataMeta = const VerificationMeta(
+    'linkData',
+  );
+  @override
+  late final GeneratedColumn<String> linkData = GeneratedColumn<String>(
+    'link_data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<int> isDeleted = GeneratedColumn<int>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    clientLinkId,
+    pageId,
+    linkData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'canvas_links';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CanvasLink> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_link_id')) {
+      context.handle(
+        _clientLinkIdMeta,
+        clientLinkId.isAcceptableOrUnknown(
+          data['client_link_id']!,
+          _clientLinkIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientLinkIdMeta);
+    }
+    if (data.containsKey('page_id')) {
+      context.handle(
+        _pageIdMeta,
+        pageId.isAcceptableOrUnknown(data['page_id']!, _pageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageIdMeta);
+    }
+    if (data.containsKey('link_data')) {
+      context.handle(
+        _linkDataMeta,
+        linkData.isAcceptableOrUnknown(data['link_data']!, _linkDataMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_linkDataMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientLinkId};
+  @override
+  CanvasLink map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CanvasLink(
+      clientLinkId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_link_id'],
+      )!,
+      pageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_id'],
+      )!,
+      linkData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}link_data'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
+    );
+  }
+
+  @override
+  $CanvasLinksTable createAlias(String alias) {
+    return $CanvasLinksTable(attachedDatabase, alias);
+  }
+}
+
+class CanvasLink extends DataClass implements Insertable<CanvasLink> {
+  final String clientLinkId;
+  final int pageId;
+  final String linkData;
+  final int isDeleted;
+  final int updatedAt;
+  final String? layerId;
+  const CanvasLink({
+    required this.clientLinkId,
+    required this.pageId,
+    required this.linkData,
+    required this.isDeleted,
+    required this.updatedAt,
+    this.layerId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_link_id'] = Variable<String>(clientLinkId);
+    map['page_id'] = Variable<int>(pageId);
+    map['link_data'] = Variable<String>(linkData);
+    map['is_deleted'] = Variable<int>(isDeleted);
+    map['updated_at'] = Variable<int>(updatedAt);
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
+    }
+    return map;
+  }
+
+  CanvasLinksCompanion toCompanion(bool nullToAbsent) {
+    return CanvasLinksCompanion(
+      clientLinkId: Value(clientLinkId),
+      pageId: Value(pageId),
+      linkData: Value(linkData),
+      isDeleted: Value(isDeleted),
+      updatedAt: Value(updatedAt),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
+    );
+  }
+
+  factory CanvasLink.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CanvasLink(
+      clientLinkId: serializer.fromJson<String>(json['clientLinkId']),
+      pageId: serializer.fromJson<int>(json['pageId']),
+      linkData: serializer.fromJson<String>(json['linkData']),
+      isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientLinkId': serializer.toJson<String>(clientLinkId),
+      'pageId': serializer.toJson<int>(pageId),
+      'linkData': serializer.toJson<String>(linkData),
+      'isDeleted': serializer.toJson<int>(isDeleted),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'layerId': serializer.toJson<String?>(layerId),
+    };
+  }
+
+  CanvasLink copyWith({
+    String? clientLinkId,
+    int? pageId,
+    String? linkData,
+    int? isDeleted,
+    int? updatedAt,
+    Value<String?> layerId = const Value.absent(),
+  }) => CanvasLink(
+    clientLinkId: clientLinkId ?? this.clientLinkId,
+    pageId: pageId ?? this.pageId,
+    linkData: linkData ?? this.linkData,
+    isDeleted: isDeleted ?? this.isDeleted,
+    updatedAt: updatedAt ?? this.updatedAt,
+    layerId: layerId.present ? layerId.value : this.layerId,
+  );
+  CanvasLink copyWithCompanion(CanvasLinksCompanion data) {
+    return CanvasLink(
+      clientLinkId: data.clientLinkId.present
+          ? data.clientLinkId.value
+          : this.clientLinkId,
+      pageId: data.pageId.present ? data.pageId.value : this.pageId,
+      linkData: data.linkData.present ? data.linkData.value : this.linkData,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasLink(')
+          ..write('clientLinkId: $clientLinkId, ')
+          ..write('pageId: $pageId, ')
+          ..write('linkData: $linkData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    clientLinkId,
+    pageId,
+    linkData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CanvasLink &&
+          other.clientLinkId == this.clientLinkId &&
+          other.pageId == this.pageId &&
+          other.linkData == this.linkData &&
+          other.isDeleted == this.isDeleted &&
+          other.updatedAt == this.updatedAt &&
+          other.layerId == this.layerId);
+}
+
+class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
+  final Value<String> clientLinkId;
+  final Value<int> pageId;
+  final Value<String> linkData;
+  final Value<int> isDeleted;
+  final Value<int> updatedAt;
+  final Value<String?> layerId;
+  final Value<int> rowid;
+  const CanvasLinksCompanion({
+    this.clientLinkId = const Value.absent(),
+    this.pageId = const Value.absent(),
+    this.linkData = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CanvasLinksCompanion.insert({
+    required String clientLinkId,
+    required int pageId,
+    required String linkData,
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : clientLinkId = Value(clientLinkId),
+       pageId = Value(pageId),
+       linkData = Value(linkData);
+  static Insertable<CanvasLink> custom({
+    Expression<String>? clientLinkId,
+    Expression<int>? pageId,
+    Expression<String>? linkData,
+    Expression<int>? isDeleted,
+    Expression<int>? updatedAt,
+    Expression<String>? layerId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientLinkId != null) 'client_link_id': clientLinkId,
+      if (pageId != null) 'page_id': pageId,
+      if (linkData != null) 'link_data': linkData,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (layerId != null) 'layer_id': layerId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CanvasLinksCompanion copyWith({
+    Value<String>? clientLinkId,
+    Value<int>? pageId,
+    Value<String>? linkData,
+    Value<int>? isDeleted,
+    Value<int>? updatedAt,
+    Value<String?>? layerId,
+    Value<int>? rowid,
+  }) {
+    return CanvasLinksCompanion(
+      clientLinkId: clientLinkId ?? this.clientLinkId,
+      pageId: pageId ?? this.pageId,
+      linkData: linkData ?? this.linkData,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
+      layerId: layerId ?? this.layerId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientLinkId.present) {
+      map['client_link_id'] = Variable<String>(clientLinkId.value);
+    }
+    if (pageId.present) {
+      map['page_id'] = Variable<int>(pageId.value);
+    }
+    if (linkData.present) {
+      map['link_data'] = Variable<String>(linkData.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<int>(isDeleted.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasLinksCompanion(')
+          ..write('clientLinkId: $clientLinkId, ')
+          ..write('pageId: $pageId, ')
+          ..write('linkData: $linkData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CanvasAttachmentsTable extends CanvasAttachments
+    with TableInfo<$CanvasAttachmentsTable, CanvasAttachment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CanvasAttachmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientAttachmentIdMeta =
+      const VerificationMeta('clientAttachmentId');
+  @override
+  late final GeneratedColumn<String> clientAttachmentId =
+      GeneratedColumn<String>(
+        'client_attachment_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _pageIdMeta = const VerificationMeta('pageId');
+  @override
+  late final GeneratedColumn<int> pageId = GeneratedColumn<int>(
+    'page_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _attachmentDataMeta = const VerificationMeta(
+    'attachmentData',
+  );
+  @override
+  late final GeneratedColumn<String> attachmentData = GeneratedColumn<String>(
+    'attachment_data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<int> isDeleted = GeneratedColumn<int>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    clientAttachmentId,
+    pageId,
+    attachmentData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'canvas_attachments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CanvasAttachment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_attachment_id')) {
+      context.handle(
+        _clientAttachmentIdMeta,
+        clientAttachmentId.isAcceptableOrUnknown(
+          data['client_attachment_id']!,
+          _clientAttachmentIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientAttachmentIdMeta);
+    }
+    if (data.containsKey('page_id')) {
+      context.handle(
+        _pageIdMeta,
+        pageId.isAcceptableOrUnknown(data['page_id']!, _pageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageIdMeta);
+    }
+    if (data.containsKey('attachment_data')) {
+      context.handle(
+        _attachmentDataMeta,
+        attachmentData.isAcceptableOrUnknown(
+          data['attachment_data']!,
+          _attachmentDataMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_attachmentDataMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientAttachmentId};
+  @override
+  CanvasAttachment map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CanvasAttachment(
+      clientAttachmentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_attachment_id'],
+      )!,
+      pageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_id'],
+      )!,
+      attachmentData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}attachment_data'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
+    );
+  }
+
+  @override
+  $CanvasAttachmentsTable createAlias(String alias) {
+    return $CanvasAttachmentsTable(attachedDatabase, alias);
+  }
+}
+
+class CanvasAttachment extends DataClass
+    implements Insertable<CanvasAttachment> {
+  final String clientAttachmentId;
+  final int pageId;
+  final String attachmentData;
+  final int isDeleted;
+  final int updatedAt;
+  final String? layerId;
+  const CanvasAttachment({
+    required this.clientAttachmentId,
+    required this.pageId,
+    required this.attachmentData,
+    required this.isDeleted,
+    required this.updatedAt,
+    this.layerId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_attachment_id'] = Variable<String>(clientAttachmentId);
+    map['page_id'] = Variable<int>(pageId);
+    map['attachment_data'] = Variable<String>(attachmentData);
+    map['is_deleted'] = Variable<int>(isDeleted);
+    map['updated_at'] = Variable<int>(updatedAt);
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
+    }
+    return map;
+  }
+
+  CanvasAttachmentsCompanion toCompanion(bool nullToAbsent) {
+    return CanvasAttachmentsCompanion(
+      clientAttachmentId: Value(clientAttachmentId),
+      pageId: Value(pageId),
+      attachmentData: Value(attachmentData),
+      isDeleted: Value(isDeleted),
+      updatedAt: Value(updatedAt),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
+    );
+  }
+
+  factory CanvasAttachment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CanvasAttachment(
+      clientAttachmentId: serializer.fromJson<String>(
+        json['clientAttachmentId'],
+      ),
+      pageId: serializer.fromJson<int>(json['pageId']),
+      attachmentData: serializer.fromJson<String>(json['attachmentData']),
+      isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientAttachmentId': serializer.toJson<String>(clientAttachmentId),
+      'pageId': serializer.toJson<int>(pageId),
+      'attachmentData': serializer.toJson<String>(attachmentData),
+      'isDeleted': serializer.toJson<int>(isDeleted),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'layerId': serializer.toJson<String?>(layerId),
+    };
+  }
+
+  CanvasAttachment copyWith({
+    String? clientAttachmentId,
+    int? pageId,
+    String? attachmentData,
+    int? isDeleted,
+    int? updatedAt,
+    Value<String?> layerId = const Value.absent(),
+  }) => CanvasAttachment(
+    clientAttachmentId: clientAttachmentId ?? this.clientAttachmentId,
+    pageId: pageId ?? this.pageId,
+    attachmentData: attachmentData ?? this.attachmentData,
+    isDeleted: isDeleted ?? this.isDeleted,
+    updatedAt: updatedAt ?? this.updatedAt,
+    layerId: layerId.present ? layerId.value : this.layerId,
+  );
+  CanvasAttachment copyWithCompanion(CanvasAttachmentsCompanion data) {
+    return CanvasAttachment(
+      clientAttachmentId: data.clientAttachmentId.present
+          ? data.clientAttachmentId.value
+          : this.clientAttachmentId,
+      pageId: data.pageId.present ? data.pageId.value : this.pageId,
+      attachmentData: data.attachmentData.present
+          ? data.attachmentData.value
+          : this.attachmentData,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasAttachment(')
+          ..write('clientAttachmentId: $clientAttachmentId, ')
+          ..write('pageId: $pageId, ')
+          ..write('attachmentData: $attachmentData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    clientAttachmentId,
+    pageId,
+    attachmentData,
+    isDeleted,
+    updatedAt,
+    layerId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CanvasAttachment &&
+          other.clientAttachmentId == this.clientAttachmentId &&
+          other.pageId == this.pageId &&
+          other.attachmentData == this.attachmentData &&
+          other.isDeleted == this.isDeleted &&
+          other.updatedAt == this.updatedAt &&
+          other.layerId == this.layerId);
+}
+
+class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
+  final Value<String> clientAttachmentId;
+  final Value<int> pageId;
+  final Value<String> attachmentData;
+  final Value<int> isDeleted;
+  final Value<int> updatedAt;
+  final Value<String?> layerId;
+  final Value<int> rowid;
+  const CanvasAttachmentsCompanion({
+    this.clientAttachmentId = const Value.absent(),
+    this.pageId = const Value.absent(),
+    this.attachmentData = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CanvasAttachmentsCompanion.insert({
+    required String clientAttachmentId,
+    required int pageId,
+    required String attachmentData,
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : clientAttachmentId = Value(clientAttachmentId),
+       pageId = Value(pageId),
+       attachmentData = Value(attachmentData);
+  static Insertable<CanvasAttachment> custom({
+    Expression<String>? clientAttachmentId,
+    Expression<int>? pageId,
+    Expression<String>? attachmentData,
+    Expression<int>? isDeleted,
+    Expression<int>? updatedAt,
+    Expression<String>? layerId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientAttachmentId != null)
+        'client_attachment_id': clientAttachmentId,
+      if (pageId != null) 'page_id': pageId,
+      if (attachmentData != null) 'attachment_data': attachmentData,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (layerId != null) 'layer_id': layerId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CanvasAttachmentsCompanion copyWith({
+    Value<String>? clientAttachmentId,
+    Value<int>? pageId,
+    Value<String>? attachmentData,
+    Value<int>? isDeleted,
+    Value<int>? updatedAt,
+    Value<String?>? layerId,
+    Value<int>? rowid,
+  }) {
+    return CanvasAttachmentsCompanion(
+      clientAttachmentId: clientAttachmentId ?? this.clientAttachmentId,
+      pageId: pageId ?? this.pageId,
+      attachmentData: attachmentData ?? this.attachmentData,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
+      layerId: layerId ?? this.layerId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientAttachmentId.present) {
+      map['client_attachment_id'] = Variable<String>(clientAttachmentId.value);
+    }
+    if (pageId.present) {
+      map['page_id'] = Variable<int>(pageId.value);
+    }
+    if (attachmentData.present) {
+      map['attachment_data'] = Variable<String>(attachmentData.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<int>(isDeleted.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasAttachmentsCompanion(')
+          ..write('clientAttachmentId: $clientAttachmentId, ')
+          ..write('pageId: $pageId, ')
+          ..write('attachmentData: $attachmentData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -9647,6 +12454,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $CanvasImageBlocksTable canvasImageBlocks =
       $CanvasImageBlocksTable(this);
+  late final $CanvasShapesTable canvasShapes = $CanvasShapesTable(this);
+  late final $CanvasAudioBlocksTable canvasAudioBlocks =
+      $CanvasAudioBlocksTable(this);
+  late final $CanvasAnimationsTable canvasAnimations = $CanvasAnimationsTable(
+    this,
+  );
+  late final $CanvasTablesTable canvasTables = $CanvasTablesTable(this);
+  late final $CanvasLinksTable canvasLinks = $CanvasLinksTable(this);
+  late final $CanvasAttachmentsTable canvasAttachments =
+      $CanvasAttachmentsTable(this);
   late final $NotebookUserTable notebookUser = $NotebookUserTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
   late final $LessonRecordingsTable lessonRecordings = $LessonRecordingsTable(
@@ -9668,6 +12485,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     canvasStrokes,
     canvasTextBlocks,
     canvasImageBlocks,
+    canvasShapes,
+    canvasAudioBlocks,
+    canvasAnimations,
+    canvasTables,
+    canvasLinks,
+    canvasAttachments,
     notebookUser,
     payments,
     lessonRecordings,
@@ -9717,6 +12540,48 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('canvas_image_blocks', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_shapes', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_audio_blocks', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_animations', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_tables', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_links', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_attachments', kind: UpdateKind.delete)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -12130,6 +14995,8 @@ typedef $$PagesTableCreateCompanionBuilder =
       Value<double?> lineSpacing,
       Value<String?> backgroundPdfPath,
       Value<String?> backgroundConfig,
+      Value<String?> viewportMatrix,
+      Value<String?> layers,
     });
 typedef $$PagesTableUpdateCompanionBuilder =
     PagesCompanion Function({
@@ -12153,6 +15020,8 @@ typedef $$PagesTableUpdateCompanionBuilder =
       Value<double?> lineSpacing,
       Value<String?> backgroundPdfPath,
       Value<String?> backgroundConfig,
+      Value<String?> viewportMatrix,
+      Value<String?> layers,
     });
 
 final class $$PagesTableReferences
@@ -12229,6 +15098,122 @@ final class $$PagesTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _canvasImageBlocksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasShapesTable, List<CanvasShape>>
+  _canvasShapesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.canvasShapes,
+    aliasName: 'pages__id__canvas_shapes__page_id',
+  );
+
+  $$CanvasShapesTableProcessedTableManager get canvasShapesRefs {
+    final manager = $$CanvasShapesTableTableManager(
+      $_db,
+      $_db.canvasShapes,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_canvasShapesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasAudioBlocksTable, List<CanvasAudioBlock>>
+  _canvasAudioBlocksRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.canvasAudioBlocks,
+        aliasName: 'pages__id__canvas_audio_blocks__page_id',
+      );
+
+  $$CanvasAudioBlocksTableProcessedTableManager get canvasAudioBlocksRefs {
+    final manager = $$CanvasAudioBlocksTableTableManager(
+      $_db,
+      $_db.canvasAudioBlocks,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _canvasAudioBlocksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasAnimationsTable, List<CanvasAnimation>>
+  _canvasAnimationsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.canvasAnimations,
+    aliasName: 'pages__id__canvas_animations__page_id',
+  );
+
+  $$CanvasAnimationsTableProcessedTableManager get canvasAnimationsRefs {
+    final manager = $$CanvasAnimationsTableTableManager(
+      $_db,
+      $_db.canvasAnimations,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _canvasAnimationsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasTablesTable, List<CanvasTable>>
+  _canvasTablesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.canvasTables,
+    aliasName: 'pages__id__canvas_tables__page_id',
+  );
+
+  $$CanvasTablesTableProcessedTableManager get canvasTablesRefs {
+    final manager = $$CanvasTablesTableTableManager(
+      $_db,
+      $_db.canvasTables,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_canvasTablesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasLinksTable, List<CanvasLink>>
+  _canvasLinksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.canvasLinks,
+    aliasName: 'pages__id__canvas_links__page_id',
+  );
+
+  $$CanvasLinksTableProcessedTableManager get canvasLinksRefs {
+    final manager = $$CanvasLinksTableTableManager(
+      $_db,
+      $_db.canvasLinks,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_canvasLinksRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CanvasAttachmentsTable, List<CanvasAttachment>>
+  _canvasAttachmentsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.canvasAttachments,
+        aliasName: 'pages__id__canvas_attachments__page_id',
+      );
+
+  $$CanvasAttachmentsTableProcessedTableManager get canvasAttachmentsRefs {
+    final manager = $$CanvasAttachmentsTableTableManager(
+      $_db,
+      $_db.canvasAttachments,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _canvasAttachmentsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -12339,6 +15324,16 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get viewportMatrix => $composableBuilder(
+    column: $table.viewportMatrix,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layers => $composableBuilder(
+    column: $table.layers,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$NotebooksTableFilterComposer get notebookId {
     final $$NotebooksTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -12428,6 +15423,156 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
           }) => $$CanvasImageBlocksTableFilterComposer(
             $db: $db,
             $table: $db.canvasImageBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasShapesRefs(
+    Expression<bool> Function($$CanvasShapesTableFilterComposer f) f,
+  ) {
+    final $$CanvasShapesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasShapes,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasShapesTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasShapes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasAudioBlocksRefs(
+    Expression<bool> Function($$CanvasAudioBlocksTableFilterComposer f) f,
+  ) {
+    final $$CanvasAudioBlocksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasAudioBlocks,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasAudioBlocksTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasAudioBlocks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasAnimationsRefs(
+    Expression<bool> Function($$CanvasAnimationsTableFilterComposer f) f,
+  ) {
+    final $$CanvasAnimationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasAnimations,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasAnimationsTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasAnimations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasTablesRefs(
+    Expression<bool> Function($$CanvasTablesTableFilterComposer f) f,
+  ) {
+    final $$CanvasTablesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasTables,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasTablesTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasTables,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasLinksRefs(
+    Expression<bool> Function($$CanvasLinksTableFilterComposer f) f,
+  ) {
+    final $$CanvasLinksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasLinks,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasLinksTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasLinks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasAttachmentsRefs(
+    Expression<bool> Function($$CanvasAttachmentsTableFilterComposer f) f,
+  ) {
+    final $$CanvasAttachmentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasAttachments,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasAttachmentsTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasAttachments,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -12542,6 +15687,16 @@ class $$PagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get viewportMatrix => $composableBuilder(
+    column: $table.viewportMatrix,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layers => $composableBuilder(
+    column: $table.layers,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$NotebooksTableOrderingComposer get notebookId {
     final $$NotebooksTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -12652,6 +15807,14 @@ class $$PagesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get viewportMatrix => $composableBuilder(
+    column: $table.viewportMatrix,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get layers =>
+      $composableBuilder(column: $table.layers, builder: (column) => column);
+
   $$NotebooksTableAnnotationComposer get notebookId {
     final $$NotebooksTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -12750,6 +15913,158 @@ class $$PagesTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> canvasShapesRefs<T extends Object>(
+    Expression<T> Function($$CanvasShapesTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasShapesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasShapes,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasShapesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.canvasShapes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> canvasAudioBlocksRefs<T extends Object>(
+    Expression<T> Function($$CanvasAudioBlocksTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasAudioBlocksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.canvasAudioBlocks,
+          getReferencedColumn: (t) => t.pageId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CanvasAudioBlocksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.canvasAudioBlocks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> canvasAnimationsRefs<T extends Object>(
+    Expression<T> Function($$CanvasAnimationsTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasAnimationsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasAnimations,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasAnimationsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.canvasAnimations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> canvasTablesRefs<T extends Object>(
+    Expression<T> Function($$CanvasTablesTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasTablesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasTables,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasTablesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.canvasTables,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> canvasLinksRefs<T extends Object>(
+    Expression<T> Function($$CanvasLinksTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasLinksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasLinks,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasLinksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.canvasLinks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> canvasAttachmentsRefs<T extends Object>(
+    Expression<T> Function($$CanvasAttachmentsTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasAttachmentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.canvasAttachments,
+          getReferencedColumn: (t) => t.pageId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CanvasAttachmentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.canvasAttachments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$PagesTableTableManager
@@ -12770,6 +16085,12 @@ class $$PagesTableTableManager
             bool canvasStrokesRefs,
             bool canvasTextBlocksRefs,
             bool canvasImageBlocksRefs,
+            bool canvasShapesRefs,
+            bool canvasAudioBlocksRefs,
+            bool canvasAnimationsRefs,
+            bool canvasTablesRefs,
+            bool canvasLinksRefs,
+            bool canvasAttachmentsRefs,
           })
         > {
   $$PagesTableTableManager(_$AppDatabase db, $PagesTable table)
@@ -12805,6 +16126,8 @@ class $$PagesTableTableManager
                 Value<double?> lineSpacing = const Value.absent(),
                 Value<String?> backgroundPdfPath = const Value.absent(),
                 Value<String?> backgroundConfig = const Value.absent(),
+                Value<String?> viewportMatrix = const Value.absent(),
+                Value<String?> layers = const Value.absent(),
               }) => PagesCompanion(
                 id: id,
                 serverId: serverId,
@@ -12826,6 +16149,8 @@ class $$PagesTableTableManager
                 lineSpacing: lineSpacing,
                 backgroundPdfPath: backgroundPdfPath,
                 backgroundConfig: backgroundConfig,
+                viewportMatrix: viewportMatrix,
+                layers: layers,
               ),
           createCompanionCallback:
               ({
@@ -12849,6 +16174,8 @@ class $$PagesTableTableManager
                 Value<double?> lineSpacing = const Value.absent(),
                 Value<String?> backgroundPdfPath = const Value.absent(),
                 Value<String?> backgroundConfig = const Value.absent(),
+                Value<String?> viewportMatrix = const Value.absent(),
+                Value<String?> layers = const Value.absent(),
               }) => PagesCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -12870,6 +16197,8 @@ class $$PagesTableTableManager
                 lineSpacing: lineSpacing,
                 backgroundPdfPath: backgroundPdfPath,
                 backgroundConfig: backgroundConfig,
+                viewportMatrix: viewportMatrix,
+                layers: layers,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -12883,6 +16212,12 @@ class $$PagesTableTableManager
                 canvasStrokesRefs = false,
                 canvasTextBlocksRefs = false,
                 canvasImageBlocksRefs = false,
+                canvasShapesRefs = false,
+                canvasAudioBlocksRefs = false,
+                canvasAnimationsRefs = false,
+                canvasTablesRefs = false,
+                canvasLinksRefs = false,
+                canvasAttachmentsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -12890,6 +16225,12 @@ class $$PagesTableTableManager
                     if (canvasStrokesRefs) db.canvasStrokes,
                     if (canvasTextBlocksRefs) db.canvasTextBlocks,
                     if (canvasImageBlocksRefs) db.canvasImageBlocks,
+                    if (canvasShapesRefs) db.canvasShapes,
+                    if (canvasAudioBlocksRefs) db.canvasAudioBlocks,
+                    if (canvasAnimationsRefs) db.canvasAnimations,
+                    if (canvasTablesRefs) db.canvasTables,
+                    if (canvasLinksRefs) db.canvasLinks,
+                    if (canvasAttachmentsRefs) db.canvasAttachments,
                   ],
                   addJoins:
                       <
@@ -12988,6 +16329,132 @@ class $$PagesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (canvasShapesRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasShape
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasShapesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasShapesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (canvasAudioBlocksRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasAudioBlock
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasAudioBlocksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasAudioBlocksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (canvasAnimationsRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasAnimation
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasAnimationsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasAnimationsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (canvasTablesRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasTablesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasTablesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (canvasLinksRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasLink
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasLinksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasLinksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (canvasAttachmentsRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasAttachment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasAttachmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasAttachmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -13013,6 +16480,12 @@ typedef $$PagesTableProcessedTableManager =
         bool canvasStrokesRefs,
         bool canvasTextBlocksRefs,
         bool canvasImageBlocksRefs,
+        bool canvasShapesRefs,
+        bool canvasAudioBlocksRefs,
+        bool canvasAnimationsRefs,
+        bool canvasTablesRefs,
+        bool canvasLinksRefs,
+        bool canvasAttachmentsRefs,
       })
     >;
 typedef $$CanvasStrokesTableCreateCompanionBuilder =
@@ -13470,6 +16943,7 @@ typedef $$CanvasTextBlocksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
@@ -13484,6 +16958,7 @@ typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 
@@ -13568,6 +17043,11 @@ class $$CanvasTextBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -13646,6 +17126,11 @@ class $$CanvasTextBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -13712,6 +17197,9 @@ class $$CanvasTextBlocksTableAnnotationComposer
   GeneratedColumn<String> get creatorId =>
       $composableBuilder(column: $table.creatorId, builder: (column) => column);
 
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -13776,6 +17264,7 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion(
                 clientTextId: clientTextId,
@@ -13788,6 +17277,7 @@ class $$CanvasTextBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13802,6 +17292,7 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion.insert(
                 clientTextId: clientTextId,
@@ -13814,6 +17305,7 @@ class $$CanvasTextBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -13902,6 +17394,7 @@ typedef $$CanvasImageBlocksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
@@ -13921,6 +17414,7 @@ typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> creatorId,
+      Value<String?> layerId,
       Value<int> rowid,
     });
 
@@ -14034,6 +17528,11 @@ class $$CanvasImageBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -14137,6 +17636,11 @@ class $$CanvasImageBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -14218,6 +17722,9 @@ class $$CanvasImageBlocksTableAnnotationComposer
   GeneratedColumn<String> get creatorId =>
       $composableBuilder(column: $table.creatorId, builder: (column) => column);
 
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -14290,6 +17797,7 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion(
                 clientImageId: clientImageId,
@@ -14307,6 +17815,7 @@ class $$CanvasImageBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -14326,6 +17835,7 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion.insert(
                 clientImageId: clientImageId,
@@ -14343,6 +17853,7 @@ class $$CanvasImageBlocksTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 creatorId: creatorId,
+                layerId: layerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -14412,6 +17923,2098 @@ typedef $$CanvasImageBlocksTableProcessedTableManager =
       $$CanvasImageBlocksTableUpdateCompanionBuilder,
       (CanvasImageBlock, $$CanvasImageBlocksTableReferences),
       CanvasImageBlock,
+      PrefetchHooks Function({bool pageId})
+    >;
+typedef $$CanvasShapesTableCreateCompanionBuilder =
+    CanvasShapesCompanion Function({
+      required String clientShapeId,
+      required int pageId,
+      required String shapeData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<int> version,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+typedef $$CanvasShapesTableUpdateCompanionBuilder =
+    CanvasShapesCompanion Function({
+      Value<String> clientShapeId,
+      Value<int> pageId,
+      Value<String> shapeData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<int> version,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+
+final class $$CanvasShapesTableReferences
+    extends BaseReferences<_$AppDatabase, $CanvasShapesTable, CanvasShape> {
+  $$CanvasShapesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_shapes__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CanvasShapesTableFilterComposer
+    extends Composer<_$AppDatabase, $CanvasShapesTable> {
+  $$CanvasShapesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientShapeId => $composableBuilder(
+    column: $table.clientShapeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shapeData => $composableBuilder(
+    column: $table.shapeData,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasShapesTableOrderingComposer
+    extends Composer<_$AppDatabase, $CanvasShapesTable> {
+  $$CanvasShapesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientShapeId => $composableBuilder(
+    column: $table.clientShapeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shapeData => $composableBuilder(
+    column: $table.shapeData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasShapesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CanvasShapesTable> {
+  $$CanvasShapesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientShapeId => $composableBuilder(
+    column: $table.clientShapeId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get shapeData =>
+      $composableBuilder(column: $table.shapeData, builder: (column) => column);
+
+  GeneratedColumn<int> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasShapesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CanvasShapesTable,
+          CanvasShape,
+          $$CanvasShapesTableFilterComposer,
+          $$CanvasShapesTableOrderingComposer,
+          $$CanvasShapesTableAnnotationComposer,
+          $$CanvasShapesTableCreateCompanionBuilder,
+          $$CanvasShapesTableUpdateCompanionBuilder,
+          (CanvasShape, $$CanvasShapesTableReferences),
+          CanvasShape,
+          PrefetchHooks Function({bool pageId})
+        > {
+  $$CanvasShapesTableTableManager(_$AppDatabase db, $CanvasShapesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CanvasShapesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CanvasShapesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CanvasShapesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> clientShapeId = const Value.absent(),
+                Value<int> pageId = const Value.absent(),
+                Value<String> shapeData = const Value.absent(),
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> version = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasShapesCompanion(
+                clientShapeId: clientShapeId,
+                pageId: pageId,
+                shapeData: shapeData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                version: version,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientShapeId,
+                required int pageId,
+                required String shapeData,
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> version = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasShapesCompanion.insert(
+                clientShapeId: clientShapeId,
+                pageId: pageId,
+                shapeData: shapeData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                version: version,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasShapesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable: $$CanvasShapesTableReferences
+                                    ._pageIdTable(db),
+                                referencedColumn: $$CanvasShapesTableReferences
+                                    ._pageIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CanvasShapesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CanvasShapesTable,
+      CanvasShape,
+      $$CanvasShapesTableFilterComposer,
+      $$CanvasShapesTableOrderingComposer,
+      $$CanvasShapesTableAnnotationComposer,
+      $$CanvasShapesTableCreateCompanionBuilder,
+      $$CanvasShapesTableUpdateCompanionBuilder,
+      (CanvasShape, $$CanvasShapesTableReferences),
+      CanvasShape,
+      PrefetchHooks Function({bool pageId})
+    >;
+typedef $$CanvasAudioBlocksTableCreateCompanionBuilder =
+    CanvasAudioBlocksCompanion Function({
+      required String clientAudioId,
+      required int pageId,
+      required String audioData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+typedef $$CanvasAudioBlocksTableUpdateCompanionBuilder =
+    CanvasAudioBlocksCompanion Function({
+      Value<String> clientAudioId,
+      Value<int> pageId,
+      Value<String> audioData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+
+final class $$CanvasAudioBlocksTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $CanvasAudioBlocksTable,
+          CanvasAudioBlock
+        > {
+  $$CanvasAudioBlocksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_audio_blocks__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CanvasAudioBlocksTableFilterComposer
+    extends Composer<_$AppDatabase, $CanvasAudioBlocksTable> {
+  $$CanvasAudioBlocksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientAudioId => $composableBuilder(
+    column: $table.clientAudioId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get audioData => $composableBuilder(
+    column: $table.audioData,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAudioBlocksTableOrderingComposer
+    extends Composer<_$AppDatabase, $CanvasAudioBlocksTable> {
+  $$CanvasAudioBlocksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientAudioId => $composableBuilder(
+    column: $table.clientAudioId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get audioData => $composableBuilder(
+    column: $table.audioData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAudioBlocksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CanvasAudioBlocksTable> {
+  $$CanvasAudioBlocksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientAudioId => $composableBuilder(
+    column: $table.clientAudioId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get audioData =>
+      $composableBuilder(column: $table.audioData, builder: (column) => column);
+
+  GeneratedColumn<int> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAudioBlocksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CanvasAudioBlocksTable,
+          CanvasAudioBlock,
+          $$CanvasAudioBlocksTableFilterComposer,
+          $$CanvasAudioBlocksTableOrderingComposer,
+          $$CanvasAudioBlocksTableAnnotationComposer,
+          $$CanvasAudioBlocksTableCreateCompanionBuilder,
+          $$CanvasAudioBlocksTableUpdateCompanionBuilder,
+          (CanvasAudioBlock, $$CanvasAudioBlocksTableReferences),
+          CanvasAudioBlock,
+          PrefetchHooks Function({bool pageId})
+        > {
+  $$CanvasAudioBlocksTableTableManager(
+    _$AppDatabase db,
+    $CanvasAudioBlocksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CanvasAudioBlocksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CanvasAudioBlocksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CanvasAudioBlocksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> clientAudioId = const Value.absent(),
+                Value<int> pageId = const Value.absent(),
+                Value<String> audioData = const Value.absent(),
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasAudioBlocksCompanion(
+                clientAudioId: clientAudioId,
+                pageId: pageId,
+                audioData: audioData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientAudioId,
+                required int pageId,
+                required String audioData,
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasAudioBlocksCompanion.insert(
+                clientAudioId: clientAudioId,
+                pageId: pageId,
+                audioData: audioData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasAudioBlocksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable:
+                                    $$CanvasAudioBlocksTableReferences
+                                        ._pageIdTable(db),
+                                referencedColumn:
+                                    $$CanvasAudioBlocksTableReferences
+                                        ._pageIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CanvasAudioBlocksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CanvasAudioBlocksTable,
+      CanvasAudioBlock,
+      $$CanvasAudioBlocksTableFilterComposer,
+      $$CanvasAudioBlocksTableOrderingComposer,
+      $$CanvasAudioBlocksTableAnnotationComposer,
+      $$CanvasAudioBlocksTableCreateCompanionBuilder,
+      $$CanvasAudioBlocksTableUpdateCompanionBuilder,
+      (CanvasAudioBlock, $$CanvasAudioBlocksTableReferences),
+      CanvasAudioBlock,
+      PrefetchHooks Function({bool pageId})
+    >;
+typedef $$CanvasAnimationsTableCreateCompanionBuilder =
+    CanvasAnimationsCompanion Function({
+      required String clientAnimationId,
+      required int pageId,
+      required String animationData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+typedef $$CanvasAnimationsTableUpdateCompanionBuilder =
+    CanvasAnimationsCompanion Function({
+      Value<String> clientAnimationId,
+      Value<int> pageId,
+      Value<String> animationData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+
+final class $$CanvasAnimationsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $CanvasAnimationsTable, CanvasAnimation> {
+  $$CanvasAnimationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_animations__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CanvasAnimationsTableFilterComposer
+    extends Composer<_$AppDatabase, $CanvasAnimationsTable> {
+  $$CanvasAnimationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientAnimationId => $composableBuilder(
+    column: $table.clientAnimationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get animationData => $composableBuilder(
+    column: $table.animationData,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAnimationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CanvasAnimationsTable> {
+  $$CanvasAnimationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientAnimationId => $composableBuilder(
+    column: $table.clientAnimationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get animationData => $composableBuilder(
+    column: $table.animationData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAnimationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CanvasAnimationsTable> {
+  $$CanvasAnimationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientAnimationId => $composableBuilder(
+    column: $table.clientAnimationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get animationData => $composableBuilder(
+    column: $table.animationData,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAnimationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CanvasAnimationsTable,
+          CanvasAnimation,
+          $$CanvasAnimationsTableFilterComposer,
+          $$CanvasAnimationsTableOrderingComposer,
+          $$CanvasAnimationsTableAnnotationComposer,
+          $$CanvasAnimationsTableCreateCompanionBuilder,
+          $$CanvasAnimationsTableUpdateCompanionBuilder,
+          (CanvasAnimation, $$CanvasAnimationsTableReferences),
+          CanvasAnimation,
+          PrefetchHooks Function({bool pageId})
+        > {
+  $$CanvasAnimationsTableTableManager(
+    _$AppDatabase db,
+    $CanvasAnimationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CanvasAnimationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CanvasAnimationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CanvasAnimationsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> clientAnimationId = const Value.absent(),
+                Value<int> pageId = const Value.absent(),
+                Value<String> animationData = const Value.absent(),
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasAnimationsCompanion(
+                clientAnimationId: clientAnimationId,
+                pageId: pageId,
+                animationData: animationData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientAnimationId,
+                required int pageId,
+                required String animationData,
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasAnimationsCompanion.insert(
+                clientAnimationId: clientAnimationId,
+                pageId: pageId,
+                animationData: animationData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasAnimationsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable:
+                                    $$CanvasAnimationsTableReferences
+                                        ._pageIdTable(db),
+                                referencedColumn:
+                                    $$CanvasAnimationsTableReferences
+                                        ._pageIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CanvasAnimationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CanvasAnimationsTable,
+      CanvasAnimation,
+      $$CanvasAnimationsTableFilterComposer,
+      $$CanvasAnimationsTableOrderingComposer,
+      $$CanvasAnimationsTableAnnotationComposer,
+      $$CanvasAnimationsTableCreateCompanionBuilder,
+      $$CanvasAnimationsTableUpdateCompanionBuilder,
+      (CanvasAnimation, $$CanvasAnimationsTableReferences),
+      CanvasAnimation,
+      PrefetchHooks Function({bool pageId})
+    >;
+typedef $$CanvasTablesTableCreateCompanionBuilder =
+    CanvasTablesCompanion Function({
+      required String clientTableId,
+      required int pageId,
+      required String tableData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+typedef $$CanvasTablesTableUpdateCompanionBuilder =
+    CanvasTablesCompanion Function({
+      Value<String> clientTableId,
+      Value<int> pageId,
+      Value<String> tableData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+
+final class $$CanvasTablesTableReferences
+    extends BaseReferences<_$AppDatabase, $CanvasTablesTable, CanvasTable> {
+  $$CanvasTablesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_tables__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CanvasTablesTableFilterComposer
+    extends Composer<_$AppDatabase, $CanvasTablesTable> {
+  $$CanvasTablesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientTableId => $composableBuilder(
+    column: $table.clientTableId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tableData => $composableBuilder(
+    column: $table.tableData,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasTablesTableOrderingComposer
+    extends Composer<_$AppDatabase, $CanvasTablesTable> {
+  $$CanvasTablesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientTableId => $composableBuilder(
+    column: $table.clientTableId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tableData => $composableBuilder(
+    column: $table.tableData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasTablesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CanvasTablesTable> {
+  $$CanvasTablesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientTableId => $composableBuilder(
+    column: $table.clientTableId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tableData =>
+      $composableBuilder(column: $table.tableData, builder: (column) => column);
+
+  GeneratedColumn<int> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasTablesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CanvasTablesTable,
+          CanvasTable,
+          $$CanvasTablesTableFilterComposer,
+          $$CanvasTablesTableOrderingComposer,
+          $$CanvasTablesTableAnnotationComposer,
+          $$CanvasTablesTableCreateCompanionBuilder,
+          $$CanvasTablesTableUpdateCompanionBuilder,
+          (CanvasTable, $$CanvasTablesTableReferences),
+          CanvasTable,
+          PrefetchHooks Function({bool pageId})
+        > {
+  $$CanvasTablesTableTableManager(_$AppDatabase db, $CanvasTablesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CanvasTablesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CanvasTablesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CanvasTablesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> clientTableId = const Value.absent(),
+                Value<int> pageId = const Value.absent(),
+                Value<String> tableData = const Value.absent(),
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasTablesCompanion(
+                clientTableId: clientTableId,
+                pageId: pageId,
+                tableData: tableData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientTableId,
+                required int pageId,
+                required String tableData,
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasTablesCompanion.insert(
+                clientTableId: clientTableId,
+                pageId: pageId,
+                tableData: tableData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasTablesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable: $$CanvasTablesTableReferences
+                                    ._pageIdTable(db),
+                                referencedColumn: $$CanvasTablesTableReferences
+                                    ._pageIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CanvasTablesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CanvasTablesTable,
+      CanvasTable,
+      $$CanvasTablesTableFilterComposer,
+      $$CanvasTablesTableOrderingComposer,
+      $$CanvasTablesTableAnnotationComposer,
+      $$CanvasTablesTableCreateCompanionBuilder,
+      $$CanvasTablesTableUpdateCompanionBuilder,
+      (CanvasTable, $$CanvasTablesTableReferences),
+      CanvasTable,
+      PrefetchHooks Function({bool pageId})
+    >;
+typedef $$CanvasLinksTableCreateCompanionBuilder =
+    CanvasLinksCompanion Function({
+      required String clientLinkId,
+      required int pageId,
+      required String linkData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+typedef $$CanvasLinksTableUpdateCompanionBuilder =
+    CanvasLinksCompanion Function({
+      Value<String> clientLinkId,
+      Value<int> pageId,
+      Value<String> linkData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+
+final class $$CanvasLinksTableReferences
+    extends BaseReferences<_$AppDatabase, $CanvasLinksTable, CanvasLink> {
+  $$CanvasLinksTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_links__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CanvasLinksTableFilterComposer
+    extends Composer<_$AppDatabase, $CanvasLinksTable> {
+  $$CanvasLinksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientLinkId => $composableBuilder(
+    column: $table.clientLinkId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get linkData => $composableBuilder(
+    column: $table.linkData,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasLinksTableOrderingComposer
+    extends Composer<_$AppDatabase, $CanvasLinksTable> {
+  $$CanvasLinksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientLinkId => $composableBuilder(
+    column: $table.clientLinkId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get linkData => $composableBuilder(
+    column: $table.linkData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasLinksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CanvasLinksTable> {
+  $$CanvasLinksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientLinkId => $composableBuilder(
+    column: $table.clientLinkId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get linkData =>
+      $composableBuilder(column: $table.linkData, builder: (column) => column);
+
+  GeneratedColumn<int> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasLinksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CanvasLinksTable,
+          CanvasLink,
+          $$CanvasLinksTableFilterComposer,
+          $$CanvasLinksTableOrderingComposer,
+          $$CanvasLinksTableAnnotationComposer,
+          $$CanvasLinksTableCreateCompanionBuilder,
+          $$CanvasLinksTableUpdateCompanionBuilder,
+          (CanvasLink, $$CanvasLinksTableReferences),
+          CanvasLink,
+          PrefetchHooks Function({bool pageId})
+        > {
+  $$CanvasLinksTableTableManager(_$AppDatabase db, $CanvasLinksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CanvasLinksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CanvasLinksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CanvasLinksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> clientLinkId = const Value.absent(),
+                Value<int> pageId = const Value.absent(),
+                Value<String> linkData = const Value.absent(),
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasLinksCompanion(
+                clientLinkId: clientLinkId,
+                pageId: pageId,
+                linkData: linkData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientLinkId,
+                required int pageId,
+                required String linkData,
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasLinksCompanion.insert(
+                clientLinkId: clientLinkId,
+                pageId: pageId,
+                linkData: linkData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasLinksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable: $$CanvasLinksTableReferences
+                                    ._pageIdTable(db),
+                                referencedColumn: $$CanvasLinksTableReferences
+                                    ._pageIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CanvasLinksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CanvasLinksTable,
+      CanvasLink,
+      $$CanvasLinksTableFilterComposer,
+      $$CanvasLinksTableOrderingComposer,
+      $$CanvasLinksTableAnnotationComposer,
+      $$CanvasLinksTableCreateCompanionBuilder,
+      $$CanvasLinksTableUpdateCompanionBuilder,
+      (CanvasLink, $$CanvasLinksTableReferences),
+      CanvasLink,
+      PrefetchHooks Function({bool pageId})
+    >;
+typedef $$CanvasAttachmentsTableCreateCompanionBuilder =
+    CanvasAttachmentsCompanion Function({
+      required String clientAttachmentId,
+      required int pageId,
+      required String attachmentData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+typedef $$CanvasAttachmentsTableUpdateCompanionBuilder =
+    CanvasAttachmentsCompanion Function({
+      Value<String> clientAttachmentId,
+      Value<int> pageId,
+      Value<String> attachmentData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> rowid,
+    });
+
+final class $$CanvasAttachmentsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $CanvasAttachmentsTable,
+          CanvasAttachment
+        > {
+  $$CanvasAttachmentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_attachments__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CanvasAttachmentsTableFilterComposer
+    extends Composer<_$AppDatabase, $CanvasAttachmentsTable> {
+  $$CanvasAttachmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientAttachmentId => $composableBuilder(
+    column: $table.clientAttachmentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get attachmentData => $composableBuilder(
+    column: $table.attachmentData,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAttachmentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CanvasAttachmentsTable> {
+  $$CanvasAttachmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientAttachmentId => $composableBuilder(
+    column: $table.clientAttachmentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get attachmentData => $composableBuilder(
+    column: $table.attachmentData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAttachmentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CanvasAttachmentsTable> {
+  $$CanvasAttachmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientAttachmentId => $composableBuilder(
+    column: $table.clientAttachmentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get attachmentData => $composableBuilder(
+    column: $table.attachmentData,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasAttachmentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CanvasAttachmentsTable,
+          CanvasAttachment,
+          $$CanvasAttachmentsTableFilterComposer,
+          $$CanvasAttachmentsTableOrderingComposer,
+          $$CanvasAttachmentsTableAnnotationComposer,
+          $$CanvasAttachmentsTableCreateCompanionBuilder,
+          $$CanvasAttachmentsTableUpdateCompanionBuilder,
+          (CanvasAttachment, $$CanvasAttachmentsTableReferences),
+          CanvasAttachment,
+          PrefetchHooks Function({bool pageId})
+        > {
+  $$CanvasAttachmentsTableTableManager(
+    _$AppDatabase db,
+    $CanvasAttachmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CanvasAttachmentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CanvasAttachmentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CanvasAttachmentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> clientAttachmentId = const Value.absent(),
+                Value<int> pageId = const Value.absent(),
+                Value<String> attachmentData = const Value.absent(),
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasAttachmentsCompanion(
+                clientAttachmentId: clientAttachmentId,
+                pageId: pageId,
+                attachmentData: attachmentData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientAttachmentId,
+                required int pageId,
+                required String attachmentData,
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasAttachmentsCompanion.insert(
+                clientAttachmentId: clientAttachmentId,
+                pageId: pageId,
+                attachmentData: attachmentData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasAttachmentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable:
+                                    $$CanvasAttachmentsTableReferences
+                                        ._pageIdTable(db),
+                                referencedColumn:
+                                    $$CanvasAttachmentsTableReferences
+                                        ._pageIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CanvasAttachmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CanvasAttachmentsTable,
+      CanvasAttachment,
+      $$CanvasAttachmentsTableFilterComposer,
+      $$CanvasAttachmentsTableOrderingComposer,
+      $$CanvasAttachmentsTableAnnotationComposer,
+      $$CanvasAttachmentsTableCreateCompanionBuilder,
+      $$CanvasAttachmentsTableUpdateCompanionBuilder,
+      (CanvasAttachment, $$CanvasAttachmentsTableReferences),
+      CanvasAttachment,
       PrefetchHooks Function({bool pageId})
     >;
 typedef $$NotebookUserTableCreateCompanionBuilder =
@@ -16678,6 +22281,18 @@ class $AppDatabaseManager {
       $$CanvasTextBlocksTableTableManager(_db, _db.canvasTextBlocks);
   $$CanvasImageBlocksTableTableManager get canvasImageBlocks =>
       $$CanvasImageBlocksTableTableManager(_db, _db.canvasImageBlocks);
+  $$CanvasShapesTableTableManager get canvasShapes =>
+      $$CanvasShapesTableTableManager(_db, _db.canvasShapes);
+  $$CanvasAudioBlocksTableTableManager get canvasAudioBlocks =>
+      $$CanvasAudioBlocksTableTableManager(_db, _db.canvasAudioBlocks);
+  $$CanvasAnimationsTableTableManager get canvasAnimations =>
+      $$CanvasAnimationsTableTableManager(_db, _db.canvasAnimations);
+  $$CanvasTablesTableTableManager get canvasTables =>
+      $$CanvasTablesTableTableManager(_db, _db.canvasTables);
+  $$CanvasLinksTableTableManager get canvasLinks =>
+      $$CanvasLinksTableTableManager(_db, _db.canvasLinks);
+  $$CanvasAttachmentsTableTableManager get canvasAttachments =>
+      $$CanvasAttachmentsTableTableManager(_db, _db.canvasAttachments);
   $$NotebookUserTableTableManager get notebookUser =>
       $$NotebookUserTableTableManager(_db, _db.notebookUser);
   $$PaymentsTableTableManager get payments =>

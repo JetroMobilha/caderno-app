@@ -223,6 +223,7 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
       }
     }
 
+    // 🚀 Lógica Absoluta: w é sempre o menor, h é sempre o maior em Raw
     double w = 210, h = 297;
     switch (val) {
       case 'A0': w = 841; h = 1189; break;
@@ -232,9 +233,12 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
       case 'A4': w = 210; h = 297; break;
       case 'A5': w = 148; h = 210; break;
     }
+    
+    // Ajustar baseado na orientação atual
     if (widget.config.page.orientation == 'landscape') {
       final temp = w; w = h; h = temp;
     }
+    
     widget.onChanged(widget.config.copyWith(page: PageConfig(
       width: w, 
       height: h, 
@@ -269,13 +273,22 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
       if (confirm != true) return;
     }
 
-    // Calcular novas dimensões baseadas na troca
-    final double newWidth = widget.config.page.height;
-    final double newHeight = widget.config.page.width;
+    // 🚀 LÓGICA DE TROCA INFALÍVEL
+    final double currentW = widget.config.page.width;
+    final double currentH = widget.config.page.height;
+    
+    double nextW = currentW;
+    double nextH = currentH;
+
+    if (orientation == 'portrait') {
+      if (currentW > currentH) { nextW = currentH; nextH = currentW; }
+    } else {
+      if (currentW < currentH) { nextW = currentH; nextH = currentW; }
+    }
 
     widget.onChanged(widget.config.copyWith(page: PageConfig(
-      width: newWidth, 
-      height: newHeight, 
+      width: nextW, 
+      height: nextH, 
       orientation: orientation,
       isInfinite: widget.config.page.isInfinite,
       paperSize: widget.config.page.paperSize,
@@ -513,7 +526,10 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => BackgroundSelectorSheet(onSelected: (bg) => widget.onChanged(widget.config.copyWith(background: bg))),
+      builder: (_) => BackgroundSelectorSheet(
+        initialConfig: widget.config.background, 
+        onSelected: (bg) => widget.onChanged(widget.config.copyWith(background: bg)),
+      ),
     );
   }
 }

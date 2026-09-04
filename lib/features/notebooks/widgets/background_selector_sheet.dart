@@ -6,23 +6,52 @@ import 'page_preview.dart';
 
 class BackgroundSelectorSheet extends StatefulWidget {
   final Function(BackgroundConfig) onSelected;
+  final BackgroundConfig? initialConfig; 
 
-  const BackgroundSelectorSheet({super.key, required this.onSelected});
+  const BackgroundSelectorSheet({
+    super.key, 
+    required this.onSelected,
+    this.initialConfig,
+  });
 
   @override
   State<BackgroundSelectorSheet> createState() => _BackgroundSelectorSheetState();
 }
 
 class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
-  static String _lastCategoryId = 'writing';
-  static String? _lastOptionId;
+  static String _lastCategoryId = 'basic';
   
   late String _selectedCategoryId;
+  String? _currentOptionId; 
 
   @override
   void initState() {
     super.initState();
     _selectedCategoryId = _lastCategoryId;
+    
+    if (widget.initialConfig != null) {
+      _findCurrentOption(widget.initialConfig!);
+    }
+  }
+
+  void _findCurrentOption(BackgroundConfig config) {
+    for (var cat in BackgroundCatalog.categories) {
+      for (var opt in cat.options) {
+        if (_isMatch(opt.config, config)) {
+          _currentOptionId = opt.id;
+          _selectedCategoryId = cat.id;
+          _lastCategoryId = cat.id;
+          return;
+        }
+      }
+    }
+  }
+
+  bool _isMatch(BackgroundConfig a, BackgroundConfig b) {
+    return a.type == b.type && 
+           a.subType == b.subType && 
+           (a.spacing - b.spacing).abs() < 0.1 &&
+           a.showRedMargin == b.showRedMargin;
   }
 
   void _onCategoryTap(String id) {
@@ -56,9 +85,8 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
           Expanded(
             child: Row(
               children: [
-                // Rail de Categorias
                 Container(
-                  width: 90,
+                  width: 100,
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.02),
                     border: Border(right: BorderSide(color: Colors.black.withValues(alpha: 0.05))),
@@ -72,7 +100,7 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
                         onTap: () => _onCategoryTap(cat.id),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                           decoration: BoxDecoration(
                             color: isSelected ? Colors.white : Colors.transparent,
                             border: isSelected ? const Border(left: BorderSide(color: Color(0xFF0F4C5C), width: 4)) : null,
@@ -88,7 +116,7 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
                               Text(cat.label, 
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
-                                  fontSize: 9, 
+                                  fontSize: 10, 
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                   color: isSelected ? const Color(0xFF0F4C5C) : Colors.black45
                                 )
@@ -100,8 +128,6 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
                     },
                   ),
                 ),
-
-                // Grelha de Opções
                 Expanded(
                   child: _buildOptionsGrid(),
                 ),
@@ -118,7 +144,6 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
     
     return GridView.builder(
       padding: const EdgeInsets.all(20),
-      // 🚀 FÍSICA DE SCROLL GARANTIDA
       physics: const BouncingScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -135,11 +160,11 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
   }
 
   Widget _buildOptionCard(BackgroundOption option) {
-    final bool isLastSelected = _lastOptionId == option.id;
+    final bool isSelected = _currentOptionId == option.id;
 
     return InkWell(
       onTap: () {
-        setState(() => _lastOptionId = option.id);
+        setState(() => _currentOptionId = option.id);
         widget.onSelected(option.config);
         Navigator.pop(context);
       },
@@ -153,10 +178,10 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isLastSelected ? const Color(0xFF0F4C5C) : Colors.black.withValues(alpha: 0.1),
-                  width: isLastSelected ? 2.5 : 1.0, // 🚀 SELEÇÃO MAIS EVIDENTE
+                  color: isSelected ? const Color(0xFF0F4C5C) : Colors.black.withValues(alpha: 0.1),
+                  width: isSelected ? 2.5 : 1.0, 
                 ),
-                boxShadow: isLastSelected ? [
+                boxShadow: isSelected ? [
                   BoxShadow(color: const Color(0xFF0F4C5C).withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 4))
                 ] : null,
               ),
@@ -167,7 +192,12 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
                     PagePreview(
                       isVibrant: true,
                       config: NotebookConfiguration(
-                        page: PageConfig(width: 210, height: 297, paperSize: 'A4'),
+                        page: PageConfig(
+                          width: 210, 
+                          height: 297, 
+                          paperSize: 'A4',
+                          orientation: 'portrait',
+                        ),
                         background: option.config,
                         margins: MarginsConfig(),
                         header: HeaderFooterConfig(),
@@ -175,7 +205,7 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
                         numbering: NumberingConfig(),
                       ),
                     ),
-                    if (isLastSelected)
+                    if (isSelected)
                       Positioned(
                         top: 8, right: 8,
                         child: Container(
@@ -196,8 +226,8 @@ class _BackgroundSelectorSheetState extends State<BackgroundSelectorSheet> {
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
               fontSize: 11, 
-              fontWeight: isLastSelected ? FontWeight.bold : FontWeight.w500,
-              color: isLastSelected ? const Color(0xFF0F4C5C) : Colors.black87,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? const Color(0xFF0F4C5C) : Colors.black87,
             )
           ),
         ],

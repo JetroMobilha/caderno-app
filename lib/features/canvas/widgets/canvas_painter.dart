@@ -94,7 +94,8 @@ class BackgroundPainter extends CustomPainter {
   bool shouldRepaint(BackgroundPainter oldDelegate) =>
       oldDelegate.lineType != lineType || 
       oldDelegate.lineSpacing != lineSpacing ||
-      oldDelegate.bgConfig != bgConfig;
+      oldDelegate.bgConfig != bgConfig ||
+      oldDelegate.notebookConfig != notebookConfig; // 🚀 ADICIONADO
 }
 
 class StrokesPainter extends CustomPainter {

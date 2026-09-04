@@ -3,12 +3,9 @@ import 'package:drift/drift.dart';
 import '../database/app_database.dart';
 import 'time_service.dart';
 
-/// 🚀 Utilitários para processamento de dados de sincronização em Isolate (Background).
+/// 🚀 Utilitários para processamento de dados de sincronização v29 (Fase 2)
 class SyncIsolates {
   
-  /// Transforma dados brutos do servidor em Companions do Drift para inserção em lote.
-  /// 🚀 OTIMIZAÇÃO: Removemos a comparação item a item (LWW) para itens sincronizados,
-  /// confiando que o motor de sync no Flutter já limpou os "clean" antes desta chamada.
   static List<dynamic> processCanvasDataBatch(Map<String, dynamic> input) {
     final List<dynamic> serverPages = input['serverPages'];
     final int currentTime = input['currentTime'];
@@ -16,81 +13,127 @@ class SyncIsolates {
     final List<CanvasStrokesCompanion> strokes = [];
     final List<CanvasTextBlocksCompanion> texts = [];
     final List<CanvasImageBlocksCompanion> images = [];
+    final List<CanvasShapesCompanion> shapes = [];
+    final List<CanvasAudioBlocksCompanion> audios = [];
+    final List<CanvasAnimationsCompanion> animations = [];
+    final List<CanvasTablesCompanion> tables = [];
+    final List<CanvasLinksCompanion> links = [];
+    final List<CanvasAttachmentsCompanion> attachments = [];
 
     for (var sPage in serverPages) {
       final int localPageId = sPage['_localPageId'];
       
-      // 1. Processar Strokes (Sem merge manual, apenas mapeamento)
-      final List strokeList = sPage['stroke_data'] ?? [];
-      for (var st in strokeList) {
-        strokes.add(mapStrokeToCompanion(st, localPageId, currentTime));
-      }
+      // 🚀 v29: Processar lista unificada de objetos
+      final List objects = sPage['objects_data'] ?? [];
+      
+      for (var obj in objects) {
+        final String type = obj['type']?.toString() ?? '';
+        final String id = obj['id']?.toString() ?? 'err';
+        final int ts = (obj['updated_at'] as num?)?.toInt() ?? currentTime;
+        final String layerId = obj['layer_id']?.toString() ?? 'default';
 
-      // 2. Processar Textos
-      final List textList = sPage['text_data'] ?? [];
-      for (var txt in textList) {
-        texts.add(mapTextToCompanion(txt, localPageId, currentTime));
-      }
-
-      // 3. Processar Imagens
-      final List imageList = sPage['image_data'] ?? [];
-      for (var img in imageList) {
-        images.add(mapImageToCompanion(img, localPageId, currentTime));
+        switch (type) {
+          case 'stroke':
+            strokes.add(CanvasStrokesCompanion.insert(
+              clientStrokeId: id, pageId: localPageId, strokeData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'text':
+            texts.add(CanvasTextBlocksCompanion.insert(
+              clientTextId: id, pageId: localPageId, textData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'image':
+            images.add(CanvasImageBlocksCompanion.insert(
+              clientImageId: id, pageId: localPageId, imagePath: obj['image_path'] ?? '',
+              posX: (obj['dx'] as num?)?.toDouble() ?? 0.0, posY: (obj['dy'] as num?)?.toDouble() ?? 0.0,
+              width: (obj['width'] as num?)?.toDouble() ?? 300.0, height: (obj['height'] as num?)?.toDouble() ?? 200.0,
+              rotation: (obj['rotation'] as num?)?.toDouble() ?? 0.0,
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'shape':
+            shapes.add(CanvasShapesCompanion.insert(
+              clientShapeId: id, pageId: localPageId, shapeData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'audio':
+            audios.add(CanvasAudioBlocksCompanion.insert(
+              clientAudioId: id, pageId: localPageId, audioData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'animation':
+            animations.add(CanvasAnimationsCompanion.insert(
+              clientAnimationId: id, pageId: localPageId, animationData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'table':
+            tables.add(CanvasTablesCompanion.insert(
+              clientTableId: id, pageId: localPageId, tableData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'link':
+            links.add(CanvasLinksCompanion.insert(
+              clientLinkId: id, pageId: localPageId, linkData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+          case 'attachment':
+            attachments.add(CanvasAttachmentsCompanion.insert(
+              clientAttachmentId: id, pageId: localPageId, attachmentData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
+        }
       }
     }
 
-    return [strokes, texts, images];
+    return [strokes, texts, images, shapes, audios, animations, tables, links, attachments];
   }
 
-  // 🚀 Mapeadores reutilizáveis (Isolates e Web Chunks)
+  // Mapeadores legados mantidos para suporte a pedaços de rede (Chunks) se necessário
   static CanvasStrokesCompanion mapStrokeToCompanion(Map<String, dynamic> st, int localPageId, int currentTime) {
     final String id = st['id']?.toString() ?? 'err';
-    final int serverTime = (st['updated_at'] as num?)?.toInt() ?? 0;
-    final bool serverDeleted = st['is_deleted'] == true || st['is_deleted'] == 1;
-
     return CanvasStrokesCompanion.insert(
-      clientStrokeId: id, 
-      pageId: localPageId, 
-      strokeData: jsonEncode(st), 
-      isDeleted: Value(serverDeleted ? 1 : 0), 
-      deletedInSession: Value(st['deleted_in_session'] == true ? 1 : 0), 
-      syncedWithCloud: const Value(1), 
-      updatedAt: Value(serverTime > 0 ? serverTime : currentTime)
+      clientStrokeId: id, pageId: localPageId, strokeData: jsonEncode(st),
+      isDeleted: Value(st['is_deleted'] == true ? 1 : 0),
+      syncedWithCloud: const Value(1), updatedAt: Value((st['updated_at'] as num?)?.toInt() ?? currentTime)
     );
   }
 
   static CanvasTextBlocksCompanion mapTextToCompanion(Map<String, dynamic> txt, int localPageId, int currentTime) {
     final String id = txt['id']?.toString() ?? 'err';
-    final int serverTime = (txt['updated_at'] as num?)?.toInt() ?? 0;
-
     return CanvasTextBlocksCompanion.insert(
-      clientTextId: id, 
-      pageId: localPageId, 
-      textData: jsonEncode(txt), 
-      isDeleted: Value((txt['is_deleted'] == true || txt['is_deleted'] == 1) ? 1 : 0), 
-      deletedInSession: Value(txt['deleted_in_session'] == true ? 1 : 0), 
-      syncedWithCloud: const Value(1), 
-      updatedAt: Value(serverTime > 0 ? serverTime : currentTime)
+      clientTextId: id, pageId: localPageId, textData: jsonEncode(txt),
+      isDeleted: Value(txt['is_deleted'] == true ? 1 : 0),
+      syncedWithCloud: const Value(1), updatedAt: Value((txt['updated_at'] as num?)?.toInt() ?? currentTime)
     );
   }
 
   static CanvasImageBlocksCompanion mapImageToCompanion(Map<String, dynamic> img, int localPageId, int currentTime) {
     final String id = img['id']?.toString() ?? 'err';
-    final int serverTime = (img['updated_at'] as num?)?.toInt() ?? 0;
-
     return CanvasImageBlocksCompanion.insert(
-      clientImageId: id, 
-      pageId: localPageId, 
-      imagePath: img['image_path']?.toString() ?? '', 
-      posX: (img['dx'] as num?)?.toDouble() ?? 0.0, 
-      posY: (img['dy'] as num?)?.toDouble() ?? 0.0, 
-      width: (img['width'] as num?)?.toDouble() ?? 300.0, 
-      height: (img['height'] as num?)?.toDouble() ?? 200.0, 
-      rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0, 
-      isDeleted: Value((img['is_deleted'] == true || img['is_deleted'] == 1) ? 1 : 0), 
-      deletedInSession: Value(img['deleted_in_session'] == true ? 1 : 0), 
-      syncedWithCloud: const Value(1), 
-      updatedAt: Value(serverTime > 0 ? serverTime : currentTime)
+      clientImageId: id, pageId: localPageId, imagePath: img['image_path'] ?? '',
+      posX: (img['dx'] as num?)?.toDouble() ?? 0.0, posY: (img['dy'] as num?)?.toDouble() ?? 0.0,
+      width: (img['width'] as num?)?.toDouble() ?? 300.0, height: (img['height'] as num?)?.toDouble() ?? 200.0,
+      rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0,
+      isDeleted: Value(img['is_deleted'] == true ? 1 : 0),
+      syncedWithCloud: const Value(1), updatedAt: Value((img['updated_at'] as num?)?.toInt() ?? currentTime)
     );
   }
 }

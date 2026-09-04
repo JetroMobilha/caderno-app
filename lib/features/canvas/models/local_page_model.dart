@@ -88,10 +88,16 @@ class LocalPage {
   // 🚀 LISTA UNIFICADA DE OBJETOS
   List<PageObject> objects;
 
-  // 🔄 Mapeadores para retrocompatibilidade
+  // 🔄 Mapeadores para retrocompatibilidade e acesso rápido
   List<Stroke> get strokes => objects.whereType<Stroke>().toList();
   List<TextBlock> get textBlocks => objects.whereType<TextBlock>().toList();
   List<ImageBlock> get imageBlocks => objects.whereType<ImageBlock>().toList();
+  List<ShapeObject> get shapes => objects.whereType<ShapeObject>().toList(); // 🚀 NOVO
+  List<AudioBlock> get audios => objects.whereType<AudioBlock>().toList(); // 🚀 NOVO
+  List<AnimationObject> get animations => objects.whereType<AnimationObject>().toList(); // 🚀 NOVO
+  List<TableObject> get tables => objects.whereType<TableObject>().toList(); // 🚀 NOVO
+  List<LinkObject> get links => objects.whereType<LinkObject>().toList(); // 🚀 NOVO
+  List<AttachmentObject> get attachments => objects.whereType<AttachmentObject>().toList(); // 🚀 NOVO
 
   List<Stroke> redoHistory;
 

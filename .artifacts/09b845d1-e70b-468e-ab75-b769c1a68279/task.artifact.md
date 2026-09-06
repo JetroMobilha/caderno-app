@@ -1,18 +1,12 @@
-# Tarefas - Fase 2: Evolução da Estrutura de Página
+# Tarefa: Fase 4.4 - Refinamento de Interatividade e Persistência do Organizador ✍️💾
 
-Implementar funcionalidades avançadas de objetos, camadas e integração multimédia.
-
-- `[x]` Implementar Formas Geométricas (`ShapeObject`)
-    - `[x]` Criar modelo `ShapeObject`
-    - `[x]` Integrar no `ObjectRenderer`
-    - `[ ]` Atualizar lógica de seleção para formas
-- `[x]` Implementar Objetos de Animação (`AnimationObject`)
-    - `[x]` Criar modelo `AnimationObject`
-    - `[x]` Integrar no `ObjectRenderer` com suporte a física
-- `[ ]` Implementar Áudio no Canvas (`AudioBlock`)
-    - `[x]` Criar modelo `AudioBlock`
-    - `[x]` Integrar no `ObjectRenderer` com ícone interativo
-- `[ ]` Gestão de Camadas (Layers)
-    - `[x]` Adicionar `layerId` ao `PageObject`
-    - `[x]` Adicionar definições de camadas ao `LocalPage`
-    - `[ ]` Criar interface básica de camadas na Toolbar
+- [ ] **T1: Persistência no Organizador**
+    - [ ] Atualizar `onPanEnd` no `InteractionLayer` para gravar a posição final no modo `organizer`.
+- [ ] **T2: Edição de Texto Inteligente**
+    - [ ] Ajustar `onTapDown` no `InteractionLayer` para priorizar a edição de blocos existentes.
+    - [ ] Garantir que o "Hit Test" para texto seja preciso mesmo com rotação.
+- [ ] **T3: Refactor de Ergonomia da Toolbar**
+    - [ ] Mover o botão "Voltar" (Seta) para a linha superior em `TextEditToolbar`.
+    - [ ] Refinar a centralização das ferramentas na linha inferior.
+- [ ] **T4: Checklists em Objetos Bloqueados**
+    - [ ] Ajustar `_tryToggleChecklist` para ignorar a flag `isLocked`.

@@ -90,8 +90,77 @@ abstract class CanvasAction {
         pageData: data['pageData'],
         timestamp: ts,
       );
+    } else if (type == 'pixelErase') { // 🚀 v2.1
+      return PixelEraseAction(
+        pageClientId: cid,
+        pageNumber: pNum,
+        deletedStrokeIds: List<String>.from(data['deletedIds'] ?? []),
+        addedStrokes: (data['addedStrokes'] as List? ?? [])
+            .map((s) => Stroke.fromJson(s))
+            .toList(),
+        timestamp: ts,
+      );
     }
     return null;
+  }
+}
+
+// 🚀 v2.1: Ação Composta para Borracha de Precisão (Undo/Redo Amigável)
+class PixelEraseAction extends CanvasAction {
+  final List<String> deletedStrokeIds;
+  final List<Stroke> addedStrokes;
+
+  PixelEraseAction({
+    required String pageClientId,
+    required int pageNumber,
+    required this.deletedStrokeIds,
+    required this.addedStrokes,
+    int? timestamp,
+  }) : super(pageClientId, pageNumber, timestamp: timestamp);
+
+  @override String get type => 'pixelErase';
+
+  @override Map<String, dynamic> toMap() => {
+    'pageClientId': pageClientId,
+    'pageNumber': pageNumber,
+    'timestamp': timestamp,
+    'deletedIds': deletedStrokeIds,
+    'addedStrokes': addedStrokes.map((s) => s.toJson()).toList(),
+  };
+
+  @override
+  void execute(LocalPage page) {
+    final now = TimeService().nowMs();
+    // 1. Marcar originais como apagados
+    for (var id in deletedStrokeIds) {
+      final idx = page.objects.indexWhere((o) => o.id == id);
+      if (idx != -1) {
+        page.objects[idx].isDeleted = true;
+        page.objects[idx].updatedAt = now;
+      }
+    }
+    // 2. Adicionar novos segmentos
+    for (var s in addedStrokes) {
+      s.isDeleted = false;
+      s.updatedAt = now;
+      page.objects.add(s);
+    }
+  }
+
+  @override
+  void undo(LocalPage page) {
+    final now = TimeService().nowMs();
+    // 1. Restaurar originais
+    for (var id in deletedStrokeIds) {
+      final idx = page.objects.indexWhere((o) => o.id == id);
+      if (idx != -1) {
+        page.objects[idx].isDeleted = false;
+        page.objects[idx].updatedAt = now;
+      }
+    }
+    // 2. Remover segmentos da borracha
+    final addedIds = addedStrokes.map((s) => s.id).toSet();
+    page.objects.removeWhere((o) => addedIds.contains(o.id));
   }
 }
 

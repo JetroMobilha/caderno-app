@@ -1,27 +1,35 @@
-# Plano de Restauro: Processamento de Imagens e Integridade no SyncService
+# Plano: Fase 4.4 - Refinamento de Interatividade e Persistência do Organizador
 
-Restaurar a lógica de descodificação Base64 e armazenamento físico de imagens no servidor, garantindo que a unificação de objetos (v29) não comprometa o upload de ficheiros.
+Resolver a falta de persistência de movimentos no modo Organizador e garantir que a edição de texto seja fluida e sem sobreposição de blocos vazios.
 
-## Diagnóstico
-Durante a migração para `objects_data`, a lógica que transformava `image_base64` em ficheiros `.png` no disco do servidor foi omitida. Isso faria com que as imagens inseridas no App não fossem guardadas corretamente no backend, resultando em links quebrados ou perda de dados.
+## Mudanças Propostas
 
-## Mudanças Propostas - Backend (Laravel)
+### 1. Persistência de Movimento no Organizador (`InteractionLayer`)
+- **Problema**: Atualmente, o modo Organizador permite mover objetos visualmente, mas os movimentos não estão a ser confirmados no banco de dados ao soltar o objeto (`onPanEnd`).
+- **[MODIFY] [interaction_layer.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/layers/interaction_layer.dart)**:
+    - Garantir que o `onPanEnd` deteta o modo `ToolMode.organizer`.
+    - Chamar `docNotifier.moveSelection` para persistir a posição final de todos os objetos selecionados no banco de dados e sincronizar com o servidor.
 
-### 1. Serviço de Sincronização (`SyncService.php`)
+### 2. Edição de Texto Inteligente (`InteractionLayer`)
+- **Problema**: O utilizador quer que, ao tocar num texto existente com a ferramenta "T", o editor abra esse texto em vez de criar um novo.
+- **[MODIFY] [interaction_layer.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/layers/interaction_layer.dart)**:
+    - No `onTapDown`, se a ferramenta for `ToolMode.text`, realizar um hit-test prioritário em `TextBlock`s existentes.
+    - Se encontrar um bloco, ativar a edição (`toolNotifier.setTextEditing`).
+    - Se não encontrar, criar um novo bloco apenas se o utilizador não estivesse já em modo de edição (evitando blocos vazios em série).
 
-#### [MODIFY] [SyncService.php](file:///C:/xampp/htdocs/caderno-backend/app/Services/SyncService.php)
-- **Implementar `processBase64Objects`**: Um novo método privado que percorre a lista de objetos (`objects_data`) e, para cada item do tipo `image`, verifica se existe conteúdo Base64.
-- **Restaurar Armazenamento**: Reintroduzir o uso de `Storage::disk('public')->put()` e a geração de URLs via `asset()`.
-- **Integrar no Fluxo Principal**: Chamar este processador antes de realizar o merge final dos objetos.
+### 3. Melhoria Ergonómica da Toolbar de Texto (`TextEditToolbar`)
+- **Seta no Topo**: Reorganizar o layout da `TextEditToolbar` para colocar a seta de "Voltar" na linha das abas de categoria.
+- **Centralização**: Ajustar o alinhamento central da linha de ferramentas de formatação para ecrãs de tablets e desktops.
 
-### 2. Modelo de Página (`Page.php`)
+### 4. Checklists em Objetos Bloqueados
+- Garantir que o cálculo de toque em checklists ignore o estado `isLocked`, permitindo marcar tarefas sem precisar de "destrancar" o bloco de texto.
 
-#### [MODIFY] [Page.php](file:///C:/xampp/htdocs/caderno-backend/app/Models/Page.php)
-- **Sincronia de Atributos**: Garantir que o atributo `unified_objects` (appends) reflita as alterações nos caminhos das imagens processadas pelo serviço.
+## Plano de Tarefas
 
-## Plano de Verificação
+- [ ] **T1: Persistência Organizador** (Save de movimento ao soltar)
+- [ ] **T2: Hit-Test Prioritário de Texto** (Editar existente vs Criar novo)
+- [ ] **T3: Refactor Ergonomia Toolbar** (Botão voltar no topo)
+- [ ] **T4: Ajuste Final de Checklists** (Acesso mesmo com bloqueio ativo)
 
-### Verificação Manual
-1. **Upload de Imagem**: Inserir uma foto nova no App Flutter e sincronizar.
-2. **Confirmação de Ficheiro**: Verificar na pasta `C:\xampp\htdocs\caderno-backend\storage\app\public\notebook_images` se o novo ficheiro `.png` foi criado.
-3. **Persistência Multi-dispositivo**: Limpar os dados do App e fazer login noutro dispositivo. Confirmar que a imagem aparece carregada através da URL do servidor.
+---
+**Conclusão**: Estas mudanças tornam as ferramentas do caderno ferramentas "vivas" que entendem o contexto e protegem o trabalho do utilizador. Posso avançar?

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'page_object.dart';
+import 'canvas_enums.dart'; // 🚀 v3.4
 
 class TextBlock implements PageObject {
   @override
@@ -17,8 +18,17 @@ class TextBlock implements PageObject {
   bool isBold;
   bool isItalic;
   bool isUnderline;
+  bool isStrikethrough; // 🚀 v3.4
   String textColorHex;
+  String? backgroundColorHex; // 🚀 v3.4
   double fontSize;
+  TextAlign textAlign;   // 🚀 v3.4
+  String? fontFamily;    // 🚀 v3.4
+  double lineHeight;     // 🚀 v3.4
+  ListType listType;     // 🚀 v3.4
+  double letterSpacing;  // 🚀 v3.7
+  double paragraphSpacing; // 🚀 v3.7
+  double internalPadding;  // 🚀 v3.7
   
   @override
   bool isDeleted;
@@ -28,7 +38,7 @@ class TextBlock implements PageObject {
   int updatedAt;
   @override
   int version;
-  bool isChecklist;
+  bool isChecklist; // Legado v3.1, será migrado para listType no futuro
   List<int> checkedLineIndices;
   @override
   int? pageNumber; 
@@ -56,8 +66,17 @@ class TextBlock implements PageObject {
     this.isBold = false,
     this.isItalic = false,
     this.isUnderline = false,
+    this.isStrikethrough = false,
     this.textColorHex = '#1A1A24',
+    this.backgroundColorHex,
     this.fontSize = 18.0,
+    this.textAlign = TextAlign.left,
+    this.fontFamily,
+    this.lineHeight = 1.2,
+    this.listType = ListType.none,
+    this.letterSpacing = 0.0,
+    this.paragraphSpacing = 0.0,
+    this.internalPadding = 4.0,
     this.isDeleted = false,
     this.deletedInSession = false,
     this.isChecklist = false,
@@ -78,8 +97,19 @@ class TextBlock implements PageObject {
 
   @override
   Size get size {
-    // Estimativa simples para MVP, idealmente usar TextPainter
-    return Size(text.length * fontSize * 0.6, fontSize * 1.2);
+    // 🚀 v3.1: Cálculo dinâmico mais preciso para a caixa de texto
+    // O TextField no LiveTextEditLayer cuidará da largura máxima (300px por padrão)
+    double width = text.length * fontSize * 0.65;
+    if (width < 60) width = 60; // Mínimo para seleção
+    if (width > 500) width = 500; // Máximo
+    
+    double height = fontSize * 1.6;
+    if (text.contains('\n')) {
+      height = (text.split('\n').length) * fontSize * 1.4;
+    }
+    if (height < 44) height = 44; 
+    
+    return Size(width, height);
   }
 
   @override
@@ -98,8 +128,17 @@ class TextBlock implements PageObject {
     'is_bold': isBold,
     'is_italic': isItalic,
     'is_underline': isUnderline,
+    'is_strikethrough': isStrikethrough, // 🚀 v3.4
     'text_color_hex': textColorHex,
+    'background_color_hex': backgroundColorHex, // 🚀 v3.4
     'font_size': fontSize,
+    'text_align': textAlign.index, // 🚀 v3.4
+    'font_family': fontFamily,      // 🚀 v3.4
+    'line_height': lineHeight,      // 🚀 v3.4
+    'list_type': listType.name,     // 🚀 v3.4
+    'letter_spacing': letterSpacing, // 🚀 v3.7
+    'paragraph_spacing': paragraphSpacing, // 🚀 v3.7
+    'internal_padding': internalPadding,   // 🚀 v3.7
     'is_deleted': isDeleted,
     'deleted_in_session': deletedInSession,
     'updated_at': updatedAt,
@@ -126,8 +165,17 @@ class TextBlock implements PageObject {
     isBold: json['is_bold'] ?? json['isBold'] ?? false,
     isItalic: json['is_italic'] ?? json['isItalic'] ?? false,
     isUnderline: json['is_underline'] ?? json['isUnderline'] ?? false,
+    isStrikethrough: json['is_strikethrough'] ?? false, // 🚀 v3.4
     textColorHex: json['text_color_hex']?.toString() ?? json['textColorHex']?.toString() ?? '#1A1A24',
+    backgroundColorHex: json['background_color_hex']?.toString(), // 🚀 v3.4
     fontSize: (json['font_size'] as num?)?.toDouble() ?? (json['fontSize'] as num?)?.toDouble() ?? 18.0,
+    textAlign: TextAlign.values[(json['text_align'] as int?) ?? 0], // 🚀 v3.4
+    fontFamily: json['font_family']?.toString(), // 🚀 v3.4
+    lineHeight: (json['line_height'] as num?)?.toDouble() ?? 1.2, // 🚀 v3.4
+    listType: ListType.values.firstWhere((e) => e.name == (json['list_type'] ?? 'none'), orElse: () => ListType.none), // 🚀 v3.4
+    letterSpacing: (json['letter_spacing'] as num?)?.toDouble() ?? 0.0, // 🚀 v3.7
+    paragraphSpacing: (json['paragraph_spacing'] as num?)?.toDouble() ?? 0.0, // 🚀 v3.7
+    internalPadding: (json['internal_padding'] as num?)?.toDouble() ?? 4.0, // 🚀 v3.7
     isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
     deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
     isChecklist: json['is_checklist'] == true || json['is_checklist'] == 1,
@@ -152,8 +200,17 @@ class TextBlock implements PageObject {
       isBold: isBold,
       isItalic: isItalic,
       isUnderline: isUnderline,
+      isStrikethrough: isStrikethrough,
       textColorHex: textColorHex,
+      backgroundColorHex: backgroundColorHex,
       fontSize: fontSize,
+      textAlign: textAlign,
+      fontFamily: fontFamily,
+      lineHeight: lineHeight,
+      listType: listType,
+      letterSpacing: letterSpacing,
+      paragraphSpacing: paragraphSpacing,
+      internalPadding: internalPadding,
       isDeleted: isDeleted,
       deletedInSession: deletedInSession,
       isChecklist: isChecklist,

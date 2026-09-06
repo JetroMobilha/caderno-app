@@ -856,12 +856,12 @@ class SyncService {
         batch.deleteWhere(_db.canvasStrokes, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
         batch.deleteWhere(_db.canvasTextBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
         batch.deleteWhere(_db.canvasImageBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasShapes, (t) => t.pageId.isIn(finalPageIds));
-        batch.deleteWhere(_db.canvasAudioBlocks, (t) => t.pageId.isIn(finalPageIds));
-        batch.deleteWhere(_db.canvasAnimations, (t) => t.pageId.isIn(finalPageIds));
-        batch.deleteWhere(_db.canvasTables, (t) => t.pageId.isIn(finalPageIds));
-        batch.deleteWhere(_db.canvasLinks, (t) => t.pageId.isIn(finalPageIds));
-        batch.deleteWhere(_db.canvasAttachments, (t) => t.pageId.isIn(finalPageIds));
+        batch.deleteWhere(_db.canvasShapes, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasAudioBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasAnimations, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasTables, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasLinks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasAttachments, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
         
         for (var s in strokes) { if (confirmedIds.contains(s.pageId.value)) batch.insert(_db.canvasStrokes, s, mode: InsertMode.insertOrReplace); }
         for (var t in texts) { if (confirmedIds.contains(t.pageId.value)) batch.insert(_db.canvasTextBlocks, t, mode: InsertMode.insertOrReplace); }

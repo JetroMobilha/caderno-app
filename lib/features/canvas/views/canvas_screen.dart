@@ -23,6 +23,8 @@ import '../widgets/dialogs/thickness_studio_dialog.dart';
 import '../widgets/dialogs/paper_style_dialog.dart';
 import '../widgets/dialogs/add_page_dialog.dart'; 
 import '../widgets/collaboration_center_sheet.dart'; 
+import '../widgets/dialogs/brush_style_sheet.dart'; // 🚀
+import '../../shared/widgets/color_engine_widget.dart'; // 🚀
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../models/local_page_model.dart';
@@ -91,7 +93,18 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     
     final bool isFocusMode = ref.watch(canvasViewportProvider.select((s) => s.isFocusMode));
     final toolState = ref.watch(canvasToolProvider);
+    final toolNotifier = ref.read(canvasToolProvider.notifier); // 🚀 FIX: Definir o notifier
     
+    // 🚀 v4.5: Sincronizar o TextEditingController quando um bloco entra em edição
+    ref.listen<CanvasToolState>(canvasToolProvider, (previous, next) {
+      if (next.activeTextBlock != null && next.activeTextBlock != previous?.activeTextBlock) {
+        _textController.text = next.activeTextBlock!.text;
+        _textController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _textController.text.length),
+        );
+      }
+    });
+
     ref.watch(canvasUiProvider); 
 
     ref.listen<CanvasDocumentState>(canvasDocumentProvider, (previous, next) {
@@ -182,19 +195,20 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
               child: Center(
                 child: CanvasToolbar(
                   currentPage: currentPage!,
-                  onColorTap: () {
+                  onColorTap: () async {
+                    final notifier = ref.read(canvasToolProvider.notifier);
                     if (toolState.selectedStrokeIds.isNotEmpty) {
-                      showDialog(context: context, builder: (_) => ColorStudioDialog(
-                        onColorSelected: (hex) {
-                          ref.read(canvasDocumentProvider.notifier).updateStrokesColor(
-                            currentPage, 
-                            toolState.selectedStrokeIds, 
-                            hex
-                          );
-                        },
-                      ));
+                      final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Seleção');
+                      if (hex != null) {
+                        ref.read(canvasDocumentProvider.notifier).updateStrokesColor(
+                          currentPage!, 
+                          toolState.selectedStrokeIds, 
+                          hex
+                        );
+                      }
                     } else {
-                      showDialog(context: context, builder: (_) => const ColorStudioDialog());
+                      final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Caneta');
+                      if (hex != null) toolNotifier.setColor(hex);
                     }
                   },
                   onThicknessTap: () => showDialog(context: context, builder: (_) => const ThicknessStudioDialog()),
@@ -331,6 +345,7 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
               ),
               child: ClipRect(
                 child: Stack(
+                  clipBehavior: Clip.none, // 🚀 v2: Permitir alças fora da folha (se necessário)
                   children: [
                     PageCanvas(
                       page: widget.page, 
@@ -344,7 +359,21 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
                     InteractionLayer(
                       page: widget.page,
                       isBlocked: widget.page.isFrozen,
-                      onFinishEditing: () => widget.toolNotifier.clearTextEditing(),
+                      onFinishEditing: () async {
+                        final toolState = ref.read(canvasToolProvider);
+                        
+                        // 🚀 v4.2: Limpeza automática via helper
+                        if (toolState.activeTextBlock != null) {
+                           await ref.read(canvasDocumentProvider.notifier).cleanupIfEmpty(widget.page, toolState.activeTextBlock!.id);
+                        }
+
+                        if (toolState.activeTableId != null) {
+                           final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.clientId == widget.page.clientId);
+                           final table = page.objects.firstWhere((o) => o.id == toolState.activeTableId);
+                           ref.read(canvasDocumentProvider.notifier).updateObject(page, table);
+                        }
+                        widget.toolNotifier.clearTextEditing();
+                      },
                       onAddTextBlock: (pos) {
                         final newBlock = TextBlock(
                           text: '', 
@@ -355,6 +384,11 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
                         ref.read(canvasDocumentProvider.notifier).addTextBlock(widget.page, newBlock);
                         widget.toolNotifier.setTextEditing(InlineTarget.block, newBlock);
                         widget.textController.text = '';
+                        widget.textFocusNode.requestFocus();
+                      },
+                      onTitleTap: () {
+                        widget.toolNotifier.setTextEditing(InlineTarget.title);
+                        widget.textController.text = widget.page.title;
                         widget.textFocusNode.requestFocus();
                       },
                     ),

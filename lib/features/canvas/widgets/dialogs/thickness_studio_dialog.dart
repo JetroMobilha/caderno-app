@@ -32,7 +32,7 @@ class _ThicknessStudioDialogState extends ConsumerState<ThicknessStudioDialog> {
           Slider(
             value: _tempThickness,
             min: 1,
-            max: 40,
+            max: 60,
             activeColor: const Color(0xFF0F4C5C),
             onChanged: (v) => setState(() => _tempThickness = v),
           ),

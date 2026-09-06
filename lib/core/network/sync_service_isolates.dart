@@ -61,6 +61,7 @@ class SyncIsolates {
             shapes.add(CanvasShapesCompanion.insert(
               clientShapeId: id, pageId: localPageId, shapeData: jsonEncode(obj),
               isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
@@ -68,6 +69,7 @@ class SyncIsolates {
             audios.add(CanvasAudioBlocksCompanion.insert(
               clientAudioId: id, pageId: localPageId, audioData: jsonEncode(obj),
               isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
@@ -75,6 +77,7 @@ class SyncIsolates {
             animations.add(CanvasAnimationsCompanion.insert(
               clientAnimationId: id, pageId: localPageId, animationData: jsonEncode(obj),
               isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
@@ -82,6 +85,7 @@ class SyncIsolates {
             tables.add(CanvasTablesCompanion.insert(
               clientTableId: id, pageId: localPageId, tableData: jsonEncode(obj),
               isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
@@ -89,6 +93,7 @@ class SyncIsolates {
             links.add(CanvasLinksCompanion.insert(
               clientLinkId: id, pageId: localPageId, linkData: jsonEncode(obj),
               isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
@@ -96,6 +101,7 @@ class SyncIsolates {
             attachments.add(CanvasAttachmentsCompanion.insert(
               clientAttachmentId: id, pageId: localPageId, attachmentData: jsonEncode(obj),
               isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;

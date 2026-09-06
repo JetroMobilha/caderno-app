@@ -4,6 +4,7 @@ import '../providers/canvas_tool_provider.dart';
 import '../models/local_page_model.dart';
 import '../models/page_object.dart';
 import '../models/stroke_model.dart';
+import '../models/canvas_enums.dart';
 
 class SelectionOverlay extends ConsumerWidget {
   final LocalPage page;
@@ -23,41 +24,75 @@ class SelectionOverlay extends ConsumerWidget {
       ...toolState.selectedStrokeIds,
       ...toolState.selectedTextIds,
       ...toolState.selectedImageIds,
+      ...toolState.selectedShapeIds,
+      ...toolState.selectedAudioIds,
+      ...toolState.selectedAnimationIds,
+      ...toolState.selectedTableIds,
+      ...toolState.selectedLinkIds,
+      ...toolState.selectedAttachmentIds,
     };
 
     if (selectedIds.isEmpty) return const SizedBox.shrink();
 
-    // Encontrar objetos selecionados
+    // 🚀 v3.1: Filtro robusto para evitar Bad state
     final selectedObjects = page.objects.where((o) => selectedIds.contains(o.id)).toList();
+    if (selectedObjects.isEmpty) return const SizedBox.shrink();
 
     return Stack(
+      clipBehavior: Clip.none,
       children: selectedObjects.map((obj) {
-        final Rect bounds = _getObjectBounds(obj);
+        final Rect baseBounds = _getObjectBounds(obj);
+        
+        // 🚀 v3.1: SINCRONIZAÇÃO TOTAL - Delta e Escala em tempo real
+        final Rect bounds = baseBounds.shift(toolState.totalSelectionDelta);
+        final double rotation = obj.rotation + toolState.liveRotation;
+        
+        // 🚀 Aplicar escala à moldura azul para feedback imersivo
+        final double finalW = bounds.width * toolState.liveScale.width;
+        final double finalH = bounds.height * toolState.liveScale.height;
+
+        final bool isSingleSelection = selectedObjects.length == 1;
+        // 🚀 v4.4: Ocultar alças no modo Organizador
+        final bool showHandles = isSingleSelection && obj.type != 'stroke' && toolState.currentTool != ToolMode.organizer;
         
         return Positioned(
-          left: bounds.left - 4,
-          top: bounds.top - 4,
+          left: bounds.left - 10,
+          top: bounds.top - 10,
           child: Transform.rotate(
-            angle: obj.rotation,
+            angle: rotation,
+            alignment: Alignment.center, 
             child: Container(
-              width: bounds.width + 8,
-              height: bounds.height + 8,
+              width: finalW + 20,
+              height: finalH + 20,
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF1976D2), width: 1.5),
+                border: Border.all(color: const Color(0xFF1976D2), width: 2.0),
                 color: const Color(0x191976D2),
               ),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Alças de redimensionamento (simplificado)
-                  if (obj.type != 'stroke') ...[
+                  if (showHandles) ...[
+                    // 8 Alças - Acompanham a escala
+                    _buildHandleItem(0, 0),
+                    _buildHandleItem((finalW + 20) / 2, 0),
+                    _buildHandleItem(finalW + 20, 0),
+                    _buildHandleItem(finalW + 20, (finalH + 20) / 2),
+                    _buildHandleItem(finalW + 20, finalH + 20),
+                    _buildHandleItem((finalW + 20) / 2, finalH + 20),
+                    _buildHandleItem(0, finalH + 20),
+                    _buildHandleItem(0, (finalH + 20) / 2),
+
+                    // Alça de Rotação
                     Positioned(
-                      right: -10, bottom: -10,
-                      child: _buildHandle(Icons.open_in_full),
-                    ),
-                    Positioned(
-                      top: -30, left: (bounds.width / 2),
-                      child: _buildHandle(Icons.rotate_right),
+                      top: -55,
+                      left: (finalW + 20) / 2 - 15,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildHandleCircle(icon: Icons.rotate_right_rounded, isRotate: true),
+                          Container(width: 2, height: 26, color: const Color(0xFF1976D2)),
+                        ],
+                      ),
                     ),
                   ],
                 ],
@@ -66,6 +101,32 @@ class SelectionOverlay extends ConsumerWidget {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildHandleItem(double x, double y) {
+    return Positioned(
+      left: x - 12,
+      top: y - 12,
+      child: _buildHandleCircle(),
+    );
+  }
+
+  Widget _buildHandleCircle({IconData? icon, bool isRotate = false}) {
+    return Container(
+      width: isRotate ? 30 : 24, 
+      height: isRotate ? 30 : 24,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF1976D2), width: 2.5),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6)],
+      ),
+      child: Center(
+        child: icon != null 
+          ? Icon(icon, size: isRotate ? 18 : 14, color: const Color(0xFF1976D2)) 
+          : Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF1976D2), shape: BoxShape.circle)),
+      ),
     );
   }
 
@@ -84,17 +145,5 @@ class SelectionOverlay extends ConsumerWidget {
       return Rect.fromLTRB(minX, minY, maxX, maxY);
     }
     return obj.position & obj.size;
-  }
-
-  Widget _buildHandle(IconData icon) {
-    return Container(
-      width: 24, height: 24,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-      ),
-      child: Icon(icon, size: 14, color: const Color(0xFF1976D2)),
-    );
   }
 }

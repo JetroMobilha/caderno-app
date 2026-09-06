@@ -14,6 +14,9 @@ class TableObject implements PageObject {
   // Chave: "row,col", Valor: conteúdo de texto
   Map<String, String> cellData;
   
+  // 🚀 v3.1: Suporte a mesclagem (Key: "row,col", Value: "rowSpan,colSpan")
+  Map<String, String> cellSpans;
+
   @override
   Offset position;
   @override
@@ -53,6 +56,7 @@ class TableObject implements PageObject {
     this.rows = 3,
     this.cols = 3,
     Map<String, String>? cellData,
+    Map<String, String>? cellSpans,
     required this.position,
     this.size = const Size(300, 150),
     this.rotation = 0.0,
@@ -71,7 +75,84 @@ class TableObject implements PageObject {
     this.borderWidth = 1.0,
     this.showHeader = true,
   }) : cellData = cellData ?? {},
+       cellSpans = cellSpans ?? {},
        updatedAt = updatedAt ?? TimeService().nowMs();
+
+  // 🚀 v3.1: LÓGICA DE GESTÃO DE ESTRUTURA
+  
+  void insertRow(int index) {
+    final Map<String, String> newData = {};
+    for (var entry in cellData.entries) {
+      final parts = entry.key.split(',');
+      int r = int.parse(parts[0]);
+      int c = int.parse(parts[1]);
+      if (r >= index) {
+        newData['${r + 1},$c'] = entry.value;
+      } else {
+        newData['$r,$c'] = entry.value;
+      }
+    }
+    cellData = newData;
+    rows++;
+    size = Size(size.width, size.height + (size.height / (rows - 1)));
+    updatedAt = TimeService().nowMs();
+  }
+
+  void deleteRow(int index) {
+    if (rows <= 1) return;
+    final Map<String, String> newData = {};
+    for (var entry in cellData.entries) {
+      final parts = entry.key.split(',');
+      int r = int.parse(parts[0]);
+      int c = int.parse(parts[1]);
+      if (r < index) {
+        newData['$r,$c'] = entry.value;
+      } else if (r > index) {
+        newData['${r - 1},$c'] = entry.value;
+      }
+    }
+    cellData = newData;
+    rows--;
+    size = Size(size.width, size.height - (size.height / (rows + 1)));
+    updatedAt = TimeService().nowMs();
+  }
+
+  void insertColumn(int index) {
+    final Map<String, String> newData = {};
+    for (var entry in cellData.entries) {
+      final parts = entry.key.split(',');
+      int r = int.parse(parts[0]);
+      int c = int.parse(parts[1]);
+      if (c >= index) {
+        newData['$r,${c + 1}'] = entry.value;
+      } else {
+        newData['$r,$c'] = entry.value;
+      }
+    }
+    cellData = newData;
+    cols++;
+    size = Size(size.width + (size.width / (cols - 1)), size.height);
+    updatedAt = TimeService().nowMs();
+  }
+
+  void deleteColumn(int index) {
+    if (cols <= 1) return;
+    final Map<String, String> newData = {};
+    for (var entry in cellData.entries) {
+      final parts = entry.key.split(',');
+      int r = int.parse(parts[0]);
+      int c = int.parse(parts[1]);
+      if (c < index) {
+        newData['$r,$c'] = entry.value;
+      } else if (c > index) {
+        newData['$r,${c - 1}'] = entry.value;
+      }
+    }
+    cellData = newData;
+    cols--;
+    size = Size(size.width - (size.width / (cols + 1)), size.height);
+    updatedAt = TimeService().nowMs();
+  }
 
   @override
   Map<String, dynamic> toJson() {
@@ -81,6 +162,7 @@ class TableObject implements PageObject {
       'rows': rows,
       'cols': cols,
       'cell_data': cellData,
+      'cell_spans': cellSpans,
       'x': position.dx,
       'y': position.dy,
       'width': size.width,
@@ -109,6 +191,7 @@ class TableObject implements PageObject {
       rows: json['rows'] ?? 3,
       cols: json['cols'] ?? 3,
       cellData: Map<String, String>.from(json['cell_data'] ?? {}),
+      cellSpans: Map<String, String>.from(json['cell_spans'] ?? {}),
       position: Offset(json['x'], json['y']),
       size: Size(json['width'], json['height']),
       rotation: json['rotation']?.toDouble() ?? 0.0,
@@ -136,6 +219,7 @@ class TableObject implements PageObject {
       rows: rows,
       cols: cols,
       cellData: Map.from(cellData),
+      cellSpans: Map.from(cellSpans),
       position: position,
       size: size,
       rotation: rotation,

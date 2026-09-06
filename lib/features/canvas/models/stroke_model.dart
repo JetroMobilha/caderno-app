@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 import '../../../core/utils/geometry_utils.dart';
+import 'canvas_enums.dart';
 import 'page_object.dart';
 
 class Stroke implements PageObject {
@@ -10,6 +11,8 @@ class Stroke implements PageObject {
   String id;
   @override
   String get type => 'stroke';
+  BrushType brushType ;
+  bool isSmoothed = false;
   
   String color;
   double thickness;
@@ -55,6 +58,8 @@ class Stroke implements PageObject {
     this.creatorId,
     this.syncedWithCloud = false,
     this.isHighlighter = false,
+    this.brushType = BrushType.gel,
+    this.isSmoothed = false,
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
@@ -131,6 +136,8 @@ class Stroke implements PageObject {
       'creator_id': creatorId,
       'synced_with_cloud': syncedWithCloud ? 1 : 0,
       'is_highlighter': isHighlighter ? 1 : 0,
+      'brush_type': brushType.name, // 🚀 v1.2
+      'is_smoothed': isSmoothed ? 1 : 0, // 🚀 v1.2
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
@@ -156,6 +163,8 @@ class Stroke implements PageObject {
       creatorId: json['creator_id']?.toString(),
       syncedWithCloud: json['synced_with_cloud'] == null ? true : (json['synced_with_cloud'] == true || json['synced_with_cloud'] == 1),
       isHighlighter: json['is_highlighter'] == true || json['is_highlighter'] == 1,
+      brushType: BrushType.values.firstWhere((e) => e.name == (json['brush_type'] ?? 'gel'), orElse: () => BrushType.gel), // 🚀 v1.2
+      isSmoothed: json['is_smoothed'] == true || json['is_smoothed'] == 1, // 🚀 v1.2
       zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == true || json['is_locked'] == 1,
       isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),
@@ -185,6 +194,8 @@ class Stroke implements PageObject {
       creatorId: creatorId,
       syncedWithCloud: syncedWithCloud,
       isHighlighter: isHighlighter,
+      brushType: brushType,
+      isSmoothed: isSmoothed,
       zIndex: zIndex,
       isLocked: isLocked,
       isVisible: isVisible,
@@ -205,6 +216,8 @@ class Stroke implements PageObject {
       creatorId: creatorId,
       syncedWithCloud: false,
       isHighlighter: isHighlighter,
+      brushType: brushType,
+      isSmoothed: isSmoothed,
       zIndex: zIndex,
       isLocked: isLocked,
       isVisible: isVisible,

@@ -5,6 +5,7 @@ import '../models/page_object.dart';
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../models/image_block_model.dart';
+import '../providers/canvas_tool_provider.dart';
 import 'canvas_painter.dart';
 import 'object_renderer.dart';
 
@@ -22,6 +23,19 @@ class PageCanvas extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final toolState = ref.watch(canvasToolProvider);
+    final selectedIds = {
+      ...toolState.selectedStrokeIds,
+      ...toolState.selectedTextIds,
+      ...toolState.selectedImageIds,
+      ...toolState.selectedShapeIds,
+      ...toolState.selectedAudioIds,
+      ...toolState.selectedAnimationIds,
+      ...toolState.selectedTableIds,
+      ...toolState.selectedLinkIds,
+      ...toolState.selectedAttachmentIds,
+    };
+
     // 1. Map de visibilidade/bloqueio das camadas para acesso rápido
     final Map<String, bool> layerVisibility = {
       for (var l in page.layers) l.id: l.isVisible
@@ -48,10 +62,10 @@ class PageCanvas extends ConsumerWidget {
               size: pageSize,
               painter: StrokesPainter(
                 strokes: group,
-                selectedStrokeIds: const {}, // Handled by SelectionOverlay or Controller
+                selectedStrokeIds: toolState.selectedStrokeIds, 
                 selectionRect: null,
                 pageVersion: page.version,
-                selectionDelta: Offset.zero,
+                selectionDelta: toolState.totalSelectionDelta, // 🚀 FLUIDEZ
               ),
             ),
           ),
@@ -65,7 +79,14 @@ class PageCanvas extends ConsumerWidget {
         currentStrokeGroup.add(obj);
       } else {
         flushStrokes();
-        renderList.add(ObjectRenderer(object: obj, isReadOnly: isReadOnly));
+        final bool isSelected = selectedIds.contains(obj.id);
+        renderList.add(ObjectRenderer(
+          object: obj, 
+          isReadOnly: isReadOnly,
+          movementDelta: isSelected ? toolState.totalSelectionDelta : null,
+          liveScale: isSelected ? toolState.liveScale : null, // 🚀 v3
+          liveRotation: isSelected ? toolState.liveRotation : null, // 🚀 v3
+        ));
       }
     }
     flushStrokes();

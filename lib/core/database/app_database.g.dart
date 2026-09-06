@@ -6771,6 +6771,18 @@ class $CanvasShapesTable extends CanvasShapes
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientShapeId,
@@ -6780,6 +6792,7 @@ class $CanvasShapesTable extends CanvasShapes
     updatedAt,
     version,
     layerId,
+    syncedWithCloud,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6844,6 +6857,15 @@ class $CanvasShapesTable extends CanvasShapes
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -6881,6 +6903,10 @@ class $CanvasShapesTable extends CanvasShapes
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
     );
   }
 
@@ -6898,6 +6924,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
   final int updatedAt;
   final int version;
   final String? layerId;
+  final int syncedWithCloud;
   const CanvasShape({
     required this.clientShapeId,
     required this.pageId,
@@ -6906,6 +6933,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     required this.updatedAt,
     required this.version,
     this.layerId,
+    required this.syncedWithCloud,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6919,6 +6947,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     return map;
   }
 
@@ -6933,6 +6962,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      syncedWithCloud: Value(syncedWithCloud),
     );
   }
 
@@ -6949,6 +6979,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       version: serializer.fromJson<int>(json['version']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
     );
   }
   @override
@@ -6962,6 +6993,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'version': serializer.toJson<int>(version),
       'layerId': serializer.toJson<String?>(layerId),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
     };
   }
 
@@ -6973,6 +7005,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     int? updatedAt,
     int? version,
     Value<String?> layerId = const Value.absent(),
+    int? syncedWithCloud,
   }) => CanvasShape(
     clientShapeId: clientShapeId ?? this.clientShapeId,
     pageId: pageId ?? this.pageId,
@@ -6981,6 +7014,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     updatedAt: updatedAt ?? this.updatedAt,
     version: version ?? this.version,
     layerId: layerId.present ? layerId.value : this.layerId,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
   );
   CanvasShape copyWithCompanion(CanvasShapesCompanion data) {
     return CanvasShape(
@@ -6993,6 +7027,9 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       version: data.version.present ? data.version.value : this.version,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
     );
   }
 
@@ -7005,7 +7042,8 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud')
           ..write(')'))
         .toString();
   }
@@ -7019,6 +7057,7 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     updatedAt,
     version,
     layerId,
+    syncedWithCloud,
   );
   @override
   bool operator ==(Object other) =>
@@ -7030,7 +7069,8 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.syncedWithCloud == this.syncedWithCloud);
 }
 
 class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
@@ -7041,6 +7081,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
   final Value<int> updatedAt;
   final Value<int> version;
   final Value<String?> layerId;
+  final Value<int> syncedWithCloud;
   final Value<int> rowid;
   const CanvasShapesCompanion({
     this.clientShapeId = const Value.absent(),
@@ -7050,6 +7091,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasShapesCompanion.insert({
@@ -7060,6 +7102,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     this.updatedAt = const Value.absent(),
     this.version = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientShapeId = Value(clientShapeId),
        pageId = Value(pageId),
@@ -7072,6 +7115,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     Expression<int>? updatedAt,
     Expression<int>? version,
     Expression<String>? layerId,
+    Expression<int>? syncedWithCloud,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -7082,6 +7126,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (version != null) 'version': version,
       if (layerId != null) 'layer_id': layerId,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7094,6 +7139,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     Value<int>? updatedAt,
     Value<int>? version,
     Value<String?>? layerId,
+    Value<int>? syncedWithCloud,
     Value<int>? rowid,
   }) {
     return CanvasShapesCompanion(
@@ -7104,6 +7150,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
       layerId: layerId ?? this.layerId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7132,6 +7179,9 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -7148,6 +7198,7 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7229,6 +7280,18 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientAudioId,
@@ -7237,6 +7300,7 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7295,6 +7359,15 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -7328,6 +7401,10 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
     );
   }
 
@@ -7345,6 +7422,7 @@ class CanvasAudioBlock extends DataClass
   final int isDeleted;
   final int updatedAt;
   final String? layerId;
+  final int syncedWithCloud;
   const CanvasAudioBlock({
     required this.clientAudioId,
     required this.pageId,
@@ -7352,6 +7430,7 @@ class CanvasAudioBlock extends DataClass
     required this.isDeleted,
     required this.updatedAt,
     this.layerId,
+    required this.syncedWithCloud,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7364,6 +7443,7 @@ class CanvasAudioBlock extends DataClass
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     return map;
   }
 
@@ -7377,6 +7457,7 @@ class CanvasAudioBlock extends DataClass
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      syncedWithCloud: Value(syncedWithCloud),
     );
   }
 
@@ -7392,6 +7473,7 @@ class CanvasAudioBlock extends DataClass
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
     );
   }
   @override
@@ -7404,6 +7486,7 @@ class CanvasAudioBlock extends DataClass
       'isDeleted': serializer.toJson<int>(isDeleted),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
     };
   }
 
@@ -7414,6 +7497,7 @@ class CanvasAudioBlock extends DataClass
     int? isDeleted,
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
+    int? syncedWithCloud,
   }) => CanvasAudioBlock(
     clientAudioId: clientAudioId ?? this.clientAudioId,
     pageId: pageId ?? this.pageId,
@@ -7421,6 +7505,7 @@ class CanvasAudioBlock extends DataClass
     isDeleted: isDeleted ?? this.isDeleted,
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
   );
   CanvasAudioBlock copyWithCompanion(CanvasAudioBlocksCompanion data) {
     return CanvasAudioBlock(
@@ -7432,6 +7517,9 @@ class CanvasAudioBlock extends DataClass
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
     );
   }
 
@@ -7443,7 +7531,8 @@ class CanvasAudioBlock extends DataClass
           ..write('audioData: $audioData, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud')
           ..write(')'))
         .toString();
   }
@@ -7456,6 +7545,7 @@ class CanvasAudioBlock extends DataClass
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   );
   @override
   bool operator ==(Object other) =>
@@ -7466,7 +7556,8 @@ class CanvasAudioBlock extends DataClass
           other.audioData == this.audioData &&
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.syncedWithCloud == this.syncedWithCloud);
 }
 
 class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
@@ -7476,6 +7567,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
   final Value<int> isDeleted;
   final Value<int> updatedAt;
   final Value<String?> layerId;
+  final Value<int> syncedWithCloud;
   final Value<int> rowid;
   const CanvasAudioBlocksCompanion({
     this.clientAudioId = const Value.absent(),
@@ -7484,6 +7576,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasAudioBlocksCompanion.insert({
@@ -7493,6 +7586,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientAudioId = Value(clientAudioId),
        pageId = Value(pageId),
@@ -7504,6 +7598,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     Expression<int>? isDeleted,
     Expression<int>? updatedAt,
     Expression<String>? layerId,
+    Expression<int>? syncedWithCloud,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -7513,6 +7608,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7524,6 +7620,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     Value<int>? isDeleted,
     Value<int>? updatedAt,
     Value<String?>? layerId,
+    Value<int>? syncedWithCloud,
     Value<int>? rowid,
   }) {
     return CanvasAudioBlocksCompanion(
@@ -7533,6 +7630,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7558,6 +7656,9 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -7573,6 +7674,7 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7655,6 +7757,18 @@ class $CanvasAnimationsTable extends CanvasAnimations
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientAnimationId,
@@ -7663,6 +7777,7 @@ class $CanvasAnimationsTable extends CanvasAnimations
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7724,6 +7839,15 @@ class $CanvasAnimationsTable extends CanvasAnimations
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -7757,6 +7881,10 @@ class $CanvasAnimationsTable extends CanvasAnimations
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
     );
   }
 
@@ -7773,6 +7901,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
   final int isDeleted;
   final int updatedAt;
   final String? layerId;
+  final int syncedWithCloud;
   const CanvasAnimation({
     required this.clientAnimationId,
     required this.pageId,
@@ -7780,6 +7909,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     required this.isDeleted,
     required this.updatedAt,
     this.layerId,
+    required this.syncedWithCloud,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7792,6 +7922,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     return map;
   }
 
@@ -7805,6 +7936,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      syncedWithCloud: Value(syncedWithCloud),
     );
   }
 
@@ -7820,6 +7952,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
     );
   }
   @override
@@ -7832,6 +7965,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       'isDeleted': serializer.toJson<int>(isDeleted),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
     };
   }
 
@@ -7842,6 +7976,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     int? isDeleted,
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
+    int? syncedWithCloud,
   }) => CanvasAnimation(
     clientAnimationId: clientAnimationId ?? this.clientAnimationId,
     pageId: pageId ?? this.pageId,
@@ -7849,6 +7984,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     isDeleted: isDeleted ?? this.isDeleted,
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
   );
   CanvasAnimation copyWithCompanion(CanvasAnimationsCompanion data) {
     return CanvasAnimation(
@@ -7862,6 +7998,9 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
     );
   }
 
@@ -7873,7 +8012,8 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
           ..write('animationData: $animationData, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud')
           ..write(')'))
         .toString();
   }
@@ -7886,6 +8026,7 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   );
   @override
   bool operator ==(Object other) =>
@@ -7896,7 +8037,8 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
           other.animationData == this.animationData &&
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.syncedWithCloud == this.syncedWithCloud);
 }
 
 class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
@@ -7906,6 +8048,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
   final Value<int> isDeleted;
   final Value<int> updatedAt;
   final Value<String?> layerId;
+  final Value<int> syncedWithCloud;
   final Value<int> rowid;
   const CanvasAnimationsCompanion({
     this.clientAnimationId = const Value.absent(),
@@ -7914,6 +8057,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasAnimationsCompanion.insert({
@@ -7923,6 +8067,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientAnimationId = Value(clientAnimationId),
        pageId = Value(pageId),
@@ -7934,6 +8079,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     Expression<int>? isDeleted,
     Expression<int>? updatedAt,
     Expression<String>? layerId,
+    Expression<int>? syncedWithCloud,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -7943,6 +8089,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7954,6 +8101,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     Value<int>? isDeleted,
     Value<int>? updatedAt,
     Value<String?>? layerId,
+    Value<int>? syncedWithCloud,
     Value<int>? rowid,
   }) {
     return CanvasAnimationsCompanion(
@@ -7963,6 +8111,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7988,6 +8137,9 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8003,6 +8155,7 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8084,6 +8237,18 @@ class $CanvasTablesTable extends CanvasTables
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientTableId,
@@ -8092,6 +8257,7 @@ class $CanvasTablesTable extends CanvasTables
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -8150,6 +8316,15 @@ class $CanvasTablesTable extends CanvasTables
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -8183,6 +8358,10 @@ class $CanvasTablesTable extends CanvasTables
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
     );
   }
 
@@ -8199,6 +8378,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
   final int isDeleted;
   final int updatedAt;
   final String? layerId;
+  final int syncedWithCloud;
   const CanvasTable({
     required this.clientTableId,
     required this.pageId,
@@ -8206,6 +8386,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     required this.isDeleted,
     required this.updatedAt,
     this.layerId,
+    required this.syncedWithCloud,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -8218,6 +8399,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     return map;
   }
 
@@ -8231,6 +8413,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      syncedWithCloud: Value(syncedWithCloud),
     );
   }
 
@@ -8246,6 +8429,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
     );
   }
   @override
@@ -8258,6 +8442,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       'isDeleted': serializer.toJson<int>(isDeleted),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
     };
   }
 
@@ -8268,6 +8453,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     int? isDeleted,
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
+    int? syncedWithCloud,
   }) => CanvasTable(
     clientTableId: clientTableId ?? this.clientTableId,
     pageId: pageId ?? this.pageId,
@@ -8275,6 +8461,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     isDeleted: isDeleted ?? this.isDeleted,
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
   );
   CanvasTable copyWithCompanion(CanvasTablesCompanion data) {
     return CanvasTable(
@@ -8286,6 +8473,9 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
     );
   }
 
@@ -8297,7 +8487,8 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
           ..write('tableData: $tableData, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud')
           ..write(')'))
         .toString();
   }
@@ -8310,6 +8501,7 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   );
   @override
   bool operator ==(Object other) =>
@@ -8320,7 +8512,8 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
           other.tableData == this.tableData &&
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.syncedWithCloud == this.syncedWithCloud);
 }
 
 class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
@@ -8330,6 +8523,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
   final Value<int> isDeleted;
   final Value<int> updatedAt;
   final Value<String?> layerId;
+  final Value<int> syncedWithCloud;
   final Value<int> rowid;
   const CanvasTablesCompanion({
     this.clientTableId = const Value.absent(),
@@ -8338,6 +8532,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasTablesCompanion.insert({
@@ -8347,6 +8542,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientTableId = Value(clientTableId),
        pageId = Value(pageId),
@@ -8358,6 +8554,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     Expression<int>? isDeleted,
     Expression<int>? updatedAt,
     Expression<String>? layerId,
+    Expression<int>? syncedWithCloud,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -8367,6 +8564,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -8378,6 +8576,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     Value<int>? isDeleted,
     Value<int>? updatedAt,
     Value<String?>? layerId,
+    Value<int>? syncedWithCloud,
     Value<int>? rowid,
   }) {
     return CanvasTablesCompanion(
@@ -8387,6 +8586,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8412,6 +8612,9 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8427,6 +8630,7 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8508,6 +8712,18 @@ class $CanvasLinksTable extends CanvasLinks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientLinkId,
@@ -8516,6 +8732,7 @@ class $CanvasLinksTable extends CanvasLinks
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -8574,6 +8791,15 @@ class $CanvasLinksTable extends CanvasLinks
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -8607,6 +8833,10 @@ class $CanvasLinksTable extends CanvasLinks
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
     );
   }
 
@@ -8623,6 +8853,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
   final int isDeleted;
   final int updatedAt;
   final String? layerId;
+  final int syncedWithCloud;
   const CanvasLink({
     required this.clientLinkId,
     required this.pageId,
@@ -8630,6 +8861,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     required this.isDeleted,
     required this.updatedAt,
     this.layerId,
+    required this.syncedWithCloud,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -8642,6 +8874,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     return map;
   }
 
@@ -8655,6 +8888,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      syncedWithCloud: Value(syncedWithCloud),
     );
   }
 
@@ -8670,6 +8904,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
     );
   }
   @override
@@ -8682,6 +8917,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       'isDeleted': serializer.toJson<int>(isDeleted),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
     };
   }
 
@@ -8692,6 +8928,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     int? isDeleted,
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
+    int? syncedWithCloud,
   }) => CanvasLink(
     clientLinkId: clientLinkId ?? this.clientLinkId,
     pageId: pageId ?? this.pageId,
@@ -8699,6 +8936,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     isDeleted: isDeleted ?? this.isDeleted,
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
   );
   CanvasLink copyWithCompanion(CanvasLinksCompanion data) {
     return CanvasLink(
@@ -8710,6 +8948,9 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
     );
   }
 
@@ -8721,7 +8962,8 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
           ..write('linkData: $linkData, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud')
           ..write(')'))
         .toString();
   }
@@ -8734,6 +8976,7 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   );
   @override
   bool operator ==(Object other) =>
@@ -8744,7 +8987,8 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
           other.linkData == this.linkData &&
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.syncedWithCloud == this.syncedWithCloud);
 }
 
 class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
@@ -8754,6 +8998,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
   final Value<int> isDeleted;
   final Value<int> updatedAt;
   final Value<String?> layerId;
+  final Value<int> syncedWithCloud;
   final Value<int> rowid;
   const CanvasLinksCompanion({
     this.clientLinkId = const Value.absent(),
@@ -8762,6 +9007,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasLinksCompanion.insert({
@@ -8771,6 +9017,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientLinkId = Value(clientLinkId),
        pageId = Value(pageId),
@@ -8782,6 +9029,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     Expression<int>? isDeleted,
     Expression<int>? updatedAt,
     Expression<String>? layerId,
+    Expression<int>? syncedWithCloud,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -8791,6 +9039,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -8802,6 +9051,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     Value<int>? isDeleted,
     Value<int>? updatedAt,
     Value<String?>? layerId,
+    Value<int>? syncedWithCloud,
     Value<int>? rowid,
   }) {
     return CanvasLinksCompanion(
@@ -8811,6 +9061,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8836,6 +9087,9 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8851,6 +9105,7 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8932,6 +9187,18 @@ class $CanvasAttachmentsTable extends CanvasAttachments
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientAttachmentId,
@@ -8940,6 +9207,7 @@ class $CanvasAttachmentsTable extends CanvasAttachments
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -9001,6 +9269,15 @@ class $CanvasAttachmentsTable extends CanvasAttachments
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -9034,6 +9311,10 @@ class $CanvasAttachmentsTable extends CanvasAttachments
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
     );
   }
 
@@ -9051,6 +9332,7 @@ class CanvasAttachment extends DataClass
   final int isDeleted;
   final int updatedAt;
   final String? layerId;
+  final int syncedWithCloud;
   const CanvasAttachment({
     required this.clientAttachmentId,
     required this.pageId,
@@ -9058,6 +9340,7 @@ class CanvasAttachment extends DataClass
     required this.isDeleted,
     required this.updatedAt,
     this.layerId,
+    required this.syncedWithCloud,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -9070,6 +9353,7 @@ class CanvasAttachment extends DataClass
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
     return map;
   }
 
@@ -9083,6 +9367,7 @@ class CanvasAttachment extends DataClass
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      syncedWithCloud: Value(syncedWithCloud),
     );
   }
 
@@ -9100,6 +9385,7 @@ class CanvasAttachment extends DataClass
       isDeleted: serializer.fromJson<int>(json['isDeleted']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
     );
   }
   @override
@@ -9112,6 +9398,7 @@ class CanvasAttachment extends DataClass
       'isDeleted': serializer.toJson<int>(isDeleted),
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
     };
   }
 
@@ -9122,6 +9409,7 @@ class CanvasAttachment extends DataClass
     int? isDeleted,
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
+    int? syncedWithCloud,
   }) => CanvasAttachment(
     clientAttachmentId: clientAttachmentId ?? this.clientAttachmentId,
     pageId: pageId ?? this.pageId,
@@ -9129,6 +9417,7 @@ class CanvasAttachment extends DataClass
     isDeleted: isDeleted ?? this.isDeleted,
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
   );
   CanvasAttachment copyWithCompanion(CanvasAttachmentsCompanion data) {
     return CanvasAttachment(
@@ -9142,6 +9431,9 @@ class CanvasAttachment extends DataClass
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
     );
   }
 
@@ -9153,7 +9445,8 @@ class CanvasAttachment extends DataClass
           ..write('attachmentData: $attachmentData, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud')
           ..write(')'))
         .toString();
   }
@@ -9166,6 +9459,7 @@ class CanvasAttachment extends DataClass
     isDeleted,
     updatedAt,
     layerId,
+    syncedWithCloud,
   );
   @override
   bool operator ==(Object other) =>
@@ -9176,7 +9470,8 @@ class CanvasAttachment extends DataClass
           other.attachmentData == this.attachmentData &&
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.syncedWithCloud == this.syncedWithCloud);
 }
 
 class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
@@ -9186,6 +9481,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
   final Value<int> isDeleted;
   final Value<int> updatedAt;
   final Value<String?> layerId;
+  final Value<int> syncedWithCloud;
   final Value<int> rowid;
   const CanvasAttachmentsCompanion({
     this.clientAttachmentId = const Value.absent(),
@@ -9194,6 +9490,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasAttachmentsCompanion.insert({
@@ -9203,6 +9500,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     this.isDeleted = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientAttachmentId = Value(clientAttachmentId),
        pageId = Value(pageId),
@@ -9214,6 +9512,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     Expression<int>? isDeleted,
     Expression<int>? updatedAt,
     Expression<String>? layerId,
+    Expression<int>? syncedWithCloud,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -9224,6 +9523,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -9235,6 +9535,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     Value<int>? isDeleted,
     Value<int>? updatedAt,
     Value<String?>? layerId,
+    Value<int>? syncedWithCloud,
     Value<int>? rowid,
   }) {
     return CanvasAttachmentsCompanion(
@@ -9244,6 +9545,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -9269,6 +9571,9 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -9284,6 +9589,7 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -17934,6 +18240,7 @@ typedef $$CanvasShapesTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 typedef $$CanvasShapesTableUpdateCompanionBuilder =
@@ -17945,6 +18252,7 @@ typedef $$CanvasShapesTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<int> version,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 
@@ -18006,6 +18314,11 @@ class $$CanvasShapesTableFilterComposer
 
   ColumnFilters<String> get layerId => $composableBuilder(
     column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18072,6 +18385,11 @@ class $$CanvasShapesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -18124,6 +18442,11 @@ class $$CanvasShapesTableAnnotationComposer
 
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -18184,6 +18507,7 @@ class $$CanvasShapesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasShapesCompanion(
                 clientShapeId: clientShapeId,
@@ -18193,6 +18517,7 @@ class $$CanvasShapesTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18204,6 +18529,7 @@ class $$CanvasShapesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasShapesCompanion.insert(
                 clientShapeId: clientShapeId,
@@ -18213,6 +18539,7 @@ class $$CanvasShapesTableTableManager
                 updatedAt: updatedAt,
                 version: version,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18290,6 +18617,7 @@ typedef $$CanvasAudioBlocksTableCreateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 typedef $$CanvasAudioBlocksTableUpdateCompanionBuilder =
@@ -18300,6 +18628,7 @@ typedef $$CanvasAudioBlocksTableUpdateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 
@@ -18368,6 +18697,11 @@ class $$CanvasAudioBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -18426,6 +18760,11 @@ class $$CanvasAudioBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -18475,6 +18814,11 @@ class $$CanvasAudioBlocksTableAnnotationComposer
 
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -18539,6 +18883,7 @@ class $$CanvasAudioBlocksTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAudioBlocksCompanion(
                 clientAudioId: clientAudioId,
@@ -18547,6 +18892,7 @@ class $$CanvasAudioBlocksTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18557,6 +18903,7 @@ class $$CanvasAudioBlocksTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAudioBlocksCompanion.insert(
                 clientAudioId: clientAudioId,
@@ -18565,6 +18912,7 @@ class $$CanvasAudioBlocksTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18644,6 +18992,7 @@ typedef $$CanvasAnimationsTableCreateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 typedef $$CanvasAnimationsTableUpdateCompanionBuilder =
@@ -18654,6 +19003,7 @@ typedef $$CanvasAnimationsTableUpdateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 
@@ -18718,6 +19068,11 @@ class $$CanvasAnimationsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -18776,6 +19131,11 @@ class $$CanvasAnimationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -18827,6 +19187,11 @@ class $$CanvasAnimationsTableAnnotationComposer
 
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -18888,6 +19253,7 @@ class $$CanvasAnimationsTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAnimationsCompanion(
                 clientAnimationId: clientAnimationId,
@@ -18896,6 +19262,7 @@ class $$CanvasAnimationsTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18906,6 +19273,7 @@ class $$CanvasAnimationsTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAnimationsCompanion.insert(
                 clientAnimationId: clientAnimationId,
@@ -18914,6 +19282,7 @@ class $$CanvasAnimationsTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18993,6 +19362,7 @@ typedef $$CanvasTablesTableCreateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 typedef $$CanvasTablesTableUpdateCompanionBuilder =
@@ -19003,6 +19373,7 @@ typedef $$CanvasTablesTableUpdateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 
@@ -19059,6 +19430,11 @@ class $$CanvasTablesTableFilterComposer
 
   ColumnFilters<String> get layerId => $composableBuilder(
     column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19120,6 +19496,11 @@ class $$CanvasTablesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -19169,6 +19550,11 @@ class $$CanvasTablesTableAnnotationComposer
 
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -19228,6 +19614,7 @@ class $$CanvasTablesTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTablesCompanion(
                 clientTableId: clientTableId,
@@ -19236,6 +19623,7 @@ class $$CanvasTablesTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -19246,6 +19634,7 @@ class $$CanvasTablesTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTablesCompanion.insert(
                 clientTableId: clientTableId,
@@ -19254,6 +19643,7 @@ class $$CanvasTablesTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -19331,6 +19721,7 @@ typedef $$CanvasLinksTableCreateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 typedef $$CanvasLinksTableUpdateCompanionBuilder =
@@ -19341,6 +19732,7 @@ typedef $$CanvasLinksTableUpdateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 
@@ -19397,6 +19789,11 @@ class $$CanvasLinksTableFilterComposer
 
   ColumnFilters<String> get layerId => $composableBuilder(
     column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19458,6 +19855,11 @@ class $$CanvasLinksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -19507,6 +19909,11 @@ class $$CanvasLinksTableAnnotationComposer
 
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -19566,6 +19973,7 @@ class $$CanvasLinksTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasLinksCompanion(
                 clientLinkId: clientLinkId,
@@ -19574,6 +19982,7 @@ class $$CanvasLinksTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -19584,6 +19993,7 @@ class $$CanvasLinksTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasLinksCompanion.insert(
                 clientLinkId: clientLinkId,
@@ -19592,6 +20002,7 @@ class $$CanvasLinksTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -19669,6 +20080,7 @@ typedef $$CanvasAttachmentsTableCreateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 typedef $$CanvasAttachmentsTableUpdateCompanionBuilder =
@@ -19679,6 +20091,7 @@ typedef $$CanvasAttachmentsTableUpdateCompanionBuilder =
       Value<int> isDeleted,
       Value<int> updatedAt,
       Value<String?> layerId,
+      Value<int> syncedWithCloud,
       Value<int> rowid,
     });
 
@@ -19747,6 +20160,11 @@ class $$CanvasAttachmentsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -19805,6 +20223,11 @@ class $$CanvasAttachmentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -19856,6 +20279,11 @@ class $$CanvasAttachmentsTableAnnotationComposer
 
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -19920,6 +20348,7 @@ class $$CanvasAttachmentsTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAttachmentsCompanion(
                 clientAttachmentId: clientAttachmentId,
@@ -19928,6 +20357,7 @@ class $$CanvasAttachmentsTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -19938,6 +20368,7 @@ class $$CanvasAttachmentsTableTableManager
                 Value<int> isDeleted = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAttachmentsCompanion.insert(
                 clientAttachmentId: clientAttachmentId,
@@ -19946,6 +20377,7 @@ class $$CanvasAttachmentsTableTableManager
                 isDeleted: isDeleted,
                 updatedAt: updatedAt,
                 layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -9,14 +9,17 @@ import '../models/shape_model.dart';
 import '../models/table_model.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_document_provider.dart';
-import '../providers/canvas_viewport_provider.dart';
 import '../models/local_page_model.dart';
 import '../models/canvas_enums.dart';
+import '../providers/canvas_ui_provider.dart';
 import 'canvas_zoom_control.dart';
 import 'dialogs/layer_manager_sheet.dart'; 
 import 'dialogs/page_action_helper.dart'; 
-import '../../explanations/controllers/explanation_controller.dart'; 
-import '../../explanations/models/explanation_model.dart';
+import 'dialogs/brush_style_sheet.dart';
+import 'dialogs/object_explorer_sheet.dart'; // 🚀 v4.0
+import '../../shared/widgets/color_engine_widget.dart';
+import 'toolbars/text_edit_toolbar.dart'; // 🚀 v3.6
+import 'toolbars/table_edit_toolbar.dart'; // 🚀 v3.6
 
 class CanvasToolbar extends ConsumerWidget {
   final LocalPage currentPage;
@@ -46,7 +49,21 @@ class CanvasToolbar extends ConsumerWidget {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final docState = ref.watch(canvasDocumentProvider);
     final docNotifier = ref.read(canvasDocumentProvider.notifier);
-    final viewportNotifier = ref.read(canvasViewportProvider.notifier);
+    final uiState = ref.watch(canvasUiProvider);
+
+    // 🚀 v3.10: LÓGICA DE BARRA CONTEXTUAL DINÂMICA
+    final bool isWriting = toolState.currentTool == ToolMode.text || toolState.activeTextBlock != null;
+    final bool isEditingTable = toolState.currentTool == ToolMode.table || toolState.activeTableId != null;
+    final bool isTableSelected = toolState.selectedTableIds.isNotEmpty;
+
+    if (isWriting) {
+      debugPrint('📝 [Toolbar] Contexto: Texto (Ativo: ${toolState.activeTextBlock?.id})');
+      return TextEditToolbar(block: toolState.activeTextBlock, currentPage: currentPage);
+    }
+    if (isEditingTable || isTableSelected) {
+      debugPrint('📊 [Toolbar] Contexto: Tabela');
+      return TableEditToolbar(currentPage: currentPage, isCellEditing: toolState.activeTableId != null);
+    }
 
     final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
     final bool isProfessor = docState.currentUserRole == 'owner';
@@ -57,273 +74,182 @@ class CanvasToolbar extends ConsumerWidget {
       return _buildCompactToolbar(context, docState);
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 15, offset: const Offset(0, 8)),
-        ],
-      ),
-      child: Wrap(
-        spacing: 6, runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.center,
-        children: [
-          _buildToolButton(toolNotifier, Icons.brush, ToolMode.draw, 'Caneta', toolState.currentTool),
-          _buildToolButton(toolNotifier, Icons.auto_fix_high, ToolMode.eraser, 'Apagar Objeto', toolState.currentTool),
-          _buildToolButton(toolNotifier, Icons.cleaning_services_rounded, ToolMode.pixelEraser, 'Borracha de Precisão', toolState.currentTool),
-          _buildToolButton(toolNotifier, Icons.text_fields, ToolMode.text, 'Texto', toolState.currentTool),
-          _buildToolButton(toolNotifier, Icons.highlight_alt, ToolMode.select, 'Selecionar (Rect)', toolState.currentTool),
-          _buildToolButton(toolNotifier, Icons.gesture_rounded, ToolMode.lasso, 'Laço de Seleção', toolState.currentTool),
-
-          if (toolState.selectedStrokeIds.isNotEmpty || toolState.selectedTextIds.isNotEmpty || toolState.selectedImageIds.isNotEmpty) ...[
-            _buildCompactIconButton(
-              toolState.isTransformMode ? Icons.check_circle_rounded : Icons.open_with_rounded, 
-              () => toolNotifier.toggleTransformMode(), 
-              toolState.isTransformMode ? 'Concluir' : 'Redimensionar Seleção', 
-              toolState.isTransformMode ? Colors.green : const Color(0xFFE67E22)
-            ),
-            InkWell(
-              onTap: onColorTap,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(border: Border.all(color: Colors.black12), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.palette_outlined, size: 18, color: Colors.blueAccent),
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: uiState.isHudMode ? 0.15 : 1.0,
+      child: IgnorePointer(
+        ignoring: uiState.isHudMode,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8)),
+            ],
+          ),
+          child: Wrap(
+            spacing: 6, runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.center,
+            children: [
+              _buildToolButton(
+                toolNotifier, 
+                Icons.brush, 
+                ToolMode.draw, 
+                'Caneta', 
+                toolState.currentTool,
+                onLongPress: () => _showBrushSelector(context),
               ),
-            ),
-          ],
+              _buildToolButton(
+                toolNotifier, 
+                toolState.currentTool == ToolMode.pixelEraser ? Icons.cleaning_services_rounded : Icons.auto_fix_high, 
+                toolState.currentTool == ToolMode.pixelEraser ? ToolMode.pixelEraser : ToolMode.eraser, 
+                toolState.currentTool == ToolMode.pixelEraser ? 'Borracha de Precisão' : 'Apagar Objeto', 
+                toolState.currentTool,
+                onLongPress: () {
+                  if (toolState.currentTool == ToolMode.eraser) {
+                    toolNotifier.switchTool(ToolMode.pixelEraser);
+                  } else {
+                    toolNotifier.switchTool(ToolMode.eraser);
+                  }
+                },
+              ),
+              _buildToolButton(
+                toolNotifier, 
+                toolState.currentTool == ToolMode.table ? Icons.table_chart_rounded : Icons.text_fields, 
+                toolState.currentTool == ToolMode.table ? ToolMode.table : ToolMode.text, 
+                'Conteúdo (Toque longo p/ Tabela)', 
+                toolState.currentTool,
+                onLongPress: () {
+                  if (toolState.currentTool == ToolMode.text) {
+                    toolNotifier.switchTool(ToolMode.table);
+                  } else {
+                    toolNotifier.switchTool(ToolMode.text);
+                  }
+                },
+              ),
+              _buildToolButton(toolNotifier, Icons.highlight_alt, ToolMode.select, 'Selecionar (Rect)', toolState.currentTool),
+              _buildToolButton(toolNotifier, Icons.gesture_rounded, ToolMode.lasso, 'Laço de Seleção', toolState.currentTool),
+              _buildToolButton(toolNotifier, Icons.account_tree_outlined, ToolMode.organizer, 'Explorador de Objetos', toolState.currentTool, onLongPress: () => _showObjectExplorer(context)),
 
-          _buildCompactIconButton(Icons.layers_outlined, () => _showLayerManager(context, currentPage), 'Camadas', const Color(0xFF0F4C5C)),
-
-          _buildShapeMenu(context, ref, currentPage),
-          _buildAnimationMenu(context, ref, currentPage),
-          _buildInsertionMenu(context, ref, currentPage), // 🚀 NOVO
-
-          if (!isSmallScreen) _buildToolButton(toolNotifier, Icons.pan_tool, ToolMode.pan, 'Mover Folha', toolState.currentTool),
-          
-          if (!isSmallScreen)
-            _buildCompactIconButton(Icons.psychology_outlined, onAiAssistantTap, 'Assistente IA', const Color(0xFF0F4C5C)),
-
-          if (!isSmallScreen)
-            _buildCompactIconButton(
-              Icons.settings_suggest_rounded, 
-              () {
-                ref.read(explanationProvider.notifier).addExplanation(
-                  EngineeringExplanation(
-                    position: const Offset(450, 200),
-                    radius: 50.0,
-                    toothCount: 18,
-                    angularVelocity: 0.5,
+              if (toolState.selectedStrokeIds.isNotEmpty || 
+                  toolState.selectedTextIds.isNotEmpty || 
+                  toolState.selectedImageIds.isNotEmpty ||
+                  toolState.selectedShapeIds.isNotEmpty || 
+                  toolState.selectedAudioIds.isNotEmpty || 
+                  toolState.selectedAnimationIds.isNotEmpty ||
+                  toolState.selectedTableIds.isNotEmpty || 
+                  toolState.selectedLinkIds.isNotEmpty || 
+                  toolState.selectedAttachmentIds.isNotEmpty) ...[
+                _buildCompactIconButton(
+                  toolState.isTransformMode ? Icons.check_circle_rounded : Icons.open_with_rounded, 
+                  () => toolNotifier.toggleTransformMode(), 
+                  toolState.isTransformMode ? 'Concluir' : 'Redimensionar Seleção', 
+                  toolState.isTransformMode ? Colors.green : const Color(0xFFE67E22)
+                ),
+                InkWell(
+                  onTap: onColorTap,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.black12), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.palette_outlined, size: 18, color: Colors.blueAccent),
                   ),
-                );
-              }, 
-              'Adicionar Engrenagem', 
-              Colors.blueGrey
-            ),
+                ),
+              ],
 
-          if (!isSmallScreen)
-            _buildCompactIconButton(Icons.add_photo_alternate_outlined, onAddImageTap, 'Adicionar Imagem', const Color(0xFF1A1A24)),
-          
-          if (isSmallScreen) ...[
-            _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.3)),
-            _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.3)),
-          ],
+              _buildCompactIconButton(Icons.layers_outlined, () => _showLayerManager(context, currentPage), 'Camadas', const Color(0xFF0F4C5C)),
+              
+              _buildInsertionMenu(context, ref, currentPage), 
 
-          if (isSmallScreen)
-            _buildMoreMenu(context, ref, toolNotifier, viewportNotifier, onAddImageTap, currentPage)
-          else ...[
-            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            _buildCompactIconButton(Icons.grid_on, onChangePaperTap, 'Mudar Pauta', const Color(0xFF0F4C5C)),
-            
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: CanvasZoomControl(currentPage: currentPage),
-            ),
+              if (!isSmallScreen) _buildToolButton(toolNotifier, Icons.pan_tool, ToolMode.pan, 'Mover Folha', toolState.currentTool),
+              
+              if (!isSmallScreen)
+                _buildCompactIconButton(Icons.psychology_outlined, onAiAssistantTap, 'Assistente IA', const Color(0xFF0F4C5C)),
 
-            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.5)),
-            _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withValues(alpha: 0.5)),
-            
-            _buildPagePopupMenu(context, ref, currentPage),
-          ],
+              if (isSmallScreen) ...[
+                _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
+                _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.3)),
+              ],
 
-          if (toolState.currentTool == ToolMode.draw) ...[
-            Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-            InkWell(
-              onTap: onColorTap, 
-              customBorder: const CircleBorder(), 
-              child: Container(
-                width: 36, height: 36, 
-                alignment: Alignment.center, 
-                child: CircleAvatar(
-                  radius: 11, 
-                  backgroundColor: Color(int.parse(toolState.selectedColorHex.replaceFirst('#', '0xFF'))).withValues(alpha: toolState.isHighlighter ? 0.4 : 1.0)
-                )
-              )
-            ),
-            InkWell(
-              onTap: onThicknessTap, 
-              customBorder: const CircleBorder(), 
-              child: Container(
-                width: 36, height: 36, 
-                alignment: Alignment.center, 
-                child: CircleAvatar(
-                  radius: 11, 
-                  backgroundColor: Colors.black.withValues(alpha: 0.12), 
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(radius: (toolState.selectedThickness / 1.5).clamp(2.0, 9.0), backgroundColor: const Color(0xFF1A1A24).withValues(alpha: toolState.isHighlighter ? 0.4 : 1.0)),
-                      if (toolState.isHighlighter) Icon(Icons.highlight, size: 10, color: Colors.white.withValues(alpha: 0.8)),
-                    ],
+              if (isSmallScreen)
+                _buildMoreMenu(context, ref, onAddImageTap, currentPage)
+              else ...[
+                Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: CanvasZoomControl(currentPage: currentPage),
+                ),
+
+                Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+                _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
+                
+                _buildPagePopupMenu(context, ref, currentPage),
+              ],
+
+              if (toolState.currentTool == ToolMode.draw) ...[
+                Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                InkWell(
+                  onTap: () async {
+                    final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Caneta');
+                    if (hex != null) toolNotifier.setColor(hex);
+                  }, 
+                  customBorder: const CircleBorder(), 
+                  child: Container(
+                    width: 36, height: 36, 
+                    alignment: Alignment.center, 
+                    child: CircleAvatar(
+                      radius: 11, 
+                      backgroundColor: Color(int.parse(toolState.selectedColorHex.replaceFirst('#', '0xFF'))).withOpacity(toolState.isHighlighter ? 0.4 : 1.0)
+                    )
                   )
-                )
-              )
-            ),
-          ],
-        ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
 
+  // --- HELPERS DE UI ---
 
-
-  Widget _buildShapeMenu(BuildContext context, WidgetRef ref, LocalPage page) {
-    return PopupMenuButton<ShapeType>(
-      icon: const Icon(Icons.category_outlined, color: Color(0xFF0F4C5C)),
-      tooltip: 'Inserir Forma',
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      onSelected: (type) {
-        final shape = ShapeObject(
-          id: const Uuid().v4(),
-          shapeType: type,
-          position: const Offset(100, 100),
-          size: const Size(150, 100),
-          strokeColor: '#0F4C5C',
-          zIndex: page.objects.length,
-        );
-        ref.read(canvasDocumentProvider.notifier).addShape(page, shape);
-      },
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: ShapeType.rectangle, child: Row(children: [Icon(Icons.rectangle_outlined), SizedBox(width: 8), Text('Retângulo')])),
-        const PopupMenuItem(value: ShapeType.circle, child: Row(children: [Icon(Icons.circle_outlined), SizedBox(width: 8), Text('Círculo')])),
-        const PopupMenuItem(value: ShapeType.triangle, child: Row(children: [Icon(Icons.change_history_rounded), SizedBox(width: 8), Text('Triângulo')])),
-        const PopupMenuItem(value: ShapeType.line, child: Row(children: [Icon(Icons.horizontal_rule_rounded), SizedBox(width: 8), Text('Linha')])),
-        const PopupMenuItem(value: ShapeType.arrow, child: Row(children: [Icon(Icons.arrow_right_alt_rounded), SizedBox(width: 8), Text('Seta')])),
-      ],
-    );
-  }
-
-  Widget _buildAnimationMenu(BuildContext context, WidgetRef ref, LocalPage page) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.animation_rounded, color: Color(0xFFE36414)),
-      tooltip: 'Inserir Animação',
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      onSelected: (type) {
-        final anim = AnimationObject(
-          id: const Uuid().v4(),
-          animationType: AnimationObjectType.physics,
-          position: const Offset(200, 200),
-          size: const Size(120, 120),
-          configData: type == 'gear' 
-              ? {'type': 'engineeringMechanism', 'is_gear': true, 'tooth_count': 18, 'radius': 50.0}
-              : {'type': 'physicsBody', 'mass': 1.0},
-          zIndex: page.objects.length,
-        );
-        ref.read(canvasDocumentProvider.notifier).addAnimation(page, anim);
-      },
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: 'gear', child: Row(children: [Icon(Icons.settings_suggest_outlined), SizedBox(width: 8), Text('Engrenagem')])),
-        const PopupMenuItem(value: 'physics', child: Row(children: [Icon(Icons.waves_rounded), SizedBox(width: 8), Text('Corpo de Física')])),
-      ],
-    );
-  }
-
-  Widget _buildInsertionMenu(BuildContext context, WidgetRef ref, LocalPage page) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF0F4C5C)),
-      tooltip: 'Mais Opções',
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      onSelected: (val) {
-        if (val == 'table') _handleInsertTable(context, ref, page);
-        else if (val == 'link') _handleInsertLink(context, ref, page);
-        else if (val == 'attach') _handleInsertAttachment(context, ref, page);
-      },
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: 'table', child: Row(children: [Icon(Icons.table_chart_outlined), SizedBox(width: 8), Text('Tabela')])),
-        const PopupMenuItem(value: 'link', child: Row(children: [Icon(Icons.link_rounded), SizedBox(width: 8), Text('Link Interativo')])),
-        const PopupMenuItem(value: 'attach', child: Row(children: [Icon(Icons.attach_file_rounded), SizedBox(width: 8), Text('Anexar Ficheiro')])),
-      ],
-    );
-  }
-
-  void _handleInsertTable(BuildContext context, WidgetRef ref, LocalPage page) {
-    final table = TableObject(
-      id: const Uuid().v4(),
-      position: const Offset(150, 150),
-      rows: 3, cols: 3,
-      zIndex: page.objects.length,
-    );
-    ref.read(canvasDocumentProvider.notifier).addTable(page, table);
-  }
-
-  void _handleInsertLink(BuildContext context, WidgetRef ref, LocalPage page) {
-    final link = LinkObject(
-      id: const Uuid().v4(),
-      linkType: LinkType.externalUrl,
-      url: 'https://google.com',
-      label: 'Google',
-      position: const Offset(200, 200),
-      zIndex: page.objects.length,
-    );
-    ref.read(canvasDocumentProvider.notifier).addLink(page, link);
-  }
-
-  void _handleInsertAttachment(BuildContext context, WidgetRef ref, LocalPage page) {
-    final attach = AttachmentObject(
-      id: const Uuid().v4(),
-      fileName: 'documento_exemplo.pdf',
-      fileExtension: 'pdf',
-      localPath: '/tmp/test.pdf',
-      position: const Offset(100, 300),
-      zIndex: page.objects.length,
-    );
-    ref.read(canvasDocumentProvider.notifier).addAttachment(page, attach);
-  }
-
-  Widget _buildCompactToolbar(BuildContext context, CanvasDocumentState docState) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8))],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(docState.currentUserRole == 'viewer' ? Icons.visibility_outlined : Icons.lock_person_rounded, color: Colors.blueGrey, size: 20),
-          const SizedBox(width: 12),
-          Text(docState.currentUserRole == 'viewer' ? 'Modo Leitura' : 'Sessão Bloqueada', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildToolButton(CanvasToolNotifier notifier, IconData icon, ToolMode mode, String tooltip, ToolMode currentTool) {
+  Widget _buildToolButton(CanvasToolNotifier notifier, IconData icon, ToolMode mode, String tooltip, ToolMode currentTool, {VoidCallback? onLongPress}) {
     final bool isActive = currentTool == mode;
-    return Container(
-      decoration: BoxDecoration(color: isActive ? const Color(0xFF0F4C5C).withValues(alpha: 0.15) : Colors.transparent, shape: BoxShape.circle),
-      child: IconButton(iconSize: 20, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, icon: Icon(icon, color: isActive ? const Color(0xFF0F4C5C) : const Color(0xFF1A1A24)), onPressed: () => notifier.switchTool(mode), tooltip: tooltip),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => notifier.switchTool(mode),
+        onLongPress: onLongPress,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFF0F4C5C).withOpacity(0.15) : Colors.transparent, 
+            shape: BoxShape.circle
+          ),
+          child: Icon(icon, size: 20, color: isActive ? const Color(0xFF0F4C5C) : const Color(0xFF1A1A24)),
+        ),
+      ),
     );
   }
 
   Widget _buildCompactIconButton(IconData icon, VoidCallback? onPressed, String tooltip, Color color) {
     return IconButton(iconSize: 20, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, icon: Icon(icon, color: color), onPressed: onPressed, tooltip: tooltip);
+  }
+
+  // --- DIALOGS E MENUS ---
+
+  void _showBrushSelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const BrushStyleSheet(),
+    );
   }
 
   void _showLayerManager(BuildContext context, LocalPage page) {
@@ -335,6 +261,88 @@ class CanvasToolbar extends ConsumerWidget {
     );
   }
 
+  void _showObjectExplorer(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ObjectExplorerSheet(pageClientId: currentPage.clientId),
+    );
+  }
+
+  Widget _buildInsertionMenu(BuildContext context, WidgetRef ref, LocalPage page) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF0F4C5C)),
+      tooltip: 'Inserir Objetos',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      onSelected: (val) {
+        if (val == 'image') onAddImageTap?.call();
+        else if (val.startsWith('shape_')) _handleInsertShape(ref, page, val.replaceFirst('shape_', ''));
+        else if (val.startsWith('anim_')) _handleInsertAnimation(ref, page, val.replaceFirst('anim_', ''));
+        else if (val == 'table') _handleInsertTable(ref, page);
+        else if (val == 'link') _handleInsertLink(ref, page);
+        else if (val == 'attach') _handleInsertAttachment(ref, page);
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'image', child: Row(children: [Icon(Icons.add_photo_alternate_outlined), SizedBox(width: 8), Text('Imagem (Galeria)')])),
+        const PopupMenuDivider(),
+        _buildHeaderItem('FORMAS GEOMÉTRICAS'),
+        _buildPopupItem('shape_rectangle', Icons.rectangle_outlined, 'Retângulo'),
+        _buildPopupItem('shape_circle', Icons.circle_outlined, 'Círculo'),
+        _buildPopupItem('shape_triangle', Icons.change_history_rounded, 'Triângulo'),
+        _buildPopupItem('shape_line', Icons.horizontal_rule_rounded, 'Linha'),
+        _buildPopupItem('shape_arrow', Icons.arrow_right_alt_rounded, 'Seta'),
+        const PopupMenuDivider(),
+        _buildHeaderItem('ILUSTRAÇÕES TÉCNICAS'),
+        _buildPopupItem('anim_gear', Icons.settings_suggest_outlined, 'Engrenagem'),
+        _buildPopupItem('anim_physics', Icons.waves_rounded, 'Corpo de Física'),
+        const PopupMenuDivider(),
+        _buildHeaderItem('ESTRUTURAS'),
+        _buildPopupItem('table', Icons.table_chart_outlined, 'Tabela'),
+        _buildPopupItem('link', Icons.link_rounded, 'Link Interativo'),
+        _buildPopupItem('attach', Icons.attach_file_rounded, 'Anexar Ficheiro'),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _buildHeaderItem(String title) {
+    return PopupMenuItem<String>(enabled: false, child: Text(title, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)));
+  }
+
+  PopupMenuItem<String> _buildPopupItem(String value, IconData icon, String label, {bool isDestructive = false}) {
+    return PopupMenuItem<String>(value: value, child: Row(children: [Icon(icon, size: 18, color: isDestructive ? Colors.redAccent : Colors.black54), const SizedBox(width: 12), Text(label, style: TextStyle(fontSize: 13, color: isDestructive ? Colors.redAccent : Colors.black87))]));
+  }
+
+  void _handleInsertShape(WidgetRef ref, LocalPage page, String typeName) {
+    final type = ShapeType.values.firstWhere((e) => e.name == typeName);
+    final shape = ShapeObject(id: const Uuid().v4(), shapeType: type, position: const Offset(150, 150), size: const Size(150, 100), strokeColor: '#0F4C5C', zIndex: page.objects.length);
+    ref.read(canvasDocumentProvider.notifier).addShape(page, shape);
+  }
+
+  void _handleInsertAnimation(WidgetRef ref, LocalPage page, String type) {
+    final anim = AnimationObject(id: const Uuid().v4(), animationType: AnimationObjectType.physics, position: const Offset(200, 200), size: const Size(120, 120), configData: type == 'gear' ? {'type': 'engineeringMechanism', 'is_gear': true, 'tooth_count': 18, 'radius': 50.0} : {'type': 'physicsBody', 'mass': 1.0}, zIndex: page.objects.length);
+    ref.read(canvasDocumentProvider.notifier).addAnimation(page, anim);
+  }
+
+  void _handleInsertTable(WidgetRef ref, LocalPage page) {
+    final table = TableObject(id: const Uuid().v4(), position: const Offset(150, 150), zIndex: page.objects.length);
+    ref.read(canvasDocumentProvider.notifier).addTable(page, table);
+  }
+
+  void _handleInsertLink(WidgetRef ref, LocalPage page) {
+    final link = LinkObject(id: const Uuid().v4(), linkType: LinkType.externalUrl, url: 'https://google.com', label: 'Google', position: const Offset(200, 200), zIndex: page.objects.length);
+    ref.read(canvasDocumentProvider.notifier).addLink(page, link);
+  }
+
+  void _handleInsertAttachment(WidgetRef ref, LocalPage page) {
+    final attach = AttachmentObject(id: const Uuid().v4(), fileName: 'documento.pdf', fileExtension: 'pdf', localPath: '', position: const Offset(100, 300), zIndex: page.objects.length);
+    ref.read(canvasDocumentProvider.notifier).addAttachment(page, attach);
+  }
+
+  Widget _buildCompactToolbar(BuildContext context, CanvasDocumentState docState) {
+    return Container(margin: const EdgeInsets.symmetric(horizontal: 16), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8))]), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(docState.currentUserRole == 'viewer' ? Icons.visibility_outlined : Icons.lock_person_rounded, color: Colors.blueGrey, size: 20), const SizedBox(width: 12), Text(docState.currentUserRole == 'viewer' ? 'Modo Leitura' : 'Sessão Bloqueada', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87))]));
+  }
+
   Widget _buildPagePopupMenu(BuildContext context, WidgetRef ref, LocalPage page) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.description_outlined, color: Color(0xFF0F4C5C)),
@@ -344,9 +352,9 @@ class CanvasToolbar extends ConsumerWidget {
       itemBuilder: (context) => [
         _buildPopupItem('rename', Icons.edit_outlined, 'Renomear'),
         _buildPopupItem('settings', Icons.settings_outlined, 'Configurar'),
+        _buildPopupItem('paper', Icons.grid_on_rounded, 'Mudar Pauta / Papel'), 
         _buildPopupItem('section', Icons.folder_outlined, 'Mover para Secção'),
-        if (page.sectionTitle != null)
-          _buildPopupItem('remove_section', Icons.folder_off_outlined, 'Remover Secção'),
+        if (page.sectionTitle != null) _buildPopupItem('remove_section', Icons.folder_off_outlined, 'Remover Secção'),
         const PopupMenuDivider(),
         _buildPopupItem('favorite', page.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, page.isFavorite ? 'Remover Favorito' : 'Marcar Favorito'),
         _buildPopupItem('duplicate', Icons.copy_rounded, 'Duplicar Página'),
@@ -359,24 +367,11 @@ class CanvasToolbar extends ConsumerWidget {
     );
   }
 
-  PopupMenuItem<String> _buildPopupItem(String value, IconData icon, String label, {bool isDestructive = false}) {
-    return PopupMenuItem(
-      value: value,
-      height: 38,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: isDestructive ? Colors.redAccent : Colors.black54),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(fontSize: 13, color: isDestructive ? Colors.redAccent : Colors.black87)),
-        ],
-      ),
-    );
-  }
-
   void _handlePageAction(BuildContext context, WidgetRef ref, LocalPage page, String action) {
     switch (action) {
       case 'rename': PageActionHelper.showRenameDialog(context, ref, page); break;
       case 'settings': PageActionHelper.showSettingsDialog(context, ref, page); break;
+      case 'paper': onChangePaperTap(); break; 
       case 'section': PageActionHelper.showSectionDialog(context, ref, page); break;
       case 'remove_section': ref.read(canvasDocumentProvider.notifier).updatePageSection(page, null); break;
       case 'favorite': ref.read(canvasDocumentProvider.notifier).toggleFavorite(page); break;
@@ -387,21 +382,16 @@ class CanvasToolbar extends ConsumerWidget {
     }
   }
 
-  Widget _buildMoreMenu(BuildContext context, WidgetRef ref, CanvasToolNotifier toolNotifier, CanvasViewportNotifier viewportNotifier, VoidCallback? onAddImage, LocalPage page) {
+  Widget _buildMoreMenu(BuildContext context, WidgetRef ref, VoidCallback? onAddImage, LocalPage page) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: Color(0xFF1A1A24)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (val) {
         if (val == 'add_image') onAddImage?.call();
-        else if (val == 'clear_explanations') ref.read(explanationProvider.notifier).clearPage();
         else _handlePageAction(context, ref, page, val);
       },
       itemBuilder: (context) => [
-        PopupMenuItem(
-          enabled: false,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: CanvasZoomControl(currentPage: page, isCompact: true),
-        ),
+        PopupMenuItem(enabled: false, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: CanvasZoomControl(currentPage: page, isCompact: true)),
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'add_image', child: Row(children: [Icon(Icons.add_photo_alternate_outlined, size: 18), SizedBox(width: 8), Text('Adicionar Imagem')])),
         const PopupMenuDivider(),

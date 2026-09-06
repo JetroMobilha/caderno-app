@@ -510,12 +510,13 @@ class CanvasRepository {
     }
 
     try {
+      // 🚀 v1.6: Garantia de fidelidade total no JSON antes da gravação
       final strokeMap = s.toJson();
       
       await _db.into(_db.canvasStrokes).insertOnConflictUpdate(CanvasStrokesCompanion.insert(
         clientStrokeId: s.id,
         pageId: targetPageId,
-        strokeData: jsonEncode(strokeMap),
+        strokeData: jsonEncode(strokeMap), // Aqui o JSON já leva brush_type e is_smoothed
         isDeleted: Value(s.isDeleted ? 1 : 0),
         deletedInSession: Value(s.deletedInSession ? 1 : 0),
         creatorId: Value(s.creatorId),
@@ -732,6 +733,34 @@ class CanvasRepository {
 
   Future<void> deleteSingleTextBlock(String textId) async {
     await (_db.update(_db.canvasTextBlocks)..where((t) => t.clientTextId.equals(textId))).write(const CanvasTextBlocksCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleImageBlock(String imageId) async {
+    await (_db.update(_db.canvasImageBlocks)..where((t) => t.clientImageId.equals(imageId))).write(const CanvasImageBlocksCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleShape(String shapeId) async {
+    await (_db.update(_db.canvasShapes)..where((t) => t.clientShapeId.equals(shapeId))).write(const CanvasShapesCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleTable(String tableId) async {
+    await (_db.update(_db.canvasTables)..where((t) => t.clientTableId.equals(tableId))).write(const CanvasTablesCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleLink(String linkId) async {
+    await (_db.update(_db.canvasLinks)..where((t) => t.clientLinkId.equals(linkId))).write(const CanvasLinksCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleAttachment(String attachmentId) async {
+    await (_db.update(_db.canvasAttachments)..where((t) => t.clientAttachmentId.equals(attachmentId))).write(const CanvasAttachmentsCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleAudio(String audioId) async {
+    await (_db.update(_db.canvasAudioBlocks)..where((t) => t.clientAudioId.equals(audioId))).write(const CanvasAudioBlocksCompanion(isDeleted: Value(1)));
+  }
+
+  Future<void> deleteSingleAnimation(String animId) async {
+    await (_db.update(_db.canvasAnimations)..where((t) => t.clientAnimationId.equals(animId))).write(const CanvasAnimationsCompanion(isDeleted: Value(1)));
   }
 
   Future<void> reindexPages(int notebookId) async {

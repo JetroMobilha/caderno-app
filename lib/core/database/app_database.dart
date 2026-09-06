@@ -151,11 +151,12 @@ class CanvasImageBlocks extends Table {
 class CanvasShapes extends Table {
   TextColumn get clientShapeId => text()();
   IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
-  TextColumn get shapeData => text()(); // JSON completo do objeto
+  TextColumn get shapeData => text()(); 
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get layerId => text().nullable()();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
   @override
   Set<Column> get primaryKey => {clientShapeId};
 }
@@ -167,6 +168,7 @@ class CanvasAudioBlocks extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
   @override
   Set<Column> get primaryKey => {clientAudioId};
 }
@@ -178,6 +180,7 @@ class CanvasAnimations extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
   @override
   Set<Column> get primaryKey => {clientAnimationId};
 }
@@ -189,6 +192,7 @@ class CanvasTables extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
   @override
   Set<Column> get primaryKey => {clientTableId};
 }
@@ -200,6 +204,7 @@ class CanvasLinks extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
   @override
   Set<Column> get primaryKey => {clientLinkId};
 }
@@ -211,6 +216,7 @@ class CanvasAttachments extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
   @override
   Set<Column> get primaryKey => {clientAttachmentId};
 }
@@ -428,12 +434,21 @@ class AppDatabase extends _$AppDatabase {
           try { await m.createTable(canvasLinks); } catch(_) {}
           try { await m.createTable(canvasAttachments); } catch(_) {}
         }
+        if (from < 30) {
+          // 🚀 v30: Coluna de sincronismo para novos objetos
+          try { await m.addColumn(canvasShapes, canvasShapes.syncedWithCloud); } catch(_) {}
+          try { await m.addColumn(canvasAudioBlocks, canvasAudioBlocks.syncedWithCloud); } catch(_) {}
+          try { await m.addColumn(canvasAnimations, canvasAnimations.syncedWithCloud); } catch(_) {}
+          try { await m.addColumn(canvasTables, canvasTables.syncedWithCloud); } catch(_) {}
+          try { await m.addColumn(canvasLinks, canvasLinks.syncedWithCloud); } catch(_) {}
+          try { await m.addColumn(canvasAttachments, canvasAttachments.syncedWithCloud); } catch(_) {}
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

@@ -1,34 +1,50 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../notebooks/models/notebook_configuration.dart';
+import '../models/canvas_enums.dart';
 import '../models/stroke_model.dart';
 import 'background_engine.dart';
 
 Path buildPath(List<Offset> points) {
   final path = Path();
   if (points.isEmpty) return path;
-  
   path.moveTo(points.first.dx, points.first.dy);
-  
   if (points.length == 1) {
     path.addOval(Rect.fromCircle(center: points.first, radius: 0.1));
     return path;
   }
-
-  // 🚀 ALTA FIDELIDADE: Usar lineTo para preservar a escrita original do autor.
-  // Isto também é muito mais performático para traços com muitos pontos.
   for (int i = 1; i < points.length; i++) {
     path.lineTo(points[i].dx, points[i].dy);
   }
+  return path;
+}
 
+/// 🚀 v1.2: Suavização Bézier Opcional
+Path buildSmoothPath(List<Offset> points) {
+  final path = Path();
+  if (points.length < 3) return buildPath(points);
+  
+  path.moveTo(points.first.dx, points.first.dy);
+  
+  for (int i = 1; i < points.length - 2; i++) {
+    final xc = (points[i].dx + points[i + 1].dx) / 2;
+    final yc = (points[i].dy + points[i + 1].dy) / 2;
+    path.quadraticBezierTo(points[i].dx, points[i].dy, xc, yc);
+  }
+  
+  path.quadraticBezierTo(
+    points[points.length - 2].dx, 
+    points[points.length - 2].dy, 
+    points.last.dx, 
+    points.last.dy
+  );
+  
   return path;
 }
 
 class BackgroundPainter extends CustomPainter {
   final NotebookConfiguration? notebookConfig;
   final BackgroundConfig? bgConfig;
-  
-  // 🚀 FALLBACK para compatibilidade com código antigo
   final String? lineType;
   final double? lineSpacing;
 
@@ -46,7 +62,6 @@ class BackgroundPainter extends CustomPainter {
       return;
     }
 
-    // 🚀 LÓGICA DE LEGACY (Se não houver config rica)
     final type = bgConfig?.type ?? lineType ?? 'ruled';
     final spacing = bgConfig?.spacing ?? lineSpacing ?? 28.0;
 
@@ -95,14 +110,14 @@ class BackgroundPainter extends CustomPainter {
       oldDelegate.lineType != lineType || 
       oldDelegate.lineSpacing != lineSpacing ||
       oldDelegate.bgConfig != bgConfig ||
-      oldDelegate.notebookConfig != notebookConfig; // 🚀 ADICIONADO
+      oldDelegate.notebookConfig != notebookConfig;
 }
 
 class StrokesPainter extends CustomPainter {
   final List<Stroke> strokes;
   final Set<String> selectedStrokeIds;
   final Rect? selectionRect;
-  final List<Offset>? lassoPath; // 🚀 Novo
+  final List<Offset>? lassoPath;
   final int pageVersion;
   final Set<String> remoteMovingStrokeIds;
   final Set<String>? visibleAuthorIds;
@@ -114,7 +129,7 @@ class StrokesPainter extends CustomPainter {
     required this.strokes,
     required this.selectedStrokeIds,
     required this.selectionRect,
-    this.lassoPath, // 🚀
+    this.lassoPath,
     required this.pageVersion,
     this.remoteMovingStrokeIds = const {},
     this.visibleAuthorIds,
@@ -127,62 +142,36 @@ class StrokesPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     for (final stroke in strokes) {
       if (stroke.isDeleted || remoteMovingStrokeIds.contains(stroke.id)) continue;
-
-      if (visibleAuthorIds != null && stroke.creatorId != null) {
-        if (!visibleAuthorIds!.contains(stroke.creatorId)) continue;
-      }
+      if (visibleAuthorIds != null && stroke.creatorId != null && !visibleAuthorIds!.contains(stroke.creatorId)) continue;
 
       final bool isSelected = selectedStrokeIds.contains(stroke.id);
-
       Color strokeColor = Color(int.parse(stroke.color.replaceFirst('#', '0xFF')));
       if (isAuthorColorEnabled && stroke.creatorId != null && userColors.containsKey(stroke.creatorId)) {
         strokeColor = userColors[stroke.creatorId]!;
       }
-
-      final paint = Paint()
-        ..color = stroke.isHighlighter ? strokeColor.withOpacity(0.4) : strokeColor
-        ..strokeWidth = stroke.thickness
-        ..style = PaintingStyle.stroke
-        ..strokeCap = stroke.isHighlighter ? StrokeCap.square : StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..blendMode = stroke.isHighlighter ? BlendMode.multiply : BlendMode.srcOver;
 
       canvas.save();
       if (isSelected && selectionDelta != Offset.zero) {
         canvas.translate(selectionDelta.dx, selectionDelta.dy);
       }
 
-      canvas.drawPath(buildPath(stroke.points), paint);
+      final path = stroke.isSmoothed ? buildSmoothPath(stroke.points) : buildPath(stroke.points);
+      _renderArtisticStroke(canvas, path, stroke.brushType, strokeColor, stroke.thickness, stroke.isHighlighter, stroke.points);
+
       canvas.restore();
     }
 
     if (selectionRect != null) {
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
-      canvas.drawRect(
-          selectionRect!,
-          Paint()
-            ..color = const Color(0xFF0F4C5C)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5);
+      canvas.drawRect(selectionRect!, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5);
     }
 
     if (lassoPath != null && lassoPath!.isNotEmpty) {
       final Path path = Path()..moveTo(lassoPath!.first.dx, lassoPath!.first.dy);
-      for (var i = 1; i < lassoPath!.length; i++) {
-        path.lineTo(lassoPath![i].dx, lassoPath![i].dy);
-      }
-      // Não fechar o path se for desenho live, ou fechar? Geralmente se fecha para seleção.
+      for (var i = 1; i < lassoPath!.length; i++) path.lineTo(lassoPath![i].dx, lassoPath![i].dy);
       path.close();
-
       canvas.drawPath(path, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
-      canvas.drawPath(
-          path,
-          Paint()
-            ..color = const Color(0xFF0F4C5C)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5
-            ..strokeCap = StrokeCap.round
-            ..strokeJoin = StrokeJoin.round);
+      canvas.drawPath(path, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
     }
   }
 
@@ -190,7 +179,7 @@ class StrokesPainter extends CustomPainter {
   bool shouldRepaint(StrokesPainter oldDelegate) {
     return oldDelegate.pageVersion != pageVersion ||
         oldDelegate.selectionRect != selectionRect ||
-        oldDelegate.lassoPath != lassoPath || // 🚀
+        oldDelegate.lassoPath != lassoPath ||
         oldDelegate.selectionDelta != selectionDelta ||
         !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) ||
         !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) ||
@@ -203,27 +192,32 @@ class ActiveStrokePainter extends CustomPainter {
   final List<Offset> currentPoints;
   final Color visualColor; 
   final double currentThickness;
-  final bool isHighlighter; // 🚀
+  final bool isHighlighter;
+  final BrushType brushType;
+  final bool isSmoothed;
 
-  ActiveStrokePainter({required this.currentPoints, required this.visualColor, required this.currentThickness, this.isHighlighter = false});
+  ActiveStrokePainter({
+    required this.currentPoints, 
+    required this.visualColor, 
+    required this.currentThickness, 
+    this.isHighlighter = false,
+    this.brushType = BrushType.gel,
+    this.isSmoothed = false,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (currentPoints.isEmpty) return;
-    final paint = Paint()
-      ..color = isHighlighter ? visualColor.withOpacity(0.4) : visualColor
-      ..strokeWidth = currentThickness
-      ..style = PaintingStyle.stroke
-      ..strokeCap = isHighlighter ? StrokeCap.square : StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..blendMode = isHighlighter ? BlendMode.multiply : BlendMode.srcOver;
-    canvas.drawPath(buildPath(currentPoints), paint);
+    final path = isSmoothed ? buildSmoothPath(currentPoints) : buildPath(currentPoints);
+    _renderArtisticStroke(canvas, path, brushType, visualColor, currentThickness, isHighlighter, currentPoints);
   }
 
   @override
   bool shouldRepaint(ActiveStrokePainter oldDelegate) {
     return oldDelegate.visualColor != visualColor ||
            oldDelegate.currentThickness != currentThickness ||
+           oldDelegate.brushType != brushType ||
+           oldDelegate.isSmoothed != isSmoothed ||
            !listEquals(oldDelegate.currentPoints, currentPoints);
   }
 }
@@ -253,27 +247,61 @@ class RemoteLiveStrokesPainter extends CustomPainter {
         strokeColor = userColors[stroke.creatorId]!;
       }
 
-      final paint = Paint()
-        ..color = stroke.isHighlighter ? strokeColor.withOpacity(0.32) : strokeColor.withOpacity(0.8)
-        ..strokeWidth = stroke.thickness
-        ..style = PaintingStyle.stroke
-        ..strokeCap = stroke.isHighlighter ? StrokeCap.square : StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..blendMode = stroke.isHighlighter ? BlendMode.multiply : BlendMode.srcOver;
-
       canvas.save();
-      if (stroke.liveOffset != Offset.zero) {
-        canvas.translate(stroke.liveOffset.dx, stroke.liveOffset.dy);
-      }
-      canvas.drawPath(buildPath(stroke.points), paint);
+      if (stroke.liveOffset != Offset.zero) canvas.translate(stroke.liveOffset.dx, stroke.liveOffset.dy);
+      
+      final path = stroke.isSmoothed ? buildSmoothPath(stroke.points) : buildPath(stroke.points);
+      _renderArtisticStroke(canvas, path, stroke.brushType, strokeColor, stroke.thickness, stroke.isHighlighter, stroke.points);
+      
       canvas.restore();
     }
   }
 
   @override
   bool shouldRepaint(RemoteLiveStrokesPainter oldDelegate) {
-    return oldDelegate.targetPageNumber != targetPageNumber ||
-           !mapEquals(oldDelegate.liveStrokes, liveStrokes);
+    return oldDelegate.targetPageNumber != targetPageNumber || !mapEquals(oldDelegate.liveStrokes, liveStrokes);
+  }
+}
+
+void _renderArtisticStroke(Canvas canvas, Path path, BrushType brushType, Color color, double thickness, bool isHighlighter, List<Offset> points) {
+  if (brushType == BrushType.neon) {
+    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, color, thickness * 2.5, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0));
+    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, color, thickness, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0));
+    canvas.drawPath(path, _getPaintForBrush(BrushType.gel, Colors.white, thickness * 0.4, false));
+  } else if (brushType == BrushType.fountain) {
+    _drawFountainPath(canvas, points, color, thickness);
+  } else {
+    canvas.drawPath(path, _getPaintForBrush(brushType, color, thickness, isHighlighter));
+  }
+}
+
+void _drawFountainPath(Canvas canvas, List<Offset> points, Color color, double baseThickness) {
+  if (points.length < 2) return;
+  for (int i = 0; i < points.length - 1; i++) {
+    final dist = (points[i] - points[i + 1]).distance;
+    final thickness = (baseThickness * (1.5 - (dist / 15).clamp(0.0, 1.2))).clamp(0.5, baseThickness * 2);
+    final paint = Paint()..color = color..strokeWidth = thickness..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
+    canvas.drawLine(points[i], points[i + 1], paint);
+  }
+}
+
+Paint _getPaintForBrush(BrushType type, Color color, double thickness, bool isHighlighter) {
+  final paint = Paint()..color = color..strokeWidth = thickness..style = PaintingStyle.stroke..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
+  if (isHighlighter && type == BrushType.gel) return paint..color = color.withOpacity(0.4)..strokeCap = StrokeCap.square..blendMode = BlendMode.multiply;
+
+  switch (type) {
+    case BrushType.gel: return paint;
+    case BrushType.fountain: return paint;
+    case BrushType.pencil: return paint..color = color.withOpacity(0.95)..strokeCap = StrokeCap.butt..strokeJoin = StrokeJoin.bevel;
+    case BrushType.marker: return paint..strokeCap = StrokeCap.square..strokeJoin = StrokeJoin.miter..color = color.withOpacity(1.0);
+    case BrushType.watercolor: return paint..color = color.withOpacity(0.35)..maskFilter = MaskFilter.blur(BlurStyle.normal, thickness * 0.4)..blendMode = BlendMode.multiply;
+    case BrushType.crayon: return paint..strokeWidth = thickness * 1.5..color = color.withOpacity(0.9)..strokeCap = StrokeCap.square..maskFilter = const MaskFilter.blur(BlurStyle.solid, 1.2);
+    case BrushType.airbrush: return paint..color = color.withOpacity(0.2)..maskFilter = MaskFilter.blur(BlurStyle.normal, thickness * 1.5);
+    case BrushType.neon: return paint..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0)..color = color.withOpacity(1.0);
+    case BrushType.calligraphy: return paint..strokeCap = StrokeCap.butt..strokeWidth = thickness * 2.5;
+    case BrushType.ribbon: return paint..strokeWidth = thickness * 0.75;
+    case BrushType.fineliner: return paint..strokeWidth = thickness * 0.5..strokeCap = StrokeCap.butt..strokeJoin = StrokeJoin.miter;
+    case BrushType.monoline: return paint..strokeWidth = thickness..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
   }
 }
 
@@ -287,83 +315,27 @@ class RemotePointersPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..style = PaintingStyle.fill;
-
     pointers.forEach((uid, data) {
       final int? pageNum = data['page_number'];
       if (pageNum != null && pageNum != targetPageNumber) return;
-
       final Offset pos = data['pos'];
       final user = onlineUsers.firstWhere((u) => u['id'].toString() == uid, orElse: () => <String, dynamic>{});
       if (user.isEmpty) return;
-      
       final Color color = (user['color'] as Color?) ?? Colors.grey;
-
       paint.color = color;
-      final Path path = Path()
-        ..moveTo(pos.dx, pos.dy)
-        ..lineTo(pos.dx + 12, pos.dy + 12)
-        ..lineTo(pos.dx + 5, pos.dy + 12)
-        ..lineTo(pos.dx, pos.dy + 18)
-        ..close();
+      final Path path = Path()..moveTo(pos.dx, pos.dy)..lineTo(pos.dx + 12, pos.dy + 12)..lineTo(pos.dx + 5, pos.dy + 12)..lineTo(pos.dx, pos.dy + 18)..close();
       canvas.drawPath(path, paint);
-
       final String label = user['name'] ?? 'Colega';
-      final String? tool = data['tool'];
-
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-        ),
-        textDirection: TextDirection.ltr,
-      );
+      final textPainter = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)), textDirection: TextDirection.ltr);
       textPainter.layout();
-
-      IconData? toolIcon;
-      if (tool != null) toolIcon = _getToolIcon(tool);
-
-      final iconPainter = toolIcon != null ? TextPainter(
-        text: TextSpan(
-          text: String.fromCharCode(toolIcon.codePoint),
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
-            fontSize: 10,
-            fontFamily: toolIcon.fontFamily,
-            package: toolIcon.fontPackage,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      ) : null;
-      iconPainter?.layout();
-
-      final double iconWidth = iconPainter != null ? iconPainter.width + 4 : 0;
-      final double totalWidth = textPainter.width + iconWidth + 12;
-      final double totalHeight = textPainter.height + 6;
-
-      final rect = Rect.fromLTWH(pos.dx + 14, pos.dy + 14, totalWidth, totalHeight);
+      final rect = Rect.fromLTWH(pos.dx + 14, pos.dy + 14, textPainter.width + 12, textPainter.height + 6);
       canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), paint);
-
-      if (iconPainter != null) iconPainter.paint(canvas, pos + const Offset(18, 16));
-      textPainter.paint(canvas, pos + Offset(18 + iconWidth, 17));
+      textPainter.paint(canvas, pos + const Offset(20, 17));
     });
-  }
-
-  IconData _getToolIcon(String toolName) {
-    switch (toolName) {
-      case 'draw': return Icons.edit_rounded;
-      case 'text': return Icons.text_fields_rounded;
-      case 'eraser': return Icons.auto_fix_normal_rounded;
-      case 'select': return Icons.ads_click_rounded;
-      case 'insertImage':
-      case 'imageEdit': return Icons.image_rounded;
-      default: return Icons.pan_tool_alt_rounded;
-    }
   }
 
   @override
   bool shouldRepaint(RemotePointersPainter oldDelegate) {
-    return oldDelegate.targetPageNumber != targetPageNumber ||
-           !mapEquals(oldDelegate.pointers, pointers) ||
-           !listEquals(oldDelegate.onlineUsers, onlineUsers);
+    return oldDelegate.targetPageNumber != targetPageNumber || !mapEquals(oldDelegate.pointers, pointers) || !listEquals(oldDelegate.onlineUsers, onlineUsers);
   }
 }

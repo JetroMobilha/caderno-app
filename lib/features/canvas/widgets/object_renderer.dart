@@ -1,6 +1,7 @@
+import 'package:flutter/material.dart';
 import 'dart:io' as io;
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
+import '../models/table_cell_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/page_object.dart';
@@ -21,6 +22,9 @@ import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
 
+/// Componente central de renderização de objetos no canvas.
+/// Detecta o tipo de [PageObject] e delega para o builder específico.
+/// Gere também o estado visual de seleção e alças de manipulação.
 class ObjectRenderer extends ConsumerStatefulWidget {
   final PageObject object;
   final bool isReadOnly;
@@ -73,9 +77,8 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
   Widget build(BuildContext context) {
     final toolState = ref.watch(canvasToolProvider);
     
-    // 🚀 v3.5: Ocultar objeto se estiver em edição inline (Ghost Mode Real)
-    final bool isEditingThis = (widget.object is TextBlock && toolState.activeTextBlock?.id == widget.object.id) ||
-                               (widget.object is TableObject && toolState.activeTableId == widget.object.id);
+    // 🚀 v5.0: Tabelas não desaparecem durante a edição (apenas blocos de texto individuais)
+    final bool isEditingThis = (widget.object is TextBlock && toolState.activeTextBlock?.id == widget.object.id);
 
     if (!widget.object.isVisible || isEditingThis) return const SizedBox.shrink();
 
@@ -127,7 +130,7 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
                     right: 4, top: 4,
                     child: Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.8), shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.8), shape: BoxShape.circle),
                       child: const Icon(Icons.lock_rounded, size: 10, color: Colors.white),
                     ),
                   ),
@@ -313,52 +316,321 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
     final toolState = ref.watch(canvasToolProvider);
     final isSelected = toolState.selectedTableIds.contains(table.id);
     
+    // 🚀 v4.1: Cálculo de offsets acumulados para posicionamento
+    List<double> colOffsets = [0];
+    for (double w in table.columnWidths) { colOffsets.add(colOffsets.last + w); }
+    
+    List<double> rowOffsets = [0];
+    for (double h in table.rowHeights) { rowOffsets.add(rowOffsets.last + h); }
+
+    // 🚀 v6.5: Modo de Transformação Deliberado (Bloqueio de alças por padrão)
+    final bool isEditingCell = toolState.activeTableCell != null;
+    final bool isTransformMode = toolState.isTransformMode;
+
+    // Só mostrar alças se a tabela estiver selecionada, NÃO estivermos a editar uma célula e o MODO de TRANSFORMAÇÃO estiver ligado
+    final bool canShowAnyHandle = isSelected && !isEditingCell && isTransformMode;
+    
+    // 🚀 v7.1: As hastes agora aparecem sempre que o Modo de Transformação estiver ativo,
+    // permitindo redimensionar tanto na ferramenta de Seleção quanto no atalho da Tabela/Texto.
+    final bool showResizeHandles = canShowAnyHandle;
+
     return Container(
       width: table.size.width,
       height: table.size.height,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: table.tableBackgroundColorHex != null 
+          ? Color(int.parse(table.tableBackgroundColorHex!.replaceFirst('#', '0xFF')))
+          : Colors.white.withOpacity(0.9),
         border: Border.all(color: Color(int.parse(table.borderColor.replaceFirst('#', '0xFF'))), width: table.borderWidth),
         boxShadow: isSelected ? [BoxShadow(color: Colors.blueAccent.withOpacity(0.2), blurRadius: 10)] : null,
       ),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Table(
-            border: TableBorder.all(color: Color(int.parse(table.borderColor.replaceFirst('#', '0xFF'))), width: table.borderWidth),
-            children: List.generate(table.rows, (r) {
-              return TableRow(
-                children: List.generate(table.cols, (c) {
-                  final text = table.cellData['$r,$c'] ?? '';
-                  return GestureDetector(
-                    onTap: () {
-                      if (!isSelected) {
-                        ref.read(canvasToolProvider.notifier).selectIds(tableIds: {table.id});
-                      }
-                    },
-                    onDoubleTap: () => _editTableCell(table, r, c),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      height: table.size.height / table.rows,
-                      alignment: Alignment.center,
-                      child: Text(text, 
-                        maxLines: 2, 
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: (table.size.height / table.rows) * 0.4)
-                      ),
-                    ),
-                  );
-                }),
-              );
-            }),
-          ),
+          // 🚀 v7.2: Renderizar Células com suporte a Spans e Bordas Inteligentes
+          ..._buildTableGrid(table, colOffsets, rowOffsets, isSelected),
+          
+          // Overlay de Seleção de Intervalo
+          if (isSelected && toolState.selectedTableCells.length > 1 && !isTransformMode)
+             _buildRangeSelectionOverlay(table, colOffsets, rowOffsets, toolState.selectedTableCells),
+
+          // 🚀 v7.1: Hastes de Redimensionamento (EXCLUSIVO MODO SELEÇÃO + TRANSFORMAÇÃO)
+          if (showResizeHandles) ...[
+            for (int i = 0; i < table.columnWidths.length - 1; i++)
+              Positioned(
+                left: colOffsets[i+1] - 10, top: 0, bottom: 0,
+                child: _buildColumnResizeHandle(table, i, colOffsets),
+              ),
+            for (int i = 0; i < table.rowHeights.length - 1; i++)
+              Positioned(
+                top: rowOffsets[i+1] - 10, left: 0, right: 0,
+                child: _buildRowResizeHandle(table, i, rowOffsets),
+              ),
+          ],
         ],
       ),
     );
   }
 
+  Widget _buildRangeSelectionOverlay(TableObject table, List<double> colOffsets, List<double> rowOffsets, Set<String> selection) {
+    int minR = 999, maxR = -1, minC = 999, maxC = -1;
+    
+    // 🚀 v6.9: Filtrar apenas células que pertencem a ESTA tabela
+    final tablePrefix = '${table.id}:';
+    final tableSelection = selection.where((key) => key.startsWith(tablePrefix)).toList();
+    
+    if (tableSelection.isEmpty) return const SizedBox.shrink();
+
+    for (var key in tableSelection) {
+      final coordsPart = key.split(':').last;
+      final parts = coordsPart.split(',');
+      if (parts.length < 2) continue; 
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      
+      if (r != null && c != null) {
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      }
+    }
+
+    if (maxC + 1 >= colOffsets.length || maxR + 1 >= rowOffsets.length || minC < 0 || minR < 0) {
+      return const SizedBox.shrink();
+    }
+
+    final double left = colOffsets[minC];
+    final double top = rowOffsets[minR];
+    final double width = colOffsets[maxC + 1] - left;
+    final double height = rowOffsets[maxR + 1] - top;
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.blueAccent.withOpacity(0.1),
+            border: Border.all(color: Colors.blueAccent, width: 2),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColumnResizeHandle(TableObject table, int index, List<double> offsets) {
+    return GestureDetector(
+      onHorizontalDragUpdate: (details) {
+        setState(() {
+          double delta = details.delta.dx;
+          if (table.columnWidths[index] + delta > 30) {
+            table.columnWidths[index] += delta;
+            ref.read(canvasDocumentProvider.notifier).updateObject(
+              ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.objects.contains(table)), 
+              table
+            );
+          }
+        });
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        child: Container(
+          width: 20,
+          color: Colors.transparent,
+          child: Center(
+            child: Container(width: 2, height: 20, decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.5), borderRadius: BorderRadius.circular(2))),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRowResizeHandle(TableObject table, int index, List<double> offsets) {
+    return GestureDetector(
+      onVerticalDragUpdate: (details) {
+        setState(() {
+          double delta = details.delta.dy;
+          if (table.rowHeights[index] + delta > 20) {
+            table.rowHeights[index] += delta;
+            ref.read(canvasDocumentProvider.notifier).updateObject(
+              ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.objects.contains(table)), 
+              table
+            );
+          }
+        });
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeUpDown,
+        child: Container(
+          height: 20,
+          color: Colors.transparent,
+          child: Center(
+            child: Container(height: 2, width: 20, decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.5), borderRadius: BorderRadius.circular(2))),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniResizeHandle(TableObject table) {
+    return const SizedBox.shrink(); 
+  }
+
+  List<Widget> _buildTableGrid(TableObject table, List<double> colOffsets, List<double> rowOffsets, bool isSelected) {
+    final List<Widget> widgets = [];
+    final Set<String> occupied = {};
+
+    for (int r = 0; r < table.rows; r++) {
+      for (int c = 0; c < table.cols; c++) {
+        final key = '$r,$c';
+        if (occupied.contains(key)) continue;
+
+        int rs = 1, cs = 1;
+        if (table.cellSpans.containsKey(key)) {
+          final span = table.cellSpans[key]!.split(',');
+          rs = int.parse(span[0]);
+          cs = int.parse(span[1]);
+        }
+
+        for (int ir = 0; ir < rs; ir++) {
+          for (int ic = 0; ic < cs; ic++) {
+            occupied.add('${r + ir},${c + ic}');
+          }
+        }
+
+        widgets.add(_buildStackCell(table, r, c, rs, cs, colOffsets, rowOffsets, isSelected));
+      }
+    }
+    return widgets;
+  }
+
+  Widget _buildStackCell(TableObject table, int r, int c, int rs, int cs, List<double> colOffsets, List<double> rowOffsets, bool isTableSelected) {
+    final String cellCoords = '$r,$c';
+    final String selectionKey = '${table.id}:$cellCoords'; 
+    
+    final toolState = ref.watch(canvasToolProvider);
+    final isCellSelected = toolState.selectedTableCells.contains(selectionKey);
+    
+    final cell = table.cells[cellCoords] ?? TableCellModel();
+    final double left = colOffsets[c];
+    final double top = rowOffsets[r];
+    
+    double width = 0;
+    for (int i = 0; i < cs; i++) {
+       if (c + i < table.columnWidths.length) width += table.columnWidths[c + i];
+    }
+    double height = 0;
+    for (int i = 0; i < rs; i++) {
+       if (r + i < table.rowHeights.length) height += table.rowHeights[r + i];
+    }
+
+    final bool isLastRow = (r + rs) >= table.rows;
+    final bool isLastCol = (c + cs) >= table.cols;
+    final Color gridColor = Color(int.parse(table.borderColor.replaceFirst('#', '0xFF'))).withOpacity(0.3);
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: MouseRegion(
+        cursor: toolState.isTransformMode ? SystemMouseCursors.move : SystemMouseCursors.text, 
+        child: GestureDetector(
+          onTap: toolState.isTransformMode ? null : () { 
+            if (!isTableSelected) {
+              ref.read(canvasToolProvider.notifier).selectIds(tableIds: {table.id});
+            }
+            ref.read(canvasToolProvider.notifier).selectIds(tableCells: {selectionKey});
+            
+            if (toolState.tableSelectionStart == null) {
+              _editTableCell(table, r, c);
+            }
+          },
+          onLongPress: toolState.isTransformMode ? null : () { 
+             if (!isTableSelected) {
+              ref.read(canvasToolProvider.notifier).selectIds(tableIds: {table.id});
+            }
+            ref.read(canvasToolProvider.notifier).toggleTableCellSelection(selectionKey);
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: cell.style.backgroundColorHex != null 
+                ? Color(int.parse(cell.style.backgroundColorHex!.replaceFirst('#', '0xFF')))
+                : null,
+              // 🚀 v7.2: Grade desenhada célula a célula. Respeita uniões (spans).
+              border: Border(
+                right: isLastCol ? BorderSide.none : BorderSide(color: gridColor, width: table.borderWidth),
+                bottom: isLastRow ? BorderSide.none : BorderSide(color: gridColor, width: table.borderWidth),
+                // Borda de seleção (azul) aplicada a todo o bloco unido
+                left: isCellSelected ? const BorderSide(color: Colors.blueAccent, width: 2) : BorderSide.none,
+                top: isCellSelected ? const BorderSide(color: Colors.blueAccent, width: 2) : BorderSide.none,
+              ),
+            ),
+            alignment: _getVerticalAlignment(cell.style.verticalAlign),
+            padding: const EdgeInsets.all(4),
+            // Se for selecionada e não for a última, precisamos forçar as bordas direitas/baixas azuis também
+            child: Stack(
+              children: [
+                if (isCellSelected)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blueAccent, width: 2),
+                      ),
+                    ),
+                  ),
+                _buildCellContent(cell, height, table),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Alignment _getVerticalAlignment(int align) {
+    switch (align) {
+      case 0: return Alignment.topCenter;
+      case 2: return Alignment.bottomCenter;
+      default: return Alignment.center;
+    }
+  }
+
+  Widget _buildCellContent(TableCellModel cell, double rowHeight, TableObject table) {
+    if (cell.type == TableCellType.checkbox) {
+      return Center(
+        child: Icon(
+          cell.value == 'true' ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+          size: rowHeight * 0.6,
+          color: const Color(0xFF0F4C5C),
+        ),
+      );
+    }
+    
+    return Text(
+      cell.value, 
+      softWrap: true,
+      textAlign: cell.style.textAlign,
+      style: GoogleFonts.getFont(
+        cell.style.fontFamily ?? 'Inter',
+        fontSize: cell.style.fontSize,
+        fontWeight: cell.style.bold ? FontWeight.bold : FontWeight.normal,
+        fontStyle: cell.style.italic ? FontStyle.italic : FontStyle.normal,
+        decoration: TextDecoration.combine([
+           if (cell.style.underline) TextDecoration.underline,
+           if (cell.style.strikethrough) TextDecoration.lineThrough,
+        ]),
+        color: Color(int.parse(cell.style.textColorHex.replaceFirst('#', '0xFF'))),
+      )
+    );
+  }
+
   void _editTableCell(TableObject table, int row, int col) {
-    ref.read(canvasToolProvider.notifier).setTableCellEditing(table.id, '$row,$col');
+    ref.read(canvasToolProvider.notifier).setTableCellEditing(table, '$row,$col');
   }
 
   Widget _buildLink(LinkObject link) {

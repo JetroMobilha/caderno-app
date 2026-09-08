@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../models/table_model.dart';
 import '../../providers/canvas_tool_provider.dart';
 import '../../providers/canvas_document_provider.dart';
+import '../../providers/canvas_viewport_provider.dart';
 import '../../models/local_page_model.dart';
 import '../../models/stroke_model.dart';
 import '../../models/canvas_enums.dart';
@@ -25,6 +26,9 @@ import '../dialogs/brush_context_popup.dart'; // 🚀 v1.7
 import '../../../../core/network/time_service.dart';
 import '../dialogs/thickness_studio_dialog.dart';
 
+/// Camada de interação principal do canvas.
+/// Captura gestos (tap, pan, long press) e os traduz em ações de ferramenta,
+/// como desenhar, selecionar objetos, apagar ou iniciar edições.
 class InteractionLayer extends ConsumerStatefulWidget {
   final LocalPage page;
   final bool isBlocked;
@@ -116,6 +120,11 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
     if (objIdx == -1) return HandleType.none;
     
     final obj = widget.page.objects[objIdx];
+
+    // 🚀 v6.5: Se for uma tabela ou texto e o MODO de TRANSFORMAÇÃO estiver desligado, ignoramos alças
+    final bool isLayoutObject = obj is TableObject || obj is TextBlock;
+    if (isLayoutObject && !toolState.isTransformMode) return HandleType.none;
+
     final bounds = obj.position & obj.size;
     
     final center = bounds.center;
@@ -256,10 +265,13 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
     final toolState = ref.watch(canvasToolProvider);
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final docNotifier = ref.read(canvasDocumentProvider.notifier);
+    final viewportState = ref.watch(canvasViewportProvider); // 🚀 v7.4
 
     return Positioned.fill(
       child: IgnorePointer(
-        ignoring: toolState.currentTool == ToolMode.pan || toolState.currentTool == ToolMode.imageEdit,
+        ignoring: toolState.currentTool == ToolMode.pan || 
+                  toolState.currentTool == ToolMode.imageEdit ||
+                  viewportState.activePointerCount > 1, // 🚀 v7.4: Prioridade total ao Zoom/Pan
         child: Stack(
           children: [
             GestureDetector(
@@ -269,11 +281,30 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                       final bool wasEditing = toolState.activeInlineTarget != InlineTarget.none || 
                           toolState.activeTableCell != null;
 
-                      // 🚀 v4.4: Limpar edições ativas (Texto ou Tabela) sem interromper o fluxo
-                      if (wasEditing) {
-                        widget.onFinishEditing();
-                      }
+                      // 🚀 v6.6: Bloqueio Total de Encerramento Automático
+                      // A edição (Texto/Tabela) SÓ fecha quando o utilizador clica no botão "Voltar" ou "Check" da toolbar.
+                      // Clicar no fundo da folha ou trocar de ferramenta (via toolbar) não deve encerrar a sessão de escrita.
+                      // if (wasEditing) {
+                      //    widget.onFinishEditing();
+                      // }
                       
+                      // 🚀 v6.6: Bloquear troca de seleção acidental em TransformMode
+                      // Mas permitir trocar o objeto alvo se clicarmos noutro diretamente.
+                      if (toolState.isTransformMode) {
+                        final hit = _findHitObject(details.localPosition, toolNotifier);
+                        if (hit != null) {
+                           final isCurrent = toolState.selectedTableIds.contains(hit.id) || 
+                                           toolState.selectedTextIds.contains(hit.id);
+                           if (!isCurrent) {
+                             toolNotifier.selectAt(details.localPosition, widget.page);
+                           }
+                           return; // Consumir o toque (não deixar ir para criação de blocos ou outros)
+                        } else {
+                           // Se clicou no vazio, não fazemos nada (protege o foco atual)
+                           if (_detectHandleHit(details.localPosition, toolState) == HandleType.none) return;
+                        }
+                      }
+
                       // 🚀 v4.3: Detecção de Toque no Título
                       if (_isTitleHit(details.localPosition)) {
                         widget.onTitleTap();
@@ -314,25 +345,49 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
 
                       // D. Ferramenta de Texto (Editar ou Criar)
                       if (toolState.currentTool == ToolMode.text) {
+                        // 🚀 v6.7: Bloquear se estivermos no Modo de Transformação
+                        if (toolState.isTransformMode) return;
+
+                        // 🚀 v5.4: Se clicar dentro da célula ativa, não faz nada (deixa o TextField lidar)
+                        if (toolState.activeTableCell != null && hitObj is TableObject) {
+                           final cell = _findCellAt(details.localPosition, hitObj);
+                           if ('${hitObj.id}:$cell' == toolState.activeTableCell) return;
+                        }
+
                         if (hitObj is TextBlock) {
                           debugPrint('📝 [TextTool] Editando bloco existente: ${hitObj.id}');
                           toolNotifier.setTextEditing(InlineTarget.block, hitObj);
+                        } else if (hitObj is TableObject) {
+                           // 🚀 v4.9: Se o usuário está no modo Texto e clica numa célula de tabela, ativa a edição de texto dela
+                           final cell = _findCellAt(details.localPosition, hitObj);
+                           if (cell != null) {
+                             toolNotifier.setTableCellEditing(hitObj, cell);
+                           }
                         } else if (!wasEditing) {
                           debugPrint('📝 [TextTool] Criando novo bloco...');
                           widget.onAddTextBlock(details.localPosition);
                         }
                       }
 
-                      // 🚀 v3.3: Inserir Tabela via Toque
+                      // 🚀 v4.7: Inserir Tabela via Toque ou Ativar Tabela Existente
                       if (toolState.currentTool == ToolMode.table) {
-                        final table = TableObject(
-                          id: const Uuid().v4(), 
-                          position: details.localPosition, 
-                          zIndex: widget.page.objects.length
-                        );
-                        docNotifier.addTable(widget.page, table);
-                        // Ativar seleção para mostrar barra de gestão
-                        toolNotifier.selectIds(tableIds: {table.id});
+                        // 🚀 v5.4: Se clicar dentro da célula ativa, não faz nada
+                        if (toolState.activeTableCell != null && hitObj is TableObject) {
+                           final cell = _findCellAt(details.localPosition, hitObj);
+                           if ('${hitObj.id}:$cell' == toolState.activeTableCell) return;
+                        }
+
+                        if (hitObj is TableObject) {
+                          // Se já existe uma tabela, focamos nela e ativamos a edição de texto da célula imediatamente (v4.9)
+                          toolNotifier.selectIds(tableIds: {hitObj.id});
+                          final cell = _findCellAt(details.localPosition, hitObj);
+                          if (cell != null) {
+                            toolNotifier.setTableCellEditing(hitObj, cell);
+                          }
+                        } else if (!wasEditing) {
+                          // Criar apenas se clicou no vazio e manifestou intenção (v4.9 - Desativado para evitar poluição, usar botão +)
+                          // final table = TableObject(...);
+                        }
                       }
                     }
                   : null,
@@ -349,10 +404,24 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                       ref.read(canvasUiProvider.notifier).setHudMode(true);
                       
                       // 1. Prioridade Máxima: Alças de Transformação
-                      // 🚀 v4.4: Desativar alças no modo Organizador
                       final bool isOrganizer = toolState.currentTool == ToolMode.organizer;
                       final hitHandle = isOrganizer ? HandleType.none : _detectHandleHit(d.localPosition, toolState);
                       
+                      // 🚀 v7.1: Se estivermos no Modo de Transformação, qualquer toque num objeto deve permitir movimento imediato
+                      if (toolState.isTransformMode && hitHandle == HandleType.none) {
+                         final hit = _findHitObject(d.localPosition, toolNotifier, includeLocked: true);
+                         if (hit != null) {
+                            // Garantir que o objeto tocado está selecionado para o movimento
+                            final isSelected = toolState.selectedTableIds.contains(hit.id) || 
+                                             toolState.selectedTextIds.contains(hit.id);
+                            if (!isSelected) {
+                              toolNotifier.selectAt(d.localPosition, widget.page, includeLocked: true);
+                            }
+                            toolNotifier.setMovingSelection(true);
+                            return;
+                         }
+                      }
+
                       if (hitHandle != HandleType.none) {
                         final selectedIds = {
                           ...toolState.selectedTextIds, 
@@ -364,14 +433,21 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                           ...toolState.selectedLinkIds,
                           ...toolState.selectedAttachmentIds,
                         };
-                        final obj = widget.page.objects.firstWhere((o) => selectedIds.contains(o.id));
-                        if (obj.isLocked) return; // 🚀 v4.0: Impedir transform se bloqueado
+                        // 🚀 v7.1: Procura robusta para evitar erro de firstWhere
+                        final obj = widget.page.objects.cast<PageObject?>().firstWhere((o) => o != null && selectedIds.contains(o.id), orElse: () => null);
+                        if (obj == null || obj.isLocked) return; 
                         toolNotifier.startHandleTransform(hitHandle, obj.position, obj.size, obj.rotation);
                         return;
                       }
 
                       // 2. Segunda Prioridade: Se clicou dentro de algo JÁ SELECIONADO, apenas move
-                      if (toolNotifier.isPointInSelection(d.localPosition, widget.page)) {
+                      // 🚀 v6.5: No modo de TRANSFORMAÇÃO, permitimos mover qualquer objeto selecionado (Tabela ou Texto)
+                      final bool isSelectedTable = toolState.selectedTableIds.isNotEmpty;
+                      final bool isSelectedText = toolState.selectedTextIds.isNotEmpty;
+                      final bool shouldAllowMove = toolState.isTransformMode || (!isSelectedTable && !isSelectedText);
+
+                      if (shouldAllowMove && toolNotifier.isPointInSelection(d.localPosition, widget.page)) {
+                        // 🚀 v2.0: Se a ferramenta for Borracha e clicou na seleção -> APAGA TUDO
                         // 🚀 v2.0: Se a ferramenta for Borracha e clicou na seleção -> APAGA TUDO
                         if (toolState.currentTool == ToolMode.eraser) {
                           _handleObjectEraser(d.localPosition, toolState, toolNotifier, docNotifier);
@@ -417,6 +493,17 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                         if (hit != null) {
                           toolNotifier.selectAt(d.localPosition, widget.page, includeLocked: true);
                           toolNotifier.setMovingSelection(true);
+                        }
+                      }
+                      // 🚀 v4.7: Iniciar seleção de intervalo no modo Tabela
+                      else if ((toolState.currentTool == ToolMode.table || (toolState.currentTool == ToolMode.select && !toolState.isTransformMode)) && !toolState.isTransformMode) {
+                        // 🚀 v6.9: Bloqueio total se estivermos a redimensionar/mover
+                        final hit = _findHitObject(d.localPosition, toolNotifier);
+                        if (hit is TableObject) {
+                          final cell = _findCellAt(d.localPosition, hit);
+                          if (cell != null) {
+                            toolNotifier.updateTableSelectionRange(cell, hit);
+                          }
                         }
                       }
                     }
@@ -466,6 +553,15 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                           deletedAccumulator: _deletedIdsDuringErase,
                           addedAccumulator: _addedStrokesDuringErase,
                         );
+                      }
+                      // 🚀 v4.7: Atualizar seleção de intervalo no modo Tabela
+                      else if ((toolState.currentTool == ToolMode.table || (toolState.currentTool == ToolMode.select && !toolState.isTransformMode)) && 
+                                toolState.selectedTableIds.isNotEmpty && !toolState.isTransformMode) {
+                        final table = widget.page.objects.whereType<TableObject>().firstWhere((t) => toolState.selectedTableIds.contains(t.id));
+                        final cell = _findCellAt(d.localPosition, table);
+                        if (cell != null) {
+                          toolNotifier.updateTableSelectionRange(cell, table);
+                        }
                       }
                     }
                   : null,
@@ -530,7 +626,9 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                         _liveStrokeId = null;
                         _isShapeDetected = false;
                         _broadcastThrottle?.cancel();
-                      } else if (toolState.currentTool == ToolMode.select || toolState.currentTool == ToolMode.organizer) {
+                      } else if (toolState.currentTool == ToolMode.select || 
+                                 toolState.currentTool == ToolMode.organizer ||
+                                 toolState.isTransformMode) { // 🚀 v7.1: Salvar se estiver em modo de transformação
                         if (toolState.totalSelectionDelta != Offset.zero) {
                           docNotifier.moveSelection(
                             widget.page,
@@ -646,7 +744,58 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
     for (var obj in objects) {
       if (!includeLocked && obj.isLocked) continue;
       if (!obj.isVisible) continue;
-      if (toolNotifier.checkHit(localPos, obj)) return obj;
+      
+      // 🚀 v4.5: Aumentar área de hit para blocos de texto (melhor ergonomia)
+      bool hit = toolNotifier.checkHit(localPos, obj);
+      if (!hit && obj is TextBlock) {
+         final bounds = obj.position & obj.size;
+         final hitBounds = Rect.fromCenter(center: bounds.center, width: bounds.width + 20, height: bounds.height + 20);
+         hit = hitBounds.contains(localPos);
+      }
+
+      if (hit) return obj;
+    }
+    return null;
+  }
+
+  // 🚀 v4.7: Encontrar célula em uma posição local
+  String? _findCellAt(Offset localPos, TableObject table) {
+    final center = (table.position & table.size).center;
+    final rotatedPos = _rotatePoint(localPos, center, -table.rotation);
+    
+    final relPos = rotatedPos - table.position;
+    
+    // 🚀 v5.9: Tolerância para toque Mobile (Aumentada para 25px para máxima sensibilidade)
+    const double tol = 25.0;
+    if (relPos.dx < -tol || relPos.dx > table.size.width + tol || 
+        relPos.dy < -tol || relPos.dy > table.size.height + tol) return null;
+
+    final double clampedX = relPos.dx.clamp(0.0, table.size.width - 0.1);
+    final double clampedY = relPos.dy.clamp(0.0, table.size.height - 0.1);
+
+    double currentW = 0;
+    int col = -1;
+    for (int i = 0; i < table.columnWidths.length; i++) {
+      currentW += table.columnWidths[i];
+      if (clampedX <= currentW) {
+        col = i;
+        break;
+      }
+    }
+
+    double currentH = 0;
+    int row = -1;
+    for (int i = 0; i < table.rowHeights.length; i++) {
+      currentH += table.rowHeights[i];
+      if (clampedY <= currentH) {
+        row = i;
+        break;
+      }
+    }
+
+    if (row != -1 && col != -1) {
+      // 🚀 v7.2: Resolver a célula mestre caso esteja em um Span (União)
+      return table.resolveMasterCell(row, col);
     }
     return null;
   }

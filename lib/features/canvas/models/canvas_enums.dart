@@ -18,3 +18,5 @@ enum BrushType {
 enum ListType { none, bullet, numbered, checklist } // 🚀 v3.4
 
 enum InlineTarget { none, block, title, footer }
+
+enum TableCellType { text, number, date, time, checkbox, link, image }

@@ -32,6 +32,8 @@ import '../../../core/network/time_service.dart';
 import '../services/audio_session_service.dart';
 import '../services/collaboration_room_service.dart';
 import '../../../core/network/sync_provider.dart';
+import 'canvas_tool_provider.dart';
+import 'canvas_ui_provider.dart';
 import 'canvas_viewport_provider.dart';
 
 class CanvasDocumentState {
@@ -94,6 +96,9 @@ class CanvasDocumentState {
   }
 }
 
+/// Notifier central para a gestão de documentos e persistência no canvas.
+/// Gere as páginas do caderno, a adição/remoção de objetos, sincronização
+/// em tempo real, colaboração e pilhas de Desfazer/Refazer (Undo/Redo).
 class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   late CanvasRepository _repository;
   late RealtimeService _realtimeService;
@@ -118,6 +123,12 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   }
 
   Future<void> initNotebook(int notebookId, int? notebookSid, String role, String? userId, {String? templateType}) async {
+    // 🚀 v5.6: Invalidação Total de Estado ao trocar de caderno
+    // Garante que ferramentas, zoom e UI contextuais sejam limpos.
+    ref.invalidate(canvasToolProvider);
+    ref.invalidate(canvasViewportProvider);
+    ref.invalidate(canvasUiProvider);
+
     state = state.copyWith(
       isLoading: false,
       currentNotebookId: notebookId,
@@ -364,7 +375,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
 
   // 🚀 v4.2: Limpar bloco de texto se estiver vazio
   Future<void> cleanupIfEmpty(LocalPage page, String? blockId) async {
-    if (blockId == null) return;
+    if (blockId == null || blockId.startsWith('proxy_')) return; // 🚀 v5.5: Ignorar proxies de tabela
     final block = page.objects.cast<PageObject?>().firstWhere((o) => o?.id == blockId, orElse: () => null);
     if (block is TextBlock && block.text.trim().isEmpty) {
       await deleteObjects(page, [blockId]);
@@ -652,6 +663,22 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     } else if (action is AddAttachmentAction) { 
       _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
         'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'attachments': [action.attach.toJson()]
+      });
+    } else if (action is MoveAction) {
+      // 🚀 v4.5: Sincronizar movimentos em tempo real
+      _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {
+        'page_client_id': action.pageClientId, 
+        'page_number': action.pageNumber, 
+        'is_move': true,
+        'strokes': action.objectIds.map((id) {
+          final obj = state.pages.firstWhere((p) => p.clientId == action.pageClientId).objects.firstWhere((o) => o.id == id);
+          return {
+            'id': id,
+            'type': obj.type,
+            'offset': {'x': obj.position.dx, 'y': obj.position.dy},
+            'updated_at': obj.updatedAt,
+          };
+        }).toList()
       });
     }
   }

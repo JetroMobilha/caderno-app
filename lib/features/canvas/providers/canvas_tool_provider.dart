@@ -1,18 +1,19 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/animation_object_model.dart';
-import '../models/audio_block_model.dart';
-import '../models/canvas_enums.dart';
-import '../models/image_block_model.dart';
-import '../models/shape_model.dart';
-import '../models/stroke_model.dart';
-import '../models/text_block_model.dart';
-import '../models/local_page_model.dart';
-import '../models/table_model.dart';
-import '../models/link_model.dart';
-import '../models/attachment_model.dart';
-import '../models/page_object.dart';
+import 'package:caderno_digital_app/features/canvas/models/animation_object_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/audio_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/canvas_enums.dart';
+import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/shape_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/table_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/link_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/attachment_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/table_cell_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/page_object.dart';
 
 enum HandleType { none, topLeft, topCenter, topRight, middleRight, bottomRight, bottomCenter, bottomLeft, middleLeft, rotate }
 
@@ -24,6 +25,8 @@ class CanvasToolState {
   final TextBlock? activeTextBlock;
   final String? activeTableId; // 🚀 v3.2
   final String? activeTableCell; // 🚀 v3.2 (format: "row,col")
+  final String? tableSelectionStart; // 🚀 v4.7
+  final String? tableSelectionEnd;   // 🚀 v4.7
   final Set<String> selectedStrokeIds;
   final Set<String> selectedTextIds;
   final Set<String> selectedImageIds;
@@ -31,6 +34,7 @@ class CanvasToolState {
   final Set<String> selectedAudioIds; 
   final Set<String> selectedAnimationIds; 
   final Set<String> selectedTableIds; 
+  final Set<String> selectedTableCells; // 🚀 v4.2 (format: "row,col")
   final Set<String> selectedLinkIds; 
   final Set<String> selectedAttachmentIds; 
   final Offset? selectionRectStart;
@@ -58,6 +62,8 @@ class CanvasToolState {
     this.activeTextBlock,
     this.activeTableId,
     this.activeTableCell,
+    this.tableSelectionStart,
+    this.tableSelectionEnd,
     this.selectedStrokeIds = const {},
     this.selectedTextIds = const {},
     this.selectedImageIds = const {},
@@ -65,6 +71,7 @@ class CanvasToolState {
     this.selectedAudioIds = const {},
     this.selectedAnimationIds = const {},
     this.selectedTableIds = const {},
+    this.selectedTableCells = const {},
     this.selectedLinkIds = const {},
     this.selectedAttachmentIds = const {},
     this.selectionRectStart,
@@ -90,21 +97,24 @@ class CanvasToolState {
     String? selectedColorHex,
     double? selectedThickness,
     InlineTarget? activeInlineTarget,
-    TextBlock? activeTextBlock,
-    String? activeTableId,
-    String? activeTableCell,
+    TextBlock? Function()? activeTextBlock, // 🚀 v5.7: Permite definir como null
+    String? Function()? activeTableId,      // 🚀 v5.7
+    String? Function()? activeTableCell,   // 🚀 v5.7
+    String? Function()? tableSelectionStart,
+    String? Function()? tableSelectionEnd,
     Set<String>? selectedStrokeIds,
     Set<String>? selectedTextIds,
     Set<String>? selectedImageIds,
-    Set<String>? selectedShapeIds,
-    Set<String>? selectedAudioIds,
-    Set<String>? selectedAnimationIds,
-    Set<String>? selectedTableIds,
-    Set<String>? selectedLinkIds,
-    Set<String>? selectedAttachmentIds,
-    Offset? selectionRectStart,
-    Offset? selectionRectEnd,
-    List<Offset>? lassoPath, 
+    Set<String>? selectedShapeIds, 
+    Set<String>? selectedAudioIds, 
+    Set<String>? selectedAnimationIds, 
+    Set<String>? selectedTableIds, 
+    Set<String>? selectedTableCells, 
+    Set<String>? selectedLinkIds, 
+    Set<String>? selectedAttachmentIds, 
+    Offset? Function()? selectionRectStart,
+    Offset? Function()? selectionRectEnd,
+    List<Offset>? Function()? lassoPath, 
     bool? isTransformMode,
     bool? isHighlighter,
     BrushType? selectedBrushType,
@@ -124,9 +134,11 @@ class CanvasToolState {
       selectedColorHex: selectedColorHex ?? this.selectedColorHex,
       selectedThickness: selectedThickness ?? this.selectedThickness,
       activeInlineTarget: activeInlineTarget ?? this.activeInlineTarget,
-      activeTextBlock: activeTextBlock ?? this.activeTextBlock,
-      activeTableId: activeTableId ?? this.activeTableId,
-      activeTableCell: activeTableCell ?? this.activeTableCell,
+      activeTextBlock: activeTextBlock != null ? activeTextBlock() : this.activeTextBlock,
+      activeTableId: activeTableId != null ? activeTableId() : this.activeTableId,
+      activeTableCell: activeTableCell != null ? activeTableCell() : this.activeTableCell,
+      tableSelectionStart: tableSelectionStart != null ? tableSelectionStart() : this.tableSelectionStart,
+      tableSelectionEnd: tableSelectionEnd != null ? tableSelectionEnd() : this.tableSelectionEnd,
       selectedStrokeIds: selectedStrokeIds ?? this.selectedStrokeIds,
       selectedTextIds: selectedTextIds ?? this.selectedTextIds,
       selectedImageIds: selectedImageIds ?? this.selectedImageIds,
@@ -134,11 +146,12 @@ class CanvasToolState {
       selectedAudioIds: selectedAudioIds ?? this.selectedAudioIds,
       selectedAnimationIds: selectedAnimationIds ?? this.selectedAnimationIds,
       selectedTableIds: selectedTableIds ?? this.selectedTableIds,
+      selectedTableCells: selectedTableCells ?? this.selectedTableCells,
       selectedLinkIds: selectedLinkIds ?? this.selectedLinkIds,
       selectedAttachmentIds: selectedAttachmentIds ?? this.selectedAttachmentIds,
-      selectionRectStart: selectionRectStart ?? this.selectionRectStart,
-      selectionRectEnd: selectionRectEnd ?? this.selectionRectEnd,
-      lassoPath: lassoPath ?? this.lassoPath, 
+      selectionRectStart: selectionRectStart != null ? selectionRectStart() : this.selectionRectStart,
+      selectionRectEnd: selectionRectEnd != null ? selectionRectEnd() : this.selectionRectEnd,
+      lassoPath: lassoPath != null ? lassoPath() : this.lassoPath, 
       isTransformMode: isTransformMode ?? this.isTransformMode,
       isHighlighter: isHighlighter ?? this.isHighlighter,
       selectedBrushType: selectedBrushType ?? this.selectedBrushType,
@@ -156,90 +169,293 @@ class CanvasToolState {
   }
 }
 
-class CanvasToolNotifier extends Notifier<CanvasToolState> {
+/// Notifier responsável pela gestão do estado das ferramentas do canvas.
+/// Controla qual a ferramenta ativa, as seleções atuais, e o estado de edição inline (texto/tabelas).
+/// 🚀 v5.6: Utiliza AutoDispose para garantir que o estado seja limpo ao fechar o caderno.
+class CanvasToolNotifier extends AutoDisposeNotifier<CanvasToolState> {
   @override
   CanvasToolState build() => CanvasToolState();
 
+  /// Altera a ferramenta atual e limpa estados temporários de seleção/edição.
   void switchTool(ToolMode mode) {
+    // 🚀 v6.6: Se for a mesma ferramenta e houver edição ativa, NÃO fechar.
+    // Isso evita que cliques acidentais nos ícones da toolbar fechem o editor.
+    if (state.currentTool == mode && (state.activeTextBlock != null || state.activeTableCell != null)) {
+      return;
+    }
+
+    // 🚀 v5.6: Se houver edição ativa e estivermos REALMENTE trocando de ferramenta, fechamos.
+    if (state.activeTextBlock != null || state.activeTableCell != null) {
+      debugPrint('📝 [CanvasTool] Finalizando edição ativa para trocar ferramenta...');
+      exitWritingMode();
+    }
+
+    // 🚀 v7.0: Decidir se mantemos o modo de transformação baseado na compatibilidade da ferramenta
+    final bool canKeepTransform = mode == ToolMode.text || 
+                                  mode == ToolMode.table || 
+                                  mode == ToolMode.select || 
+                                  mode == ToolMode.lasso ||
+                                  mode == ToolMode.organizer;
+
     state = state.copyWith(
       currentTool: mode,
-      isTransformMode: false,
-      selectionRectStart: null,
-      selectionRectEnd: null,
-      lassoPath: null,
-      // 🚀 v3.6: Limpar edições ativas ao trocar de ferramenta manualmente
+      isTransformMode: canKeepTransform ? state.isTransformMode : false,
+      selectionRectStart: () => null,
+      selectionRectEnd: () => null,
+      lassoPath: () => null,
       activeInlineTarget: InlineTarget.none,
-      activeTextBlock: null,
-      activeTableId: null,
-      activeTableCell: null,
+      activeTextBlock: () => null,
+      activeTableId: () => null,
+      activeTableCell: () => null,
+      selectedTableCells: {},
     );
   }
 
+  /// Define a cor selecionada para ferramentas de desenho e texto.
   void setColor(String hex) {
     state = state.copyWith(selectedColorHex: hex);
   }
 
+  /// Define a espessura da linha para canetas e formas.
   void setThickness(double thickness) {
     state = state.copyWith(selectedThickness: thickness);
   }
 
+  /// Ativa/Desativa o modo marca-texto (transparência).
   void toggleHighlighterMode(bool value) {
     state = state.copyWith(isHighlighter: value);
   }
 
+  /// Altera o tipo de pincel (gel, caneta, marcador, etc).
   void setBrushType(BrushType type) {
     state = state.copyWith(selectedBrushType: type);
   }
 
+  /// Ativa/Desativa a suavização de traço (Bezier).
   void setSmoothing(bool value) {
     state = state.copyWith(isSmoothingEnabled: value);
   }
 
+  /// Inicia a edição inline de um bloco de texto.
+  /// Limpa seleções de outros objetos para focar na escrita.
   void setTextEditing(InlineTarget target, [TextBlock? block]) {
+    final bool isProxy = block?.id.startsWith('proxy_') ?? false;
+
     state = state.copyWith(
       activeInlineTarget: target,
-      activeTextBlock: block,
+      activeTextBlock: () => block,
+      selectedStrokeIds: {},
+      selectedTextIds: {},
+      selectedImageIds: {},
+      selectedShapeIds: {},
+      selectedAudioIds: {},
+      selectedAnimationIds: {},
+      selectedTableIds: isProxy ? state.selectedTableIds : {},
+      selectedLinkIds: {},
+      selectedAttachmentIds: {},
+      // 🚀 v5.5: Preservar contexto de tabela se for um proxy
+      activeTableId: () => isProxy ? state.activeTableId : null,
+      activeTableCell: () => isProxy ? state.activeTableCell : null,
     );
   }
 
-  void setTableCellEditing(String tableId, String cell) {
+  /// Ativa a edição de uma célula específica de uma tabela.
+  /// Implementa um mecanismo de 'Proxy' para reutilizar a barra de texto original.
+  void setTableCellEditing(TableObject table, String cellCoords) {
+    // 🚀 v5.4: Evitar re-ativação se já estivermos na mesma célula (Preserva cursor)
+    final newCellKey = '${table.id}:$cellCoords';
+    if (state.activeTableCell == newCellKey) return;
+
+    final cell = table.cells[cellCoords] ?? TableCellModel();
+    
+    // 🚀 v7.3: Cálculo de Posição com Suporte a Rotação (Alignment.center)
+    final parts = cellCoords.split(',');
+    final r = int.parse(parts[0]);
+    final c = int.parse(parts[1]);
+    
+    double localLeft = 0;
+    for (int i = 0; i < c; i++) localLeft += table.columnWidths[i];
+    double localTop = 0;
+    for (int i = 0; i < r; i++) localTop += table.rowHeights[i];
+
+    // Calcular dimensões considerando spans
+    double cellW = table.columnWidths[c];
+    double cellH = table.rowHeights[r];
+    if (table.cellSpans.containsKey(cellCoords)) {
+      final spanParts = table.cellSpans[cellCoords]!.split(',');
+      int rs = int.parse(spanParts[0]);
+      int cs = int.parse(spanParts[1]);
+      cellW = 0;
+      for (int i = 0; i < cs; i++) cellW += table.columnWidths[c + i];
+      cellH = 0;
+      for (int i = 0; i < rs; i++) cellH += table.rowHeights[r + i];
+    }
+
+    // 1. Centro da Tabela (Ponto de rotação no ObjectRenderer)
+    final tableCenter = (table.position & table.size).center;
+
+    // 2. Centro da Célula (Não rotacionado)
+    final cellUnrotatedTopLeft = table.position + Offset(localLeft, localTop);
+    final cellUnrotatedCenter = cellUnrotatedTopLeft + Offset(cellW / 2, cellH / 2);
+
+    // 3. Centro da Célula (Rotacionado)
+    final rotatedCellCenter = _rotatePoint(cellUnrotatedCenter, tableCenter, table.rotation);
+
+    // 4. Posição Final do Proxy (Para que o seu centro bata com o centro rotacionado da célula)
+    final proxyPos = rotatedCellCenter - Offset(cellW / 2, cellH / 2);
+
+    final proxy = TextBlock(
+      id: 'proxy_${table.id}_$cellCoords',
+      text: cell.value,
+      position: proxyPos,
+      fontSize: cell.style.fontSize,
+      isBold: cell.style.bold,
+      isItalic: cell.style.italic,
+      isUnderline: cell.style.underline,
+      isStrikethrough: cell.style.strikethrough,
+      textAlign: cell.style.textAlign,
+      fontFamily: cell.style.fontFamily,
+      textColorHex: cell.style.textColorHex,
+      backgroundColorHex: cell.style.backgroundColorHex,
+      rotation: table.rotation,
+    );
+
+    state = state.copyWith(
+      activeInlineTarget: InlineTarget.block, 
+      activeTextBlock: () => proxy,
+      activeTableId: () => table.id,
+      activeTableCell: () => newCellKey, // Formato id:r,c
+      selectedTableCells: {newCellKey},
+      tableSelectionStart: () => null,
+      tableSelectionEnd: () => null,
+      // 🚀 v5.5: Limpar outras seleções para evitar conflitos visuais
+      selectedStrokeIds: {},
+      selectedTextIds: {},
+      selectedImageIds: {},
+      selectedShapeIds: {},
+      selectedAudioIds: {},
+      selectedAnimationIds: {},
+      selectedTableIds: {table.id},
+    );
+  }
+
+  /// Alterna a seleção de uma célula individual (usado em multi-seleção/Shift).
+  void toggleTableCellSelection(String cell) {
+    final newSelection = Set<String>.from(state.selectedTableCells);
+    if (newSelection.contains(cell)) {
+      newSelection.remove(cell);
+    } else {
+      newSelection.add(cell);
+    }
+    state = state.copyWith(selectedTableCells: newSelection);
+  }
+
+  /// Limpa todas as seleções de células de tabela.
+  void clearTableCellSelection() {
+    state = state.copyWith(
+      selectedTableCells: {},
+      tableSelectionStart: () => null,
+      tableSelectionEnd: () => null,
+    );
+  }
+
+  /// Atualiza o intervalo de seleção de células (arraste no modo Tabela).
+  void updateTableSelectionRange(String cellCoords, TableObject table) {
+    final cellKey = '${table.id}:$cellCoords';
+    String start = state.tableSelectionStart ?? cellKey;
+    state = state.copyWith(
+      tableSelectionStart: () => start,
+      tableSelectionEnd: () => cellKey,
+      selectedTableCells: table.getKeysInRange(start, cellKey),
+    );
+  }
+
+  /// Limpa apenas o cursor/bloco ativo, mas mantém a ferramenta de texto/tabela ativa.
+  /// 🚀 v5.8: Essencial para preenchimento contínuo.
+  void stopEditing() {
+    debugPrint('📝 [CanvasTool] Parando edição (Mantendo ferramenta)...');
     state = state.copyWith(
       activeInlineTarget: InlineTarget.none,
-      activeTextBlock: null,
-      activeTableId: tableId,
-      activeTableCell: cell,
+      activeTextBlock: () => null,
+      activeTableCell: () => null,
+      tableSelectionStart: () => null,
+      tableSelectionEnd: () => null,
+      selectedTableCells: {},
     );
   }
 
-  // 🚀 v3.11: RESET TOTAL E SEGURO (Evita erro de null no copyWith)
+  /// Finaliza qualquer modo de escrita ativo e retorna ao estado neutro.
   void exitWritingMode() {
-    debugPrint('🛡️ [CanvasTool] Reset Atómico do Modo de Escrita...');
+    debugPrint('🛡️ [CanvasTool] Finalizando modo de escrita...');
     
-    // Criamos um estado novo preservando apenas as configurações de desenho
-    state = CanvasToolState(
+    // 🚀 v5.9: Se estávamos editando uma tabela, voltamos para o modo Tabela
+    final bool wasInTable = state.activeTableId != null || state.currentTool == ToolMode.table;
+
+    state = state.copyWith(
+      currentTool: wasInTable ? ToolMode.table : ToolMode.draw,
+      activeInlineTarget: InlineTarget.none,
+      activeTextBlock: () => null,
+      activeTableCell: () => null,
+      activeTableId: () => wasInTable ? state.activeTableId : null, 
+      tableSelectionStart: () => null,
+      tableSelectionEnd: () => null,
+      selectedTableCells: {},
+      selectedTableIds: wasInTable ? state.selectedTableIds : {}, 
+      isTransformMode: false,
+    );
+  }
+
+  /// Encerra forçadamente o modo de design de tabela.
+  void forceExitTableMode() {
+     debugPrint('🛑 [CanvasTool] Saindo explicitamente do Modo de Tabela.');
+     state = CanvasToolState(
       currentTool: ToolMode.draw,
       selectedColorHex: state.selectedColorHex,
       selectedThickness: state.selectedThickness,
       isHighlighter: state.isHighlighter,
       selectedBrushType: state.selectedBrushType,
       isSmoothingEnabled: state.isSmoothingEnabled,
-      // Os campos de edição (activeTextBlock, activeTableId, etc.) voltam ao default (null)
     );
   }
 
+  /// Atalho para limpar edição de texto.
   void clearTextEditing() {
     exitWritingMode();
   }
 
+  /// Ativa/Desativa o modo de transformação (redimensionamento/rotação).
+  /// 🚀 v6.8: Agora limpa edições ativas para focar no layout.
   void toggleTransformMode() {
-    state = state.copyWith(isTransformMode: !state.isTransformMode);
+    final bool turningOn = !state.isTransformMode;
+    
+    if (turningOn) {
+      debugPrint('📐 [CanvasTool] Ativando modo de transformação. Limpando editores...');
+      
+      // Se houver um bloco de texto sendo editado que não seja proxy, garantimos que ele está selecionado
+      final activeBlock = state.activeTextBlock;
+      final Set<String> newTextIds = Set.from(state.selectedTextIds);
+      if (activeBlock != null && !activeBlock.id.startsWith('proxy_')) {
+        newTextIds.add(activeBlock.id);
+      }
+
+      // Parar edições de texto/células e limpar seleções internas
+      stopEditing();
+
+      state = state.copyWith(
+        isTransformMode: true,
+        selectedTextIds: newTextIds,
+        selectedTableCells: {}, // 🚀 v6.9: Limpar seleção interna ao entrar em modo layout
+      );
+    } else {
+      state = state.copyWith(isTransformMode: false);
+    }
   }
 
   void setSelectionRect(Offset? start, Offset? end, [LocalPage? page]) {
     state = state.copyWith(
-      selectionRectStart: start,
-      selectionRectEnd: end,
-      lassoPath: null,
+      selectionRectStart: () => start,
+      selectionRectEnd: () => end,
+      lassoPath: () => null,
     );
 
     if (start != null && end != null && page != null) {
@@ -296,9 +512,9 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
 
   void setLassoPath(List<Offset>? path, [LocalPage? page]) {
     state = state.copyWith(
-      lassoPath: path,
-      selectionRectStart: null,
-      selectionRectEnd: null,
+      lassoPath: () => path,
+      selectionRectStart: () => null,
+      selectionRectEnd: () => null,
     );
 
     if (path != null && path.length > 3 && page != null) {
@@ -381,10 +597,10 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       selectedTableIds: {}, 
       selectedLinkIds: {}, 
       selectedAttachmentIds: {}, 
-      selectionRectStart: null,
-      selectionRectEnd: null,
-      lassoPath: null, 
-      isTransformMode: false,
+      selectionRectStart: () => null,
+      selectionRectEnd: () => null,
+      lassoPath: () => null, 
+      isTransformMode: state.isTransformMode, // 🚀 v7.0: Não resetar automaticamente
       isMovingSelection: false, 
       totalSelectionDelta: Offset.zero,
       liveScale: const Size(1, 1), 
@@ -408,6 +624,7 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
     Set<String>? audioIds,
     Set<String>? animationIds,
     Set<String>? tableIds,
+    Set<String>? tableCells,
     Set<String>? linkIds,
     Set<String>? attachmentIds,
   }) {
@@ -419,6 +636,7 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       selectedAudioIds: audioIds ?? state.selectedAudioIds,
       selectedAnimationIds: animationIds ?? state.selectedAnimationIds,
       selectedTableIds: tableIds ?? state.selectedTableIds,
+      selectedTableCells: tableCells ?? state.selectedTableCells,
       selectedLinkIds: linkIds ?? state.selectedLinkIds,
       selectedAttachmentIds: attachmentIds ?? state.selectedAttachmentIds,
     );
@@ -531,8 +749,13 @@ class CanvasToolNotifier extends Notifier<CanvasToolState> {
       liveRotation: 0,
     );
   }
+
+  /// Reinicia completamente o estado das ferramentas para o padrão.
+  void reset() {
+    state = CanvasToolState();
+  }
 }
 
-final canvasToolProvider = NotifierProvider<CanvasToolNotifier, CanvasToolState>(() {
+final canvasToolProvider = NotifierProvider.autoDispose<CanvasToolNotifier, CanvasToolState>(() {
   return CanvasToolNotifier();
 });

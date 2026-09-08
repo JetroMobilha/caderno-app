@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'page_object.dart';
+import 'table_cell_model.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 
+/// Representação de uma tabela no canvas.
+/// Utiliza um sistema baseado em [Stack] e [Positioned] para permitir
+/// flexibilidade total em larguras de coluna e alturas de linha, além de spans.
 class TableObject implements PageObject {
   @override
   final String id;
@@ -11,16 +15,43 @@ class TableObject implements PageObject {
   int rows;
   int cols;
   
-  // Chave: "row,col", Valor: conteúdo de texto
-  Map<String, String> cellData;
+  // Chave: "row,col", Valor: TableCellModel
+  Map<String, TableCellModel> _cells;
+  Map<String, TableCellModel> get cells => _cells;
+  set cells(Map<String, TableCellModel> value) => _cells = value;
   
+  // 🚀 v4.0: Dimensões individuais por linha/coluna
+  List<double> rowHeights;
+  List<double> columnWidths;
+
   // 🚀 v3.1: Suporte a mesclagem (Key: "row,col", Value: "rowSpan,colSpan")
   Map<String, String> cellSpans;
 
   @override
   Offset position;
+  
   @override
-  Size size;
+  Size get size {
+    double h = rowHeights.fold(0, (sum, item) => sum + item);
+    double w = columnWidths.fold(0, (sum, item) => sum + item);
+    return Size(w, h);
+  }
+  
+  @override
+  set size(Size value) {
+    // Quando redimensionamos a tabela inteira (alça global), 
+    // distribuímos proporcionalmente o novo tamanho.
+    double scaleX = value.width / size.width;
+    double scaleY = value.height / size.height;
+    
+    for (int i = 0; i < columnWidths.length; i++) {
+      columnWidths[i] *= scaleX;
+    }
+    for (int i = 0; i < rowHeights.length; i++) {
+      rowHeights[i] *= scaleY;
+    }
+  }
+
   @override
   double rotation;
   @override
@@ -46,19 +77,20 @@ class TableObject implements PageObject {
   @override
   String? layerId;
 
-  // Estilo
+  // Estilo Global
   String borderColor;
   double borderWidth;
   bool showHeader;
+  String? tableBackgroundColorHex;
 
   TableObject({
     required this.id,
     this.rows = 3,
     this.cols = 3,
-    Map<String, String>? cellData,
+    List<double>? rowHeights,
+    List<double>? columnWidths,
     Map<String, String>? cellSpans,
     required this.position,
-    this.size = const Size(300, 150),
     this.rotation = 0.0,
     this.zIndex = 0,
     this.isLocked = false,
@@ -74,84 +106,238 @@ class TableObject implements PageObject {
     this.borderColor = '#0F4C5C',
     this.borderWidth = 1.0,
     this.showHeader = true,
-  }) : cellData = cellData ?? {},
+    this.tableBackgroundColorHex,
+    Map<String, TableCellModel>? cells,
+  }) : _cells = cells ?? {},
+       rowHeights = rowHeights ?? List.filled(rows, 40.0),
+       columnWidths = columnWidths ?? List.filled(cols, 100.0),
        cellSpans = cellSpans ?? {},
        updatedAt = updatedAt ?? TimeService().nowMs();
 
   // 🚀 v3.1: LÓGICA DE GESTÃO DE ESTRUTURA
   
   void insertRow(int index) {
-    final Map<String, String> newData = {};
-    for (var entry in cellData.entries) {
+    final Map<String, TableCellModel> newCells = {};
+    for (var entry in cells.entries) {
       final parts = entry.key.split(',');
-      int r = int.parse(parts[0]);
-      int c = int.parse(parts[1]);
+      if (parts.length < 2) continue; // 🚀 v6.3: Segurança contra chaves malformatadas
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
       if (r >= index) {
-        newData['${r + 1},$c'] = entry.value;
+        newCells['${r + 1},$c'] = entry.value;
       } else {
-        newData['$r,$c'] = entry.value;
+        newCells['$r,$c'] = entry.value;
       }
     }
-    cellData = newData;
+    _cells = newCells;
+
+    // 🚀 v4.6: Shift Spans
+    final Map<String, String> newSpans = {};
+    for (var entry in cellSpans.entries) {
+      final parts = entry.key.split(',');
+      if (parts.length < 2) continue;
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
+      if (r >= index) {
+        newSpans['${r + 1},$c'] = entry.value;
+      } else {
+        newSpans['$r,$c'] = entry.value;
+      }
+    }
+    cellSpans = newSpans;
+
     rows++;
-    size = Size(size.width, size.height + (size.height / (rows - 1)));
+    rowHeights.insert(index, 40.0);
     updatedAt = TimeService().nowMs();
   }
 
   void deleteRow(int index) {
     if (rows <= 1) return;
-    final Map<String, String> newData = {};
-    for (var entry in cellData.entries) {
+    final Map<String, TableCellModel> newCells = {};
+    for (var entry in cells.entries) {
       final parts = entry.key.split(',');
-      int r = int.parse(parts[0]);
-      int c = int.parse(parts[1]);
+      if (parts.length < 2) continue;
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
       if (r < index) {
-        newData['$r,$c'] = entry.value;
+        newCells['$r,$c'] = entry.value;
       } else if (r > index) {
-        newData['${r - 1},$c'] = entry.value;
+        newCells['${r - 1},$c'] = entry.value;
       }
     }
-    cellData = newData;
+    _cells = newCells;
+
+    // Shift Spans
+    final Map<String, String> newSpans = {};
+    for (var entry in cellSpans.entries) {
+      final parts = entry.key.split(',');
+      if (parts.length < 2) continue;
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
+      if (r < index) {
+        newSpans['$r,$c'] = entry.value;
+      } else if (r > index) {
+        newSpans['${r - 1},$c'] = entry.value;
+      }
+    }
+    cellSpans = newSpans;
+
     rows--;
-    size = Size(size.width, size.height - (size.height / (rows + 1)));
+    rowHeights.removeAt(index);
     updatedAt = TimeService().nowMs();
   }
 
   void insertColumn(int index) {
-    final Map<String, String> newData = {};
-    for (var entry in cellData.entries) {
+    final Map<String, TableCellModel> newCells = {};
+    for (var entry in cells.entries) {
       final parts = entry.key.split(',');
-      int r = int.parse(parts[0]);
-      int c = int.parse(parts[1]);
+      if (parts.length < 2) continue;
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
       if (c >= index) {
-        newData['$r,${c + 1}'] = entry.value;
+        newCells['$r,${c + 1}'] = entry.value;
       } else {
-        newData['$r,$c'] = entry.value;
+        newCells['$r,$c'] = entry.value;
       }
     }
-    cellData = newData;
+    _cells = newCells;
+
+    // Shift Spans
+    final Map<String, String> newSpans = {};
+    for (var entry in cellSpans.entries) {
+      final parts = entry.key.split(',');
+      if (parts.length < 2) continue;
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
+      if (c >= index) {
+        newSpans['$r,${c + 1}'] = entry.value;
+      } else {
+        newSpans['$r,$c'] = entry.value;
+      }
+    }
+    cellSpans = newSpans;
+
     cols++;
-    size = Size(size.width + (size.width / (cols - 1)), size.height);
+    columnWidths.insert(index, 100.0);
     updatedAt = TimeService().nowMs();
   }
 
   void deleteColumn(int index) {
     if (cols <= 1) return;
-    final Map<String, String> newData = {};
-    for (var entry in cellData.entries) {
+    final Map<String, TableCellModel> newCells = {};
+    for (var entry in cells.entries) {
       final parts = entry.key.split(',');
-      int r = int.parse(parts[0]);
-      int c = int.parse(parts[1]);
+      if (parts.length < 2) continue;
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
       if (c < index) {
-        newData['$r,$c'] = entry.value;
+        newCells['$r,$c'] = entry.value;
       } else if (c > index) {
-        newData['$r,${c - 1}'] = entry.value;
+        newCells['$r,${c - 1}'] = entry.value;
       }
     }
-    cellData = newData;
+    _cells = newCells;
+
+    // Shift Spans
+    final Map<String, String> newSpans = {};
+    for (var entry in cellSpans.entries) {
+      final parts = entry.key.split(',');
+      if (parts.length < 2) continue;
+
+      int? r = int.tryParse(parts[0]);
+      int? c = int.tryParse(parts[1]);
+      if (r == null || c == null) continue;
+
+      if (c < index) {
+        newSpans['$r,$c'] = entry.value;
+      } else if (c > index) {
+        newSpans['$r,${c - 1}'] = entry.value;
+      }
+    }
+    cellSpans = newSpans;
+
     cols--;
-    size = Size(size.width - (size.width / (cols + 1)), size.height);
+    columnWidths.removeAt(index);
     updatedAt = TimeService().nowMs();
+  }
+
+  // 🚀 v5.4: Utilitário para seleção de intervalo com ID da tabela
+  Set<String> getKeysInRange(String startKey, String endKey) {
+    // Suportar tanto formato antigo "r,c" quanto novo "id:r,c"
+    final sStr = startKey.contains(':') ? startKey.split(':')[1] : startKey;
+    final eStr = endKey.contains(':') ? endKey.split(':')[1] : endKey;
+
+    final startParts = sStr.split(',');
+    final endParts = eStr.split(',');
+    
+    if (startParts.length < 2 || endParts.length < 2) return {startKey};
+
+    int? r1 = int.tryParse(startParts[0]);
+    int? c1 = int.tryParse(startParts[1]);
+    int? r2 = int.tryParse(endParts[0]);
+    int? c2 = int.tryParse(endParts[1]);
+
+    if (r1 == null || c1 == null || r2 == null || c2 == null) return {startKey};
+
+    int minR = r1 < r2 ? r1 : r2;
+    int maxR = r1 > r2 ? r1 : r2;
+    int minC = c1 < c2 ? c1 : c2;
+    int maxC = c1 > c2 ? c1 : c2;
+
+    final Set<String> result = {};
+    for (int r = minR; r <= maxR; r++) {
+      for (int c = minC; c <= maxC; c++) {
+        result.add('$id:$r,$c'); // 🚀 v5.4: Adicionado prefixo de ID
+      }
+    }
+    return result;
+  }
+
+  /// 🚀 v7.2: Resolve a célula mestre caso a posição dada esteja coberta por um span.
+  /// Retorna a chave no formato "row,col".
+  String resolveMasterCell(int r, int c) {
+    // 1. Verificar se a própria célula é mestre de um span
+    final currentKey = '$r,$c';
+    if (cellSpans.containsKey(currentKey)) return currentKey;
+
+    // 2. Procurar spans que cubram esta coordenada
+    for (var entry in cellSpans.entries) {
+      final masterCoords = entry.key.split(',');
+      final spanValue = entry.value.split(',');
+      
+      int masterR = int.parse(masterCoords[0]);
+      int masterC = int.parse(masterCoords[1]);
+      int rowSpan = int.parse(spanValue[0]);
+      int colSpan = int.parse(spanValue[1]);
+
+      if (r >= masterR && r < masterR + rowSpan &&
+          c >= masterC && c < masterC + colSpan) {
+        return entry.key; // Encontrou a mestre que cobre esta área
+      }
+    }
+
+    return currentKey; // Não faz parte de nenhum span especial
   }
 
   @override
@@ -161,12 +347,12 @@ class TableObject implements PageObject {
       'type': type,
       'rows': rows,
       'cols': cols,
-      'cell_data': cellData,
+      'cells': cells.map((key, value) => MapEntry(key, value.toJson())),
+      'row_heights': rowHeights,
+      'column_widths': columnWidths,
       'cell_spans': cellSpans,
       'x': position.dx,
       'y': position.dy,
-      'width': size.width,
-      'height': size.height,
       'rotation': rotation,
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
@@ -182,18 +368,30 @@ class TableObject implements PageObject {
       'border_color': borderColor,
       'border_width': borderWidth,
       'show_header': showHeader ? 1 : 0,
+      'table_bg_color': tableBackgroundColorHex,
     };
   }
 
   factory TableObject.fromJson(Map<String, dynamic> json) {
+    final Map<String, TableCellModel> cellsMap = {};
+    if (json['cells'] != null) {
+      (json['cells'] as Map).forEach((k, v) {
+        cellsMap[k.toString()] = TableCellModel.fromJson(Map<String, dynamic>.from(v));
+      });
+    }
+
+    int rows = json['rows'] ?? 3;
+    int cols = json['cols'] ?? 3;
+
     return TableObject(
       id: json['id'],
-      rows: json['rows'] ?? 3,
-      cols: json['cols'] ?? 3,
-      cellData: Map<String, String>.from(json['cell_data'] ?? {}),
+      rows: rows,
+      cols: cols,
+      rowHeights: json['row_heights'] != null ? List<double>.from(json['row_heights']) : List.filled(rows, 40.0),
+      columnWidths: json['column_widths'] != null ? List<double>.from(json['column_widths']) : List.filled(cols, 100.0),
+      cells: cellsMap,
       cellSpans: Map<String, String>.from(json['cell_spans'] ?? {}),
-      position: Offset(json['x'], json['y']),
-      size: Size(json['width'], json['height']),
+      position: Offset(json['x']?.toDouble() ?? 0, json['y']?.toDouble() ?? 0),
       rotation: json['rotation']?.toDouble() ?? 0.0,
       zIndex: json['z_index'] ?? 0,
       isLocked: json['is_locked'] == 1,
@@ -209,6 +407,7 @@ class TableObject implements PageObject {
       borderColor: json['border_color'] ?? '#0F4C5C',
       borderWidth: json['border_width']?.toDouble() ?? 1.0,
       showHeader: json['show_header'] == 1,
+      tableBackgroundColorHex: json['table_bg_color'],
     );
   }
 
@@ -218,10 +417,11 @@ class TableObject implements PageObject {
       id: newId ?? id,
       rows: rows,
       cols: cols,
-      cellData: Map.from(cellData),
+      rowHeights: List.from(rowHeights),
+      columnWidths: List.from(columnWidths),
+      cells: cells.map((k, v) => MapEntry(k, v.clone())),
       cellSpans: Map.from(cellSpans),
       position: position,
-      size: size,
       rotation: rotation,
       zIndex: zIndex,
       isLocked: isLocked,
@@ -237,6 +437,7 @@ class TableObject implements PageObject {
       borderColor: borderColor,
       borderWidth: borderWidth,
       showHeader: showHeader,
+      tableBackgroundColorHex: tableBackgroundColorHex,
     );
   }
 }

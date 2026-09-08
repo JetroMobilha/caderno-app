@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide SelectionOverlay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -126,6 +127,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFD6D6D6),
+      resizeToAvoidBottomInset: true, // 🚀 v5.8: Garantir que a folha sobe no Android/iOS
       appBar: isFocusMode ? null : CanvasAppBar(
         notebook: widget.notebook,
         onCollaborationTap: () => showModalBottomSheet(
@@ -182,48 +184,50 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
             ),
           ) 
         : Stack(
-        children: [
-          ExcludeSemantics(
-            child: _CanvasPageView(
-              textController: _textController,
-              textFocusNode: _textFocusNode,
-            ),
-          ),
-          if (!ref.watch(canvasViewportProvider.select((s) => s.isFocusMode)))
-            Positioned(
-              bottom: 20, left: 0, right: 0,
-              child: Center(
-                child: CanvasToolbar(
-                  currentPage: currentPage!,
-                  onColorTap: () async {
-                    final notifier = ref.read(canvasToolProvider.notifier);
-                    if (toolState.selectedStrokeIds.isNotEmpty) {
-                      final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Seleção');
-                      if (hex != null) {
-                        ref.read(canvasDocumentProvider.notifier).updateStrokesColor(
-                          currentPage!, 
-                          toolState.selectedStrokeIds, 
-                          hex
-                        );
-                      }
-                    } else {
-                      final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Caneta');
-                      if (hex != null) toolNotifier.setColor(hex);
-                    }
-                  },
-                  onThicknessTap: () => showDialog(context: context, builder: (_) => const ThicknessStudioDialog()),
-                  onChangePaperTap: () => showDialog(context: context, builder: (_) => PaperStyleDialog(currentPage: currentPage)),
-                  onDeletePageTap: () => ref.read(canvasDocumentProvider.notifier).deletePage(currentPage),
-                  onAiAssistantTap: () {},
-                  onAddImageTap: () => ref.read(canvasDocumentProvider.notifier).pickAndInsertImage(currentPage),
+            children: [
+              ExcludeSemantics(
+                child: _CanvasPageView(
+                  textController: _textController,
+                  textFocusNode: _textFocusNode,
                 ),
               ),
+                if (!ref.watch(canvasViewportProvider.select((s) => s.isFocusMode)))
+                  Positioned(
+                    bottom: 20, left: 0, right: 0,
+                    child: Center(
+                      child: CanvasToolbar(
+                        currentPage: currentPage!,
+                        onColorTap: () async {
+                          final notifier = ref.read(canvasToolProvider.notifier);
+                          if (toolState.selectedStrokeIds.isNotEmpty) {
+                            final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Seleção');
+                            if (hex != null) {
+                              ref.read(canvasDocumentProvider.notifier).updateStrokesColor(
+                                currentPage!, 
+                                toolState.selectedStrokeIds, 
+                                hex
+                              );
+                            }
+                          } else {
+                            final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Caneta');
+                            if (hex != null) toolNotifier.setColor(hex);
+                          }
+                        },
+                        onThicknessTap: () => showDialog(context: context, builder: (_) => const ThicknessStudioDialog()),
+                        onChangePaperTap: () => showDialog(context: context, builder: (_) => PaperStyleDialog(currentPage: currentPage)),
+                        onDeletePageTap: () => ref.read(canvasDocumentProvider.notifier).deletePage(currentPage),
+                        onAiAssistantTap: () {},
+                        onAddImageTap: () => ref.read(canvasDocumentProvider.notifier).pickAndInsertImage(currentPage),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-        ],
-      ),
+
     );
   }
-}
+  }
+
 
 class _CanvasPageView extends ConsumerWidget {
   final TextEditingController textController;
@@ -314,99 +318,110 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
     });
   }
 
+  int _activePointers = 0; // 🚀 v7.4: Controle local para evitar race conditions
+
   @override
   Widget build(BuildContext context) {
     final controller = widget.viewportNotifier.getControllerFor(widget.page.clientId);
+    final viewportState = ref.watch(canvasViewportProvider); // 🚀 v7.5
 
-    return InteractiveViewer(
-      key: ValueKey('viewport_${widget.page.clientId}'), 
-      transformationController: controller,
-      onInteractionEnd: (_) {
-        // 🚀 REMOVIDO: Não salvar no DB durante o zoom para evitar flicker
+    return Listener(
+      onPointerDown: (e) {
+        _activePointers++;
+        widget.viewportNotifier.updatePointerCount(_activePointers);
       },
-      boundaryMargin: const EdgeInsets.all(5000.0), 
-      minScale: 0.05, // 🚀 AUMENTADA AMPLITUDE (Permite zoom out até 5%)
-      maxScale: 6.0,
-      constrained: false, 
-      interactionEndFrictionCoefficient: 0.01,
-      child: SizedBox(
-        width: widget.page.pageWidthPx,
-        height: widget.page.pageHeightPx,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: widget.page.pageWidthPx, 
-              height: widget.page.pageHeightPx, 
-              key: ValueKey('page_container_${widget.page.clientId}'),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFDFBF7),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.26), blurRadius: 10, offset: const Offset(0, 4))],
-              ),
-              child: ClipRect(
-                child: Stack(
-                  clipBehavior: Clip.none, // 🚀 v2: Permitir alças fora da folha (se necessário)
-                  children: [
-                    PageCanvas(
-                      page: widget.page, 
-                      pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
+      onPointerUp: (e) {
+        _activePointers = math.max(0, _activePointers - 1);
+        widget.viewportNotifier.updatePointerCount(_activePointers);
+      },
+      onPointerCancel: (e) {
+        _activePointers = 0;
+        widget.viewportNotifier.updatePointerCount(0);
+      },
+      child: InteractiveViewer(
+        key: ValueKey('viewport_${widget.page.clientId}'),
+        transformationController: controller,
+        boundaryMargin: const EdgeInsets.all(5000.0),
+        minScale: 0.05,
+        maxScale: 6.0,
+        constrained: false,
+        interactionEndFrictionCoefficient: 0.01,
+        child: IgnorePointer(
+          ignoring: viewportState.activePointerCount > 1, // 🚀 v7.5: Bloqueio global da folha no multi-toque
+          child: SizedBox(
+            width: widget.page.pageWidthPx,
+            height: widget.page.pageHeightPx,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: widget.page.pageWidthPx,
+                  height: widget.page.pageHeightPx,
+                  key: ValueKey('page_container_${widget.page.clientId}'),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDFBF7),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.26), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: ClipRect(
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        PageCanvas(
+                          page: widget.page,
+                          pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
+                        ),
+                        SelectionOverlay(
+                          page: widget.page,
+                          pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
+                        ),
+                        ExplanationLayer(pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx)),
+                        InteractionLayer(
+                          page: widget.page,
+                          isBlocked: widget.page.isFrozen,
+                          onFinishEditing: () async {
+                            debugPrint('🏁 [CanvasScreen] Parando edição ativa...');
+                            final toolState = ref.read(canvasToolProvider);
+                            if (toolState.activeTextBlock != null) {
+                              await ref.read(canvasDocumentProvider.notifier).cleanupIfEmpty(widget.page, toolState.activeTextBlock!.id);
+                            }
+                            ref.read(canvasToolProvider.notifier).stopEditing();
+                            FocusManager.instance.primaryFocus?.unfocus();
+                          },
+                          onAddTextBlock: (pos) {
+                            final newBlock = TextBlock(
+                              text: '',
+                              position: pos,
+                              textColorHex: widget.toolState.selectedColorHex,
+                              zIndex: widget.page.objects.length,
+                            );
+                            ref.read(canvasDocumentProvider.notifier).addTextBlock(widget.page, newBlock);
+                            widget.toolNotifier.setTextEditing(InlineTarget.block, newBlock);
+                            widget.textController.text = '';
+                            widget.textFocusNode.requestFocus();
+                          },
+                          onTitleTap: () {
+                            widget.toolNotifier.setTextEditing(InlineTarget.title);
+                            widget.textController.text = widget.page.title;
+                            widget.textFocusNode.requestFocus();
+                          },
+                        ),
+                        LiveTextEditLayer(
+                          page: widget.page,
+                          textController: widget.textController,
+                          textFocusNode: widget.textFocusNode,
+                          onTitleTap: () {
+                            widget.toolNotifier.setTextEditing(InlineTarget.title);
+                            widget.textController.text = widget.page.title;
+                            widget.textFocusNode.requestFocus();
+                          },
+                        ),
+                      ],
                     ),
-                    SelectionOverlay(
-                      page: widget.page,
-                      pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
-                    ),
-                    ExplanationLayer(pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx)),
-                    InteractionLayer(
-                      page: widget.page,
-                      isBlocked: widget.page.isFrozen,
-                      onFinishEditing: () async {
-                        final toolState = ref.read(canvasToolProvider);
-                        
-                        // 🚀 v4.2: Limpeza automática via helper
-                        if (toolState.activeTextBlock != null) {
-                           await ref.read(canvasDocumentProvider.notifier).cleanupIfEmpty(widget.page, toolState.activeTextBlock!.id);
-                        }
-
-                        if (toolState.activeTableId != null) {
-                           final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.clientId == widget.page.clientId);
-                           final table = page.objects.firstWhere((o) => o.id == toolState.activeTableId);
-                           ref.read(canvasDocumentProvider.notifier).updateObject(page, table);
-                        }
-                        widget.toolNotifier.clearTextEditing();
-                      },
-                      onAddTextBlock: (pos) {
-                        final newBlock = TextBlock(
-                          text: '', 
-                          position: pos, 
-                          textColorHex: widget.toolState.selectedColorHex,
-                          zIndex: widget.page.objects.length,
-                        );
-                        ref.read(canvasDocumentProvider.notifier).addTextBlock(widget.page, newBlock);
-                        widget.toolNotifier.setTextEditing(InlineTarget.block, newBlock);
-                        widget.textController.text = '';
-                        widget.textFocusNode.requestFocus();
-                      },
-                      onTitleTap: () {
-                        widget.toolNotifier.setTextEditing(InlineTarget.title);
-                        widget.textController.text = widget.page.title;
-                        widget.textFocusNode.requestFocus();
-                      },
-                    ),
-                    LiveTextEditLayer(
-                      page: widget.page,
-                      textController: widget.textController,
-                      textFocusNode: widget.textFocusNode,
-                      onTitleTap: () {
-                        widget.toolNotifier.setTextEditing(InlineTarget.title);
-                        widget.textController.text = widget.page.title;
-                        widget.textFocusNode.requestFocus();
-                      },
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

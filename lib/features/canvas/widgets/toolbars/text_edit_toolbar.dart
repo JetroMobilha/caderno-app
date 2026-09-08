@@ -1,17 +1,23 @@
 import 'dart:math' as math;
+import 'package:caderno_digital_app/features/shared/widgets/color_engine_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
-import '../../models/text_block_model.dart';
-import '../../models/canvas_enums.dart';
-import '../../providers/canvas_tool_provider.dart';
-import '../../providers/canvas_document_provider.dart';
-import '../../models/local_page_model.dart';
-import '../../../shared/widgets/color_engine_widget.dart';
+import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/canvas_enums.dart';
+import 'package:caderno_digital_app/features/canvas/providers/canvas_tool_provider.dart';
+import 'package:caderno_digital_app/features/canvas/providers/canvas_document_provider.dart';
+import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+
+import '../../models/table_cell_model.dart';
+import '../../models/table_model.dart';
 
 enum TextEditCategory { basics, format, organize, structure, box }
 
+/// Barra de ferramentas contextual para edição de texto.
+/// Oferece opções de formatação, alinhamento, listas e gestão de blocos.
+/// É reutilizada para edições de células de tabela via Proxy.
 class TextEditToolbar extends ConsumerStatefulWidget {
   final TextBlock? block;
   final LocalPage currentPage;
@@ -30,14 +36,16 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
   TextEditCategory _activeCategory = TextEditCategory.format;
 
   void _handleExit() async {
-    debugPrint('🔙 [TextToolbar] Saindo do modo escrita (Reset total)...');
+    debugPrint('🔙 [TextToolbar] Saindo do modo escrita...');
     
-    // 1. Limpar blocos vazios se existirem
+    // 1. Fechar teclado imediatamente
+    FocusManager.instance.primaryFocus?.unfocus();
+
     if (widget.block != null) {
       await ref.read(canvasDocumentProvider.notifier).cleanupIfEmpty(widget.currentPage, widget.block!.id);
     }
 
-    FocusManager.instance.primaryFocus?.unfocus();
+    // 2. Limpar estado no provider
     ref.read(canvasToolProvider.notifier).exitWritingMode();
   }
 
@@ -52,7 +60,6 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
     final bool isSmallScreen = screenWidth < 600;
 
     return Container(
-      // 🚀 v4.4: Barra compacta e centralizada (Max 500px em telas grandes)
       constraints: BoxConstraints(maxWidth: isSmallScreen ? screenWidth - 24 : 500),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -67,15 +74,20 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 🚀 LINHA SUPERIOR: VOLTAR + SELETOR DE CATEGORIA
           Row(
             children: [
-              // BOTÃO VOLTAR (ERGONÓMICO)
               _buildCustomIconButton(
-                icon: Icons.arrow_back_ios_new_rounded, 
+                icon: Icons.arrow_back_ios_new_rounded,
                 onTap: _handleExit, 
                 color: const Color(0xFF0F4C5C),
                 size: 18,
+              ),
+              // 🚀 v6.5: Modo de Transformação Deliberado para Texto
+              _buildCustomIconButton(
+                icon: Icons.open_with_rounded, 
+                onTap: () => toolNotifier.toggleTransformMode(), 
+                color: toolState.isTransformMode ? Colors.orangeAccent : Colors.black54,
+                size: 20,
               ),
               const VerticalDivider(width: 24, indent: 8, endIndent: 8),
               Expanded(
@@ -95,10 +107,9 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
               ),
             ],
           ),
-          
+
           const Divider(height: 16, color: Colors.black12, indent: 4, endIndent: 4),
 
-          // 🚀 FERRAMENTAS (LINHA INFERIOR - CENTRALIZADA)
           Center(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -110,7 +121,7 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
                   if (widget.block != null) 
                     _buildActiveCategoryContent(context, toolNotifier, docState, docNotifier, widget.block!)
                   else
-                    const Text('TOQUE NUM TEXTO PARA FORMATAR', 
+                    const Text('TOQUE NUM TEXTO PARA FORMATAR',
                       style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black26, letterSpacing: 1.2)
                     ),
                 ],
@@ -147,17 +158,50 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
     );
   }
 
+  /// 🚀 v6.6: Helper para persistir alterações, suportando Blocos de Texto e Proxies de Tabela.
+  void _updateBlock(CanvasDocumentNotifier docNotifier, TextBlock block) {
+    if (block.id.startsWith('proxy_')) {
+      final parts = block.id.split('_');
+      if (parts.length < 3) return;
+      final tableId = parts[1];
+      final cellCoords = parts[2];
+
+      final docState = ref.read(canvasDocumentProvider);
+      final page = docState.pages.firstWhere((p) => p.clientId == widget.currentPage.clientId);
+      final table = page.objects.whereType<TableObject>().firstWhere((t) => t.id == tableId);
+
+      // Sincronizar estilos do Proxy com a célula real da tabela
+      final cell = table.cells[cellCoords] ?? TableCellModel();
+      cell.value = block.text;
+      cell.style.bold = block.isBold;
+      cell.style.italic = block.isItalic;
+      cell.style.underline = block.isUnderline;
+      cell.style.strikethrough = block.isStrikethrough;
+      cell.style.fontSize = block.fontSize;
+      cell.style.fontFamily = block.fontFamily;
+      cell.style.textColorHex = block.textColorHex;
+      cell.style.backgroundColorHex = block.backgroundColorHex;
+      cell.style.textAlign = block.textAlign;
+      
+      table.cells[cellCoords] = cell;
+      docNotifier.updateObject(page, table);
+    } else {
+      final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.clientId == widget.currentPage.clientId);
+      docNotifier.updateObject(page, block);
+    }
+  }
+
   Widget _buildActiveCategoryContent(BuildContext context, CanvasToolNotifier notifier, CanvasDocumentState docState, CanvasDocumentNotifier docNotifier, TextBlock block) {
     switch (_activeCategory) {
       case TextEditCategory.basics:
         return Row(
           children: [
             _buildCustomIconButton(icon: Icons.content_copy_rounded, onTap: () {}, color: Colors.black87),
-            _buildCustomIconButton(icon: Icons.undo_rounded, 
-              onTap: docState.undoStack.isNotEmpty ? () => docNotifier.undo(widget.currentPage) : null, 
+            _buildCustomIconButton(icon: Icons.undo_rounded,
+              onTap: docState.undoStack.isNotEmpty ? () => docNotifier.undo(widget.currentPage) : null,
               color: docState.undoStack.isNotEmpty ? Colors.black87 : Colors.black12),
-            _buildCustomIconButton(icon: Icons.redo_rounded, 
-              onTap: docState.redoStack.isNotEmpty ? () => docNotifier.redo(widget.currentPage) : null, 
+            _buildCustomIconButton(icon: Icons.redo_rounded,
+              onTap: docState.redoStack.isNotEmpty ? () => docNotifier.redo(widget.currentPage) : null,
               color: docState.redoStack.isNotEmpty ? Colors.black87 : Colors.black12),
             _buildCustomIconButton(icon: Icons.select_all_rounded, onTap: () {}, color: Colors.black87),
           ],
@@ -165,27 +209,37 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
       case TextEditCategory.format:
         return Row(
           children: [
-            _buildFontFamilyDropdown(notifier, block),
+            _buildFontFamilyDropdown(notifier, docNotifier, block),
             const SizedBox(width: 12),
             _buildFormatToggle(Icons.format_bold, block.isBold, () {
-              block.isBold = !block.isBold;
+              setState(() {
+                block.isBold = !block.isBold;
+              });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             _buildFormatToggle(Icons.format_italic, block.isItalic, () {
-              block.isItalic = !block.isItalic;
+              setState(() {
+                block.isItalic = !block.isItalic;
+              });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             _buildFormatToggle(Icons.format_underlined, block.isUnderline, () {
-              block.isUnderline = !block.isUnderline;
+              setState(() {
+                block.isUnderline = !block.isUnderline;
+              });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             const SizedBox(width: 12),
-            _buildColorCircle(context, notifier, block),
+            _buildColorCircle(context, notifier, docNotifier, block),
             _buildCustomIconButton(icon: Icons.format_color_fill_rounded, onTap: () async {
                final hex = await ColorEngine.show(context, initialColor: block.backgroundColorHex ?? '#FFFFFF', title: 'Cor de Realce');
                if (hex != null) {
                  block.backgroundColorHex = hex;
                  notifier.setTextEditing(InlineTarget.block, block);
+                 _updateBlock(docNotifier, block);
                }
             }, color: block.backgroundColorHex != null ? Color(int.parse(block.backgroundColorHex!.replaceFirst('#', '0xFF'))) : Colors.black26),
           ],
@@ -194,29 +248,37 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
         return Row(
           children: [
             _buildFormatToggle(Icons.format_align_left_rounded, block.textAlign == TextAlign.left, () {
-              block.textAlign = TextAlign.left;
+              setState(() { block.textAlign = TextAlign.left; });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             _buildFormatToggle(Icons.format_align_center_rounded, block.textAlign == TextAlign.center, () {
-              block.textAlign = TextAlign.center;
+              setState(() { block.textAlign = TextAlign.center; });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             _buildFormatToggle(Icons.format_align_right_rounded, block.textAlign == TextAlign.right, () {
-              block.textAlign = TextAlign.right;
+              setState(() { block.textAlign = TextAlign.right; });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             _buildFormatToggle(Icons.format_align_justify_rounded, block.textAlign == TextAlign.justify, () {
-              block.textAlign = TextAlign.justify;
+              setState(() { block.textAlign = TextAlign.justify; });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             const SizedBox(width: 12),
             _buildCustomIconButton(icon: Icons.text_increase, onTap: () {
-              block.fontSize += 2;
+              setState(() { block.fontSize += 2; });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }, color: const Color(0xFF0F4C5C)),
             _buildCustomIconButton(icon: Icons.text_decrease, onTap: () {
-              if (block.fontSize > 8) block.fontSize -= 2;
-              notifier.setTextEditing(InlineTarget.block, block);
+              if (block.fontSize > 8) {
+                setState(() { block.fontSize -= 2; });
+                _updateBlock(docNotifier, block);
+                notifier.setTextEditing(InlineTarget.block, block);
+              }
             }, color: const Color(0xFF0F4C5C)),
           ],
         );
@@ -224,21 +286,33 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
         return Row(
           children: [
             _buildFormatToggle(Icons.format_list_bulleted_rounded, block.listType == ListType.bullet, () {
-              block.listType = block.listType == ListType.bullet ? ListType.none : ListType.bullet;
+              setState(() {
+                block.listType = block.listType == ListType.bullet ? ListType.none : ListType.bullet;
+              });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             _buildFormatToggle(Icons.format_list_numbered_rounded, block.listType == ListType.numbered, () {
-              block.listType = block.listType == ListType.numbered ? ListType.none : ListType.numbered;
+              setState(() {
+                block.listType = block.listType == ListType.numbered ? ListType.none : ListType.numbered;
+              });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             _buildFormatToggle(Icons.checklist_rounded, block.listType == ListType.checklist, () {
-              block.listType = block.listType == ListType.checklist ? ListType.none : ListType.checklist;
+              setState(() {
+                block.listType = block.listType == ListType.checklist ? ListType.none : ListType.checklist;
+              });
+              _updateBlock(docNotifier, block);
               notifier.setTextEditing(InlineTarget.block, block);
             }),
             const SizedBox(width: 12),
             _buildFormatToggle(Icons.title_rounded, block.fontSize > 24, () {
-               block.fontSize = (block.fontSize > 24) ? 18 : 32;
-               block.isBold = block.fontSize > 24;
+               setState(() {
+                 block.fontSize = (block.fontSize > 24) ? 18 : 32;
+                 block.isBold = block.fontSize > 24;
+               });
+               _updateBlock(docNotifier, block);
                notifier.setTextEditing(InlineTarget.block, block);
             }),
           ],
@@ -263,6 +337,7 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
             _buildCustomIconButton(icon: block.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, onTap: () {
                block.isLocked = !block.isLocked;
                notifier.setTextEditing(InlineTarget.block, block);
+               _updateBlock(docNotifier, block);
             }, color: block.isLocked ? Colors.orange : Colors.black87),
             _buildCustomIconButton(icon: Icons.delete_outline_rounded, onTap: () {
                final page = docState.pages.firstWhere((p) => p.clientId == widget.currentPage.clientId);
@@ -274,7 +349,7 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
     }
   }
 
-  Widget _buildFontFamilyDropdown(CanvasToolNotifier notifier, TextBlock block) {
+  Widget _buildFontFamilyDropdown(CanvasToolNotifier notifier, CanvasDocumentNotifier docNotifier, TextBlock block) {
     final fonts = ['Inter', 'Lora', 'Roboto', 'Oswald', 'Dancing Script'];
     return PopupMenuButton<String>(
       initialValue: block.fontFamily ?? 'Inter',
@@ -289,7 +364,10 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
         ),
       ),
       onSelected: (font) {
-        block.fontFamily = font;
+        setState(() {
+          block.fontFamily = font;
+        });
+        _updateBlock(docNotifier, block);
         notifier.setTextEditing(InlineTarget.block, block);
       },
       itemBuilder: (ctx) => fonts.map((f) => PopupMenuItem(value: f, child: Text(f, style: GoogleFonts.getFont(f)))).toList(),
@@ -312,19 +390,22 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
 
   Widget _buildFormatToggle(IconData icon, bool active, VoidCallback onTap) {
     return _buildCustomIconButton(
-      icon: icon, 
-      onTap: onTap, 
+      icon: icon,
+      onTap: onTap,
       color: active ? Colors.blueAccent : Colors.black54,
       size: 18,
     );
   }
 
-  Widget _buildColorCircle(BuildContext context, CanvasToolNotifier notifier, TextBlock block) {
+  Widget _buildColorCircle(BuildContext context, CanvasToolNotifier notifier, CanvasDocumentNotifier docNotifier, TextBlock block) {
     return InkWell(
       onTap: () async {
         final hex = await ColorEngine.show(context, initialColor: block.textColorHex, title: 'Cor do Texto');
         if (hex != null) {
-          block.textColorHex = hex;
+          setState(() {
+            block.textColorHex = hex;
+          });
+          _updateBlock(docNotifier, block);
           notifier.setTextEditing(InlineTarget.block, block);
         }
       },
@@ -337,35 +418,5 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
         ),
       ),
     );
-  }
-
-  PopupMenuItem<T> _buildPopupItem<T>(T value, IconData icon, String label, bool active) {
-    return PopupMenuItem<T>(
-      value: value,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: active ? Colors.blueAccent : Colors.black54),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(fontSize: 13, color: active ? Colors.blueAccent : Colors.black87)),
-        ],
-      ),
-    );
-  }
-
-  IconData _getAlignIcon(TextAlign align) {
-    switch (align) {
-      case TextAlign.center: return Icons.format_align_center_rounded;
-      case TextAlign.right: return Icons.format_align_right_rounded;
-      case TextAlign.justify: return Icons.format_align_justify_rounded;
-      default: return Icons.format_align_left_rounded;
-    }
-  }
-
-  IconData _getListIcon(ListType type) {
-    switch (type) {
-      case ListType.numbered: return Icons.format_list_numbered_rounded;
-      case ListType.checklist: return Icons.checklist_rounded;
-      default: return Icons.format_list_bulleted_rounded;
-    }
   }
 }

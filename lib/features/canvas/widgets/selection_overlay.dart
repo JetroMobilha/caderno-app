@@ -20,6 +20,17 @@ class SelectionOverlay extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final toolState = ref.watch(canvasToolProvider);
     
+    // 🚀 v6.1: Restringir a visibilidade do overlay de seleção
+    // Só mostramos o quadro azul e as alças nos modos de gestão de objetos (Seleção/Laço/Organizador)
+    // OU no modo de Texto se o Modo de Transformação estiver ativo (v6.5)
+    final bool isManagementMode = toolState.currentTool == ToolMode.select || 
+                                   toolState.currentTool == ToolMode.lasso ||
+                                   toolState.currentTool == ToolMode.organizer;
+                                   
+    final bool isTextTransform = toolState.currentTool == ToolMode.text && toolState.isTransformMode;
+    
+    if (!isManagementMode && !isTextTransform) return const SizedBox.shrink();
+
     final selectedIds = {
       ...toolState.selectedStrokeIds,
       ...toolState.selectedTextIds,
@@ -41,6 +52,12 @@ class SelectionOverlay extends ConsumerWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: selectedObjects.map((obj) {
+        // 🚀 v6.0: Não mostrar overlay de seleção para o objeto que está sendo editado (Texto ou Tabela)
+        final bool isBeingEdited = (toolState.activeTextBlock?.id == obj.id) || 
+                                    (toolState.activeTableId == obj.id);
+        
+        if (isBeingEdited) return const SizedBox.shrink();
+
         final Rect baseBounds = _getObjectBounds(obj);
         
         // 🚀 v3.1: SINCRONIZAÇÃO TOTAL - Delta e Escala em tempo real
@@ -52,8 +69,17 @@ class SelectionOverlay extends ConsumerWidget {
         final double finalH = bounds.height * toolState.liveScale.height;
 
         final bool isSingleSelection = selectedObjects.length == 1;
-        // 🚀 v4.4: Ocultar alças no modo Organizador
-        final bool showHandles = isSingleSelection && obj.type != 'stroke' && toolState.currentTool != ToolMode.organizer;
+        
+        // 🚀 v6.0: Lógica de Visibilidade Coerente com ObjectRenderer
+        final bool isEditingCell = toolState.activeTableCell != null;
+        final bool isSelectTool = toolState.currentTool == ToolMode.select || toolState.currentTool == ToolMode.lasso;
+        
+        // As alças circulares só devem aparecer se estivermos no modo de Seleção ou Transformação, e não estivermos editando conteúdo
+        final bool showHandles = isSingleSelection && 
+                                 obj.type != 'stroke' && 
+                                 toolState.currentTool != ToolMode.organizer &&
+                                 !isEditingCell &&
+                                 (isSelectTool || toolState.isTransformMode);
         
         return Positioned(
           left: bounds.left - 10,

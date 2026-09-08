@@ -51,17 +51,20 @@ class CanvasViewportNotifier extends AutoDisposeNotifier<CanvasViewportState> {
   // 🚀 GESTÃO DE CONTROLLERS POR PÁGINA (Isolamento total)
   final Map<String, TransformationController> _controllers = {};
   final Set<String> _initializedPages = {}; 
-  late final PageController pageController;
+  PageController? _pageController;
+
+  PageController get pageController {
+    _pageController ??= PageController(initialPage: 0);
+    return _pageController!;
+  }
 
   @override
   CanvasViewportState build() {
-    pageController = PageController(initialPage: 0);
-    
     ref.onDispose(() {
       for (var c in _controllers.values) {
         c.dispose();
       }
-      pageController.dispose();
+      _pageController?.dispose();
     });
 
     return CanvasViewportState();

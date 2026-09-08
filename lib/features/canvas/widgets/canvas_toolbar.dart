@@ -1,26 +1,31 @@
+import 'package:caderno_digital_app/features/shared/widgets/color_engine_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/dialogs/table_creation_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
-import '../models/animation_object_model.dart';
-import '../models/attachment_model.dart';
-import '../models/link_model.dart';
-import '../models/shape_model.dart';
-import '../models/table_model.dart';
-import '../providers/canvas_tool_provider.dart';
-import '../providers/canvas_document_provider.dart';
-import '../models/local_page_model.dart';
-import '../models/canvas_enums.dart';
-import '../providers/canvas_ui_provider.dart';
-import 'canvas_zoom_control.dart';
-import 'dialogs/layer_manager_sheet.dart'; 
-import 'dialogs/page_action_helper.dart'; 
-import 'dialogs/brush_style_sheet.dart';
-import 'dialogs/object_explorer_sheet.dart'; // 🚀 v4.0
-import '../../shared/widgets/color_engine_widget.dart';
-import 'toolbars/text_edit_toolbar.dart'; // 🚀 v3.6
-import 'toolbars/table_edit_toolbar.dart'; // 🚀 v3.6
+import 'package:caderno_digital_app/features/canvas/models/animation_object_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/attachment_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/link_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/shape_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/table_model.dart';
+import 'package:caderno_digital_app/features/canvas/providers/canvas_tool_provider.dart';
+import 'package:caderno_digital_app/features/canvas/providers/canvas_document_provider.dart';
+import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/canvas_enums.dart';
+import 'package:caderno_digital_app/features/canvas/providers/canvas_ui_provider.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/canvas_zoom_control.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/dialogs/layer_manager_sheet.dart'; 
+import 'package:caderno_digital_app/features/canvas/widgets/dialogs/page_action_helper.dart'; 
+import 'package:caderno_digital_app/features/canvas/widgets/dialogs/brush_style_sheet.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/dialogs/object_explorer_sheet.dart';
+import 'package:caderno_digital_app/features/canvas/models/table_cell_model.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/toolbars/text_edit_toolbar.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/toolbars/table_edit_toolbar.dart';
 
+/// Barra de ferramentas principal do canvas.
+/// Gere a alternância entre ferramentas (Caneta, Texto, Tabela) e 
+/// exibe barras contextuais ricas dependendo do que está selecionado.
 class CanvasToolbar extends ConsumerWidget {
   final LocalPage currentPage;
   final VoidCallback onColorTap;
@@ -51,18 +56,31 @@ class CanvasToolbar extends ConsumerWidget {
     final docNotifier = ref.read(canvasDocumentProvider.notifier);
     final uiState = ref.watch(canvasUiProvider);
 
-    // 🚀 v3.10: LÓGICA DE BARRA CONTEXTUAL DINÂMICA
-    final bool isWriting = toolState.currentTool == ToolMode.text || toolState.activeTextBlock != null;
-    final bool isEditingTable = toolState.currentTool == ToolMode.table || toolState.activeTableId != null;
-    final bool isTableSelected = toolState.selectedTableIds.isNotEmpty;
+    final bool isWritingTextBlock = toolState.activeTextBlock != null;
+    final bool isEditingCell = toolState.activeTableCell != null;
+    final bool isTextToolActive = toolState.currentTool == ToolMode.text; 
+    final bool hasMultipleCellsSelected = toolState.selectedTableCells.length > 1; // 🚀 v6.4
 
-    if (isWriting) {
-      debugPrint('📝 [Toolbar] Contexto: Texto (Ativo: ${toolState.activeTextBlock?.id})');
-      return TextEditToolbar(block: toolState.activeTextBlock, currentPage: currentPage);
+    // 🚀 v5.6: Só mostrar barra de design se houver uma tabela selecionada/ativa
+    final bool hasTableSelected = toolState.selectedTableIds.isNotEmpty || toolState.activeTableId != null;
+    // 🚀 v6.2: Persistência no modo Seleção para redimensionamento
+    final bool isTableDesignMode = (toolState.currentTool == ToolMode.table || toolState.currentTool == ToolMode.select) && hasTableSelected;
+
+    // Prioridade 1: Múltiplas Células Selecionadas -> Barra de Tabela (Estrutura/Estilos em Massa)
+    if (hasMultipleCellsSelected && hasTableSelected) {
+      return TableEditToolbar(currentPage: currentPage, isCellEditing: false);
     }
-    if (isEditingTable || isTableSelected) {
-      debugPrint('📊 [Toolbar] Contexto: Tabela');
-      return TableEditToolbar(currentPage: currentPage, isCellEditing: toolState.activeTableId != null);
+
+    // Prioridade 2: Edição de Texto (Blocos ou Célula Única) ou Ferramenta de Texto Ativa
+    if (isTextToolActive || isWritingTextBlock || isEditingCell) {
+       return TextEditToolbar(
+         block: toolState.activeTextBlock, 
+         currentPage: currentPage
+       );
+    }
+
+    if (isTableDesignMode) {
+      return TableEditToolbar(currentPage: currentPage, isCellEditing: false);
     }
 
     final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
@@ -117,17 +135,17 @@ class CanvasToolbar extends ConsumerWidget {
               ),
               _buildToolButton(
                 toolNotifier, 
-                toolState.currentTool == ToolMode.table ? Icons.table_chart_rounded : Icons.text_fields, 
-                toolState.currentTool == ToolMode.table ? ToolMode.table : ToolMode.text, 
-                'Conteúdo (Toque longo p/ Tabela)', 
+                Icons.text_fields, 
+                ToolMode.text, 
+                'Texto', 
                 toolState.currentTool,
-                onLongPress: () {
-                  if (toolState.currentTool == ToolMode.text) {
-                    toolNotifier.switchTool(ToolMode.table);
-                  } else {
-                    toolNotifier.switchTool(ToolMode.text);
-                  }
-                },
+              ),
+              _buildToolButton(
+                toolNotifier, 
+                Icons.table_chart_rounded, 
+                ToolMode.table, 
+                'Trabalhar com Tabelas', 
+                toolState.currentTool,
               ),
               _buildToolButton(toolNotifier, Icons.highlight_alt, ToolMode.select, 'Selecionar (Rect)', toolState.currentTool),
               _buildToolButton(toolNotifier, Icons.gesture_rounded, ToolMode.lasso, 'Laço de Seleção', toolState.currentTool),
@@ -177,16 +195,13 @@ class CanvasToolbar extends ConsumerWidget {
                 _buildMoreMenu(context, ref, onAddImageTap, currentPage)
               else ...[
                 Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: CanvasZoomControl(currentPage: currentPage),
                 ),
-
                 Container(width: 1, height: 24, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
                 _buildCompactIconButton(Icons.undo, docState.undoStack.isNotEmpty ? () => docNotifier.undo(currentPage) : null, 'Desfazer', docState.undoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
                 _buildCompactIconButton(Icons.redo, docState.redoStack.isNotEmpty ? () => docNotifier.redo(currentPage) : null, 'Avançar', docState.redoStack.isNotEmpty ? const Color(0xFF1A1A24) : Colors.grey.withOpacity(0.5)),
-                
                 _buildPagePopupMenu(context, ref, currentPage),
               ],
 
@@ -215,8 +230,6 @@ class CanvasToolbar extends ConsumerWidget {
     );
   }
 
-  // --- HELPERS DE UI ---
-
   Widget _buildToolButton(CanvasToolNotifier notifier, IconData icon, ToolMode mode, String tooltip, ToolMode currentTool, {VoidCallback? onLongPress}) {
     final bool isActive = currentTool == mode;
     return Material(
@@ -241,33 +254,16 @@ class CanvasToolbar extends ConsumerWidget {
     return IconButton(iconSize: 20, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, icon: Icon(icon, color: color), onPressed: onPressed, tooltip: tooltip);
   }
 
-  // --- DIALOGS E MENUS ---
-
   void _showBrushSelector(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => const BrushStyleSheet(),
-    );
+    showModalBottomSheet(context: context, backgroundColor: Colors.transparent, isScrollControlled: true, builder: (_) => const BrushStyleSheet());
   }
 
   void _showLayerManager(BuildContext context, LocalPage page) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => LayerManagerSheet(page: page),
-    );
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => LayerManagerSheet(page: page));
   }
 
   void _showObjectExplorer(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ObjectExplorerSheet(pageClientId: currentPage.clientId),
-    );
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => ObjectExplorerSheet(pageClientId: currentPage.clientId));
   }
 
   Widget _buildInsertionMenu(BuildContext context, WidgetRef ref, LocalPage page) {
@@ -279,7 +275,7 @@ class CanvasToolbar extends ConsumerWidget {
         if (val == 'image') onAddImageTap?.call();
         else if (val.startsWith('shape_')) _handleInsertShape(ref, page, val.replaceFirst('shape_', ''));
         else if (val.startsWith('anim_')) _handleInsertAnimation(ref, page, val.replaceFirst('anim_', ''));
-        else if (val == 'table') _handleInsertTable(ref, page);
+        else if (val == 'table') _handleInsertTable(context, ref, page);
         else if (val == 'link') _handleInsertLink(ref, page);
         else if (val == 'attach') _handleInsertAttachment(ref, page);
       },
@@ -324,9 +320,12 @@ class CanvasToolbar extends ConsumerWidget {
     ref.read(canvasDocumentProvider.notifier).addAnimation(page, anim);
   }
 
-  void _handleInsertTable(WidgetRef ref, LocalPage page) {
-    final table = TableObject(id: const Uuid().v4(), position: const Offset(150, 150), zIndex: page.objects.length);
-    ref.read(canvasDocumentProvider.notifier).addTable(page, table);
+  void _handleInsertTable(BuildContext context, WidgetRef ref, LocalPage page) async {
+    final result = await TableCreationDialog.show(context);
+    if (result != null) {
+      final table = TableObject(id: const Uuid().v4(), rows: result['rows']!, cols: result['cols']!, position: const Offset(150, 150), zIndex: page.objects.length);
+      ref.read(canvasDocumentProvider.notifier).addTable(page, table);
+    }
   }
 
   void _handleInsertLink(WidgetRef ref, LocalPage page) {

@@ -7,52 +7,54 @@ import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'page_object.dart';
 
+/// 🚀 v10.0: Implementação Imutável de Bloco de Imagem.
 class ImageBlock implements PageObject {
   @override
-  String id;
+  final String id;
   @override
-  String get type => 'image';
+  final String type = 'image';
+  @override
+  final String? parentId; // 🚀 v10
 
-  String imagePath;
+  final String imagePath;
   
   @override
-  Offset position;
-  
-  double width;
-  double height;
+  final Offset position;
+  final double width;
+  final double height;
   @override
-  double rotation;
-  
-  double baseScale = 1.0;
-  double baseRotation = 0.0;
+  final double rotation;
   
   @override
-  bool isDeleted;
+  final bool isDeleted;
   @override
-  bool deletedInSession;
+  final bool deletedInSession;
   @override
-  int updatedAt;
+  final int updatedAt;
   @override
-  int version;
+  final int version;
   @override
-  int? pageNumber; 
+  final int? pageNumber; 
   @override
   final String? creatorId;
   @override
-  bool syncedWithCloud;
+  final bool syncedWithCloud;
 
   @override
-  int zIndex;
+  final int zIndex;
   @override
-  bool isLocked;
+  final bool isLocked;
   @override
-  bool isVisible;
+  final bool isVisible;
+  @override
+  final double opacity; // 🚀 v10
   
   @override
-  String? layerId;
+  final String? layerId;
 
   ImageBlock({
     String? id,
+    this.parentId,
     required this.imagePath,
     required this.position,
     this.width = 300.0,
@@ -68,16 +70,55 @@ class ImageBlock implements PageObject {
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
+    this.opacity = 1.0,
     this.layerId,
   }) : id = id ?? const Uuid().v4(),
        updatedAt = updatedAt ?? TimeService().nowMs();
 
   @override
   Size get size => Size(width, height);
+
   @override
-  set size(Size value) {
-    width = value.width;
-    height = value.height;
+  ImageBlock copyWith({
+    String? id,
+    String? parentId,
+    Offset? position,
+    Size? size,
+    double? rotation,
+    int? zIndex,
+    bool? isLocked,
+    bool? isVisible,
+    double? opacity,
+    int? updatedAt,
+    int? version,
+    bool? isDeleted,
+    bool? syncedWithCloud,
+    bool? deletedInSession,
+    int? pageNumber,
+    String? layerId,
+    String? imagePath,
+  }) {
+    return ImageBlock(
+      id: id ?? this.id,
+      parentId: parentId ?? this.parentId,
+      imagePath: imagePath ?? this.imagePath,
+      position: position ?? this.position,
+      width: size?.width ?? this.width,
+      height: size?.height ?? this.height,
+      rotation: rotation ?? this.rotation,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedInSession: deletedInSession ?? this.deletedInSession,
+      pageNumber: pageNumber ?? this.pageNumber,
+      updatedAt: updatedAt ?? TimeService().nowMs(),
+      version: version ?? (this.version + 1),
+      creatorId: creatorId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      zIndex: zIndex ?? this.zIndex,
+      isLocked: isLocked ?? this.isLocked,
+      isVisible: isVisible ?? this.isVisible,
+      opacity: opacity ?? this.opacity,
+      layerId: layerId ?? this.layerId,
+    );
   }
 
   @override
@@ -85,6 +126,7 @@ class ImageBlock implements PageObject {
     return {
       'id': id,
       'type': type,
+      'parent_id': parentId,
       'dx': double.parse(position.dx.toStringAsFixed(1)),
       'dy': double.parse(position.dy.toStringAsFixed(1)),
       'width': double.parse(width.toStringAsFixed(1)),
@@ -101,6 +143,7 @@ class ImageBlock implements PageObject {
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
+      'opacity': opacity,
       'layer_id': layerId,
     };
   }
@@ -138,11 +181,9 @@ class ImageBlock implements PageObject {
     }
     return ImageBlock(
       id: json['id']?.toString() ?? const Uuid().v4(),
+      parentId: json['parent_id']?.toString(),
       imagePath: path,
-      position: Offset(
-        (json['dx'] as num?)?.toDouble() ?? 0.0,
-        (json['dy'] as num?)?.toDouble() ?? 0.0,
-      ),
+      position: Offset((json['dx'] as num?)?.toDouble() ?? 0.0, (json['dy'] as num?)?.toDouble() ?? 0.0),
       width: (json['width'] as num?)?.toDouble() ?? 300.0,
       height: (json['height'] as num?)?.toDouble() ?? 200.0,
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
@@ -156,28 +197,19 @@ class ImageBlock implements PageObject {
       zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == true || json['is_locked'] == 1,
       isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),
+      opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
       layerId: json['layer_id']?.toString(),
     );
   }
 
+  @override
   ImageBlock clone({String? newId, int? newPageNumber}) {
-    return ImageBlock(
+    return copyWith(
       id: newId ?? const Uuid().v4(),
-      imagePath: imagePath,
-      position: position,
-      width: width,
-      height: height,
-      rotation: rotation,
-      isDeleted: isDeleted,
-      deletedInSession: deletedInSession,
       pageNumber: newPageNumber ?? pageNumber,
       updatedAt: TimeService().nowMs(),
       version: 1,
-      creatorId: creatorId,
       syncedWithCloud: false,
-      zIndex: zIndex,
-      isLocked: isLocked,
-      isVisible: isVisible,
     );
   }
 }

@@ -12,6 +12,15 @@ import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../auth/controllers/auth_controller.dart';
+import '../../canvas/models/animation_object_model.dart';
+import '../../canvas/models/attachment_model.dart';
+import '../../canvas/models/audio_block_model.dart';
+import '../../canvas/models/image_block_model.dart';
+import '../../canvas/models/link_model.dart';
+import '../../canvas/models/shape_model.dart';
+import '../../canvas/models/stroke_model.dart';
+import '../../canvas/models/table_model.dart';
+import '../../canvas/models/text_block_model.dart';
 import '../../subjects/controllers/subjects_controller.dart';
 
 class NotebooksState {
@@ -294,16 +303,18 @@ class NotebooksController extends Notifier<NotebooksState> {
     state = state.copyWith(isLoading: true);
     try {
       // 1. Criar o novo caderno local usando Clonagem
-      final newNotebook = source.clone(newSubjectId: targetSubjectId);
+      Notebook newNotebook = source.clone(newSubjectId: targetSubjectId);
       
       // Ajuste opcional para o título da cópia se não for o dono
       if (source.role != 'owner') {
-        newNotebook.title = '${source.title} (Minha Cópia)';
-        newNotebook.authorName = 'Eu (Original: ${source.authorName ?? "Colega"})'; // Se precisarmos editar campos finais
+        newNotebook = newNotebook.copyWith(
+          title: '${source.title} (Minha Cópia)',
+          authorName: 'Eu (Original: ${source.authorName ?? "Colega"})',
+        );
       }
 
       final int newId = await _repository.insertNotebook(newNotebook);
-      newNotebook.id = newId;
+      newNotebook = newNotebook.copyWith(id: newId);
 
       // 2. Buscar páginas do original COM CONTEÚDO COMPLETO
       // 🚀 Forçamos a leitura fresca do disco para garantir que strokes/textos estão presentes
@@ -321,16 +332,27 @@ class NotebooksController extends Notifier<NotebooksState> {
         final int newLocalPageId = await _canvasRepository.savePage(clonedPage, null);
         debugPrint('📄 [Duplicate] Folha original (localId: ${page.id}) copiada para nova localId $newLocalPageId');
         
-        for (var stroke in clonedPage.strokes) {
-          await _canvasRepository.saveSingleStroke(clonedPage.clientId, stroke);
-        }
-
-        for (var text in clonedPage.textBlocks) {
-          await _canvasRepository.saveSingleTextBlock(clonedPage.clientId, text);
-        }
-
-        for (var img in clonedPage.imageBlocks) {
-          await _canvasRepository.saveSingleImageBlock(clonedPage.clientId, img);
+        // 🚀 v9.5: Salvar todos os tipos de objetos de forma abrangente
+        for (var obj in clonedPage.objects) {
+          if (obj is Stroke) {
+            await _canvasRepository.saveSingleStroke(clonedPage.clientId, obj);
+          } else if (obj is TextBlock) {
+            await _canvasRepository.saveSingleTextBlock(clonedPage.clientId, obj);
+          } else if (obj is ImageBlock) {
+            await _canvasRepository.saveSingleImageBlock(clonedPage.clientId, obj);
+          } else if (obj is ShapeObject) {
+            await _canvasRepository.saveSingleShape(clonedPage.clientId, obj);
+          } else if (obj is TableObject) {
+            await _canvasRepository.saveSingleTable(clonedPage.clientId, obj);
+          } else if (obj is AudioBlock) {
+            await _canvasRepository.saveSingleAudioBlock(clonedPage.clientId, obj);
+          } else if (obj is AnimationObject) {
+            await _canvasRepository.saveSingleAnimationObject(clonedPage.clientId, obj);
+          } else if (obj is LinkObject) {
+            await _canvasRepository.saveSingleLink(clonedPage.clientId, obj);
+          } else if (obj is AttachmentObject) {
+            await _canvasRepository.saveSingleAttachment(clonedPage.clientId, obj);
+          }
         }
         
         debugPrint('✅ [Duplicate] Conteúdo da folha ${page.pageNumber} duplicado com Clonagem Real');

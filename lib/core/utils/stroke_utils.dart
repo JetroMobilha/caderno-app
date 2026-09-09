@@ -31,10 +31,19 @@ class StrokeUtils {
       newSegments.add(currentSegment);
     }
 
-    return newSegments.map((pts) => stroke.clone()
-      ..id = const Uuid().v4() // 🆔 UUID consistente para Sync
-      ..points = pts
-      ..updatedAt = TimeService().nowMs()
-    ).toList();
+    return newSegments.map((pts) => Stroke(
+      id: const Uuid().v4(), // 🆔 UUID consistente para Sync
+      color: stroke.color,
+      thickness: stroke.thickness,
+      points: pts,
+      isHighlighter: stroke.isHighlighter,
+      brushType: stroke.brushType,
+      isSmoothed: stroke.isSmoothed,
+      zIndex: stroke.zIndex,
+      layerId: stroke.layerId,
+      creatorId: stroke.creatorId,
+      pageNumber: stroke.pageNumber,
+      updatedAt: TimeService().nowMs(),
+    )).toList();
   }
 }

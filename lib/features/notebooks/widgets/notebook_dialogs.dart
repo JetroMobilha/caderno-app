@@ -206,7 +206,7 @@ class NotebookDialogs {
                       isFavorite: isFavorite,
                     );
 
-                    newNotebook.id = await notifier.addNotebook(newNotebook, activeSubject?.serverId);
+                    await notifier.addNotebook(newNotebook, activeSubject?.serverId);
                     if (contextDialog.mounted) {
                       Navigator.pop(contextDialog);
                     }

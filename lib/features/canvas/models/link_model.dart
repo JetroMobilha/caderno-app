@@ -1,55 +1,61 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'page_object.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 
 enum LinkType { internalPage, externalUrl }
 
+/// 🚀 v10.0: Implementação Imutável de Objeto de Link Refatorada.
 class LinkObject implements PageObject {
   @override
   final String id;
   @override
   final String type = 'link';
+  @override
+  final String? parentId; // 🚀 v10
   
   final LinkType linkType;
   final String? targetPageClientId;
   final String? url;
-  String label;
+  final String label;
   
   @override
-  Offset position;
+  final Offset position;
   @override
-  Size size;
+  final Size size;
   @override
-  double rotation;
+  final double rotation;
   @override
-  int zIndex;
+  final int zIndex;
   @override
-  bool isLocked;
+  final bool isLocked;
   @override
-  bool isVisible;
+  final bool isVisible;
   @override
-  int updatedAt;
+  final double opacity; // 🚀 v10
   @override
-  int version;
+  final int updatedAt;
   @override
-  bool isDeleted;
+  final int version;
   @override
-  bool syncedWithCloud;
+  final bool isDeleted;
   @override
-  bool deletedInSession;
+  final bool syncedWithCloud;
   @override
-  int? pageNumber;
+  final bool deletedInSession;
+  @override
+  final int? pageNumber;
   @override
   final String? creatorId;
   @override
-  String? layerId;
+  final String? layerId;
 
-  // Estilo
-  String backgroundColor;
-  String textColor;
+  final String backgroundColor;
+  final String textColor;
 
   LinkObject({
     required this.id,
+    this.parentId,
     required this.linkType,
     this.targetPageClientId,
     this.url,
@@ -60,6 +66,7 @@ class LinkObject implements PageObject {
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
+    this.opacity = 1.0,
     int? updatedAt,
     this.version = 1,
     this.isDeleted = false,
@@ -73,10 +80,71 @@ class LinkObject implements PageObject {
   }) : updatedAt = updatedAt ?? TimeService().nowMs();
 
   @override
+  LinkObject copyWith({
+    String? id,
+    String? parentId,
+    Offset? position,
+    Size? size,
+    double? rotation,
+    int? zIndex,
+    bool? isLocked,
+    bool? isVisible,
+    double? opacity,
+    int? updatedAt,
+    int? version,
+    bool? isDeleted,
+    bool? syncedWithCloud,
+    bool? deletedInSession,
+    int? pageNumber,
+    String? layerId,
+    String? label,
+    String? backgroundColor,
+    String? textColor,
+  }) {
+    return LinkObject(
+      id: id ?? this.id,
+      parentId: parentId ?? this.parentId,
+      linkType: linkType,
+      targetPageClientId: targetPageClientId,
+      url: url,
+      label: label ?? this.label,
+      position: position ?? this.position,
+      size: size ?? this.size,
+      rotation: rotation ?? this.rotation,
+      zIndex: zIndex ?? this.zIndex,
+      isLocked: isLocked ?? this.isLocked,
+      isVisible: isVisible ?? this.isVisible,
+      opacity: opacity ?? this.opacity,
+      updatedAt: updatedAt ?? TimeService().nowMs(),
+      version: version ?? (this.version + 1),
+      isDeleted: isDeleted ?? this.isDeleted,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      deletedInSession: deletedInSession ?? this.deletedInSession,
+      pageNumber: pageNumber ?? this.pageNumber,
+      creatorId: creatorId,
+      layerId: layerId ?? this.layerId,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      textColor: textColor ?? this.textColor,
+    );
+  }
+
+  @override
+  LinkObject clone({String? newId, int? newPageNumber}) {
+    return copyWith(
+      id: newId ?? const Uuid().v4(),
+      pageNumber: newPageNumber ?? pageNumber,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      syncedWithCloud: false,
+    );
+  }
+
+  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'type': type,
+      'parent_id': parentId,
       'link_type': linkType.name,
       'target_page_client_id': targetPageClientId,
       'url': url,
@@ -89,6 +157,7 @@ class LinkObject implements PageObject {
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
+      'opacity': opacity,
       'updated_at': updatedAt,
       'version': version,
       'is_deleted': isDeleted ? 1 : 0,
@@ -105,17 +174,19 @@ class LinkObject implements PageObject {
   factory LinkObject.fromJson(Map<String, dynamic> json) {
     return LinkObject(
       id: json['id'],
+      parentId: json['parent_id'],
       linkType: LinkType.values.firstWhere((e) => e.name == json['link_type']),
       targetPageClientId: json['target_page_client_id'],
       url: json['url'],
       label: json['label'] ?? 'Link',
-      position: Offset(json['x'], json['y']),
-      size: Size(json['width'], json['height']),
-      rotation: json['rotation']?.toDouble() ?? 0.0,
-      zIndex: json['z_index'] ?? 0,
+      position: Offset((json['x'] as num?)?.toDouble() ?? 0.0, (json['y'] as num?)?.toDouble() ?? 0.0),
+      size: Size((json['width'] as num?)?.toDouble() ?? 140.0, (json['height'] as num?)?.toDouble() ?? 40.0),
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
+      zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == 1,
       isVisible: json['is_visible'] == 1,
-      updatedAt: json['updated_at'],
+      opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
+      updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
       version: json['version'] ?? 1,
       isDeleted: json['is_deleted'] == 1,
       syncedWithCloud: json['synced_with_cloud'] == 1,
@@ -125,33 +196,6 @@ class LinkObject implements PageObject {
       layerId: json['layer_id'],
       backgroundColor: json['bg_color'] ?? '#0F4C5C',
       textColor: json['text_color'] ?? '#FFFFFF',
-    );
-  }
-
-  @override
-  LinkObject clone({String? newId, int? newPageNumber}) {
-    return LinkObject(
-      id: newId ?? id,
-      linkType: linkType,
-      targetPageClientId: targetPageClientId,
-      url: url,
-      label: label,
-      position: position,
-      size: size,
-      rotation: rotation,
-      zIndex: zIndex,
-      isLocked: isLocked,
-      isVisible: isVisible,
-      updatedAt: updatedAt,
-      version: version,
-      isDeleted: isDeleted,
-      syncedWithCloud: false,
-      deletedInSession: false,
-      pageNumber: newPageNumber ?? pageNumber,
-      creatorId: creatorId,
-      layerId: layerId,
-      backgroundColor: backgroundColor,
-      textColor: textColor,
     );
   }
 }

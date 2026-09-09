@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart'; // 🚀 v9.7
+import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'package:vector_math/vector_math_64.dart';
@@ -9,17 +11,18 @@ import 'text_block_model.dart';
 import 'shape_model.dart'; 
 import 'audio_block_model.dart'; 
 import 'animation_object_model.dart'; 
-import 'table_model.dart'; // 🚀 NOVO
-import 'link_model.dart'; // 🚀 NOVO
-import 'attachment_model.dart'; // 🚀 NOVO
+import 'table_model.dart';
+import 'link_model.dart';
+import 'attachment_model.dart';
 import 'page_object.dart';
 import '../../notebooks/models/notebook_configuration.dart';
 
+/// 🚀 v9.0: Definição de Camada Imutável.
 class LayerDefinition {
   final String id;
-  String name;
-  bool isVisible;
-  bool isLocked;
+  final String name;
+  final bool isVisible;
+  final bool isLocked;
 
   LayerDefinition({
     required this.id,
@@ -49,63 +52,54 @@ class LayerDefinition {
     );
   }
 
-  LayerDefinition clone() {
-    return LayerDefinition(
-      id: id,
-      name: name,
-      isVisible: isVisible,
-      isLocked: isLocked,
-    );
-  }
+  LayerDefinition clone() => copyWith();
 }
 
+/// 🚀 v9.2: Modelo de Página Imutável Refatorado.
 class LocalPage {
-  int? id;
-  int? serverId;
+  final int? id;
+  final int? serverId;
   final String clientId;
   final int notebookId;
   final int pageNumber;
   final bool isLandscape;
   final String paperSize;
-  String? lineType;
-  double? lineSpacing;
-  bool isFrozen; 
-  bool isFavorite; 
-  bool isDeleted;
-  bool isTearing = false;
-  bool isContentLoaded = false;
-  bool isInfinite;
+  final String? lineType;
+  final double? lineSpacing;
+  final bool isFrozen; 
+  final bool isFavorite; 
+  final bool isDeleted;
+  final bool isTearing;
+  final bool isContentLoaded;
+  final bool isInfinite;
 
-  String title;
-  String? sectionTitle; 
-  String? sectionColor; 
-  String footer;
-  String? extractedText;
-  BackgroundConfig? backgroundConfig; 
-  Matrix4? viewportMatrix; 
-  List<LayerDefinition> layers; // 🚀 v28
+  final String title;
+  final String? sectionTitle; 
+  final String? sectionColor; 
+  final String footer;
+  final String? extractedText;
+  final BackgroundConfig? backgroundConfig; 
+  final Matrix4? viewportMatrix; 
+  final List<LayerDefinition> layers;
 
-  // 🚀 LISTA UNIFICADA DE OBJETOS
-  List<PageObject> objects;
+  final List<PageObject> objects;
 
-  // 🔄 Mapeadores para retrocompatibilidade e acesso rápido
   List<Stroke> get strokes => objects.whereType<Stroke>().toList();
   List<TextBlock> get textBlocks => objects.whereType<TextBlock>().toList();
   List<ImageBlock> get imageBlocks => objects.whereType<ImageBlock>().toList();
-  List<ShapeObject> get shapes => objects.whereType<ShapeObject>().toList(); // 🚀 NOVO
-  List<AudioBlock> get audios => objects.whereType<AudioBlock>().toList(); // 🚀 NOVO
-  List<AnimationObject> get animations => objects.whereType<AnimationObject>().toList(); // 🚀 NOVO
-  List<TableObject> get tables => objects.whereType<TableObject>().toList(); // 🚀 NOVO
-  List<LinkObject> get links => objects.whereType<LinkObject>().toList(); // 🚀 NOVO
-  List<AttachmentObject> get attachments => objects.whereType<AttachmentObject>().toList(); // 🚀 NOVO
+  List<ShapeObject> get shapes => objects.whereType<ShapeObject>().toList();
+  List<AudioBlock> get audios => objects.whereType<AudioBlock>().toList();
+  List<AnimationObject> get animations => objects.whereType<AnimationObject>().toList();
+  List<TableObject> get tables => objects.whereType<TableObject>().toList();
+  List<LinkObject> get links => objects.whereType<LinkObject>().toList();
+  List<AttachmentObject> get attachments => objects.whereType<AttachmentObject>().toList();
 
-  List<Stroke> redoHistory;
+  final List<Stroke> redoHistory;
 
-  int syncedWithCloud;
-  int updatedAt;
-  int version;
+  final int syncedWithCloud;
+  final int updatedAt;
+  final int version;
 
-  /// 🚀 Verifica se a página possui conteúdo visível (não apagado)
   bool get hasData => objects.any((o) => !o.isDeleted);
 
   LocalPage({
@@ -122,6 +116,8 @@ class LocalPage {
     this.isFavorite = false,
     this.isDeleted = false,
     this.isInfinite = false,
+    this.isTearing = false,
+    this.isContentLoaded = false,
     this.title = '',
     this.sectionTitle, 
     this.sectionColor, 
@@ -131,21 +127,21 @@ class LocalPage {
     this.backgroundConfig,
     this.viewportMatrix,
     List<LayerDefinition>? layers,
+    List<Stroke>? redoHistory,
     this.syncedWithCloud = 0,
     int? updatedAt,
     this.version = 1,
   })  : clientId = clientId ?? const Uuid().v4(),
-       objects = objects ?? <PageObject>[],
-       layers = layers ?? [
+       objects = List.unmodifiable(objects ?? <PageObject>[]),
+       layers = List.unmodifiable(layers ?? [
          LayerDefinition(id: 'default', name: 'Geral'),
          LayerDefinition(id: 'background', name: 'Fundo'),
          LayerDefinition(id: 'drawings', name: 'Desenhos'),
          LayerDefinition(id: 'text', name: 'Texto'),
-       ],
-       redoHistory = [],
+       ]),
+       redoHistory = List.unmodifiable(redoHistory ?? []),
        updatedAt = updatedAt ?? TimeService().nowMs();
 
-  // 🚀 UNIDADES PADRONIZADAS: toConfig deve retornar dimensões em MM
   NotebookConfiguration get toConfig => NotebookConfiguration(
     page: PageConfig(
       width: isInfinite ? 1000 : (isLandscape ? _getPaperDimsRaw(paperSize)['h']! : _getPaperDimsRaw(paperSize)['w']!),
@@ -167,7 +163,6 @@ class LocalPage {
     numbering: NumberingConfig(enabled: true),
   );
 
-  // 🚀 DIMENSÕES PARA RENDERIZAÇÃO (PIXELS)
   double get pageWidthPx {
     if (isInfinite) return 5000.0;
     final dims = _getPaperDimsPx(paperSize);
@@ -187,7 +182,7 @@ class LocalPage {
       case 'A2': return {'w': 420, 'h': 594};
       case 'A3': return {'w': 297, 'h': 420};
       case 'A5': return {'w': 148, 'h': 210};
-      default: return {'w': 210, 'h': 297}; // A4
+      default: return {'w': 210, 'h': 297};
     }
   }
 
@@ -210,6 +205,8 @@ class LocalPage {
     bool? isFavorite,
     bool? isDeleted,
     bool? isInfinite,
+    bool? isTearing,
+    bool? isContentLoaded,
     String? title,
     String? sectionTitle,
     String? sectionColor,
@@ -218,6 +215,7 @@ class LocalPage {
     String? extractedText,
     List<PageObject>? objects,
     List<LayerDefinition>? layers,
+    List<Stroke>? redoHistory,
     BackgroundConfig? backgroundConfig,
     Matrix4? viewportMatrix,
     int? syncedWithCloud,
@@ -238,45 +236,34 @@ class LocalPage {
       isFavorite: isFavorite ?? this.isFavorite,
       isDeleted: isDeleted ?? this.isDeleted,
       isInfinite: isInfinite ?? this.isInfinite,
+      isTearing: isTearing ?? this.isTearing,
+      isContentLoaded: isContentLoaded ?? this.isContentLoaded,
       title: title ?? this.title,
       sectionTitle: clearSection ? null : (sectionTitle ?? this.sectionTitle),
       sectionColor: clearSection ? null : (sectionColor ?? this.sectionColor),
       footer: footer ?? this.footer,
       extractedText: extractedText ?? this.extractedText,
-      objects: objects ?? List.from(this.objects),
-      layers: layers ?? List.from(this.layers),
+      objects: objects ?? this.objects,
+      layers: layers ?? this.layers,
+      redoHistory: redoHistory ?? this.redoHistory,
       backgroundConfig: backgroundConfig ?? this.backgroundConfig,
       viewportMatrix: viewportMatrix ?? this.viewportMatrix,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
-      updatedAt: updatedAt ?? this.updatedAt,
-      version: version ?? this.version,
+      updatedAt: updatedAt ?? TimeService().nowMs(),
+      version: version ?? (this.version + 1),
     );
   }
 
   LocalPage clone({String? newClientId, int? newNotebookId, int? newPageNumber}) {
-    return LocalPage(
+    final int pNum = newPageNumber ?? pageNumber;
+    return copyWith(
       id: null,
       serverId: null,
       clientId: newClientId ?? const Uuid().v4(),
       notebookId: newNotebookId ?? notebookId,
-      pageNumber: newPageNumber ?? pageNumber,
-      isLandscape: isLandscape,
-      paperSize: paperSize,
-      lineType: lineType,
-      lineSpacing: lineSpacing,
-      isFrozen: isFrozen,
-      isFavorite: isFavorite,
-      isDeleted: isDeleted,
-      isInfinite: isInfinite,
-      title: title,
-      sectionTitle: sectionTitle,
-      sectionColor: sectionColor,
-      footer: footer,
-      extractedText: extractedText,
-      objects: objects.map((obj) => obj.clone(newPageNumber: newPageNumber ?? pageNumber)).toList(),
-      layers: layers.map((l) => l.clone()).toList(), // 🚀 Deep copy layers
-      backgroundConfig: backgroundConfig != null ? BackgroundConfig.fromJson(backgroundConfig!.toJson()) : null,
-      viewportMatrix: viewportMatrix?.clone(),
+      pageNumber: pNum,
+      objects: objects.map((obj) => obj.clone(newPageNumber: pNum)).toList(),
+      layers: layers.map((l) => l.clone()).toList(),
       syncedWithCloud: 0,
       updatedAt: TimeService().nowMs(),
       version: 1,
@@ -314,7 +301,7 @@ class LocalPage {
       'footer_data': {'title': footer},
       'extracted_text': extractedText,
       'objects_data': objects.map((o) => o.toJson()).toList(),
-      'layers': layers.map((l) => l.toJson()).toList(), // 🚀 v28
+      'layers': layers.map((l) => l.toJson()).toList(),
       'background_config': backgroundConfig?.toJson(),
       'viewport_matrix': viewportMatrix != null ? viewportMatrix!.storage.toList() : null,
       'updated_at': updatedAt,
@@ -325,11 +312,8 @@ class LocalPage {
   Future<Map<String, dynamic>> toJsonAsync() async {
     final List<Map<String, dynamic>> asyncObjects = [];
     for (var obj in objects) {
-      if (obj is ImageBlock) {
-        asyncObjects.add(await obj.toJsonAsync());
-      } else {
-        asyncObjects.add(obj.toJson());
-      }
+      if (obj is ImageBlock) asyncObjects.add(await obj.toJsonAsync());
+      else asyncObjects.add(obj.toJson());
     }
     final map = toJson();
     map['objects_data'] = asyncObjects;
@@ -338,7 +322,6 @@ class LocalPage {
 
   factory LocalPage.fromJson(Map<String, dynamic> json) {
     final List<PageObject> objs = [];
-
     if (json['objects_data'] != null) {
       for (var item in json['objects_data']) {
         final type = item['type'];
@@ -348,27 +331,11 @@ class LocalPage {
         else if (type == 'shape') objs.add(ShapeObject.fromJson(item));
         else if (type == 'audio') objs.add(AudioBlock.fromJson(item));
         else if (type == 'animation') objs.add(AnimationObject.fromJson(item));
-        else if (type == 'table') objs.add(TableObject.fromJson(item)); // 🚀 NOVO
-        else if (type == 'link') objs.add(LinkObject.fromJson(item)); // 🚀 NOVO
-        else if (type == 'attachment') objs.add(AttachmentObject.fromJson(item)); // 🚀 NOVO
+        else if (type == 'table') objs.add(TableObject.fromJson(item));
+        else if (type == 'link') objs.add(LinkObject.fromJson(item));
+        else if (type == 'attachment') objs.add(AttachmentObject.fromJson(item));
       }
-    } else {
-      final List<dynamic> strokesList = json['stroke_data'] ?? [];
-      final List<dynamic> textList = json['text_data'] ?? [];
-      final List<dynamic> imageList = json['image_data'] ?? [];
-      objs.addAll(strokesList.map((s) => Stroke.fromJson(s)));
-      objs.addAll(textList.map((t) => TextBlock.fromJson(t)));
-      objs.addAll(imageList.map((img) => ImageBlock.fromJson(img)));
     }
-
-    int? upAt;
-    if (json['updated_at_ms'] != null) upAt = (json['updated_at_ms'] as num).toInt();
-    else if (json['updated_at'] != null) {
-      final val = json['updated_at'];
-      if (val is num) upAt = val.toInt();
-      else if (val is String) upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
-    }
-
     return LocalPage(
       serverId: json['id'] != null ? int.tryParse(json['id'].toString()) : null,
       clientId: json['client_id']?.toString(),
@@ -382,62 +349,26 @@ class LocalPage {
       isFavorite: json['is_favorite'] == true || json['is_favorite'] == 1,
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
       isInfinite: json['is_infinite'] == true || json['is_infinite'] == 1,
-      title: parseMeta(json['header_data']),
-      sectionTitle: parseSection(json['header_data']),
-      sectionColor: parseSectionColor(json['header_data']),
-      footer: parseMeta(json['footer_data']),
+      title: LocalPage.parseMeta(json['header_data']),
+      sectionTitle: LocalPage.parseSection(json['header_data']),
+      sectionColor: LocalPage.parseSectionColor(json['header_data']),
+      footer: LocalPage.parseMeta(json['footer_data']),
       extractedText: json['extracted_text']?.toString(),
       objects: objs,
-      layers: json['layers'] != null 
-          ? (json['layers'] as List).map((l) => LayerDefinition.fromJson(l)).toList() 
-          : null,
+      layers: json['layers'] != null ? (json['layers'] as List).map((l) => LayerDefinition.fromJson(l)).toList() : null,
       backgroundConfig: json['background_config'] != null ? BackgroundConfig.fromJson(json['background_config']) : null,
       viewportMatrix: json['viewport_matrix'] != null ? Matrix4.fromList(List<double>.from(json['viewport_matrix'])) : null,
       syncedWithCloud: json['synced_with_cloud'] ?? 0,
-      updatedAt: upAt,
+      updatedAt: (json['updated_at_ms'] ?? json['updated_at']) as int?,
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     );
   }
 
   static String parseMeta(dynamic data) {
     if (data == null) return '';
-    dynamic current = data;
-    for (int i = 0; i < 5; i++) {
-      if (current is Map) current = current['title'];
-      else if (current is String && current.trim().startsWith('{')) {
-        try {
-          final decoded = jsonDecode(current);
-          if (decoded is Map && decoded.containsKey('title')) current = decoded['title'];
-          else break;
-        } catch (_) { break; }
-      } else {
-        break;
-      }
-    }
-    return current?.toString() ?? '';
+    if (data is Map) return data['title']?.toString() ?? '';
+    return '';
   }
-
-  static String? parseSection(dynamic data) {
-    if (data == null) return null;
-    if (data is Map) return data['section']?.toString();
-    if (data is String && data.trim().startsWith('{')) {
-      try {
-        final decoded = jsonDecode(data);
-        if (decoded is Map) return decoded['section']?.toString();
-      } catch (_) {}
-    }
-    return null;
-  }
-
-  static String? parseSectionColor(dynamic data) {
-    if (data == null) return null;
-    if (data is Map) return data['section_color']?.toString();
-    if (data is String && data.trim().startsWith('{')) {
-      try {
-        final decoded = jsonDecode(data);
-        if (decoded is Map) return decoded['section_color']?.toString();
-      } catch (_) {}
-    }
-    return null;
-  }
+  static String? parseSection(dynamic data) { if (data is Map) return data['section']?.toString(); return null; }
+  static String? parseSectionColor(dynamic data) { if (data is Map) return data['section_color']?.toString(); return null; }
 }

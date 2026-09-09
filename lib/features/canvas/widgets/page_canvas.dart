@@ -6,9 +6,12 @@ import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../models/image_block_model.dart';
 import '../providers/canvas_tool_provider.dart';
+import '../providers/canvas_render_provider.dart'; // 🚀 NOVO
 import 'canvas_painter.dart';
 import 'object_renderer.dart';
 
+/// 🚀 v9.0: Widget de renderização pura da folha.
+/// Agora é um "Pure Consumer" que recebe a lista de renderização pré-calculada.
 class PageCanvas extends ConsumerWidget {
   final LocalPage page;
   final Size pageSize;
@@ -24,72 +27,36 @@ class PageCanvas extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final toolState = ref.watch(canvasToolProvider);
-    final selectedIds = {
-      ...toolState.selectedStrokeIds,
-      ...toolState.selectedTextIds,
-      ...toolState.selectedImageIds,
-      ...toolState.selectedShapeIds,
-      ...toolState.selectedAudioIds,
-      ...toolState.selectedAnimationIds,
-      ...toolState.selectedTableIds,
-      ...toolState.selectedLinkIds,
-      ...toolState.selectedAttachmentIds,
-    };
+    final renderList = ref.watch(canvasRenderProvider(page.clientId)); // 🚀 v9.0
 
-    // 1. Map de visibilidade/bloqueio das camadas para acesso rápido
-    final Map<String, bool> layerVisibility = {
-      for (var l in page.layers) l.id: l.isVisible
-    };
+    final List<Widget> widgets = [];
 
-    // 2. Sort objects by zIndex and filter by visibility
-    final sortedObjects = page.objects.where((o) {
-      if (o.isDeleted) return false;
-      final bool layerVisible = layerVisibility[o.layerId ?? 'default'] ?? true;
-      return layerVisible && o.isVisible;
-    }).toList()
-      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
-
-    // 🚀 OTIMIZAÇÃO: Agrupar strokes consecutivos para melhor performance
-    final List<Widget> renderList = [];
-    List<Stroke> currentStrokeGroup = [];
-
-    void flushStrokes() {
-      if (currentStrokeGroup.isNotEmpty) {
-        final group = List<Stroke>.from(currentStrokeGroup);
-        renderList.add(
+    for (var item in renderList) {
+      if (item is StrokesRenderItem) {
+        widgets.add(
           RepaintBoundary(
             child: CustomPaint(
               size: pageSize,
               painter: StrokesPainter(
-                strokes: group,
+                strokes: item.strokes,
                 selectedStrokeIds: toolState.selectedStrokeIds, 
                 selectionRect: null,
                 pageVersion: page.version,
-                selectionDelta: toolState.totalSelectionDelta, // 🚀 FLUIDEZ
+                selectionDelta: toolState.totalSelectionDelta,
               ),
             ),
           ),
         );
-        currentStrokeGroup = [];
-      }
-    }
-
-    for (var obj in sortedObjects) {
-      if (obj is Stroke) {
-        currentStrokeGroup.add(obj);
-      } else {
-        flushStrokes();
-        final bool isSelected = selectedIds.contains(obj.id);
-        renderList.add(ObjectRenderer(
-          object: obj, 
+      } else if (item is ObjectRenderItem) {
+        widgets.add(ObjectRenderer(
+          object: item.object, 
           isReadOnly: isReadOnly,
-          movementDelta: isSelected ? toolState.totalSelectionDelta : null,
-          liveScale: isSelected ? toolState.liveScale : null, // 🚀 v3
-          liveRotation: isSelected ? toolState.liveRotation : null, // 🚀 v3
+          movementDelta: item.isSelected ? toolState.totalSelectionDelta : null,
+          liveScale: item.isSelected ? toolState.liveScale : null,
+          liveRotation: item.isSelected ? toolState.liveRotation : null,
         ));
       }
     }
-    flushStrokes();
 
     return Container(
       width: pageSize.width,
@@ -98,7 +65,6 @@ class PageCanvas extends ConsumerWidget {
       child: Stack(
         fit: StackFit.expand, 
         children: [
-          // 🚀 REMOVIDO RepaintBoundary para evitar limites de textura GPU em folhas gigantes
           CustomPaint(
             size: pageSize,
             painter: BackgroundPainter(
@@ -108,9 +74,7 @@ class PageCanvas extends ConsumerWidget {
               lineSpacing: page.lineSpacing,
             ),
           ),
-          
-          // Layer de Objetos
-          ...renderList,
+          ...widgets,
         ],
       ),
     );

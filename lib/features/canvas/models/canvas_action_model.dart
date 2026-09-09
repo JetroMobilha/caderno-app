@@ -7,11 +7,12 @@ import 'image_block_model.dart';
 import 'shape_model.dart'; 
 import 'audio_block_model.dart'; 
 import 'animation_object_model.dart'; 
-import 'table_model.dart'; // 🚀 NOVO
-import 'link_model.dart'; // 🚀 NOVO
-import 'attachment_model.dart'; // 🚀 NOVO
+import 'table_model.dart';
+import 'link_model.dart';
+import 'attachment_model.dart';
 import 'page_object.dart';
 
+/// 🚀 v9.0: Ações do Canvas redesenhadas para o paradigma imutável.
 abstract class CanvasAction {
   final String pageClientId;
   final int pageNumber;
@@ -20,8 +21,8 @@ abstract class CanvasAction {
   CanvasAction(this.pageClientId, this.pageNumber, {int? timestamp}) 
     : timestamp = timestamp ?? TimeService().nowMs();
 
-  void execute(LocalPage page);
-  void undo(LocalPage page);
+  LocalPage execute(LocalPage page);
+  LocalPage undo(LocalPage page);
   
   String get type;
   Map<String, dynamic> toMap();
@@ -44,17 +45,17 @@ abstract class CanvasAction {
       return AddTextAction(pageClientId: cid, pageNumber: pNum, block: TextBlock.fromJson(data['block']), timestamp: ts);
     } else if (type == 'addImage') {
       return AddImageAction(pageClientId: cid, pageNumber: pNum, block: ImageBlock.fromJson(data['block']), timestamp: ts);
-    } else if (type == 'addShape') { // 🚀 v28
+    } else if (type == 'addShape') {
       return AddShapeAction(pageClientId: cid, pageNumber: pNum, shape: ShapeObject.fromJson(data['shape']), timestamp: ts);
     } else if (type == 'addAudio') { 
       return AddAudioAction(pageClientId: cid, pageNumber: pNum, audio: AudioBlock.fromJson(data['audio']), timestamp: ts);
     } else if (type == 'addAnimation') { 
       return AddAnimationAction(pageClientId: cid, pageNumber: pNum, animation: AnimationObject.fromJson(data['animation']), timestamp: ts);
-    } else if (type == 'addTable') { // 🚀 v29
+    } else if (type == 'addTable') {
       return AddTableAction(pageClientId: cid, pageNumber: pNum, table: TableObject.fromJson(data['table']), timestamp: ts);
-    } else if (type == 'addLink') { // 🚀 v29
+    } else if (type == 'addLink') {
       return AddLinkAction(pageClientId: cid, pageNumber: pNum, link: LinkObject.fromJson(data['link']), timestamp: ts);
-    } else if (type == 'addAttachment') { // 🚀 v29
+    } else if (type == 'addAttachment') {
       return AddAttachmentAction(pageClientId: cid, pageNumber: pNum, attach: AttachmentObject.fromJson(data['attach']), timestamp: ts);
     } else if (type == 'move') {
       return MoveAction(
@@ -73,24 +74,7 @@ abstract class CanvasAction {
         newState: data['newState'],
         timestamp: ts,
       );
-    } else if (type == 'addPage') {
-      return AddPageAction(
-        pageClientId: cid,
-        pageNumber: pNum,
-        isLandscape: data['isLandscape'] ?? false,
-        paperSize: data['paperSize'] ?? 'A4',
-        lineType: data['lineType'],
-        lineSpacing: (data['lineSpacing'] as num?)?.toDouble(),
-        timestamp: ts,
-      );
-    } else if (type == 'deletePage') {
-      return DeletePageAction(
-        pageClientId: cid,
-        pageNumber: pNum,
-        pageData: data['pageData'],
-        timestamp: ts,
-      );
-    } else if (type == 'pixelErase') { // 🚀 v2.1
+    } else if (type == 'pixelErase') {
       return PixelEraseAction(
         pageClientId: cid,
         pageNumber: pNum,
@@ -100,12 +84,70 @@ abstract class CanvasAction {
             .toList(),
         timestamp: ts,
       );
+    } else if (type == 'group') {
+      return GroupAction(
+        pageClientId: cid,
+        pageNumber: pNum,
+        objectIds: List<String>.from(data['objectIds'] ?? []),
+        newParentId: data['newParentId'],
+        oldParentIds: Map<String, String?>.from(data['oldParentIds'] ?? {}),
+        timestamp: ts,
+      );
     }
     return null;
   }
 }
 
-// 🚀 v2.1: Ação Composta para Borracha de Precisão (Undo/Redo Amigável)
+class GroupAction extends CanvasAction {
+  final List<String> objectIds;
+  final String? newParentId;
+  final Map<String, String?> oldParentIds;
+
+  GroupAction({
+    required String pageClientId,
+    required int pageNumber,
+    required this.objectIds,
+    this.newParentId,
+    required this.oldParentIds,
+    int? timestamp,
+  }) : super(pageClientId, pageNumber, timestamp: timestamp);
+
+  @override String get type => 'group';
+
+  @override Map<String, dynamic> toMap() => {
+    'pageClientId': pageClientId,
+    'pageNumber': pageNumber,
+    'timestamp': timestamp,
+    'objectIds': objectIds,
+    'newParentId': newParentId,
+    'oldParentIds': oldParentIds,
+  };
+
+  @override
+  LocalPage execute(LocalPage page) {
+    final now = TimeService().nowMs();
+    final newObjects = page.objects.map((o) {
+      if (objectIds.contains(o.id)) {
+        return o.copyWith(parentId: newParentId, updatedAt: now);
+      }
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
+  }
+
+  @override
+  LocalPage undo(LocalPage page) {
+    final now = TimeService().nowMs();
+    final newObjects = page.objects.map((o) {
+      if (objectIds.contains(o.id)) {
+        return o.copyWith(parentId: oldParentIds[o.id], updatedAt: now);
+      }
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
+  }
+}
+
 class PixelEraseAction extends CanvasAction {
   final List<String> deletedStrokeIds;
   final List<Stroke> addedStrokes;
@@ -129,38 +171,29 @@ class PixelEraseAction extends CanvasAction {
   };
 
   @override
-  void execute(LocalPage page) {
+  LocalPage execute(LocalPage page) {
     final now = TimeService().nowMs();
-    // 1. Marcar originais como apagados
-    for (var id in deletedStrokeIds) {
-      final idx = page.objects.indexWhere((o) => o.id == id);
-      if (idx != -1) {
-        page.objects[idx].isDeleted = true;
-        page.objects[idx].updatedAt = now;
+    final newObjects = page.objects.map((o) {
+      if (deletedStrokeIds.contains(o.id)) {
+        return o.copyWith(isDeleted: true, updatedAt: now);
       }
-    }
-    // 2. Adicionar novos segmentos
-    for (var s in addedStrokes) {
-      s.isDeleted = false;
-      s.updatedAt = now;
-      page.objects.add(s);
-    }
+      return o;
+    }).toList();
+    newObjects.addAll(addedStrokes);
+    return page.copyWith(objects: newObjects.cast<PageObject>());
   }
 
   @override
-  void undo(LocalPage page) {
+  LocalPage undo(LocalPage page) {
     final now = TimeService().nowMs();
-    // 1. Restaurar originais
-    for (var id in deletedStrokeIds) {
-      final idx = page.objects.indexWhere((o) => o.id == id);
-      if (idx != -1) {
-        page.objects[idx].isDeleted = false;
-        page.objects[idx].updatedAt = now;
-      }
-    }
-    // 2. Remover segmentos da borracha
     final addedIds = addedStrokes.map((s) => s.id).toSet();
-    page.objects.removeWhere((o) => addedIds.contains(o.id));
+    final newObjects = page.objects.where((o) => !addedIds.contains(o.id)).map((o) {
+      if (deletedStrokeIds.contains(o.id)) {
+        return o.copyWith(isDeleted: false, updatedAt: now);
+      }
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects.cast<PageObject>());
   }
 }
 
@@ -186,18 +219,18 @@ class MoveAction extends CanvasAction {
     'deltaY': delta.dy,
   };
 
-  @override void execute(LocalPage page) => _applyDelta(page, delta);
-  @override void undo(LocalPage page) => _applyDelta(page, -delta);
+  @override LocalPage execute(LocalPage page) => _applyDelta(page, delta);
+  @override LocalPage undo(LocalPage page) => _applyDelta(page, -delta);
 
-  void _applyDelta(LocalPage page, Offset d) {
+  LocalPage _applyDelta(LocalPage page, Offset d) {
     final int now = TimeService().nowMs();
-    for (var oid in objectIds) {
-      final idx = page.objects.indexWhere((o) => o.id == oid);
-      if (idx != -1) {
-        page.objects[idx].position += d;
-        page.objects[idx].updatedAt = now;
+    final newObjects = page.objects.map((o) {
+      if (objectIds.contains(o.id)) {
+        return o.copyWith(position: o.position + d, updatedAt: now);
       }
-    }
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -225,26 +258,26 @@ class UpdateObjectAction extends CanvasAction {
     'newState': newState,
   };
 
-  @override void execute(LocalPage page) => _applyState(page, newState);
-  @override void undo(LocalPage page) => _applyState(page, oldState);
+  @override LocalPage execute(LocalPage page) => _applyState(page, newState);
+  @override LocalPage undo(LocalPage page) => _applyState(page, oldState);
 
-  void _applyState(LocalPage page, Map<String, dynamic> state) {
-    final idx = page.objects.indexWhere((o) => o.id == objectId);
-    if (idx != -1) {
-      final type = state['type'];
-      PageObject? newObj;
-      if (type == 'stroke') newObj = Stroke.fromJson(state);
-      else if (type == 'text') newObj = TextBlock.fromJson(state);
-      else if (type == 'image') newObj = ImageBlock.fromJson(state);
-      else if (type == 'shape') newObj = ShapeObject.fromJson(state);
-      else if (type == 'audio') newObj = AudioBlock.fromJson(state);
-      else if (type == 'animation') newObj = AnimationObject.fromJson(state);
-      
-      if (newObj != null) {
-        page.objects[idx] = newObj;
-        page.objects[idx].updatedAt = TimeService().nowMs();
+  LocalPage _applyState(LocalPage page, Map<String, dynamic> state) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == objectId) {
+        final type = state['type'];
+        if (type == 'stroke') return Stroke.fromJson(state);
+        if (type == 'text') return TextBlock.fromJson(state);
+        if (type == 'image') return ImageBlock.fromJson(state);
+        if (type == 'shape') return ShapeObject.fromJson(state);
+        if (type == 'audio') return AudioBlock.fromJson(state);
+        if (type == 'animation') return AnimationObject.fromJson(state);
+        if (type == 'table') return TableObject.fromJson(state);
+        if (type == 'link') return LinkObject.fromJson(state);
+        if (type == 'attachment') return AttachmentObject.fromJson(state);
       }
-    }
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -260,19 +293,20 @@ class AddStrokeAction extends CanvasAction {
     'stroke': stroke.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    stroke.isDeleted = false;
-    stroke.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == stroke.id);
-    if (idx != -1) page.objects[idx] = stroke;
-    else page.objects.add(stroke);
+  @override LocalPage execute(LocalPage page) {
+    final updatedStroke = stroke.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedStroke.id);
+    if (idx != -1) newObjects[idx] = updatedStroke;
+    else newObjects.add(updatedStroke);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == stroke.id);
-    if (idx != -1) {
-      page.objects[idx].isDeleted = true;
-      page.objects[idx].updatedAt = TimeService().nowMs();
-    }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == stroke.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -288,25 +322,21 @@ class DeleteAction extends CanvasAction {
     'objectIds': objectIds,
   };
 
-  @override void execute(LocalPage page) {
+  @override LocalPage execute(LocalPage page) {
     final int now = TimeService().nowMs();
-    for (var oid in objectIds) {
-      final idx = page.objects.indexWhere((o) => o.id == oid);
-      if (idx != -1) {
-        page.objects[idx].isDeleted = true;
-        page.objects[idx].updatedAt = now;
-      }
-    }
+    final newObjects = page.objects.map((o) {
+      if (objectIds.contains(o.id)) return o.copyWith(isDeleted: true, updatedAt: now);
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
+  @override LocalPage undo(LocalPage page) {
     final int now = TimeService().nowMs();
-    for (var oid in objectIds) {
-      final idx = page.objects.indexWhere((o) => o.id == oid);
-      if (idx != -1) {
-        page.objects[idx].isDeleted = false;
-        page.objects[idx].updatedAt = now;
-      }
-    }
+    final newObjects = page.objects.map((o) {
+      if (objectIds.contains(o.id)) return o.copyWith(isDeleted: false, updatedAt: now);
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -319,19 +349,20 @@ class AddTextAction extends CanvasAction {
     'pageClientId': pageClientId, 'pageNumber': pageNumber, 'timestamp': timestamp, 'block': block.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    block.isDeleted = false;
-    block.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == block.id);
-    if (idx != -1) page.objects[idx] = block;
-    else page.objects.add(block);
+  @override LocalPage execute(LocalPage page) {
+    final updatedBlock = block.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedBlock.id);
+    if (idx != -1) newObjects[idx] = updatedBlock;
+    else newObjects.add(updatedBlock);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == block.id);
-    if (idx != -1) {
-      page.objects[idx].isDeleted = true;
-      page.objects[idx].updatedAt = TimeService().nowMs();
-    }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == block.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -344,79 +375,20 @@ class AddImageAction extends CanvasAction {
     'pageClientId': pageClientId, 'pageNumber': pageNumber, 'timestamp': timestamp, 'block': block.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    block.isDeleted = false;
-    block.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == block.id);
-    if (idx != -1) page.objects[idx] = block;
-    else page.objects.add(block);
+  @override LocalPage execute(LocalPage page) {
+    final updatedBlock = block.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedBlock.id);
+    if (idx != -1) newObjects[idx] = updatedBlock;
+    else newObjects.add(updatedBlock);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == block.id);
-    if (idx != -1) {
-      page.objects[idx].isDeleted = true;
-      page.objects[idx].updatedAt = TimeService().nowMs();
-    }
-  }
-}
-
-class AddPageAction extends CanvasAction {
-  final bool isLandscape;
-  final String paperSize;
-  final String? lineType;
-  final double? lineSpacing;
-
-  AddPageAction({
-    required String pageClientId, 
-    required int pageNumber, 
-    required this.isLandscape, 
-    required this.paperSize,
-    this.lineType,
-    this.lineSpacing,
-    int? timestamp,
-  }) : super(pageClientId, pageNumber, timestamp: timestamp);
-
-  @override String get type => 'addPage';
-  @override Map<String, dynamic> toMap() => {
-    'pageClientId': pageClientId, 'pageNumber': pageNumber, 'timestamp': timestamp, 'isLandscape': isLandscape, 'paperSize': paperSize, 'lineType': lineType, 'lineSpacing': lineSpacing,
-  };
-
-  @override void execute(LocalPage page) {
-    page.isDeleted = false;
-    if (lineType != null) page.lineType = lineType;
-    if (lineSpacing != null) page.lineSpacing = lineSpacing;
-    page.updatedAt = TimeService().nowMs();
-  }
-
-  @override void undo(LocalPage page) {
-    page.isDeleted = true;
-    page.updatedAt = TimeService().nowMs();
-  }
-}
-
-class DeletePageAction extends CanvasAction {
-  final Map<String, dynamic> pageData; 
-
-  DeletePageAction({
-    required String pageClientId, 
-    required int pageNumber, 
-    required this.pageData,
-    int? timestamp,
-  }) : super(pageClientId, pageNumber, timestamp: timestamp);
-
-  @override String get type => 'deletePage';
-  @override Map<String, dynamic> toMap() => {
-    'pageClientId': pageClientId, 'pageNumber': pageNumber, 'timestamp': timestamp, 'pageData': pageData,
-  };
-
-  @override void execute(LocalPage page) {
-    page.isDeleted = true;
-    page.updatedAt = TimeService().nowMs();
-  }
-
-  @override void undo(LocalPage page) {
-    page.isDeleted = false;
-    page.updatedAt = TimeService().nowMs();
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == block.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -429,19 +401,20 @@ class AddShapeAction extends CanvasAction {
     'pageClientId': pageClientId, 'pageNumber': pageNumber, 'timestamp': timestamp, 'shape': shape.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    shape.isDeleted = false;
-    shape.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == shape.id);
-    if (idx != -1) page.objects[idx] = shape;
-    else page.objects.add(shape);
+  @override LocalPage execute(LocalPage page) {
+    final updatedShape = shape.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedShape.id);
+    if (idx != -1) newObjects[idx] = updatedShape;
+    else newObjects.add(updatedShape);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == shape.id);
-    if (idx != -1) {
-      page.objects[idx].isDeleted = true;
-      page.objects[idx].updatedAt = TimeService().nowMs();
-    }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == shape.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -454,19 +427,20 @@ class AddAudioAction extends CanvasAction {
     'pageClientId': pageClientId, 'pageNumber': pageNumber, 'timestamp': timestamp, 'audio': audio.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    audio.isDeleted = false;
-    audio.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == audio.id);
-    if (idx != -1) page.objects[idx] = audio;
-    else page.objects.add(audio);
+  @override LocalPage execute(LocalPage page) {
+    final updatedAudio = audio.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedAudio.id);
+    if (idx != -1) newObjects[idx] = updatedAudio;
+    else newObjects.add(updatedAudio);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == audio.id);
-    if (idx != -1) {
-      page.objects[idx].isDeleted = true;
-      page.objects[idx].updatedAt = TimeService().nowMs();
-    }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == audio.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -479,19 +453,20 @@ class AddAnimationAction extends CanvasAction {
     'pageClientId': pageClientId, 'pageNumber': pageNumber, 'timestamp': timestamp, 'animation': animation.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    animation.isDeleted = false;
-    animation.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == animation.id);
-    if (idx != -1) page.objects[idx] = animation;
-    else page.objects.add(animation);
+  @override LocalPage execute(LocalPage page) {
+    final updatedAnimation = animation.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedAnimation.id);
+    if (idx != -1) newObjects[idx] = updatedAnimation;
+    else newObjects.add(updatedAnimation);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == animation.id);
-    if (idx != -1) {
-      page.objects[idx].isDeleted = true;
-      page.objects[idx].updatedAt = TimeService().nowMs();
-    }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == animation.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -505,16 +480,20 @@ class AddTableAction extends CanvasAction {
     'table': table.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    table.isDeleted = false;
-    table.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == table.id);
-    if (idx != -1) page.objects[idx] = table;
-    else page.objects.add(table);
+  @override LocalPage execute(LocalPage page) {
+    final updatedTable = table.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedTable.id);
+    if (idx != -1) newObjects[idx] = updatedTable;
+    else newObjects.add(updatedTable);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == table.id);
-    if (idx != -1) { page.objects[idx].isDeleted = true; page.objects[idx].updatedAt = TimeService().nowMs(); }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == table.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -528,16 +507,20 @@ class AddLinkAction extends CanvasAction {
     'link': link.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    link.isDeleted = false;
-    link.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == link.id);
-    if (idx != -1) page.objects[idx] = link;
-    else page.objects.add(link);
+  @override LocalPage execute(LocalPage page) {
+    final updatedLink = link.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedLink.id);
+    if (idx != -1) newObjects[idx] = updatedLink;
+    else newObjects.add(updatedLink);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == link.id);
-    if (idx != -1) { page.objects[idx].isDeleted = true; page.objects[idx].updatedAt = TimeService().nowMs(); }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == link.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }
 
@@ -551,15 +534,19 @@ class AddAttachmentAction extends CanvasAction {
     'attach': attach.toJson()
   };
 
-  @override void execute(LocalPage page) {
-    attach.isDeleted = false;
-    attach.updatedAt = TimeService().nowMs();
-    final idx = page.objects.indexWhere((o) => o.id == attach.id);
-    if (idx != -1) page.objects[idx] = attach;
-    else page.objects.add(attach);
+  @override LocalPage execute(LocalPage page) {
+    final updatedAttach = attach.copyWith(isDeleted: false, updatedAt: TimeService().nowMs());
+    final newObjects = List<PageObject>.from(page.objects);
+    final idx = newObjects.indexWhere((o) => o.id == updatedAttach.id);
+    if (idx != -1) newObjects[idx] = updatedAttach;
+    else newObjects.add(updatedAttach);
+    return page.copyWith(objects: newObjects);
   }
-  @override void undo(LocalPage page) {
-    final idx = page.objects.indexWhere((o) => o.id == attach.id);
-    if (idx != -1) { page.objects[idx].isDeleted = true; page.objects[idx].updatedAt = TimeService().nowMs(); }
+  @override LocalPage undo(LocalPage page) {
+    final newObjects = page.objects.map((o) {
+      if (o.id == attach.id) return o.copyWith(isDeleted: true, updatedAt: TimeService().nowMs());
+      return o;
+    }).toList();
+    return page.copyWith(objects: newObjects);
   }
 }

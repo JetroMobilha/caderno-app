@@ -1,36 +1,41 @@
-# Plano de Implementação - Seleção de Estrutura e Ferramenta de Redimensionamento em Tabelas
+# Plano de Implementação - Sistema de Grupos e Hierarquia (v10.1)
 
-Este plano visa facilitar a manipulação de linhas e colunas (seleção e eliminação) e integrar a ferramenta de Seleção diretamente na barra de tabelas para redimensionamento rápido.
-
-## User Review Required
-
-> [!IMPORTANT]
-> **Ferramenta de Seleção na Tabela**: Adicionaremos um ícone de "Seleção" na `TableEditToolbar`. Ao ativá-lo, as hastes de redimensionamento aparecerão imediatamente, permitindo ajustar o tamanho da tabela sem sair do contexto de edição.
->
-> **Gestão de Estrutura**: Adicionaremos botões na categoria "Estrutura" para selecionar a linha ou coluna atual com um único clique, facilitando a aplicação de estilos em massa ou a eliminação das mesmas.
+Este plano descreve a implementação da funcionalidade de agrupamento de objetos, permitindo manipular múltiplos elementos como uma única entidade.
 
 ## Mudanças Propostas
 
-### 1. Barra de Ferramentas de Tabela
-#### [MODIFY] [table_edit_toolbar.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/toolbars/table_edit_toolbar.dart)
-- Adicionar o botão da ferramenta de **Seleção** junto ao botão de concluir.
-- Na categoria **Estrutura**, adicionar botões para:
-    - "Selecionar Linha" (baseado na célula ativa ou selecionada).
-    - "Selecionar Coluna".
-- Garantir que a eliminação de linha/coluna utilize as chaves de seleção no novo formato (`id:r,c`).
+### 1. Persistência de Metadados (Database)
+- **Modificar [app_database.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/database/app_database.dart)**:
+    - Adicionar colunas `parentId` (TEXT), `isVisible` (INT), `isLocked` (INT), `opacity` (REAL) às tabelas:
+        - `CanvasStrokes`, `CanvasTextBlocks`, `CanvasImageBlocks`, `CanvasShapes`, `CanvasAudioBlocks`, `CanvasAnimations`, `CanvasTables`, `CanvasLinks`, `CanvasAttachments`.
+    - Incrementar a versão do esquema para `31`.
 
-### 2. Motor de Renderização
-#### [MODIFY] [object_renderer.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/object_renderer.dart)
-- Corrigir os handles de seleção de linha/coluna (setas) para usarem o formato de chave único `${table.id}:r,c`.
-- Ajustar a visibilidade das alças para considerar o novo fluxo de trabalho.
+### 2. Repositório de Dados (Data Layer)
+- **Modificar [canvas_repository.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/repositories/canvas_repository.dart)**:
+    - Atualizar os métodos de leitura (`getPageByClientId`, `loadPageContent`) para extrair os novos campos das linhas do banco.
+    - Atualizar os métodos de gravação (`saveSingleStroke`, `saveSingleTextBlock`, etc.) para persistir os metadados de grupo, visibilidade e bloqueio.
 
-### 3. Lógica de Toolbar Principal
-#### [MODIFY] [canvas_toolbar.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/canvas_toolbar.dart)
-- Ajustar a condição `isTableDesignMode` para que a `TableEditToolbar` permaneça visível se a ferramenta for "Seleção" mas houver uma tabela selecionada.
+### 3. Lógica de Agrupamento (Interaction Provider)
+- **Modificar [canvas_tool_provider.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/providers/canvas_tool_provider.dart)**:
+    - Implementar `groupSelectedObjects()`: gera um novo UUID e atribui como `parentId` de todos os objetos selecionados.
+    - Implementar `ungroupSelectedObjects()`: remove o `parentId` dos objetos selecionados que pertençam a um grupo.
+    - **Seleção Inteligente**: Atualizar `selectAt` para que, ao tocar num objeto com `parentId`, todos os "irmãos" (objetos com o mesmo parent) sejam selecionados automaticamente.
+
+### 4. Interface (UI)
+- **Modificar [canvas_toolbar.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/canvas_toolbar.dart)**:
+    - Adicionar botão "Agrupar" (Icons.group_work) na **Zona Contextual** quando > 1 objeto estiver selecionado.
+    - Adicionar botão "Desagrupar" quando o objeto selecionado tiver um `parentId`.
+- **Modificar [layer_manager_sheet.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/dialogs/layer_manager_sheet.dart)**:
+    - Visualizar grupos na lista (opcional nesta fase, ou apenas indicar o ID do grupo no subtítulo).
 
 ## Plano de Verificação
 
-### Testes Manuais
-1. **Redimensionamento Rápido**: Clique numa tabela -> Na barra de tabela, clique no ícone de Seleção -> Verifique se as hastes aparecem -> Redimensione -> Volte à ferramenta de Tabela (ou Texto).
-2. **Seleção de Linha/Coluna**: Clique numa célula -> Na categoria Estrutura, clique em "Selecionar Linha" -> Verifique se todas as células da linha ficam azuis -> Clique em "Eliminar Linha" -> Verifique se a linha correta foi removida.
-3. **Formatos de Chave**: Verifique se o log não apresenta erros de "Bad state" ao manipular a estrutura.
+### Testes de Funcionalidade
+1. **Agrupar**: Selecionar um desenho e um texto, clicar em "Agrupar". Tentar mover um deles; ambos devem mover-se juntos.
+2. **Persistência**: Agrupar objetos, fechar o caderno e reabrir. O vínculo de grupo deve ser mantido.
+3. **Desagrupar**: Selecionar um grupo, clicar em "Desagrupar". Verificar se os objetos voltam a ser independentes.
+4. **Cadeado de Grupo**: Bloquear um dos membros do grupo. O grupo inteiro deve ficar protegido ou apenas o membro? (Padrão: O bloqueio de um membro impede a transformação do grupo).
+
+---
+
+**Podemos avançar com a atualização da base de dados e lógica de grupos?**

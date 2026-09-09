@@ -5,51 +5,44 @@ Um ecossistema de produtividade focado em escrita manual fluida, colaboração e
 ## 🚀 Stack Tecnológica de Elite
 
 *   **Frontend:** Flutter (3.24+) - Interface fluida e responsiva para Mobile e Web.
-*   **Persistência Reativa:** [Drift (WASM)](https://drift.simonbinder.eu/) - Banco de dados SQL v26 com reatividade nativa e suporte total a WebAssembly.
-*   **Gestão de Estado:** Riverpod 2.0 - Arquitetura desacoplada e testável.
+*   **Persistência Reativa:** [Drift (WASM)](https://drift.simonbinder.eu/) - Banco de dados SQL com reatividade nativa e suporte total a WebAssembly.
+*   **Gestão de Estado:** Riverpod 2.0 - Arquitetura desacoplada e modular.
 *   **Colaboração Real-time:** Laravel Reverb (WebSockets) - Sincronização de traços e conteúdo em milissegundos.
-*   **Motor de Áudio:** WebRTC P2P - Chamadas de voz integradas para estudo em grupo.
 *   **Backend:** Laravel 11 (PHP) - API robusta com MySQL e Redis.
 
 ---
 
-## ✨ Funcionalidades Principais
+## ✨ Funcionalidades Implementadas
+
+### 🔐 Autenticação e Segurança
+*   **Sistema de Login:** Acesso seguro com gestão de estado de sessão via Riverpod.
+*   **Sincronização de Perfil:** Dados de utilizador integrados com o ecossistema cloud.
 
 ### 📂 Gestão de Estrutura e Organização
-O SyncScribe oferece uma hierarquia clara para organizar o conhecimento:
-*   **Pastas (Subjects):** Personalização total com 24 ícones temáticos e 48 cores profissionais.
-*   **Cadernos (Notebooks):** 14 modelos profissionais pré-configurados:
-    *   *Académico:* Escolar, Universitário, Estudo (Layout versátil).
-    *   *Técnico:* Engenharia (Milimetrado/Isométrico), Contabilidade, Laboratório (STEM).
-    *   *Criativo:* Desenho (A3/Livre), Música (Pentagramas).
-    *   *Gestão:* Agenda, Projeto, Reunião.
-    *   *Pessoal:* Diário, Em Branco, Personalizado.
-*   **Organização Inteligente:** Sistema de **Etiquetas (Tags)** transversais, **Favoritos** e **Arquivamento** de pastas e cadernos.
+*   **Matérias (Subjects):** Personalização total com ícones temáticos e paletas de cores profissionais.
+*   **Cadernos (Notebooks):** 14 modelos profissionais (Académico, Técnico, Criativo, Gestão, Pessoal).
+*   **Páginas:** Gestão dinâmica de folhas com suporte a diferentes estilos de papel (pautado, quadriculado, pontilhado).
+*   **Resiliência de Dados:**
+    *   **Soft Delete (Lixeira):** Sistema de eliminação em dois níveis para evitar perda acidental de dados.
+    *   **Arquivo:** Possibilidade de arquivar matérias e cadernos antigos para manter o foco no presente.
 
-### 🎨 Motor de Cores Profissional (Color Engine v2)
-Uma ferramenta de design independente integrada em toda a aplicação:
-*   **Presets de Elite:** 48 cores organizadas por gradientes tonais para escolhas rápidas.
-*   **Estúdio HSV:** Seletor visual tátil para ajustar Matiz, Saturação e Brilho sem necessidade de conhecimentos técnicos (sem códigos hexadecimais).
-*   **Memória de Sessão:** Lembra-se automaticamente das cores e categorias usadas recentemente.
+### 🖌️ Canvas Inteligente (Motor de Edição)
+O coração do SyncScribe, focado em precisão e ergonomia:
+*   **Escrita e Desenho:** Pincéis realistas (Gel, Caneta, Marcador) com suavização de traço via curvas de Bezier.
+*   **Blocos de Texto:** Editor WYSIWYG com suporte a negrito, itálico, cores, tipos de letra e listas dinâmicas (bullets, numeradas e checklists).
+*   **Tabelas Complexas:**
+    *   Criação dinâmica de linhas e colunas.
+    *   **União de Células (Merge):** Lógica avançada de spans que permite criar layouts de dados complexos.
+    *   Redimensionamento individual de colunas e linhas.
+*   **Modo de Transformação Declarativo:** Sistema de proteção que "tranca" o conteúdo durante a edição, exigindo uma ativação explícita para mover ou redimensionar objetos, evitando erros de precisão tátil.
+*   **Navegação Multi-Toque (v7.5):** Detecção inteligente de dedos que prioriza automaticamente o Zoom e Pan quando dois ou mais dedos tocam no ecrã, garantindo que o desenho nunca interfira na navegação.
 
-### 🪄 Assistente de Criação (Wizard) com Print-Fidelity
-Experiência de criação otimizada com foco na fidelidade física:
-*   **Criação Rápida vs. Personalizada:** Gere um caderno em 2 cliques ou ajuste cada detalhe técnico.
-*   **Tecnologia Print-Fidelity:** Pré-visualização baseada em milímetros reais (WYSIWYG). O que vê no ecrã é exatamente o que terá na impressão ou PDF.
-*   **Formatos ISO (A0 a A5):** Suporte total desde o pequeno A5 até posters técnicos A0 (841 x 1189 mm).
-*   **Zoom Interativo:** Inspeção detalhada do papel com recorte visual (clipping) garantido.
+### 🎨 Motor de Cores (Color Engine v2)
+*   **Estúdio HSV:** Seletor visual tátil para ajuste fino de Matiz, Saturação e Brilho.
+*   **Presets de Elite:** Cores organizadas por gradientes tonais para escolhas rápidas e harmoniosas.
 
-### ♻️ Resiliência e Gestão de Ficheiros
-Segurança máxima para os seus dados:
-*   **Soft Deletion (Lixeira):** Sistema de eliminação em dois níveis. Itens apagados podem ser restaurados a qualquer momento até à limpeza definitiva da lixeira.
-*   **Gestão de Media:** Armazenamento local eficiente de imagens e gravações de áudio, com sincronização em background para o servidor Laravel.
-*   **Motor Offline-First:** Sincronização diferencial (Delta-Sync) inteligente que funciona sem interrupções, mesmo com conectividade instável.
-
-### 🛒 Marketplace de Conhecimento
-Ecossistema de partilha e monetização:
-*   **Publicação:** Disponibilize cadernos na loja com sinopse, preço e nome de autor.
-*   **Aquisição Server-Side:** A clonagem de cadernos é processada no servidor para garantir integridade absoluta em múltiplos dispositivos.
-*   **Sincronização Automática:** Cadernos adquiridos aparecem instantaneamente na pasta "Matérias Adquiridas 🛒" via motor de sync.
+### 🪄 Assistente de Criação (Wizard)
+*   **Tecnologia Print-Fidelity:** Pré-visualização baseada em milímetros reais (A0 a A5). O que vê no ecrã é o que terá na impressão.
 
 ---
 
@@ -73,18 +66,10 @@ flutter run
 ```
 
 ### Executar em WebAssembly (WASM)
-O SyncScribe utiliza o novo motor WASM do Flutter para performance máxima no browser.
+O SyncScribe utiliza o motor WASM para performance máxima.
 ```bash
 flutter run -d chrome --wasm
 ```
-
-### Executar Testes
-```bash
-flutter test
-```
-
-## 📚 Documentação Adicional
-A arquitetura detalhada, esquemas de base de dados e diagramas de sequência podem ser encontrados na [Wiki do Projeto](https://github.com/JetroMobilha/caderno--backend/wiki).
 
 ---
 Desenvolvido com ❤️ por Jetro Mobilha e equipa.

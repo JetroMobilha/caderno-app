@@ -11,6 +11,7 @@ import 'package:caderno_digital_app/core/network/api_provider.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 import 'package:caderno_digital_app/features/canvas/models/local_page_model.dart';
+import 'package:caderno_digital_app/features/canvas/models/page_object.dart';
 import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
@@ -127,6 +128,7 @@ class CollaborationRoomService extends ChangeNotifier {
   Future<void> Function(Map<String, dynamic> data)? onFullStateReceived;
   Future<void> Function(Map<String, dynamic> data)? onFingerprintReceived;
   Future<void> Function(Map<String, dynamic> data)? onCloudSyncSignal;
+  Future<void> Function(String pageClientId, List<PageObject> newObjects, int remoteTs)? onApplyRemoteChange;
   void Function()? onNotebookDeleted;
   void Function()? onAccessRevoked;
   Future<void> Function(Map<String, dynamic> data)? onNotebookStructureUpdated;
@@ -425,13 +427,13 @@ class CollaborationRoomService extends ChangeNotifier {
       int idx = -1;
       if (pcid != null) idx = pages.indexWhere((p) => p.clientId == pcid);
       if (idx == -1 && ipn > 0) idx = pages.indexWhere((p) => p.pageNumber == ipn);
-      
       if (idx == -1) return;
+
       final tp = pages[idx];
+      final List<PageObject> currentObjects = List.from(tp.objects);
+      bool hasPermanentChanges = false;
+      int maxRemoteTs = tp.updatedAt;
 
-      if (tp.id == null) await _repository.savePage(tp, notebookId);
-
-      bool hasChanges = false;
       final curM = Map<String, Stroke>.from(remoteLiveStrokes.value);
       final bool isMove = d['is_move'] == true;
 
@@ -439,11 +441,12 @@ class CollaborationRoomService extends ChangeNotifier {
         final sid = sm['id'];
         
         if (sm['is_deleted'] == true) {
-          final exI = tp.strokes.indexWhere((s) => s.id == sid);
-          if (exI != -1) {
-            tp.strokes[exI].isDeleted = true;
-            tp.strokes[exI].updatedAt = sm['updated_at'] ?? TimeService().nowMs();
-            hasChanges = true;
+          final remoteTs = sm['updated_at'] ?? TimeService().nowMs();
+          final objIdx = currentObjects.indexWhere((o) => o.id == sid);
+          if (objIdx != -1) {
+            currentObjects[objIdx] = currentObjects[objIdx].copyWith(isDeleted: true, updatedAt: remoteTs);
+            hasPermanentChanges = true;
+            if (remoteTs > maxRemoteTs) maxRemoteTs = remoteTs;
           }
           _repository.deleteSingleStroke(sid);
           continue;
@@ -456,11 +459,7 @@ class CollaborationRoomService extends ChangeNotifier {
           if (sm['offset'] != null) {
             final off = Offset((sm['offset']['x'] as num).toDouble(), (sm['offset']['y'] as num).toDouble());
             final baseS = tp.strokes.firstWhere((s) => s.id == sid, orElse: () => Stroke(color: '#000000', thickness: 1, points: []));
-            curM[sid] = Stroke(
-              id: sid, color: baseS.color, thickness: baseS.thickness, 
-              points: baseS.points, 
-              pageNumber: ipn
-            )..liveOffset = off;
+            curM[sid] = baseS.copyWith(liveOffset: off);
           } else {
             final pts = (sm['points'] as List).map((p) => Offset((p['x'] as num).toDouble(), (p['y'] as num).toDouble())).toList();
             final exS = curM[sid];
@@ -469,47 +468,34 @@ class CollaborationRoomService extends ChangeNotifier {
             } else {
               curM[sid] = Stroke(id: sid, color: sm['color'], thickness: (sm['thickness'] as num).toDouble(), points: List.from(pts), pageNumber: ipn);
             }
-
-            final String? senderId = d['sender_id']?.toString();
-            if (pts.isNotEmpty && followingUserId != null && senderId == followingUserId && lastScreenSize != null) {
-              final lastPt = pts.last;
-              final screenCenter = Offset(lastScreenSize!.width / 2, lastScreenSize!.height / 2);
-              final double currentScale = getCurrentScale?.call() ?? 1.0;
-              final targetMatrix = Matrix4.translationValues(screenCenter.dx, screenCenter.dy, 0.0)
-                ..scale(currentScale, currentScale, 1.0)
-                ..translate(-lastPt.dx, -lastPt.dy, 0.0);
-              onSmoothTransition?.call(targetMatrix);
-            }
           }
-          hasChanges = true;
         } else {
           final int remoteTs = sm['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
           final pts = (sm['points'] as List).map((p) => Offset((p['x'] as num).toDouble(), (p['y'] as num).toDouble())).toList();
           final ns = Stroke(id: sid, color: sm['color'], thickness: (sm['thickness'] as num).toDouble(), points: pts, pageNumber: ipn, updatedAt: remoteTs);
 
-          final exI = tp.strokes.indexWhere((s) => s.id == sid);
-          if (exI != -1 && tp.strokes[exI].updatedAt > remoteTs) {
+          final objIdx = currentObjects.indexWhere((o) => o.id == sid);
+          if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) {
              curM.remove(sid);
              remoteMovingStrokeIds.remove(sid);
-             hasChanges = true;
              continue;
           }
 
           curM.remove(sid);
           remoteMovingStrokeIds.remove(sid);
-          tp.strokes.removeWhere((s) => s.id == sid);
-          tp.strokes.add(ns);
-          tp.updatedAt = remoteTs;
-          hasChanges = true;
+          if (objIdx != -1) currentObjects[objIdx] = ns; else currentObjects.add(ns);
+          
+          if (remoteTs > maxRemoteTs) maxRemoteTs = remoteTs;
+          hasPermanentChanges = true;
           _repository.saveSingleStroke(tp.clientId, ns);
         }
       }
 
-      if (hasChanges) {
-        remoteLiveStrokes.value = curM;
-        if (!isMove) tp.version++;
-        notifyListeners();
+      remoteLiveStrokes.value = curM;
+      if (hasPermanentChanges && onApplyRemoteChange != null) {
+        await onApplyRemoteChange!(tp.clientId, currentObjects, maxRemoteTs);
       }
+      notifyListeners();
       if (onStrokeReceived != null) await onStrokeReceived!(d);
     });
 
@@ -527,25 +513,25 @@ class CollaborationRoomService extends ChangeNotifier {
       if (idx == -1) return;
 
       final tp = pages[idx];
-      if (tp.id == null) await _repository.savePage(tp, notebookId);
-
+      final List<PageObject> currentObjects = List.from(tp.objects);
       final bd = d['block'];
       final bid = bd['id'];
+      final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
       
       if (d['is_deleted'] == true) {
-        tp.textBlocks.removeWhere((t) => t.id == bid);
+        currentObjects.removeWhere((t) => t.id == bid);
       } else {
-        final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
-        final exI = tp.textBlocks.indexWhere((t) => t.id == bid);
-        if (exI != -1 && tp.textBlocks[exI].updatedAt > remoteTs) return;
+        final objIdx = currentObjects.indexWhere((t) => t.id == bid);
+        if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) return;
 
         final nb = TextBlock.fromJson(bd);
-        if (exI != -1) tp.textBlocks[exI] = nb; else tp.textBlocks.add(nb);
+        if (objIdx != -1) currentObjects[objIdx] = nb; else currentObjects.add(nb);
       }
       
-      tp.version++;
+      if (onApplyRemoteChange != null) {
+        await onApplyRemoteChange!(tp.clientId, currentObjects, remoteTs);
+      }
       notifyListeners();
-      await _repository.savePage(tp, notebookId);
       if (onTextReceived != null) await onTextReceived!(d);
     });
 
@@ -563,25 +549,25 @@ class CollaborationRoomService extends ChangeNotifier {
       if (idx == -1) return;
 
       final tp = pages[idx];
-      if (tp.id == null) await _repository.savePage(tp, notebookId);
-
+      final List<PageObject> currentObjects = List.from(tp.objects);
       final bd = d['block'];
       final bid = bd['id'];
+      final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
       
       if (d['is_deleted'] == true) {
-        tp.imageBlocks.removeWhere((i) => i.id == bid);
+        currentObjects.removeWhere((i) => i.id == bid);
       } else {
-        final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
-        final exI = tp.imageBlocks.indexWhere((i) => i.id == bid);
-        if (exI != -1 && tp.imageBlocks[exI].updatedAt > remoteTs) return;
+        final objIdx = currentObjects.indexWhere((i) => i.id == bid);
+        if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) return;
 
         final nib = ImageBlock.fromJson(bd);
-        if (exI != -1) tp.imageBlocks[exI] = nib; else tp.imageBlocks.add(nib);
+        if (objIdx != -1) currentObjects[objIdx] = nib; else currentObjects.add(nib);
       }
       
-      tp.version++;
+      if (onApplyRemoteChange != null) {
+        await onApplyRemoteChange!(tp.clientId, currentObjects, remoteTs);
+      }
       notifyListeners();
-      await _repository.savePage(tp, notebookId);
       if (onImageReceived != null) await onImageReceived!(d);
     });
 
@@ -841,19 +827,23 @@ class CollaborationRoomService extends ChangeNotifier {
 
       final idx = pages.indexWhere((p) => p.pageNumber == pNum);
       if (idx != -1) {
-        final p = pages[idx];
+        LocalPage p = pages[idx];
         
         bool metaChanged = false;
+        String newTitle = p.title;
+        String newFooter = p.footer;
+
         if (hData != null) {
-          final String newTitle = LocalPage.parseMeta(hData);
-          if (p.title != newTitle) { p.title = newTitle; metaChanged = true; }
+          final String parsedTitle = LocalPage.parseMeta(hData);
+          if (p.title != parsedTitle) { newTitle = parsedTitle; metaChanged = true; }
         }
         if (fData != null) {
-          final String newFooter = LocalPage.parseMeta(fData);
-          if (p.footer != newFooter) { p.footer = newFooter; metaChanged = true; }
+          final String parsedFooter = LocalPage.parseMeta(fData);
+          if (p.footer != parsedFooter) { newFooter = parsedFooter; metaChanged = true; }
         }
 
         if (metaChanged) {
+           p = p.copyWith(title: newTitle, footer: newFooter);
            await _repository.savePage(p, _liveNotebookSid);
         }
 

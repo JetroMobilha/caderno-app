@@ -1,10 +1,11 @@
 import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 
+/// 🚀 v9.4: Modelo de Matéria Imutável.
 class Subject {
   final int? id;
   final int? serverId;
-  final String clientId; // 🆔 Identidade única global
+  final String clientId;
   final int? userId;
   final String name;
   final String color;
@@ -12,7 +13,7 @@ class Subject {
   final int syncedWithCloud;
   final int isDeleted;
   final int updatedAt;
-  int version; // 🔄 UI Only
+  final int version;
   final bool isArchived;
   final bool isFavorite;
 
@@ -58,30 +59,42 @@ class Subject {
       icon: icon ?? this.icon,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       isDeleted: isDeleted ?? this.isDeleted,
-      updatedAt: updatedAt ?? this.updatedAt,
-      version: version ?? this.version,
+      updatedAt: updatedAt ?? TimeService().nowMs(),
+      version: version ?? (this.version + 1),
       isArchived: isArchived ?? this.isArchived,
       isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
-  // Receber do Laravel (JSON)
+  Subject clone({String? newClientId, int? newUserId}) {
+    return copyWith(
+      id: null,
+      serverId: null,
+      clientId: newClientId ?? const Uuid().v4(),
+      userId: newUserId ?? userId,
+      name: '$name (Cópia)',
+      syncedWithCloud: 0,
+      isDeleted: 0,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      isArchived: false,
+      isFavorite: false,
+    );
+  }
+
   factory Subject.fromJson(Map<String, dynamic> json) {
     int? upAt;
     if (json['updated_at_ms'] != null) {
       upAt = (json['updated_at_ms'] as num).toInt();
     } else if (json['updated_at'] != null) {
       final val = json['updated_at'];
-      if (val is num) {
-        upAt = val.toInt();
-      } else if (val is String) {
-        upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
-      }
+      if (val is num) upAt = val.toInt();
+      else if (val is String) upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
     }
 
     return Subject(
       serverId: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
-      clientId: json['client_id'] ?? const Uuid().v4(), // Prioridade ao ID do cliente
+      clientId: json['client_id'] ?? const Uuid().v4(),
       userId: json['user_id'] is int ? json['user_id'] : int.tryParse(json['user_id']?.toString() ?? ''),
       name: json['name'] ?? '',
       color: json['color'] ?? '#0F4C5C',
@@ -97,37 +110,10 @@ class Subject {
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'server_id': serverId,
-      'client_id': clientId,
-      'user_id': userId,
-      'name': name,
-      'color': color,
-      'icon': icon,
-      'synced_with_cloud': syncedWithCloud,
-      'is_deleted': isDeleted,
-      'updated_at': updatedAt,
-      'version': 1,
-      'is_archived': isArchived ? 1 : 0,
-      'is_favorite': isFavorite ? 1 : 0,
+      'id': id, 'server_id': serverId, 'client_id': clientId, 'user_id': userId,
+      'name': name, 'color': color, 'icon': icon, 'synced_with_cloud': syncedWithCloud,
+      'is_deleted': isDeleted, 'updated_at': updatedAt, 'version': 1,
+      'is_archived': isArchived ? 1 : 0, 'is_favorite': isFavorite ? 1 : 0,
     };
-  }
-
-  Subject clone({String? newClientId, int? newUserId}) {
-    return Subject(
-      id: null,
-      serverId: null,
-      clientId: newClientId ?? const Uuid().v4(),
-      userId: newUserId ?? userId,
-      name: '$name (Cópia)',
-      color: color,
-      icon: icon,
-      syncedWithCloud: 0,
-      isDeleted: 0,
-      updatedAt: TimeService().nowMs(),
-      version: 1,
-      isArchived: false,
-      isFavorite: false,
-    );
   }
 }

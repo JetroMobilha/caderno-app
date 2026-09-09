@@ -4,6 +4,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/sync_provider.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../canvas/models/animation_object_model.dart';
+import '../../canvas/models/attachment_model.dart';
+import '../../canvas/models/audio_block_model.dart';
+import '../../canvas/models/image_block_model.dart';
+import '../../canvas/models/link_model.dart';
+import '../../canvas/models/shape_model.dart';
+import '../../canvas/models/stroke_model.dart';
+import '../../canvas/models/table_model.dart';
+import '../../canvas/models/text_block_model.dart';
 import '../models/subject_model.dart';
 import '../repositories/subject_repository.dart';
 import '../../notebooks/repositories/notebook_repository.dart';
@@ -178,15 +187,27 @@ class SubjectsController extends Notifier<List<Subject>> {
           final clonedPage = page.clone(newNotebookId: newNbId);
           await canvasRepo.savePage(clonedPage, null);
 
-          // 6. Salvar Elementos (Strokes, Text, Images)
-          for (var s in clonedPage.strokes) {
-            await canvasRepo.saveSingleStroke(clonedPage.clientId, s);
-          }
-          for (var t in clonedPage.textBlocks) {
-            await canvasRepo.saveSingleTextBlock(clonedPage.clientId, t);
-          }
-          for (var i in clonedPage.imageBlocks) {
-            await canvasRepo.saveSingleImageBlock(clonedPage.clientId, i);
+          // 6. 🚀 v9.5: Salvar todos os tipos de objetos de forma abrangente
+          for (var obj in clonedPage.objects) {
+            if (obj is Stroke) {
+              await canvasRepo.saveSingleStroke(clonedPage.clientId, obj);
+            } else if (obj is TextBlock) {
+              await canvasRepo.saveSingleTextBlock(clonedPage.clientId, obj);
+            } else if (obj is ImageBlock) {
+              await canvasRepo.saveSingleImageBlock(clonedPage.clientId, obj);
+            } else if (obj is ShapeObject) {
+              await canvasRepo.saveSingleShape(clonedPage.clientId, obj);
+            } else if (obj is TableObject) {
+              await canvasRepo.saveSingleTable(clonedPage.clientId, obj);
+            } else if (obj is AudioBlock) {
+              await canvasRepo.saveSingleAudioBlock(clonedPage.clientId, obj);
+            } else if (obj is AnimationObject) {
+              await canvasRepo.saveSingleAnimationObject(clonedPage.clientId, obj);
+            } else if (obj is LinkObject) {
+              await canvasRepo.saveSingleLink(clonedPage.clientId, obj);
+            } else if (obj is AttachmentObject) {
+              await canvasRepo.saveSingleAttachment(clonedPage.clientId, obj);
+            }
           }
         }
       }

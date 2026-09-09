@@ -1,6 +1,9 @@
+import 'package:caderno_digital_app/core/network/time_service.dart';
+
+/// 🚀 v9.4: Modelo de Utilizador Imutável.
 class User {
-  final int? id; // ID local (SQLite)
-  final int? serverId; // ID na Nuvem (Laravel)
+  final int? id;
+  final int? serverId;
   final String name;
   final String email;
   final String? avatar;
@@ -9,7 +12,7 @@ class User {
   final String? institution;
   final String? preferredColor;
   final String? preferredFont;
-  final String? specialties; // Armazenado como string separada por vírgulas ou JSON
+  final String? specialties;
   final int syncedWithCloud;
   final int updatedAt;
 
@@ -29,18 +32,55 @@ class User {
     this.updatedAt = 0,
   });
 
-  // 1. Receber do Laravel (JSON) ou do Cache Local
+  User copyWith({
+    int? id,
+    int? serverId,
+    String? name,
+    String? email,
+    String? avatar,
+    String? planType,
+    String? bio,
+    String? institution,
+    String? preferredColor,
+    String? preferredFont,
+    String? specialties,
+    int? syncedWithCloud,
+    int? updatedAt,
+  }) {
+    return User(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      avatar: avatar ?? this.avatar,
+      planType: planType ?? this.planType,
+      bio: bio ?? this.bio,
+      institution: institution ?? this.institution,
+      preferredColor: preferredColor ?? this.preferredColor,
+      preferredFont: preferredFont ?? this.preferredFont,
+      specialties: specialties ?? this.specialties,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  User clone() {
+    return copyWith(
+      id: null,
+      serverId: null,
+      syncedWithCloud: 0,
+      updatedAt: TimeService().nowMs(),
+    );
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
     int? upAt;
     if (json['updated_at_ms'] != null) {
       upAt = (json['updated_at_ms'] as num).toInt();
     } else if (json['updated_at'] != null) {
       final val = json['updated_at'];
-      if (val is num) {
-        upAt = val.toInt();
-      } else if (val is String) {
-        upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
-      }
+      if (val is num) upAt = val.toInt();
+      else if (val is String) upAt = DateTime.tryParse(val)?.millisecondsSinceEpoch;
     }
 
     return User(
@@ -64,18 +104,10 @@ class User {
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'server_id': serverId,
-      'name': name,
-      'email': email,
-      'avatar': avatar,
-      'plan_type': planType,
-      'bio': bio,
-      'institution': institution,
-      'preferred_color': preferredColor,
-      'preferred_font': preferredFont,
-      'specialties': specialties,
-      'synced_with_cloud': syncedWithCloud,
+      'id': id, 'server_id': serverId, 'name': name, 'email': email, 'avatar': avatar,
+      'plan_type': planType, 'bio': bio, 'institution': institution,
+      'preferred_color': preferredColor, 'preferred_font': preferredFont,
+      'specialties': specialties, 'synced_with_cloud': syncedWithCloud,
       'updated_at': updatedAt,
     };
   }

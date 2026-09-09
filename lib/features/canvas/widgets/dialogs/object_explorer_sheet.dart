@@ -143,8 +143,7 @@ class ObjectExplorerSheet extends ConsumerWidget {
             icon: Icon(obj.isVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded, 
               size: 20, color: obj.isVisible ? const Color(0xFF0F4C5C) : Colors.black26),
             onPressed: () {
-              obj.isVisible = !obj.isVisible;
-              ref.read(canvasDocumentProvider.notifier).updateObject(page, obj);
+              ref.read(canvasDocumentProvider.notifier).updateObject(page, obj.copyWith(isVisible: !obj.isVisible));
             },
           ),
           IconButton(
@@ -152,8 +151,7 @@ class ObjectExplorerSheet extends ConsumerWidget {
             icon: Icon(obj.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, 
               size: 20, color: obj.isLocked ? Colors.orange : Colors.black26),
             onPressed: () {
-              obj.isLocked = !obj.isLocked;
-              ref.read(canvasDocumentProvider.notifier).updateObject(page, obj);
+              ref.read(canvasDocumentProvider.notifier).updateObject(page, obj.copyWith(isLocked: !obj.isLocked));
             },
           ),
           IconButton(

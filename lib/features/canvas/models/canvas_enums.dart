@@ -1,4 +1,4 @@
-enum ToolMode { draw, highlighter, pan, select, lasso, text, table, eraser, pixelEraser, insertImage, imageEdit, organizer }
+enum ToolMode { draw, highlighter, pan, select, lasso, text, table, eraser, pixelEraser, insertImage, imageEdit, organizer, video, fileAnchor }
 
 enum BrushType { 
   gel,          // Técnica/Precisão
@@ -20,3 +20,17 @@ enum ListType { none, bullet, numbered, checklist } // 🚀 v3.4
 enum InlineTarget { none, block, title, footer }
 
 enum TableCellType { text, number, date, time, checkbox, link, image }
+
+/// 🚀 v10.0: Estados explícitos de interação com o canvas.
+enum CanvasInteractionStateMode {
+  idle,           // Neutro
+  drawing,        // A desenhar traços
+  selecting,      // A criar rect de seleção
+  lassoSelecting, // A usar o laço
+  moving,         // A mover objetos
+  transforming,   // A redimensionar/rotacionar
+  textEditing,    // Teclado aberto num bloco
+  tableEditing,   // Foco numa célula ou estrutura
+  panning,        // A mover a folha inteira
+  inserting       // Modo de inserção rápida
+}

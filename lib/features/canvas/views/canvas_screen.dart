@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide SelectionOverlay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -19,12 +18,10 @@ import '../widgets/layers/live_text_edit_layer.dart';
 import '../widgets/page_canvas.dart'; 
 import '../widgets/selection_overlay.dart'; 
 import '../../explanations/widgets/explanation_layer.dart'; 
-import '../widgets/dialogs/color_studio_dialog.dart';
 import '../widgets/dialogs/thickness_studio_dialog.dart';
 import '../widgets/dialogs/paper_style_dialog.dart';
 import '../widgets/dialogs/add_page_dialog.dart'; 
 import '../widgets/collaboration_center_sheet.dart'; 
-import '../widgets/dialogs/brush_style_sheet.dart'; // 🚀
 import '../../shared/widgets/color_engine_widget.dart'; // 🚀
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -198,12 +195,11 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                       child: CanvasToolbar(
                         currentPage: currentPage!,
                         onColorTap: () async {
-                          final notifier = ref.read(canvasToolProvider.notifier);
                           if (toolState.selectedStrokeIds.isNotEmpty) {
                             final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Seleção');
                             if (hex != null) {
                               ref.read(canvasDocumentProvider.notifier).updateStrokesColor(
-                                currentPage!, 
+                                currentPage, 
                                 toolState.selectedStrokeIds, 
                                 hex
                               );
@@ -329,14 +325,27 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
       onPointerDown: (e) {
         _activePointers++;
         widget.viewportNotifier.updatePointerCount(_activePointers);
+        
+        // 🚀 v9.8: Atalho Multi-toque para Pan
+        if (_activePointers > 1) {
+          widget.toolNotifier.enterTemporaryPan();
+        }
       },
       onPointerUp: (e) {
         _activePointers = math.max(0, _activePointers - 1);
         widget.viewportNotifier.updatePointerCount(_activePointers);
+        
+        // 🚀 v9.8: Voltar para a ferramenta anterior ao soltar todos os dedos
+        if (_activePointers == 0) {
+          widget.toolNotifier.exitTemporaryPan();
+          ref.read(canvasUiProvider.notifier).setHudMode(false); // 🚀 FIX v9.9: Garantir toolbar visível
+        }
       },
       onPointerCancel: (e) {
         _activePointers = 0;
         widget.viewportNotifier.updatePointerCount(0);
+        widget.toolNotifier.exitTemporaryPan();
+        ref.read(canvasUiProvider.notifier).setHudMode(false); // 🚀 FIX v9.9
       },
       child: InteractiveViewer(
         key: ValueKey('viewport_${widget.page.clientId}'),

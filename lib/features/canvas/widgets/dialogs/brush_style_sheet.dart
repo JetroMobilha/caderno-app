@@ -9,8 +9,8 @@ class BrushStyleSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final toolState = ref.watch(canvasToolProvider);
-    final toolNotifier = ref.read(canvasToolProvider.notifier);
+    final toolState = ref.watch(canvasInteractionProvider);
+    final toolNotifier = ref.read(canvasInteractionProvider.notifier);
 
     final List<Map<String, dynamic>> brushes = [
       {'type': BrushType.gel, 'name': 'Caneta Gel', 'icon': Icons.edit_rounded},
@@ -41,10 +41,9 @@ class BrushStyleSheet extends ConsumerWidget {
           Text('ESTÚDIO DE CANETAS', style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           const SizedBox(height: 24),
           
-          // Switch de Suavização
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(color: Colors.black.withOpacity(0.04), borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(16)),
             child: Row(
               children: [
                 const Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.blueAccent),
@@ -54,7 +53,7 @@ class BrushStyleSheet extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('Suavização Bézier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text('Arredonda traços automaticamente', style: TextStyle(fontSize: 11, color: Colors.black.withOpacity(0.4))),
+                      Text('Arredonda traços automaticamente', style: TextStyle(fontSize: 11, color: Colors.black.withValues(alpha: 0.4))),
                     ],
                   ),
                 ),
@@ -69,8 +68,8 @@ class BrushStyleSheet extends ConsumerWidget {
           
           const SizedBox(height: 24),
           
-          Container(
-            height: 320, // 🚀 Altura fixa segura para evitar overflow
+          SizedBox(
+            height: 320,
             child: GridView.builder(
               shrinkWrap: true,
               physics: const BouncingScrollPhysics(),
@@ -100,7 +99,7 @@ class BrushStyleSheet extends ConsumerWidget {
                           color: isSelected ? const Color(0xFF0F4C5C) : Colors.white,
                           shape: BoxShape.circle,
                           border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.black12, width: 1.5),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 3))],
                         ),
                         child: Center(
                           child: CustomPaint(
@@ -156,17 +155,17 @@ class _BrushPreviewPainter extends CustomPainter {
       canvas.drawPath(path, paint..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0)..strokeWidth = 6);
       canvas.drawPath(path, Paint()..color = Colors.white..strokeWidth = 1.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
     } else if (type == BrushType.watercolor) {
-      canvas.drawPath(path, paint..color = color.withOpacity(0.4)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0)..strokeWidth = 8);
+      canvas.drawPath(path, paint..color = color.withValues(alpha: 0.4)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0)..strokeWidth = 8);
     } else if (type == BrushType.marker) {
       canvas.drawPath(path, paint..strokeCap = StrokeCap.square..strokeWidth = 5);
     } else if (type == BrushType.pencil) {
-      canvas.drawPath(path, paint..color = color.withOpacity(0.7)..strokeWidth = 2);
+      canvas.drawPath(path, paint..color = color.withValues(alpha: 0.7)..strokeWidth = 2);
     } else if (type == BrushType.calligraphy) {
        canvas.drawPath(path, paint..strokeCap = StrokeCap.butt..strokeWidth = 6);
     } else if (type == BrushType.crayon) {
        canvas.drawPath(path, paint..strokeWidth = 5..maskFilter = const MaskFilter.blur(BlurStyle.solid, 1.0));
     } else if (type == BrushType.airbrush) {
-       canvas.drawPath(path, paint..color = color.withOpacity(0.3)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0)..strokeWidth = 10);
+       canvas.drawPath(path, paint..color = color.withValues(alpha: 0.3)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0)..strokeWidth = 10);
     } else if (type == BrushType.fineliner) {
        canvas.drawPath(path, paint..strokeWidth = 1.2..strokeCap = StrokeCap.butt);
     } else if (type == BrushType.monoline) {

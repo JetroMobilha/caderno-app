@@ -1,55 +1,63 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
-import '../../../core/utils/geometry_utils.dart';
 import 'canvas_enums.dart';
 import 'page_object.dart';
 
+/// 🚀 v10.0: Implementação Imutável de Traço (Desenho).
 class Stroke implements PageObject {
   @override
-  String id;
+  final String id;
   @override
   String get type => 'stroke';
-  BrushType brushType ;
-  bool isSmoothed = false;
+  @override
+  final String? parentId; // 🚀 v10
   
-  String color;
-  double thickness;
-  List<Offset> points;
+  final BrushType brushType;
+  final bool isSmoothed;
+  final String color;
+  final double thickness;
+  final List<Offset> points;
   
   @override
-  bool isDeleted; 
+  final bool isDeleted; 
   @override
-  bool deletedInSession; 
+  final bool deletedInSession; 
   @override
-  int updatedAt; 
+  final int updatedAt; 
   @override
-  int version;
+  final int version;
   @override
-  int? pageNumber; 
-  Offset liveOffset = Offset.zero; 
+  final int? pageNumber; 
+  
+  final Offset liveOffset; 
   @override
   final String? creatorId;
   @override
-  bool syncedWithCloud;
-  bool isHighlighter;
+  final bool syncedWithCloud;
+  final bool isHighlighter;
 
   @override
-  int zIndex;
+  final int zIndex;
   @override
-  bool isLocked;
+  final bool isLocked;
   @override
-  bool isVisible;
+  final bool isVisible;
+  @override
+  final double opacity; // 🚀 v10
   
   @override
-  String? layerId;
+  double get rotation => 0.0;
+  
+  @override
+  final String? layerId;
 
   Stroke({
     String? id,
+    this.parentId,
     required this.color,
     required this.thickness,
-    required this.points,
+    required List<Offset> points,
     this.isDeleted = false,
     this.deletedInSession = false,
     int? updatedAt,
@@ -63,8 +71,11 @@ class Stroke implements PageObject {
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
+    this.opacity = 1.0,
     this.layerId,
+    this.liveOffset = Offset.zero,
   }) : id = id ?? const Uuid().v4(),
+       this.points = List.unmodifiable(points),
        updatedAt = updatedAt ?? TimeService().nowMs();
 
   @override
@@ -77,14 +88,6 @@ class Stroke implements PageObject {
       if (p.dy < minY) minY = p.dy;
     }
     return Offset(minX, minY);
-  }
-
-  @override
-  set position(Offset value) {
-    final delta = value - position;
-    for (int i = 0; i < points.length; i++) {
-      points[i] += delta;
-    }
   }
 
   @override
@@ -102,31 +105,82 @@ class Stroke implements PageObject {
   }
 
   @override
-  set size(Size value) {
-    // Redimensionar strokes é complexo, para MVP podemos ignorar ou escalar pontos
-    final currentSize = size;
-    if (currentSize.width == 0 || currentSize.height == 0) return;
-    final scaleX = value.width / currentSize.width;
-    final scaleY = value.height / currentSize.height;
-    final pos = position;
-    for (int i = 0; i < points.length; i++) {
-      points[i] = Offset(
-        pos.dx + (points[i].dx - pos.dx) * scaleX,
-        pos.dy + (points[i].dy - pos.dy) * scaleY,
-      );
-    }
-  }
+  Stroke copyWith({
+    String? id,
+    String? parentId,
+    Offset? position,
+    Size? size,
+    double? rotation,
+    int? zIndex,
+    bool? isLocked,
+    bool? isVisible,
+    double? opacity,
+    int? updatedAt,
+    int? version,
+    bool? isDeleted,
+    bool? syncedWithCloud,
+    bool? deletedInSession,
+    int? pageNumber,
+    String? layerId,
+    BrushType? brushType,
+    bool? isSmoothed,
+    String? color,
+    double? thickness,
+    List<Offset>? points,
+    Offset? liveOffset,
+    bool? isHighlighter,
+  }) {
+    List<Offset>? finalPoints = points ?? this.points;
 
-  @override
-  double get rotation => 0.0; // Strokes geralmente não rotacionam individualmente no MVP
-  @override
-  set rotation(double value) {}
+    if (position != null) {
+      final delta = position - this.position;
+      finalPoints = this.points.map((p) => p + delta).toList();
+    }
+
+    if (size != null) {
+      final currentSize = this.size;
+      if (currentSize.width != 0 && currentSize.height != 0) {
+        final scaleX = size.width / currentSize.width;
+        final scaleY = size.height / currentSize.height;
+        final pos = this.position;
+        finalPoints = this.points.map((p) => Offset(
+          pos.dx + (p.dx - pos.dx) * scaleX,
+          pos.dy + (p.dy - pos.dy) * scaleY,
+        )).toList();
+      }
+    }
+
+    return Stroke(
+      id: id ?? this.id,
+      parentId: parentId ?? this.parentId,
+      color: color ?? this.color,
+      thickness: thickness ?? this.thickness,
+      points: finalPoints,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedInSession: deletedInSession ?? this.deletedInSession,
+      updatedAt: updatedAt ?? TimeService().nowMs(),
+      version: version ?? (this.version + 1),
+      pageNumber: pageNumber ?? this.pageNumber,
+      creatorId: creatorId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      isHighlighter: isHighlighter ?? this.isHighlighter,
+      brushType: brushType ?? this.brushType,
+      isSmoothed: isSmoothed ?? this.isSmoothed,
+      zIndex: zIndex ?? this.zIndex,
+      isLocked: isLocked ?? this.isLocked,
+      isVisible: isVisible ?? this.isVisible,
+      opacity: opacity ?? this.opacity,
+      layerId: layerId ?? this.layerId,
+      liveOffset: liveOffset ?? this.liveOffset,
+    );
+  }
 
   @override
   Map<String, dynamic> toJson({bool includePoints = true}) {
     return {
       'id': id,
       'type': type,
+      'parent_id': parentId,
       'color': color,
       'thickness': thickness,
       'is_deleted': isDeleted,
@@ -136,11 +190,12 @@ class Stroke implements PageObject {
       'creator_id': creatorId,
       'synced_with_cloud': syncedWithCloud ? 1 : 0,
       'is_highlighter': isHighlighter ? 1 : 0,
-      'brush_type': brushType.name, // 🚀 v1.2
-      'is_smoothed': isSmoothed ? 1 : 0, // 🚀 v1.2
+      'brush_type': brushType.name,
+      'is_smoothed': isSmoothed ? 1 : 0,
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
+      'opacity': opacity,
       'layer_id': layerId,
       if (pageNumber != null) 'page_number': pageNumber,
       if (includePoints) 'points': points.map((p) => {
@@ -153,6 +208,7 @@ class Stroke implements PageObject {
   factory Stroke.fromJson(Map<String, dynamic> json) {
     return Stroke(
       id: json['id']?.toString(),
+      parentId: json['parent_id']?.toString(),
       color: json['color']?.toString() ?? '#1A1A24',
       thickness: (json['thickness'] as num?)?.toDouble() ?? 3.0,
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
@@ -163,11 +219,12 @@ class Stroke implements PageObject {
       creatorId: json['creator_id']?.toString(),
       syncedWithCloud: json['synced_with_cloud'] == null ? true : (json['synced_with_cloud'] == true || json['synced_with_cloud'] == 1),
       isHighlighter: json['is_highlighter'] == true || json['is_highlighter'] == 1,
-      brushType: BrushType.values.firstWhere((e) => e.name == (json['brush_type'] ?? 'gel'), orElse: () => BrushType.gel), // 🚀 v1.2
-      isSmoothed: json['is_smoothed'] == true || json['is_smoothed'] == 1, // 🚀 v1.2
+      brushType: BrushType.values.firstWhere((e) => e.name == (json['brush_type'] ?? 'gel'), orElse: () => BrushType.gel),
+      isSmoothed: json['is_smoothed'] == true || json['is_smoothed'] == 1,
       zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == true || json['is_locked'] == 1,
       isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),
+      opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
       layerId: json['layer_id']?.toString(),
       points: json['points'] != null
           ? (json['points'] as List)
@@ -177,50 +234,14 @@ class Stroke implements PageObject {
     );
   }
 
-  String toJsonString() => jsonEncode(toJson());
-  factory Stroke.fromJsonString(String jsonStr) => Stroke.fromJson(jsonDecode(jsonStr));
-
-  Stroke simplify({double epsilon = 0.5}) {
-    return Stroke(
-      id: id,
-      color: color,
-      thickness: thickness,
-      points: GeometryUtils.simplifyPoints(points, epsilon: epsilon),
-      isDeleted: isDeleted,
-      deletedInSession: deletedInSession,
-      updatedAt: updatedAt,
-      version: version,
-      pageNumber: pageNumber,
-      creatorId: creatorId,
-      syncedWithCloud: syncedWithCloud,
-      isHighlighter: isHighlighter,
-      brushType: brushType,
-      isSmoothed: isSmoothed,
-      zIndex: zIndex,
-      isLocked: isLocked,
-      isVisible: isVisible,
-    );
-  }
-
+  @override
   Stroke clone({String? newId, int? newPageNumber}) {
-    return Stroke(
+    return copyWith(
       id: newId ?? const Uuid().v4(),
-      color: color,
-      thickness: thickness,
-      points: List.from(points),
-      isDeleted: isDeleted,
-      deletedInSession: deletedInSession,
+      pageNumber: newPageNumber ?? pageNumber,
       updatedAt: TimeService().nowMs(),
       version: 1,
-      pageNumber: newPageNumber ?? pageNumber,
-      creatorId: creatorId,
       syncedWithCloud: false,
-      isHighlighter: isHighlighter,
-      brushType: brushType,
-      isSmoothed: isSmoothed,
-      zIndex: zIndex,
-      isLocked: isLocked,
-      isVisible: isVisible,
     );
   }
 }

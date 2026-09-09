@@ -1,7 +1,9 @@
-# Tarefas de Suporte Multi-Toque (v7.4)
+# Tarefas: Implementação de Grupos (v10.1)
 
-- `[x]` Implementar `Listener` em `_IsolateViewportItem` para rastrear dedos no ecrã
-- `[x]` Atualizar `activePointerCount` no `canvasViewportProvider`
-- `[x]` Configurar `InteractionLayer` para ignorar gestos quando houver > 1 dedo
-- `[x]` Garantir que o zoom e pan do `InteractiveViewer` recebam prioridade absoluta
-- `[x]` Validar que o desenho com 1 dedo permanece funcional
+- `[ ]` Adicionar colunas de metadados em `AppDatabase` (parentId, isVisible, isLocked, opacity)
+- `[ ]` Implementar Migração v31 para o banco de dados Drift
+- `[ ]` Atualizar `CanvasRepository` para ler/escrever novos metadados
+- `[ ]` Implementar `groupSelectedObjects` e `ungroupSelectedObjects` no `CanvasInteractionNotifier`
+- `[ ]` Atualizar lógica de `selectAt` para suportar seleção de grupos
+- `[ ]` Adicionar botões de Agrupar/Desagrupar na `CanvasToolbar`
+- `[ ]` Implementar `GroupAction` em `canvas_action_model.dart` para Undo/Redo

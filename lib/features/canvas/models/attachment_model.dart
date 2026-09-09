@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'page_object.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
 
+/// 🚀 v10.0: Implementação Imutável de Objeto de Anexo Refatorada.
 class AttachmentObject implements PageObject {
   @override
   final String id;
   @override
   final String type = 'attachment';
+  @override
+  final String? parentId; // 🚀 v10
   
   final String fileName;
   final String fileExtension;
@@ -15,36 +19,39 @@ class AttachmentObject implements PageObject {
   final String? remoteUrl;
   
   @override
-  Offset position;
+  final Offset position;
   @override
-  Size size;
+  final Size size;
   @override
-  double rotation;
+  final double rotation;
   @override
-  int zIndex;
+  final int zIndex;
   @override
-  bool isLocked;
+  final bool isLocked;
   @override
-  bool isVisible;
+  final bool isVisible;
   @override
-  int updatedAt;
+  final double opacity; // 🚀 v10
   @override
-  int version;
+  final int updatedAt;
   @override
-  bool isDeleted;
+  final int version;
   @override
-  bool syncedWithCloud;
+  final bool isDeleted;
   @override
-  bool deletedInSession;
+  final bool syncedWithCloud;
   @override
-  int? pageNumber;
+  final bool deletedInSession;
+  @override
+  final int? pageNumber;
   @override
   final String? creatorId;
   @override
-  String? layerId;
+  final String? layerId;
 
   AttachmentObject({
     required this.id,
+    this.parentId,
     required this.fileName,
     required this.fileExtension,
     this.fileSize = 0,
@@ -56,6 +63,7 @@ class AttachmentObject implements PageObject {
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
+    this.opacity = 1.0,
     int? updatedAt,
     this.version = 1,
     this.isDeleted = false,
@@ -67,10 +75,67 @@ class AttachmentObject implements PageObject {
   }) : updatedAt = updatedAt ?? TimeService().nowMs();
 
   @override
+  AttachmentObject copyWith({
+    String? id,
+    String? parentId,
+    Offset? position,
+    Size? size,
+    double? rotation,
+    int? zIndex,
+    bool? isLocked,
+    bool? isVisible,
+    double? opacity,
+    int? updatedAt,
+    int? version,
+    bool? isDeleted,
+    bool? syncedWithCloud,
+    bool? deletedInSession,
+    int? pageNumber,
+    String? layerId,
+  }) {
+    return AttachmentObject(
+      id: id ?? this.id,
+      parentId: parentId ?? this.parentId,
+      fileName: fileName,
+      fileExtension: fileExtension,
+      fileSize: fileSize,
+      localPath: localPath,
+      remoteUrl: remoteUrl,
+      position: position ?? this.position,
+      size: size ?? this.size,
+      rotation: rotation ?? this.rotation,
+      zIndex: zIndex ?? this.zIndex,
+      isLocked: isLocked ?? this.isLocked,
+      isVisible: isVisible ?? this.isVisible,
+      opacity: opacity ?? this.opacity,
+      updatedAt: updatedAt ?? TimeService().nowMs(),
+      version: version ?? (this.version + 1),
+      isDeleted: isDeleted ?? this.isDeleted,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      deletedInSession: deletedInSession ?? this.deletedInSession,
+      pageNumber: pageNumber ?? this.pageNumber,
+      creatorId: creatorId,
+      layerId: layerId ?? this.layerId,
+    );
+  }
+
+  @override
+  AttachmentObject clone({String? newId, int? newPageNumber}) {
+    return copyWith(
+      id: newId ?? const Uuid().v4(),
+      pageNumber: newPageNumber ?? pageNumber,
+      updatedAt: TimeService().nowMs(),
+      version: 1,
+      syncedWithCloud: false,
+    );
+  }
+
+  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'type': type,
+      'parent_id': parentId,
       'file_name': fileName,
       'file_ext': fileExtension,
       'file_size': fileSize,
@@ -84,6 +149,7 @@ class AttachmentObject implements PageObject {
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
+      'opacity': opacity,
       'updated_at': updatedAt,
       'version': version,
       'is_deleted': isDeleted ? 1 : 0,
@@ -98,18 +164,20 @@ class AttachmentObject implements PageObject {
   factory AttachmentObject.fromJson(Map<String, dynamic> json) {
     return AttachmentObject(
       id: json['id'],
+      parentId: json['parent_id'],
       fileName: json['file_name'] ?? 'ficheiro',
       fileExtension: json['file_ext'] ?? '',
       fileSize: json['file_size'] ?? 0,
       localPath: json['local_path'] ?? '',
       remoteUrl: json['remote_url'],
-      position: Offset(json['x'], json['y']),
-      size: Size(json['width'], json['height']),
-      rotation: json['rotation']?.toDouble() ?? 0.0,
-      zIndex: json['z_index'] ?? 0,
+      position: Offset((json['x'] as num?)?.toDouble() ?? 0.0, (json['y'] as num?)?.toDouble() ?? 0.0),
+      size: Size((json['width'] as num?)?.toDouble() ?? 180.0, (json['height'] as num?)?.toDouble() ?? 50.0),
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
+      zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == 1,
       isVisible: json['is_visible'] == 1,
-      updatedAt: json['updated_at'],
+      opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
+      updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
       version: json['version'] ?? 1,
       isDeleted: json['is_deleted'] == 1,
       syncedWithCloud: json['synced_with_cloud'] == 1,
@@ -117,32 +185,6 @@ class AttachmentObject implements PageObject {
       pageNumber: json['page_number'],
       creatorId: json['creator_id'],
       layerId: json['layer_id'],
-    );
-  }
-
-  @override
-  AttachmentObject clone({String? newId, int? newPageNumber}) {
-    return AttachmentObject(
-      id: newId ?? id,
-      fileName: fileName,
-      fileExtension: fileExtension,
-      fileSize: fileSize,
-      localPath: localPath,
-      remoteUrl: remoteUrl,
-      position: position,
-      size: size,
-      rotation: rotation,
-      zIndex: zIndex,
-      isLocked: isLocked,
-      isVisible: isVisible,
-      updatedAt: updatedAt,
-      version: version,
-      isDeleted: isDeleted,
-      syncedWithCloud: false,
-      deletedInSession: false,
-      pageNumber: newPageNumber ?? pageNumber,
-      creatorId: creatorId,
-      layerId: layerId,
     );
   }
 }

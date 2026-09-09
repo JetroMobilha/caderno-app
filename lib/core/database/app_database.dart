@@ -18,8 +18,8 @@ class Users extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
-  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); 
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); 
 }
 
 class Subjects extends Table {
@@ -34,8 +34,8 @@ class Subjects extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
-  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); 
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); 
 }
 
 class Notebooks extends Table {
@@ -60,14 +60,14 @@ class Notebooks extends Table {
   TextColumn get role => text().withDefault(const Constant('owner'))();
   TextColumn get alternativeTitle => text().nullable()();
   TextColumn get sharingType => text().withDefault(const Constant('full'))();
-  TextColumn get tags => text().nullable()(); // 🚀 v20: Tags separadas por vírgula
-  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v20
-  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v20
-  TextColumn get origin => text().nullable()(); // 🚀 v24
-  TextColumn get participantsPreview => text().nullable()(); // 🚀 v24 (JSON)
-  TextColumn get lastUpdatedByName => text().nullable()(); // 🚀 v24
-  IntColumn get notificationsEnabled => integer().withDefault(const Constant(1))(); // 🚀 v24
-  TextColumn get configuration => text().nullable()(); // 🚀 v25 (JSON)
+  TextColumn get tags => text().nullable()(); 
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); 
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); 
+  TextColumn get origin => text().nullable()(); 
+  TextColumn get participantsPreview => text().nullable()(); 
+  TextColumn get lastUpdatedByName => text().nullable()(); 
+  IntColumn get notificationsEnabled => integer().withDefault(const Constant(1))(); 
+  TextColumn get configuration => text().nullable()(); 
 }
 
 class Pages extends Table {
@@ -85,14 +85,14 @@ class Pages extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   IntColumn get isFrozen => integer().withDefault(const Constant(0))();
-  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v19
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); 
   TextColumn get paperSize => text().withDefault(const Constant('A4'))();
   TextColumn get lineType => text().nullable()();
   RealColumn get lineSpacing => real().nullable()();
   TextColumn get backgroundPdfPath => text().nullable()();
-  TextColumn get backgroundConfig => text().nullable()(); // 🚀 v25 (JSON)
-  TextColumn get viewportMatrix => text().nullable()(); // 🚀 v27 (JSON Matrix4)
-  TextColumn get layers => text().nullable()(); // 🚀 v28 (JSON LayerDefinition list)
+  TextColumn get backgroundConfig => text().nullable()(); 
+  TextColumn get viewportMatrix => text().nullable()(); 
+  TextColumn get layers => text().nullable()(); 
 }
 
 class CanvasStrokes extends Table {
@@ -107,6 +107,10 @@ class CanvasStrokes extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
   TextColumn get layerId => text().nullable()(); 
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientStrokeId};
 }
@@ -122,7 +126,11 @@ class CanvasTextBlocks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
-  TextColumn get layerId => text().nullable()(); // 🚀 v28
+  TextColumn get layerId => text().nullable()(); 
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientTextId};
 }
@@ -143,7 +151,11 @@ class CanvasImageBlocks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
-  TextColumn get layerId => text().nullable()(); // 🚀 v28
+  TextColumn get layerId => text().nullable()(); 
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientImageId};
 }
@@ -156,7 +168,11 @@ class CanvasShapes extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get layerId => text().nullable()();
-  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientShapeId};
 }
@@ -168,7 +184,11 @@ class CanvasAudioBlocks extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
-  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientAudioId};
 }
@@ -180,7 +200,11 @@ class CanvasAnimations extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
-  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientAnimationId};
 }
@@ -192,7 +216,11 @@ class CanvasTables extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
-  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientTableId};
 }
@@ -204,7 +232,11 @@ class CanvasLinks extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
-  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientLinkId};
 }
@@ -216,7 +248,11 @@ class CanvasAttachments extends Table {
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
-  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))(); // 🚀 v30
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  TextColumn get parentId => text().nullable()(); // 🚀 v31
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
   @override
   Set<Column> get primaryKey => {clientAttachmentId};
 }
@@ -230,8 +266,8 @@ class NotebookUser extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
-  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); 
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); 
 }
 
 class Payments extends Table {
@@ -248,8 +284,8 @@ class Payments extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
-  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); 
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); 
 }
 
 class LessonRecordings extends Table {
@@ -263,8 +299,8 @@ class LessonRecordings extends Table {
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   IntColumn get version => integer().withDefault(const Constant(1))();
-  IntColumn get isArchived => integer().withDefault(const Constant(0))(); // 🚀 v22
-  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); // 🚀 v22
+  IntColumn get isArchived => integer().withDefault(const Constant(0))(); 
+  IntColumn get isFavorite => integer().withDefault(const Constant(0))(); 
 }
 
 class NotebookTemplates extends Table {
@@ -284,7 +320,7 @@ class NotebookTemplateVersions extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get templateId => integer().references(NotebookTemplates, #id, onDelete: KeyAction.cascade)();
   IntColumn get version => integer()();
-  TextColumn get configuration => text()(); // JSON
+  TextColumn get configuration => text()(); 
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
 }
@@ -376,18 +412,12 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(notebooks, notebooks.isArchived);
           await m.addColumn(notebooks, notebooks.isFavorite);
         }
-        if (from < 21) {
-          // 🚀 REMOÇÃO DE CAMPOS REDUNDANTES (v21)
-          // O Drift não suporta dropColumn diretamente em SQLite nativo sem recriar tabela.
-          // Para manter simplicidade nesta fase, vamos apenas ignorar os dados nos modelos.
-          // Contudo, para o esquema ficar limpo, marcamos aqui a intenção.
-        }
+        if (from < 21) {}
         if (from < 22) {
           await m.addColumn(subjects, subjects.isArchived);
           await m.addColumn(subjects, subjects.isFavorite);
         }
         if (from < 23) {
-          // 🚀 Garantir colunas em todas as tabelas (Correção de migração incompleta v22)
           await m.addColumn(users, users.isArchived);
           await m.addColumn(users, users.isFavorite);
           await m.addColumn(notebookUser, notebookUser.isArchived);
@@ -396,8 +426,6 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(payments, payments.isFavorite);
           await m.addColumn(lessonRecordings, lessonRecordings.isArchived);
           await m.addColumn(lessonRecordings, lessonRecordings.isFavorite);
-          
-          // Caso faltem nestas (redundância de segurança)
           try { await m.addColumn(subjects, subjects.isArchived); } catch(_) {}
           try { await m.addColumn(subjects, subjects.isFavorite); } catch(_) {}
           try { await m.addColumn(notebooks, notebooks.isArchived); } catch(_) {}
@@ -416,11 +444,9 @@ class AppDatabase extends _$AppDatabase {
           try { await m.createTable(notebookTemplateVersions); } catch(_) {}
         }
         if (from < 27) {
-          // 🚀 v27: Memória de Zoom/Viewport por página
           try { await m.addColumn(pages, pages.viewportMatrix); } catch(_) {}
         }
         if (from < 28) {
-          // 🚀 v28: Formas, Áudio, Animações e Camadas
           try { await m.addColumn(pages, pages.layers); } catch(_) {}
           try { await m.addColumn(canvasImageBlocks, canvasImageBlocks.layerId); } catch(_) {}
           try { await m.addColumn(canvasTextBlocks, canvasTextBlocks.layerId); } catch(_) {}
@@ -429,13 +455,11 @@ class AppDatabase extends _$AppDatabase {
           try { await m.createTable(canvasAnimations); } catch(_) {}
         }
         if (from < 29) {
-          // 🚀 v29: Tabelas, Links e Anexos
           try { await m.createTable(canvasTables); } catch(_) {}
           try { await m.createTable(canvasLinks); } catch(_) {}
           try { await m.createTable(canvasAttachments); } catch(_) {}
         }
         if (from < 30) {
-          // 🚀 v30: Coluna de sincronismo para novos objetos
           try { await m.addColumn(canvasShapes, canvasShapes.syncedWithCloud); } catch(_) {}
           try { await m.addColumn(canvasAudioBlocks, canvasAudioBlocks.syncedWithCloud); } catch(_) {}
           try { await m.addColumn(canvasAnimations, canvasAnimations.syncedWithCloud); } catch(_) {}
@@ -443,12 +467,26 @@ class AppDatabase extends _$AppDatabase {
           try { await m.addColumn(canvasLinks, canvasLinks.syncedWithCloud); } catch(_) {}
           try { await m.addColumn(canvasAttachments, canvasAttachments.syncedWithCloud); } catch(_) {}
         }
+        if (from < 31) {
+          // 🚀 v31: Metadados de Grupo, Visibilidade e Bloqueio
+          final List<TableInfo> canvasTablesList = [
+            canvasStrokes, canvasTextBlocks, canvasImageBlocks, 
+            canvasShapes, canvasAudioBlocks, canvasAnimations, 
+            canvasTables, canvasLinks, canvasAttachments
+          ];
+          for (var table in canvasTablesList) {
+            await m.addColumn(table, table.parentId as GeneratedColumn);
+            await m.addColumn(table, table.isVisible as GeneratedColumn);
+            await m.addColumn(table, table.isLocked as GeneratedColumn);
+            await m.addColumn(table, table.opacity as GeneratedColumn);
+          }
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 31;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

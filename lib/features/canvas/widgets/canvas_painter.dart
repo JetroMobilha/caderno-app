@@ -19,10 +19,10 @@ Path buildPath(List<Offset> points) {
   return path;
 }
 
-/// 🚀 v1.2: Suavização Bézier Opcional
-Path buildSmoothPath(List<Offset> points) {
+/// 🚀 v10.21: Suavização Bézier Opcional com Nível e Performance Otimizada
+Path buildSmoothPath(List<Offset> points, [double level = 0.5]) {
   final path = Path();
-  if (points.length < 3) return buildPath(points);
+  if (points.length < 3 || level <= 0.05) return buildPath(points);
   
   path.moveTo(points.first.dx, points.first.dy);
   
@@ -155,8 +155,20 @@ class StrokesPainter extends CustomPainter {
         canvas.translate(selectionDelta.dx, selectionDelta.dy);
       }
 
-      final path = stroke.isSmoothed ? buildSmoothPath(stroke.points) : buildPath(stroke.points);
-      _renderArtisticStroke(canvas, path, stroke.brushType, strokeColor, stroke.thickness, stroke.isHighlighter, stroke.points);
+      final path = stroke.smoothingLevel > 0 
+          ? buildSmoothPath(stroke.points, stroke.smoothingLevel) 
+          : buildPath(stroke.points);
+          
+      _renderArtisticStroke(
+        canvas: canvas, 
+        path: path, 
+        brushType: stroke.brushType, 
+        color: strokeColor, 
+        thickness: stroke.thickness, 
+        opacity: stroke.opacity,
+        isHighlighter: stroke.isHighlighter, 
+        points: stroke.points,
+      );
 
       canvas.restore();
     }
@@ -192,24 +204,38 @@ class ActiveStrokePainter extends CustomPainter {
   final List<Offset> currentPoints;
   final Color visualColor; 
   final double currentThickness;
+  final double opacity; 
   final bool isHighlighter;
   final BrushType brushType;
-  final bool isSmoothed;
+  final double smoothingLevel;
 
   ActiveStrokePainter({
     required this.currentPoints, 
     required this.visualColor, 
     required this.currentThickness, 
+    this.opacity = 1.0,
     this.isHighlighter = false,
     this.brushType = BrushType.gel,
-    this.isSmoothed = false,
+    this.smoothingLevel = 0.0,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (currentPoints.isEmpty) return;
-    final path = isSmoothed ? buildSmoothPath(currentPoints) : buildPath(currentPoints);
-    _renderArtisticStroke(canvas, path, brushType, visualColor, currentThickness, isHighlighter, currentPoints);
+    final path = smoothingLevel > 0 
+        ? buildSmoothPath(currentPoints, smoothingLevel) 
+        : buildPath(currentPoints);
+        
+    _renderArtisticStroke(
+      canvas: canvas, 
+      path: path, 
+      brushType: brushType, 
+      color: visualColor, 
+      thickness: currentThickness, 
+      opacity: opacity,
+      isHighlighter: isHighlighter, 
+      points: currentPoints,
+    );
   }
 
   @override
@@ -217,7 +243,8 @@ class ActiveStrokePainter extends CustomPainter {
     return oldDelegate.visualColor != visualColor ||
            oldDelegate.currentThickness != currentThickness ||
            oldDelegate.brushType != brushType ||
-           oldDelegate.isSmoothed != isSmoothed ||
+           oldDelegate.smoothingLevel != smoothingLevel ||
+           oldDelegate.opacity != opacity ||
            !listEquals(oldDelegate.currentPoints, currentPoints);
   }
 }
@@ -250,8 +277,20 @@ class RemoteLiveStrokesPainter extends CustomPainter {
       canvas.save();
       if (stroke.liveOffset != Offset.zero) canvas.translate(stroke.liveOffset.dx, stroke.liveOffset.dy);
       
-      final path = stroke.isSmoothed ? buildSmoothPath(stroke.points) : buildPath(stroke.points);
-      _renderArtisticStroke(canvas, path, stroke.brushType, strokeColor, stroke.thickness, stroke.isHighlighter, stroke.points);
+      final path = stroke.smoothingLevel > 0 
+          ? buildSmoothPath(stroke.points, stroke.smoothingLevel) 
+          : buildPath(stroke.points);
+          
+      _renderArtisticStroke(
+        canvas: canvas, 
+        path: path, 
+        brushType: stroke.brushType, 
+        color: strokeColor, 
+        thickness: stroke.thickness, 
+        opacity: stroke.opacity,
+        isHighlighter: stroke.isHighlighter, 
+        points: stroke.points,
+      );
       
       canvas.restore();
     }
@@ -263,15 +302,26 @@ class RemoteLiveStrokesPainter extends CustomPainter {
   }
 }
 
-void _renderArtisticStroke(Canvas canvas, Path path, BrushType brushType, Color color, double thickness, bool isHighlighter, List<Offset> points) {
+void _renderArtisticStroke({
+  required Canvas canvas, 
+  required Path path, 
+  required BrushType brushType, 
+  required Color color, 
+  required double thickness, 
+  double opacity = 1.0,
+  bool isHighlighter = false, 
+  required List<Offset> points,
+}) {
+  final paintColor = color.withOpacity(opacity * (isHighlighter ? 0.4 : 1.0));
+  
   if (brushType == BrushType.neon) {
-    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, color, thickness * 2.5, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0));
-    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, color, thickness, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0));
-    canvas.drawPath(path, _getPaintForBrush(BrushType.gel, Colors.white, thickness * 0.4, false));
+    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, paintColor, thickness * 2.5, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0));
+    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, paintColor, thickness, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0));
+    canvas.drawPath(path, _getPaintForBrush(BrushType.gel, Colors.white.withOpacity(opacity), thickness * 0.4, false));
   } else if (brushType == BrushType.fountain) {
-    _drawFountainPath(canvas, points, color, thickness);
+    _drawFountainPath(canvas, points, paintColor, thickness);
   } else {
-    canvas.drawPath(path, _getPaintForBrush(brushType, color, thickness, isHighlighter));
+    canvas.drawPath(path, _getPaintForBrush(brushType, paintColor, thickness, isHighlighter));
   }
 }
 
@@ -286,18 +336,31 @@ void _drawFountainPath(Canvas canvas, List<Offset> points, Color color, double b
 }
 
 Paint _getPaintForBrush(BrushType type, Color color, double thickness, bool isHighlighter) {
-  final paint = Paint()..color = color..strokeWidth = thickness..style = PaintingStyle.stroke..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
-  if (isHighlighter && type == BrushType.gel) return paint..color = color.withOpacity(0.4)..strokeCap = StrokeCap.square..blendMode = BlendMode.multiply;
+  final paint = Paint()
+    ..color = color
+    ..strokeWidth = thickness
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
 
   switch (type) {
-    case BrushType.gel: return paint;
+    case BrushType.gel: 
+      return isHighlighter 
+          ? (paint..strokeCap = StrokeCap.square..blendMode = BlendMode.multiply) 
+          : paint;
     case BrushType.fountain: return paint;
-    case BrushType.pencil: return paint..color = color.withOpacity(0.95)..strokeCap = StrokeCap.butt..strokeJoin = StrokeJoin.bevel;
-    case BrushType.marker: return paint..strokeCap = StrokeCap.square..strokeJoin = StrokeJoin.miter..color = color.withOpacity(1.0);
-    case BrushType.watercolor: return paint..color = color.withOpacity(0.35)..maskFilter = MaskFilter.blur(BlurStyle.normal, thickness * 0.4)..blendMode = BlendMode.multiply;
-    case BrushType.crayon: return paint..strokeWidth = thickness * 1.5..color = color.withOpacity(0.9)..strokeCap = StrokeCap.square..maskFilter = const MaskFilter.blur(BlurStyle.solid, 1.2);
-    case BrushType.airbrush: return paint..color = color.withOpacity(0.2)..maskFilter = MaskFilter.blur(BlurStyle.normal, thickness * 1.5);
-    case BrushType.neon: return paint..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0)..color = color.withOpacity(1.0);
+    case BrushType.pencil: 
+      return paint..color = color.withOpacity(color.opacity * 0.8)..strokeCap = StrokeCap.butt..strokeJoin = StrokeJoin.bevel;
+    case BrushType.marker: 
+      return paint..strokeCap = StrokeCap.square..strokeJoin = StrokeJoin.miter;
+    case BrushType.watercolor: 
+      return paint..color = color.withOpacity(color.opacity * 0.6)..maskFilter = MaskFilter.blur(BlurStyle.normal, thickness * 0.4)..blendMode = BlendMode.multiply;
+    case BrushType.crayon: 
+      return paint..strokeWidth = thickness * 1.5..color = color.withOpacity(color.opacity * 0.9)..strokeCap = StrokeCap.square..maskFilter = const MaskFilter.blur(BlurStyle.solid, 1.2);
+    case BrushType.airbrush: 
+      return paint..color = color.withOpacity(color.opacity * 0.4)..maskFilter = MaskFilter.blur(BlurStyle.normal, thickness * 1.5);
+    case BrushType.neon: 
+      return paint..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
     case BrushType.calligraphy: return paint..strokeCap = StrokeCap.butt..strokeWidth = thickness * 2.5;
     case BrushType.ribbon: return paint..strokeWidth = thickness * 0.75;
     case BrushType.fineliner: return paint..strokeWidth = thickness * 0.5..strokeCap = StrokeCap.butt..strokeJoin = StrokeJoin.miter;

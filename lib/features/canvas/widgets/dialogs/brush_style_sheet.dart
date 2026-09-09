@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/canvas_tool_provider.dart';
 import '../../models/canvas_enums.dart';
+import '../brush_preview.dart';
 
 class BrushStyleSheet extends ConsumerWidget {
   const BrushStyleSheet({super.key});
@@ -58,8 +59,8 @@ class BrushStyleSheet extends ConsumerWidget {
                   ),
                 ),
                 Switch(
-                  value: toolState.isSmoothingEnabled, 
-                  onChanged: (v) => toolNotifier.setSmoothing(v),
+                  value: toolState.smoothingLevel > 0, 
+                  onChanged: (v) => toolNotifier.setSmoothingLevel(v ? 0.5 : 0.0),
                   activeColor: Colors.blueAccent,
                 ),
               ],
@@ -104,7 +105,7 @@ class BrushStyleSheet extends ConsumerWidget {
                         child: Center(
                           child: CustomPaint(
                             size: const Size(26, 26),
-                            painter: _BrushPreviewPainter(
+                            painter: BrushPreviewPainter(
                               type: brush['type'], 
                               color: isSelected ? Colors.white : const Color(0xFF0F4C5C)
                             ),
@@ -131,50 +132,4 @@ class BrushStyleSheet extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _BrushPreviewPainter extends CustomPainter {
-  final BrushType type;
-  final Color color;
-
-  _BrushPreviewPainter({required this.type, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    final path = Path()
-      ..moveTo(5, size.height - 5)
-      ..quadraticBezierTo(size.width / 2, -5, size.width - 5, size.height - 5);
-
-    if (type == BrushType.neon) {
-      canvas.drawPath(path, paint..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0)..strokeWidth = 6);
-      canvas.drawPath(path, Paint()..color = Colors.white..strokeWidth = 1.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
-    } else if (type == BrushType.watercolor) {
-      canvas.drawPath(path, paint..color = color.withValues(alpha: 0.4)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0)..strokeWidth = 8);
-    } else if (type == BrushType.marker) {
-      canvas.drawPath(path, paint..strokeCap = StrokeCap.square..strokeWidth = 5);
-    } else if (type == BrushType.pencil) {
-      canvas.drawPath(path, paint..color = color.withValues(alpha: 0.7)..strokeWidth = 2);
-    } else if (type == BrushType.calligraphy) {
-       canvas.drawPath(path, paint..strokeCap = StrokeCap.butt..strokeWidth = 6);
-    } else if (type == BrushType.crayon) {
-       canvas.drawPath(path, paint..strokeWidth = 5..maskFilter = const MaskFilter.blur(BlurStyle.solid, 1.0));
-    } else if (type == BrushType.airbrush) {
-       canvas.drawPath(path, paint..color = color.withValues(alpha: 0.3)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0)..strokeWidth = 10);
-    } else if (type == BrushType.fineliner) {
-       canvas.drawPath(path, paint..strokeWidth = 1.2..strokeCap = StrokeCap.butt);
-    } else if (type == BrushType.monoline) {
-       canvas.drawPath(path, paint..strokeWidth = 4..strokeCap = StrokeCap.round);
-    } else {
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

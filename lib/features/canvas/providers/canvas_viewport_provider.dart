@@ -205,6 +205,15 @@ class CanvasViewportNotifier extends AutoDisposeNotifier<CanvasViewportState> {
     final controller = getControllerFor(clientId);
     controller.value = getCenteredMatrix(page, state.lastScreenSize!);
   }
+
+  double get currentScale {
+    if (state.currentPageClientId == null) return 1.0;
+    return getControllerFor(state.currentPageClientId!).value.getMaxScaleOnAxis();
+  }
+
+  Offset screenDeltaToDocumentDelta(Offset screenDelta) {
+    return screenDelta / currentScale;
+  }
 }
 
 final canvasViewportProvider = NotifierProvider.autoDispose<CanvasViewportNotifier, CanvasViewportState>(() {

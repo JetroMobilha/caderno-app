@@ -168,14 +168,14 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     final page = state.pages[index];
     if (page.isContentLoaded || page.id == null) return;
     try {
-      final content = await _repository.loadPageContent(page.id!, pageNumber: page.pageNumber);
+      final content = await _repository.loadPageContent(page.id!);
       final updatedPages = List<LocalPage>.from(state.pages);
       updatedPages[index] = page.copyWith(objects: [...content['strokes'], ...content['textBlocks'], ...content['imageBlocks'], ...content['shapes'], ...content['audios'], ...content['animations'], ...content['tables'], ...content['links'], ...content['attachments']], isContentLoaded: true);
       state = state.copyWith(pages: updatedPages);
-    } catch (e) {}
+    } catch (e) { debugPrint('🚨 LazyLoad Error: $e'); }
   }
 
-  Future<void> addStroke(LocalPage p, Stroke s) async { final ns = s.copyWith(creatorId: state.myUserId, pageNumber: p.pageNumber, layerId: 'drawings'); await _executeAction(AddStrokeAction(pageClientId: p.clientId, pageNumber: p.pageNumber, stroke: ns), targetPage: p); }
+  Future<void> addStroke(LocalPage p, Stroke s) async { final ns = s.copyWith(creatorId: state.myUserId, pageNumber: p.pageNumber, layerId: s.layerId ?? 'drawings'); await _executeAction(AddStrokeAction(pageClientId: p.clientId, pageNumber: p.pageNumber, stroke: ns), targetPage: p); }
   Future<void> addTextBlock(LocalPage page, TextBlock block) async { await _executeAction(AddTextAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: block.copyWith(layerId: 'text')), targetPage: page); }
   Future<void> addShape(LocalPage page, ShapeObject shape) async { await _executeAction(AddShapeAction(pageClientId: page.clientId, pageNumber: page.pageNumber, shape: shape.copyWith(layerId: 'drawings')), targetPage: page); }
   Future<void> addAudioBlock(LocalPage page, AudioBlock audio) async { await _executeAction(AddAudioAction(pageClientId: page.clientId, pageNumber: page.pageNumber, audio: audio.copyWith(layerId: 'default')), targetPage: page); }
@@ -246,8 +246,8 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     if (!isRemote) _broadcastAction(action);
   }
 
-  void undo(LocalPage page) { final updatedTarget = _undoRedoManager.undo(page); if (updatedTarget != null) state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updatedTarget : p).toList(), canUndo: _undoRedoManager.canUndo, canRedo: _undoRedoManager.canRedo); }
-  void redo(LocalPage page) { final updatedTarget = _undoRedoManager.redo(page); if (updatedTarget != null) state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updatedTarget : p).toList(), canUndo: _undoRedoManager.canUndo, canRedo: _undoRedoManager.canRedo); }
+  void undo(LocalPage page) { final updatedTarget = _undoRedoManager.undo(page); if (updatedTarget != null) { state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updatedTarget : p).toList(), canUndo: _undoRedoManager.canUndo, canRedo: _undoRedoManager.canRedo); _repository.markPageAsUnsynced(page.clientId); } }
+  void redo(LocalPage page) { final updatedTarget = _undoRedoManager.redo(page); if (updatedTarget != null) { state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updatedTarget : p).toList(), canUndo: _undoRedoManager.canUndo, canRedo: _undoRedoManager.canRedo); _repository.markPageAsUnsynced(page.clientId); } }
 
   Future<void> _persistIncrementalAction(LocalPage target, CanvasAction action, {int? updatedAt}) async {
     final String cid = target.clientId; final int? pid = target.id;
@@ -302,23 +302,61 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     else if (action is MoveAction) _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {'page_client_id': action.pageClientId, 'page_number': action.pageNumber, 'is_move': true, 'strokes': action.objectIds.map((id) { final obj = state.pages.firstWhere((p) => p.clientId == action.pageClientId).objects.firstWhere((o) => o.id == id); return {'id': id, 'type': obj.type, 'offset': {'x': obj.position.dx, 'y': obj.position.dy}, 'updated_at': obj.updatedAt}; }).toList()});
   }
 
+  // Gestão de Páginas
   Future<void> addNewPage({required bool isLandscape, String paperSize = 'A4', bool isInfinite = false, String? lineType, double? lineSpacing, String? sectionTitle, int count = 1, int? insertIndex}) async { final int startPageNumber = (insertIndex ?? state.pages.length) + 1; if (insertIndex != null && insertIndex < state.pages.length) await _repository.shiftPageNumbers(state.currentNotebookId, insertIndex, count); for (int i = 0; i < count; i++) { final np = LocalPage(notebookId: state.currentNotebookId, pageNumber: startPageNumber + i, isLandscape: isLandscape, paperSize: paperSize, isInfinite: isInfinite, lineType: lineType, lineSpacing: lineSpacing, sectionTitle: sectionTitle); await _repository.savePage(np, state.liveNotebookSid); } await _repository.reindexPages(state.currentNotebookId); }
   Future<void> duplicatePage(LocalPage source) async { if (!source.isContentLoaded && source.id != null) { final content = await _repository.loadPageContent(source.id!, pageNumber: source.pageNumber); source = source.copyWith(objects: [...content['strokes'], ...content['textBlocks'], ...content['imageBlocks']], isContentLoaded: true); } final clonedPage = source.clone(newClientId: const Uuid().v4(), newPageNumber: source.pageNumber + 1); await _repository.savePage(clonedPage, state.liveNotebookSid); for (var obj in clonedPage.objects) { if (obj is Stroke) await _repository.saveSingleStroke(clonedPage.clientId, obj); else if (obj is TextBlock) await _repository.saveSingleTextBlock(clonedPage.clientId, obj); else if (obj is ImageBlock) await _repository.saveSingleImageBlock(clonedPage.clientId, obj); else if (obj is ShapeObject) await _repository.saveSingleShape(clonedPage.clientId, obj); else if (obj is TableObject) await _repository.saveSingleTable(clonedPage.clientId, obj); else if (obj is LinkObject) await _repository.saveSingleLink(clonedPage.clientId, obj); else if (obj is AttachmentObject) await _repository.saveSingleAttachment(clonedPage.clientId, obj); else if (obj is AudioBlock) await _repository.saveSingleAudioBlock(clonedPage.clientId, obj); else if (obj is AnimationObject) await _repository.saveSingleAnimationObject(clonedPage.clientId, obj); } await _repository.reindexPages(state.currentNotebookId); }
+  Future<void> duplicatePages(List<LocalPage> sources) async { for (var s in sources) await duplicatePage(s); }
   Future<void> reorderPage(int oldIndex, int newIndex) async { if (oldIndex == newIndex) return; final list = List<LocalPage>.from(state.pages); final item = list.removeAt(oldIndex); list.insert(newIndex, item); state = state.copyWith(pages: list); final pageIds = list.map((p) => p.id).whereType<int>().toList(); await _repository.updatePageNumbersBatch(pageIds); }
   Future<void> updatePageSettings(LocalPage page, NotebookConfiguration newConfig) async { if (page.id == null) return; final updated = page.copyWith(isLandscape: newConfig.page.orientation == 'landscape', paperSize: newConfig.page.paperSize, isInfinite: newConfig.page.isInfinite, backgroundConfig: newConfig.background, lineType: newConfig.background.type, lineSpacing: newConfig.background.spacing, title: newConfig.header.enabled ? (newConfig.header.fields.isNotEmpty ? newConfig.header.fields.join(' / ') : page.title) : page.title, footer: newConfig.footer.enabled ? (newConfig.footer.fields.isNotEmpty ? newConfig.footer.fields.join(' / ') : page.footer) : page.footer, updatedAt: TimeService().nowMs()); await _repository.savePage(updated, state.liveNotebookSid); state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updated : p).toList()); }
   Future<void> renamePage(LocalPage page, String newTitle) async { if (page.id == null) return; final updated = page.copyWith(title: newTitle, updatedAt: TimeService().nowMs()); await _repository.savePage(updated, state.liveNotebookSid); state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updated : p).toList()); }
   Future<void> updatePageViewport(String clientId, Matrix4 matrix) async { final idx = state.pages.indexWhere((p) => p.clientId == clientId); if (idx == -1) return; final updated = state.pages[idx].copyWith(viewportMatrix: matrix, updatedAt: TimeService().nowMs()); state = state.copyWith(pages: state.pages.map((p) => p.clientId == clientId ? updated : p).toList()); await _repository.savePage(updated, state.liveNotebookSid); }
   Future<void> updatePageSection(LocalPage page, String? sectionTitle, {String? sectionColor}) async { if (page.id == null) return; final updated = page.copyWith(sectionTitle: sectionTitle, sectionColor: sectionColor, clearSection: sectionTitle == null || sectionTitle.isEmpty, updatedAt: TimeService().nowMs()); await _repository.savePage(updated, state.liveNotebookSid); state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updated : p).toList()); }
   Future<void> toggleFavorite(LocalPage page) async { if (page.id == null) return; final updated = page.copyWith(isFavorite: !page.isFavorite, updatedAt: TimeService().nowMs()); await _repository.savePage(updated, state.liveNotebookSid); state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updated : p).toList()); }
+  Future<void> setLineType(LocalPage page, String type) async { final updated = page.copyWith(lineType: type, updatedAt: TimeService().nowMs()); await _repository.savePage(updated, state.liveNotebookSid); state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updated : p).toList()); }
   Future<void> deletePages(List<LocalPage> pagesToDelete) async { final clientIds = pagesToDelete.map((p) => p.clientId).toSet(); state = state.copyWith(tearingPageClientIds: {...state.tearingPageClientIds, ...clientIds}); await Future.delayed(const Duration(milliseconds: 400)); final pageIds = pagesToDelete.map((p) => p.id).whereType<int>().toList(); await _repository.deletePagesBatch(pageIds); await _repository.reindexPages(state.currentNotebookId); state = state.copyWith(pages: state.pages.where((p) => !clientIds.contains(p.clientId)).toList(), tearingPageClientIds: state.tearingPageClientIds.where((id) => !clientIds.contains(id)).toSet()); }
-  Future<void> pickAndInsertImage(LocalPage page) async { final pf = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85); if (pf != null) { final appDir = await getApplicationDocumentsDirectory(); final String newPath = '${appDir.path}/img_${TimeService().nowMs()}'; await io.File(pf.path).copy(newPath); final nib = ImageBlock(id: const Uuid().v4(), imagePath: newPath, position: const Offset(100, 150), width: 300.0, height: 200.0, creatorId: state.myUserId); await _executeAction(AddImageAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: nib), targetPage: page); } }
-  Future<void> moveSelection(LocalPage page, {required List<String> strokeIds, required List<String> textIds, required List<String> imageIds, required List<String> shapeIds, required List<String> audioIds, required List<String> animationIds, required List<String> tableIds, required List<String> linkIds, required List<String> attachmentIds, required Offset delta}) async { if (page.isFrozen || delta == Offset.zero) return; final action = MoveAction(pageClientId: page.clientId, pageNumber: page.pageNumber, objectIds: [...strokeIds, ...textIds, ...imageIds, ...shapeIds, ...audioIds, ...animationIds, ...tableIds, ...linkIds, ...attachmentIds], delta: delta); await _executeAction(action, targetPage: page); }
   Future<void> deletePage(LocalPage page) async { await deletePages([page]); }
   Future<void> movePageToOtherNotebook(LocalPage page, int targetNotebookId) async { final targetPages = await _repository.getPagesByNotebook(targetNotebookId, null); final int newPageNumber = targetPages.length + 1; await _repository.movePageToNotebook(page.clientId, targetNotebookId, newPageNumber); await _repository.reindexPages(state.currentNotebookId); await _repository.reindexPages(targetNotebookId); }
   Future<void> copyPageToOtherNotebook(LocalPage page, int targetNotebookId) async { if (!page.isContentLoaded && page.id != null) { final content = await _repository.loadPageContent(page.id!, pageNumber: page.pageNumber); page = page.copyWith(objects: [...content['strokes'], ...content['textBlocks'], ...content['imageBlocks']], isContentLoaded: true); } final targetPages = await _repository.getPagesByNotebook(targetNotebookId, null); final int newPageNumber = targetPages.length + 1; final clonedPage = page.clone(newNotebookId: targetNotebookId, newPageNumber: newPageNumber); await _repository.savePage(clonedPage, null); for (var obj in clonedPage.objects) { if (obj is Stroke) await _repository.saveSingleStroke(clonedPage.clientId, obj); else if (obj is TextBlock) await _repository.saveSingleTextBlock(clonedPage.clientId, obj); else if (obj is ImageBlock) await _repository.saveSingleImageBlock(clonedPage.clientId, obj); else if (obj is ShapeObject) await _repository.saveSingleShape(clonedPage.clientId, obj); else if (obj is TableObject) await _repository.saveSingleTable(clonedPage.clientId, obj); else if (obj is LinkObject) await _repository.saveSingleLink(clonedPage.clientId, obj); else if (obj is AttachmentObject) await _repository.saveSingleAttachment(clonedPage.clientId, obj); else if (obj is AudioBlock) await _repository.saveSingleAudioBlock(clonedPage.clientId, obj); else if (obj is AnimationObject) await _repository.saveSingleAnimationObject(clonedPage.clientId, obj); } await _repository.reindexPages(targetNotebookId); }
   Future<void> updatePagesSection(List<LocalPage> pagesToUpdate, String? sectionTitle, {String? sectionColor}) async { for (var page in pagesToUpdate) { if (page.id != null) { final hData = {'title': page.title, 'section': sectionTitle, 'section_color': sectionColor ?? page.sectionColor}; await _repository.updatePagesSectionBatch([page.id!], hData); } } await _performCollectiveSync(); }
   Future<List<LocalPage>> getDeletedPages() async { return await _repository.getDeletedPages(state.currentNotebookId); }
   Future<void> restorePage(LocalPage page) async { await _repository.restorePage(page.clientId); await _repository.reindexPages(state.currentNotebookId); }
+
+  Future<void> pickAndInsertImage(LocalPage page) async { 
+    final pf = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85); 
+    if (pf != null) { 
+      final appDir = await getApplicationDocumentsDirectory(); 
+      final String newPath = '${appDir.path}/img_${TimeService().nowMs()}'; 
+      await io.File(pf.path).copy(newPath); 
+      final nib = ImageBlock(id: const Uuid().v4(), imagePath: newPath, position: const Offset(100, 150), width: 300.0, height: 200.0, creatorId: state.myUserId); 
+      await _executeAction(AddImageAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: nib), targetPage: page); 
+    } 
+  }
+  
+  Future<void> moveSelection(LocalPage page, {required Set<String> objectIds, required Offset delta}) async { 
+    if (page.isFrozen || delta == Offset.zero || objectIds.isEmpty) return; 
+    final action = MoveAction(pageClientId: page.clientId, pageNumber: page.pageNumber, objectIds: objectIds.toList(), delta: delta); 
+    await _executeAction(action, targetPage: page); 
+  }
+  
+  void broadcastLiveStroke({required String pageClientId, required int pageNumber, required String strokeId, required List<Offset> points, required String color, required double thickness, required bool isHighlighter, BrushType brushType = BrushType.gel, double smoothingLevel = 0.0, bool isFinal = false}) { 
+    if (!state.isCollaborationEnabled || state.liveNotebookSid == null) return; 
+    final data = {
+      'page_client_id': pageClientId, 
+      'page_number': pageNumber, 
+      'strokes': [{
+        'id': strokeId, 
+        'color': color, 
+        'thickness': thickness, 
+        'is_final': isFinal, 
+        'is_highlighter': isHighlighter ? 1 : 0, 
+        'brush_type': brushType.name, 
+        'smoothing_level': smoothingLevel, 
+        'points': points.map((pt) => {'x': pt.dx, 'y': pt.dy}).toList()
+      }]
+    }; 
+    _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: data); 
+  }
+
   void reset() { _pagesSubscription?.cancel(); _collabService.leaveSession(); state = CanvasDocumentState(); }
 
   Future<void> _performCollectiveSync() async { if (state.isGlobalSyncing) return; state = state.copyWith(isGlobalSyncing: true); try { if (state.currentUserRole == 'owner' || state.currentUserRole == 'editor') await _syncService.pushPages(onlyNotebookId: state.currentNotebookId); await _syncService.pullPages(forceFull: true, onlyNotebookId: state.liveNotebookSid); } finally { state = state.copyWith(isGlobalSyncing: false); } }

@@ -31,7 +31,7 @@ class SelectionOverlay extends ConsumerWidget {
     
     if (!isManagementMode && !isTextTransform) return const SizedBox.shrink();
 
-    final selectedIds = {
+    final selectedIds = <String>{
       ...toolState.selectedStrokeIds,
       ...toolState.selectedTextIds,
       ...toolState.selectedImageIds,

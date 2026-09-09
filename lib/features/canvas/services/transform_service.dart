@@ -3,45 +3,97 @@ import 'package:flutter/material.dart';
 import '../models/page_object.dart';
 import '../providers/canvas_tool_provider.dart';
 
-/// 🚀 v10.0: Motor de Transformação Centralizado.
+/// 🚀 v10.4: Motor de Transformação Centralizado.
 /// Fornece lógica matemática para Mover, Redimensionar e Rotacionar qualquer objeto do canvas.
 class TransformService {
   
+  /// Calcula os limites combinados de um conjunto de objetos.
+  /// 🚀 v10.6: Refinado para maior precisão em coordenadas de documento.
+  static Rect getCombinedBounds(List<PageObject> objects) {
+    if (objects.isEmpty) return Rect.zero;
+    
+    double minX = 9999999.0;
+    double minY = 9999999.0;
+    double maxX = -9999999.0;
+    double maxY = -9999999.0;
+
+    for (final obj in objects) {
+      final bounds = obj.position & obj.size;
+      if (bounds.left < minX) minX = bounds.left;
+      if (bounds.top < minY) minY = bounds.top;
+      if (bounds.right > maxX) maxX = bounds.right;
+      if (bounds.bottom > maxY) maxY = bounds.bottom;
+    }
+
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
   /// Calcula o novo estado de um objeto após um arraste de redimensionamento.
   static PageObject? calculateResize({
     required PageObject object,
     required HandleType handle,
     required Offset delta,
-    required bool keepAspectRatio,
+    bool keepAspectRatio = false,
   }) {
+    if (object.isLocked) return null;
+
     double newX = object.position.dx;
     double newY = object.position.dy;
     double newW = object.size.width;
     double newH = object.size.height;
 
-    // Se o objeto estiver bloqueado, não permite redimensionar
-    if (object.isLocked) return null;
+    final double aspectRatio = object.size.width / object.size.height;
 
     switch (handle) {
       case HandleType.bottomRight:
         newW += delta.dx;
         newH += delta.dy;
+        if (keepAspectRatio) {
+          if (newW / newH > aspectRatio) newH = newW / aspectRatio;
+          else newW = newH * aspectRatio;
+        }
         break;
       case HandleType.bottomLeft:
         newX += delta.dx;
         newW -= delta.dx;
         newH += delta.dy;
+        if (keepAspectRatio) {
+          if (newW / newH > aspectRatio) newH = newW / aspectRatio;
+          else {
+            final oldW = newW;
+            newW = newH * aspectRatio;
+            newX -= (newW - oldW);
+          }
+        }
         break;
       case HandleType.topLeft:
         newX += delta.dx;
         newY += delta.dy;
         newW -= delta.dx;
         newH -= delta.dy;
+        if (keepAspectRatio) {
+          if (newW / newH > aspectRatio) {
+            final oldH = newH;
+            newH = newW / aspectRatio;
+            newY -= (newH - oldH);
+          } else {
+            final oldW = newW;
+            newW = newH * aspectRatio;
+            newX -= (newW - oldW);
+          }
+        }
         break;
       case HandleType.topRight:
         newY += delta.dy;
         newW += delta.dx;
         newH -= delta.dy;
+        if (keepAspectRatio) {
+          if (newW / newH > aspectRatio) {
+            final oldH = newH;
+            newH = newW / aspectRatio;
+            newY -= (newH - oldH);
+          } else newW = newH * aspectRatio;
+        }
         break;
       case HandleType.middleRight:
         newW += delta.dx;
@@ -79,7 +131,7 @@ class TransformService {
     final center = (object.position & object.size).center;
     final double angle = math.atan2(currentLocalPos.dy - center.dy, currentLocalPos.dx - center.dx);
     
-    // Compensar o offset de 90 graus (topo) e a rotação atual
+    // Compensar o offset de 90 graus (topo)
     return angle + (math.pi / 2);
   }
 

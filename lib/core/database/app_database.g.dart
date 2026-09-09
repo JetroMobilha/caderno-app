@@ -4572,6 +4572,53 @@ class $CanvasStrokesTable extends CanvasStrokes
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientStrokeId,
@@ -4585,6 +4632,10 @@ class $CanvasStrokesTable extends CanvasStrokes
     version,
     creatorId,
     layerId,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4679,6 +4730,30 @@ class $CanvasStrokesTable extends CanvasStrokes
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -4732,6 +4807,22 @@ class $CanvasStrokesTable extends CanvasStrokes
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -4753,6 +4844,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
   final int version;
   final String? creatorId;
   final String? layerId;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasStroke({
     required this.clientStrokeId,
     this.serverId,
@@ -4765,6 +4860,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     required this.version,
     this.creatorId,
     this.layerId,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4786,6 +4885,12 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -4808,6 +4913,12 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -4828,6 +4939,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -4845,6 +4960,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
       'layerId': serializer.toJson<String?>(layerId),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -4860,6 +4979,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     int? version,
     Value<String?> creatorId = const Value.absent(),
     Value<String?> layerId = const Value.absent(),
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasStroke(
     clientStrokeId: clientStrokeId ?? this.clientStrokeId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -4872,6 +4995,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
     layerId: layerId.present ? layerId.value : this.layerId,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasStroke copyWithCompanion(CanvasStrokesCompanion data) {
     return CanvasStroke(
@@ -4894,6 +5021,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -4910,7 +5041,11 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -4928,6 +5063,10 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     version,
     creatorId,
     layerId,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -4943,7 +5082,11 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
           other.creatorId == this.creatorId &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
@@ -4958,6 +5101,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
   final Value<int> version;
   final Value<String?> creatorId;
   final Value<String?> layerId;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasStrokesCompanion({
     this.clientStrokeId = const Value.absent(),
@@ -4971,6 +5118,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasStrokesCompanion.insert({
@@ -4985,6 +5136,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientStrokeId = Value(clientStrokeId),
        pageId = Value(pageId),
@@ -5001,6 +5156,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Expression<int>? version,
     Expression<String>? creatorId,
     Expression<String>? layerId,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5015,6 +5174,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
       if (layerId != null) 'layer_id': layerId,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5031,6 +5194,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Value<int>? version,
     Value<String?>? creatorId,
     Value<String?>? layerId,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasStrokesCompanion(
@@ -5045,6 +5212,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
       layerId: layerId ?? this.layerId,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5085,6 +5256,18 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5105,6 +5288,10 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5244,6 +5431,53 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientTextId,
@@ -5257,6 +5491,10 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     version,
     creatorId,
     layerId,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5351,6 +5589,30 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -5404,6 +5666,22 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -5425,6 +5703,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
   final int version;
   final String? creatorId;
   final String? layerId;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasTextBlock({
     required this.clientTextId,
     this.serverId,
@@ -5437,6 +5719,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     required this.version,
     this.creatorId,
     this.layerId,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5458,6 +5744,12 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -5480,6 +5772,12 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -5500,6 +5798,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -5517,6 +5819,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
       'layerId': serializer.toJson<String?>(layerId),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -5532,6 +5838,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     int? version,
     Value<String?> creatorId = const Value.absent(),
     Value<String?> layerId = const Value.absent(),
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasTextBlock(
     clientTextId: clientTextId ?? this.clientTextId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -5544,6 +5854,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
     layerId: layerId.present ? layerId.value : this.layerId,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasTextBlock copyWithCompanion(CanvasTextBlocksCompanion data) {
     return CanvasTextBlock(
@@ -5564,6 +5878,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -5580,7 +5898,11 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -5598,6 +5920,10 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     version,
     creatorId,
     layerId,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -5613,7 +5939,11 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
           other.creatorId == this.creatorId &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
@@ -5628,6 +5958,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
   final Value<int> version;
   final Value<String?> creatorId;
   final Value<String?> layerId;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasTextBlocksCompanion({
     this.clientTextId = const Value.absent(),
@@ -5641,6 +5975,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasTextBlocksCompanion.insert({
@@ -5655,6 +5993,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientTextId = Value(clientTextId),
        pageId = Value(pageId),
@@ -5671,6 +6013,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Expression<int>? version,
     Expression<String>? creatorId,
     Expression<String>? layerId,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5685,6 +6031,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
       if (layerId != null) 'layer_id': layerId,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5701,6 +6051,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Value<int>? version,
     Value<String?>? creatorId,
     Value<String?>? layerId,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasTextBlocksCompanion(
@@ -5715,6 +6069,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
       layerId: layerId ?? this.layerId,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5755,6 +6113,18 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5775,6 +6145,10 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5961,6 +6335,53 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientImageId,
@@ -5979,6 +6400,10 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     version,
     creatorId,
     layerId,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6113,6 +6538,30 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -6186,6 +6635,22 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         DriftSqlType.string,
         data['${effectivePrefix}layer_id'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -6213,6 +6678,10 @@ class CanvasImageBlock extends DataClass
   final int version;
   final String? creatorId;
   final String? layerId;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasImageBlock({
     required this.clientImageId,
     this.serverId,
@@ -6230,6 +6699,10 @@ class CanvasImageBlock extends DataClass
     required this.version,
     this.creatorId,
     this.layerId,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6256,6 +6729,12 @@ class CanvasImageBlock extends DataClass
     if (!nullToAbsent || layerId != null) {
       map['layer_id'] = Variable<String>(layerId);
     }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -6283,6 +6762,12 @@ class CanvasImageBlock extends DataClass
       layerId: layerId == null && nullToAbsent
           ? const Value.absent()
           : Value(layerId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -6308,6 +6793,10 @@ class CanvasImageBlock extends DataClass
       version: serializer.fromJson<int>(json['version']),
       creatorId: serializer.fromJson<String?>(json['creatorId']),
       layerId: serializer.fromJson<String?>(json['layerId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -6330,6 +6819,10 @@ class CanvasImageBlock extends DataClass
       'version': serializer.toJson<int>(version),
       'creatorId': serializer.toJson<String?>(creatorId),
       'layerId': serializer.toJson<String?>(layerId),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -6350,6 +6843,10 @@ class CanvasImageBlock extends DataClass
     int? version,
     Value<String?> creatorId = const Value.absent(),
     Value<String?> layerId = const Value.absent(),
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasImageBlock(
     clientImageId: clientImageId ?? this.clientImageId,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -6367,6 +6864,10 @@ class CanvasImageBlock extends DataClass
     version: version ?? this.version,
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
     layerId: layerId.present ? layerId.value : this.layerId,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasImageBlock copyWithCompanion(CanvasImageBlocksCompanion data) {
     return CanvasImageBlock(
@@ -6392,6 +6893,10 @@ class CanvasImageBlock extends DataClass
       version: data.version.present ? data.version.value : this.version,
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -6413,7 +6918,11 @@ class CanvasImageBlock extends DataClass
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
-          ..write('layerId: $layerId')
+          ..write('layerId: $layerId, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -6436,6 +6945,10 @@ class CanvasImageBlock extends DataClass
     version,
     creatorId,
     layerId,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -6456,7 +6969,11 @@ class CanvasImageBlock extends DataClass
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
           other.creatorId == this.creatorId &&
-          other.layerId == this.layerId);
+          other.layerId == this.layerId &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
@@ -6476,6 +6993,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
   final Value<int> version;
   final Value<String?> creatorId;
   final Value<String?> layerId;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasImageBlocksCompanion({
     this.clientImageId = const Value.absent(),
@@ -6494,6 +7015,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasImageBlocksCompanion.insert({
@@ -6513,6 +7038,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.version = const Value.absent(),
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientImageId = Value(clientImageId),
        pageId = Value(pageId),
@@ -6539,6 +7068,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Expression<int>? version,
     Expression<String>? creatorId,
     Expression<String>? layerId,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -6558,6 +7091,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       if (version != null) 'version': version,
       if (creatorId != null) 'creator_id': creatorId,
       if (layerId != null) 'layer_id': layerId,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -6579,6 +7116,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Value<int>? version,
     Value<String?>? creatorId,
     Value<String?>? layerId,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasImageBlocksCompanion(
@@ -6598,6 +7139,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       version: version ?? this.version,
       creatorId: creatorId ?? this.creatorId,
       layerId: layerId ?? this.layerId,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -6653,6 +7198,18 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     if (layerId.present) {
       map['layer_id'] = Variable<String>(layerId.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -6678,6 +7235,10 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
           ..write('version: $version, ')
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6783,6 +7344,53 @@ class $CanvasShapesTable extends CanvasShapes
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientShapeId,
@@ -6793,6 +7401,10 @@ class $CanvasShapesTable extends CanvasShapes
     version,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6866,6 +7478,30 @@ class $CanvasShapesTable extends CanvasShapes
         ),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -6907,6 +7543,22 @@ class $CanvasShapesTable extends CanvasShapes
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -6925,6 +7577,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
   final int version;
   final String? layerId;
   final int syncedWithCloud;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasShape({
     required this.clientShapeId,
     required this.pageId,
@@ -6934,6 +7590,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     required this.version,
     this.layerId,
     required this.syncedWithCloud,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6948,6 +7608,12 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       map['layer_id'] = Variable<String>(layerId);
     }
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -6963,6 +7629,12 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
           ? const Value.absent()
           : Value(layerId),
       syncedWithCloud: Value(syncedWithCloud),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -6980,6 +7652,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       version: serializer.fromJson<int>(json['version']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -6994,6 +7670,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       'version': serializer.toJson<int>(version),
       'layerId': serializer.toJson<String?>(layerId),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -7006,6 +7686,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     int? version,
     Value<String?> layerId = const Value.absent(),
     int? syncedWithCloud,
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasShape(
     clientShapeId: clientShapeId ?? this.clientShapeId,
     pageId: pageId ?? this.pageId,
@@ -7015,6 +7699,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     version: version ?? this.version,
     layerId: layerId.present ? layerId.value : this.layerId,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasShape copyWithCompanion(CanvasShapesCompanion data) {
     return CanvasShape(
@@ -7030,6 +7718,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -7043,7 +7735,11 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
           ..write('updatedAt: $updatedAt, ')
           ..write('version: $version, ')
           ..write('layerId: $layerId, ')
-          ..write('syncedWithCloud: $syncedWithCloud')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -7058,6 +7754,10 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
     version,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -7070,7 +7770,11 @@ class CanvasShape extends DataClass implements Insertable<CanvasShape> {
           other.updatedAt == this.updatedAt &&
           other.version == this.version &&
           other.layerId == this.layerId &&
-          other.syncedWithCloud == this.syncedWithCloud);
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
@@ -7082,6 +7786,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
   final Value<int> version;
   final Value<String?> layerId;
   final Value<int> syncedWithCloud;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasShapesCompanion({
     this.clientShapeId = const Value.absent(),
@@ -7092,6 +7800,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     this.version = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasShapesCompanion.insert({
@@ -7103,6 +7815,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     this.version = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientShapeId = Value(clientShapeId),
        pageId = Value(pageId),
@@ -7116,6 +7832,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     Expression<int>? version,
     Expression<String>? layerId,
     Expression<int>? syncedWithCloud,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -7127,6 +7847,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
       if (version != null) 'version': version,
       if (layerId != null) 'layer_id': layerId,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7140,6 +7864,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     Value<int>? version,
     Value<String?>? layerId,
     Value<int>? syncedWithCloud,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasShapesCompanion(
@@ -7151,6 +7879,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
       version: version ?? this.version,
       layerId: layerId ?? this.layerId,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7182,6 +7914,18 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -7199,6 +7943,10 @@ class CanvasShapesCompanion extends UpdateCompanion<CanvasShape> {
           ..write('version: $version, ')
           ..write('layerId: $layerId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7292,6 +8040,53 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientAudioId,
@@ -7301,6 +8096,10 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7368,6 +8167,30 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
         ),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -7405,6 +8228,22 @@ class $CanvasAudioBlocksTable extends CanvasAudioBlocks
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -7423,6 +8262,10 @@ class CanvasAudioBlock extends DataClass
   final int updatedAt;
   final String? layerId;
   final int syncedWithCloud;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasAudioBlock({
     required this.clientAudioId,
     required this.pageId,
@@ -7431,6 +8274,10 @@ class CanvasAudioBlock extends DataClass
     required this.updatedAt,
     this.layerId,
     required this.syncedWithCloud,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7444,6 +8291,12 @@ class CanvasAudioBlock extends DataClass
       map['layer_id'] = Variable<String>(layerId);
     }
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -7458,6 +8311,12 @@ class CanvasAudioBlock extends DataClass
           ? const Value.absent()
           : Value(layerId),
       syncedWithCloud: Value(syncedWithCloud),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -7474,6 +8333,10 @@ class CanvasAudioBlock extends DataClass
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -7487,6 +8350,10 @@ class CanvasAudioBlock extends DataClass
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -7498,6 +8365,10 @@ class CanvasAudioBlock extends DataClass
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
     int? syncedWithCloud,
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasAudioBlock(
     clientAudioId: clientAudioId ?? this.clientAudioId,
     pageId: pageId ?? this.pageId,
@@ -7506,6 +8377,10 @@ class CanvasAudioBlock extends DataClass
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasAudioBlock copyWithCompanion(CanvasAudioBlocksCompanion data) {
     return CanvasAudioBlock(
@@ -7520,6 +8395,10 @@ class CanvasAudioBlock extends DataClass
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -7532,7 +8411,11 @@ class CanvasAudioBlock extends DataClass
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
-          ..write('syncedWithCloud: $syncedWithCloud')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -7546,6 +8429,10 @@ class CanvasAudioBlock extends DataClass
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -7557,7 +8444,11 @@ class CanvasAudioBlock extends DataClass
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
           other.layerId == this.layerId &&
-          other.syncedWithCloud == this.syncedWithCloud);
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
@@ -7568,6 +8459,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
   final Value<int> updatedAt;
   final Value<String?> layerId;
   final Value<int> syncedWithCloud;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasAudioBlocksCompanion({
     this.clientAudioId = const Value.absent(),
@@ -7577,6 +8472,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasAudioBlocksCompanion.insert({
@@ -7587,6 +8486,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientAudioId = Value(clientAudioId),
        pageId = Value(pageId),
@@ -7599,6 +8502,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     Expression<int>? updatedAt,
     Expression<String>? layerId,
     Expression<int>? syncedWithCloud,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -7609,6 +8516,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7621,6 +8532,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     Value<int>? updatedAt,
     Value<String?>? layerId,
     Value<int>? syncedWithCloud,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasAudioBlocksCompanion(
@@ -7631,6 +8546,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7659,6 +8578,18 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -7675,6 +8606,10 @@ class CanvasAudioBlocksCompanion extends UpdateCompanion<CanvasAudioBlock> {
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7769,6 +8704,53 @@ class $CanvasAnimationsTable extends CanvasAnimations
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientAnimationId,
@@ -7778,6 +8760,10 @@ class $CanvasAnimationsTable extends CanvasAnimations
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -7848,6 +8834,30 @@ class $CanvasAnimationsTable extends CanvasAnimations
         ),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -7885,6 +8895,22 @@ class $CanvasAnimationsTable extends CanvasAnimations
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -7902,6 +8928,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
   final int updatedAt;
   final String? layerId;
   final int syncedWithCloud;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasAnimation({
     required this.clientAnimationId,
     required this.pageId,
@@ -7910,6 +8940,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     required this.updatedAt,
     this.layerId,
     required this.syncedWithCloud,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -7923,6 +8957,12 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       map['layer_id'] = Variable<String>(layerId);
     }
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -7937,6 +8977,12 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
           ? const Value.absent()
           : Value(layerId),
       syncedWithCloud: Value(syncedWithCloud),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -7953,6 +8999,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -7966,6 +9016,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -7977,6 +9031,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
     int? syncedWithCloud,
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasAnimation(
     clientAnimationId: clientAnimationId ?? this.clientAnimationId,
     pageId: pageId ?? this.pageId,
@@ -7985,6 +9043,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasAnimation copyWithCompanion(CanvasAnimationsCompanion data) {
     return CanvasAnimation(
@@ -8001,6 +9063,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -8013,7 +9079,11 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
-          ..write('syncedWithCloud: $syncedWithCloud')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -8027,6 +9097,10 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -8038,7 +9112,11 @@ class CanvasAnimation extends DataClass implements Insertable<CanvasAnimation> {
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
           other.layerId == this.layerId &&
-          other.syncedWithCloud == this.syncedWithCloud);
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
@@ -8049,6 +9127,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
   final Value<int> updatedAt;
   final Value<String?> layerId;
   final Value<int> syncedWithCloud;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasAnimationsCompanion({
     this.clientAnimationId = const Value.absent(),
@@ -8058,6 +9140,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasAnimationsCompanion.insert({
@@ -8068,6 +9154,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientAnimationId = Value(clientAnimationId),
        pageId = Value(pageId),
@@ -8080,6 +9170,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     Expression<int>? updatedAt,
     Expression<String>? layerId,
     Expression<int>? syncedWithCloud,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -8090,6 +9184,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -8102,6 +9200,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     Value<int>? updatedAt,
     Value<String?>? layerId,
     Value<int>? syncedWithCloud,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasAnimationsCompanion(
@@ -8112,6 +9214,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8140,6 +9246,18 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8156,6 +9274,10 @@ class CanvasAnimationsCompanion extends UpdateCompanion<CanvasAnimation> {
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8249,6 +9371,53 @@ class $CanvasTablesTable extends CanvasTables
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientTableId,
@@ -8258,6 +9427,10 @@ class $CanvasTablesTable extends CanvasTables
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -8325,6 +9498,30 @@ class $CanvasTablesTable extends CanvasTables
         ),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -8362,6 +9559,22 @@ class $CanvasTablesTable extends CanvasTables
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -8379,6 +9592,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
   final int updatedAt;
   final String? layerId;
   final int syncedWithCloud;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasTable({
     required this.clientTableId,
     required this.pageId,
@@ -8387,6 +9604,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     required this.updatedAt,
     this.layerId,
     required this.syncedWithCloud,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -8400,6 +9621,12 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       map['layer_id'] = Variable<String>(layerId);
     }
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -8414,6 +9641,12 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
           ? const Value.absent()
           : Value(layerId),
       syncedWithCloud: Value(syncedWithCloud),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -8430,6 +9663,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -8443,6 +9680,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -8454,6 +9695,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
     int? syncedWithCloud,
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasTable(
     clientTableId: clientTableId ?? this.clientTableId,
     pageId: pageId ?? this.pageId,
@@ -8462,6 +9707,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasTable copyWithCompanion(CanvasTablesCompanion data) {
     return CanvasTable(
@@ -8476,6 +9725,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -8488,7 +9741,11 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
-          ..write('syncedWithCloud: $syncedWithCloud')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -8502,6 +9759,10 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -8513,7 +9774,11 @@ class CanvasTable extends DataClass implements Insertable<CanvasTable> {
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
           other.layerId == this.layerId &&
-          other.syncedWithCloud == this.syncedWithCloud);
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
@@ -8524,6 +9789,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
   final Value<int> updatedAt;
   final Value<String?> layerId;
   final Value<int> syncedWithCloud;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasTablesCompanion({
     this.clientTableId = const Value.absent(),
@@ -8533,6 +9802,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasTablesCompanion.insert({
@@ -8543,6 +9816,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientTableId = Value(clientTableId),
        pageId = Value(pageId),
@@ -8555,6 +9832,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     Expression<int>? updatedAt,
     Expression<String>? layerId,
     Expression<int>? syncedWithCloud,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -8565,6 +9846,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -8577,6 +9862,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     Value<int>? updatedAt,
     Value<String?>? layerId,
     Value<int>? syncedWithCloud,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasTablesCompanion(
@@ -8587,6 +9876,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8615,6 +9908,18 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8631,6 +9936,10 @@ class CanvasTablesCompanion extends UpdateCompanion<CanvasTable> {
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8724,6 +10033,53 @@ class $CanvasLinksTable extends CanvasLinks
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientLinkId,
@@ -8733,6 +10089,10 @@ class $CanvasLinksTable extends CanvasLinks
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -8800,6 +10160,30 @@ class $CanvasLinksTable extends CanvasLinks
         ),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -8837,6 +10221,22 @@ class $CanvasLinksTable extends CanvasLinks
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -8854,6 +10254,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
   final int updatedAt;
   final String? layerId;
   final int syncedWithCloud;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasLink({
     required this.clientLinkId,
     required this.pageId,
@@ -8862,6 +10266,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     required this.updatedAt,
     this.layerId,
     required this.syncedWithCloud,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -8875,6 +10283,12 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       map['layer_id'] = Variable<String>(layerId);
     }
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -8889,6 +10303,12 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
           ? const Value.absent()
           : Value(layerId),
       syncedWithCloud: Value(syncedWithCloud),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -8905,6 +10325,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -8918,6 +10342,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -8929,6 +10357,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
     int? syncedWithCloud,
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasLink(
     clientLinkId: clientLinkId ?? this.clientLinkId,
     pageId: pageId ?? this.pageId,
@@ -8937,6 +10369,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasLink copyWithCompanion(CanvasLinksCompanion data) {
     return CanvasLink(
@@ -8951,6 +10387,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -8963,7 +10403,11 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
-          ..write('syncedWithCloud: $syncedWithCloud')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -8977,6 +10421,10 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -8988,7 +10436,11 @@ class CanvasLink extends DataClass implements Insertable<CanvasLink> {
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
           other.layerId == this.layerId &&
-          other.syncedWithCloud == this.syncedWithCloud);
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
@@ -8999,6 +10451,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
   final Value<int> updatedAt;
   final Value<String?> layerId;
   final Value<int> syncedWithCloud;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasLinksCompanion({
     this.clientLinkId = const Value.absent(),
@@ -9008,6 +10464,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasLinksCompanion.insert({
@@ -9018,6 +10478,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientLinkId = Value(clientLinkId),
        pageId = Value(pageId),
@@ -9030,6 +10494,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     Expression<int>? updatedAt,
     Expression<String>? layerId,
     Expression<int>? syncedWithCloud,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -9040,6 +10508,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -9052,6 +10524,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     Value<int>? updatedAt,
     Value<String?>? layerId,
     Value<int>? syncedWithCloud,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasLinksCompanion(
@@ -9062,6 +10538,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -9090,6 +10570,18 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -9106,6 +10598,10 @@ class CanvasLinksCompanion extends UpdateCompanion<CanvasLink> {
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -9199,6 +10695,53 @@ class $CanvasAttachmentsTable extends CanvasAttachments
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     clientAttachmentId,
@@ -9208,6 +10751,10 @@ class $CanvasAttachmentsTable extends CanvasAttachments
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -9278,6 +10825,30 @@ class $CanvasAttachmentsTable extends CanvasAttachments
         ),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
     return context;
   }
 
@@ -9315,6 +10886,22 @@ class $CanvasAttachmentsTable extends CanvasAttachments
         DriftSqlType.int,
         data['${effectivePrefix}synced_with_cloud'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
     );
   }
 
@@ -9333,6 +10920,10 @@ class CanvasAttachment extends DataClass
   final int updatedAt;
   final String? layerId;
   final int syncedWithCloud;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
   const CanvasAttachment({
     required this.clientAttachmentId,
     required this.pageId,
@@ -9341,6 +10932,10 @@ class CanvasAttachment extends DataClass
     required this.updatedAt,
     this.layerId,
     required this.syncedWithCloud,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -9354,6 +10949,12 @@ class CanvasAttachment extends DataClass
       map['layer_id'] = Variable<String>(layerId);
     }
     map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
     return map;
   }
 
@@ -9368,6 +10969,12 @@ class CanvasAttachment extends DataClass
           ? const Value.absent()
           : Value(layerId),
       syncedWithCloud: Value(syncedWithCloud),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
     );
   }
 
@@ -9386,6 +10993,10 @@ class CanvasAttachment extends DataClass
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
     );
   }
   @override
@@ -9399,6 +11010,10 @@ class CanvasAttachment extends DataClass
       'updatedAt': serializer.toJson<int>(updatedAt),
       'layerId': serializer.toJson<String?>(layerId),
       'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
     };
   }
 
@@ -9410,6 +11025,10 @@ class CanvasAttachment extends DataClass
     int? updatedAt,
     Value<String?> layerId = const Value.absent(),
     int? syncedWithCloud,
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
   }) => CanvasAttachment(
     clientAttachmentId: clientAttachmentId ?? this.clientAttachmentId,
     pageId: pageId ?? this.pageId,
@@ -9418,6 +11037,10 @@ class CanvasAttachment extends DataClass
     updatedAt: updatedAt ?? this.updatedAt,
     layerId: layerId.present ? layerId.value : this.layerId,
     syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
   );
   CanvasAttachment copyWithCompanion(CanvasAttachmentsCompanion data) {
     return CanvasAttachment(
@@ -9434,6 +11057,10 @@ class CanvasAttachment extends DataClass
       syncedWithCloud: data.syncedWithCloud.present
           ? data.syncedWithCloud.value
           : this.syncedWithCloud,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
     );
   }
 
@@ -9446,7 +11073,11 @@ class CanvasAttachment extends DataClass
           ..write('isDeleted: $isDeleted, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
-          ..write('syncedWithCloud: $syncedWithCloud')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
           ..write(')'))
         .toString();
   }
@@ -9460,6 +11091,10 @@ class CanvasAttachment extends DataClass
     updatedAt,
     layerId,
     syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
   );
   @override
   bool operator ==(Object other) =>
@@ -9471,7 +11106,11 @@ class CanvasAttachment extends DataClass
           other.isDeleted == this.isDeleted &&
           other.updatedAt == this.updatedAt &&
           other.layerId == this.layerId &&
-          other.syncedWithCloud == this.syncedWithCloud);
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
 }
 
 class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
@@ -9482,6 +11121,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
   final Value<int> updatedAt;
   final Value<String?> layerId;
   final Value<int> syncedWithCloud;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
   final Value<int> rowid;
   const CanvasAttachmentsCompanion({
     this.clientAttachmentId = const Value.absent(),
@@ -9491,6 +11134,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CanvasAttachmentsCompanion.insert({
@@ -9501,6 +11148,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     this.updatedAt = const Value.absent(),
     this.layerId = const Value.absent(),
     this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : clientAttachmentId = Value(clientAttachmentId),
        pageId = Value(pageId),
@@ -9513,6 +11164,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     Expression<int>? updatedAt,
     Expression<String>? layerId,
     Expression<int>? syncedWithCloud,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -9524,6 +11179,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (layerId != null) 'layer_id': layerId,
       if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -9536,6 +11195,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     Value<int>? updatedAt,
     Value<String?>? layerId,
     Value<int>? syncedWithCloud,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
     Value<int>? rowid,
   }) {
     return CanvasAttachmentsCompanion(
@@ -9546,6 +11209,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
       updatedAt: updatedAt ?? this.updatedAt,
       layerId: layerId ?? this.layerId,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -9574,6 +11241,18 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
     if (syncedWithCloud.present) {
       map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -9590,6 +11269,10 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
           ..write('updatedAt: $updatedAt, ')
           ..write('layerId: $layerId, ')
           ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -16807,6 +18490,10 @@ typedef $$CanvasStrokesTableCreateCompanionBuilder =
       Value<int> version,
       Value<String?> creatorId,
       Value<String?> layerId,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasStrokesTableUpdateCompanionBuilder =
@@ -16822,6 +18509,10 @@ typedef $$CanvasStrokesTableUpdateCompanionBuilder =
       Value<int> version,
       Value<String?> creatorId,
       Value<String?> layerId,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -16910,6 +18601,26 @@ class $$CanvasStrokesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -16993,6 +18704,26 @@ class $$CanvasStrokesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -17064,6 +18795,18 @@ class $$CanvasStrokesTableAnnotationComposer
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
 
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -17127,6 +18870,10 @@ class $$CanvasStrokesTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasStrokesCompanion(
                 clientStrokeId: clientStrokeId,
@@ -17140,6 +18887,10 @@ class $$CanvasStrokesTableTableManager
                 version: version,
                 creatorId: creatorId,
                 layerId: layerId,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -17155,6 +18906,10 @@ class $$CanvasStrokesTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasStrokesCompanion.insert(
                 clientStrokeId: clientStrokeId,
@@ -17168,6 +18923,10 @@ class $$CanvasStrokesTableTableManager
                 version: version,
                 creatorId: creatorId,
                 layerId: layerId,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -17250,6 +19009,10 @@ typedef $$CanvasTextBlocksTableCreateCompanionBuilder =
       Value<int> version,
       Value<String?> creatorId,
       Value<String?> layerId,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
@@ -17265,6 +19028,10 @@ typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
       Value<int> version,
       Value<String?> creatorId,
       Value<String?> layerId,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -17354,6 +19121,26 @@ class $$CanvasTextBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -17437,6 +19224,26 @@ class $$CanvasTextBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -17506,6 +19313,18 @@ class $$CanvasTextBlocksTableAnnotationComposer
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
 
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -17571,6 +19390,10 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion(
                 clientTextId: clientTextId,
@@ -17584,6 +19407,10 @@ class $$CanvasTextBlocksTableTableManager
                 version: version,
                 creatorId: creatorId,
                 layerId: layerId,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -17599,6 +19426,10 @@ class $$CanvasTextBlocksTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTextBlocksCompanion.insert(
                 clientTextId: clientTextId,
@@ -17612,6 +19443,10 @@ class $$CanvasTextBlocksTableTableManager
                 version: version,
                 creatorId: creatorId,
                 layerId: layerId,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -17701,6 +19536,10 @@ typedef $$CanvasImageBlocksTableCreateCompanionBuilder =
       Value<int> version,
       Value<String?> creatorId,
       Value<String?> layerId,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
@@ -17721,6 +19560,10 @@ typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
       Value<int> version,
       Value<String?> creatorId,
       Value<String?> layerId,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -17839,6 +19682,26 @@ class $$CanvasImageBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -17947,6 +19810,26 @@ class $$CanvasImageBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -18031,6 +19914,18 @@ class $$CanvasImageBlocksTableAnnotationComposer
   GeneratedColumn<String> get layerId =>
       $composableBuilder(column: $table.layerId, builder: (column) => column);
 
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
+
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -18104,6 +19999,10 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion(
                 clientImageId: clientImageId,
@@ -18122,6 +20021,10 @@ class $$CanvasImageBlocksTableTableManager
                 version: version,
                 creatorId: creatorId,
                 layerId: layerId,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18142,6 +20045,10 @@ class $$CanvasImageBlocksTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasImageBlocksCompanion.insert(
                 clientImageId: clientImageId,
@@ -18160,6 +20067,10 @@ class $$CanvasImageBlocksTableTableManager
                 version: version,
                 creatorId: creatorId,
                 layerId: layerId,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18241,6 +20152,10 @@ typedef $$CanvasShapesTableCreateCompanionBuilder =
       Value<int> version,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasShapesTableUpdateCompanionBuilder =
@@ -18253,6 +20168,10 @@ typedef $$CanvasShapesTableUpdateCompanionBuilder =
       Value<int> version,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -18319,6 +20238,26 @@ class $$CanvasShapesTableFilterComposer
 
   ColumnFilters<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18390,6 +20329,26 @@ class $$CanvasShapesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -18447,6 +20406,18 @@ class $$CanvasShapesTableAnnotationComposer
     column: $table.syncedWithCloud,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -18508,6 +20479,10 @@ class $$CanvasShapesTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasShapesCompanion(
                 clientShapeId: clientShapeId,
@@ -18518,6 +20493,10 @@ class $$CanvasShapesTableTableManager
                 version: version,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18530,6 +20509,10 @@ class $$CanvasShapesTableTableManager
                 Value<int> version = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasShapesCompanion.insert(
                 clientShapeId: clientShapeId,
@@ -18540,6 +20523,10 @@ class $$CanvasShapesTableTableManager
                 version: version,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18618,6 +20605,10 @@ typedef $$CanvasAudioBlocksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasAudioBlocksTableUpdateCompanionBuilder =
@@ -18629,6 +20620,10 @@ typedef $$CanvasAudioBlocksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -18702,6 +20697,26 @@ class $$CanvasAudioBlocksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -18765,6 +20780,26 @@ class $$CanvasAudioBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -18819,6 +20854,18 @@ class $$CanvasAudioBlocksTableAnnotationComposer
     column: $table.syncedWithCloud,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -18884,6 +20931,10 @@ class $$CanvasAudioBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAudioBlocksCompanion(
                 clientAudioId: clientAudioId,
@@ -18893,6 +20944,10 @@ class $$CanvasAudioBlocksTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18904,6 +20959,10 @@ class $$CanvasAudioBlocksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAudioBlocksCompanion.insert(
                 clientAudioId: clientAudioId,
@@ -18913,6 +20972,10 @@ class $$CanvasAudioBlocksTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18993,6 +21056,10 @@ typedef $$CanvasAnimationsTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasAnimationsTableUpdateCompanionBuilder =
@@ -19004,6 +21071,10 @@ typedef $$CanvasAnimationsTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -19073,6 +21144,26 @@ class $$CanvasAnimationsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -19136,6 +21227,26 @@ class $$CanvasAnimationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -19192,6 +21303,18 @@ class $$CanvasAnimationsTableAnnotationComposer
     column: $table.syncedWithCloud,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -19254,6 +21377,10 @@ class $$CanvasAnimationsTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAnimationsCompanion(
                 clientAnimationId: clientAnimationId,
@@ -19263,6 +21390,10 @@ class $$CanvasAnimationsTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -19274,6 +21405,10 @@ class $$CanvasAnimationsTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAnimationsCompanion.insert(
                 clientAnimationId: clientAnimationId,
@@ -19283,6 +21418,10 @@ class $$CanvasAnimationsTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -19363,6 +21502,10 @@ typedef $$CanvasTablesTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasTablesTableUpdateCompanionBuilder =
@@ -19374,6 +21517,10 @@ typedef $$CanvasTablesTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -19435,6 +21582,26 @@ class $$CanvasTablesTableFilterComposer
 
   ColumnFilters<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19501,6 +21668,26 @@ class $$CanvasTablesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -19555,6 +21742,18 @@ class $$CanvasTablesTableAnnotationComposer
     column: $table.syncedWithCloud,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -19615,6 +21814,10 @@ class $$CanvasTablesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTablesCompanion(
                 clientTableId: clientTableId,
@@ -19624,6 +21827,10 @@ class $$CanvasTablesTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -19635,6 +21842,10 @@ class $$CanvasTablesTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasTablesCompanion.insert(
                 clientTableId: clientTableId,
@@ -19644,6 +21855,10 @@ class $$CanvasTablesTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -19722,6 +21937,10 @@ typedef $$CanvasLinksTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasLinksTableUpdateCompanionBuilder =
@@ -19733,6 +21952,10 @@ typedef $$CanvasLinksTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -19794,6 +22017,26 @@ class $$CanvasLinksTableFilterComposer
 
   ColumnFilters<int> get syncedWithCloud => $composableBuilder(
     column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19860,6 +22103,26 @@ class $$CanvasLinksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -19914,6 +22177,18 @@ class $$CanvasLinksTableAnnotationComposer
     column: $table.syncedWithCloud,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -19974,6 +22249,10 @@ class $$CanvasLinksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasLinksCompanion(
                 clientLinkId: clientLinkId,
@@ -19983,6 +22262,10 @@ class $$CanvasLinksTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -19994,6 +22277,10 @@ class $$CanvasLinksTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasLinksCompanion.insert(
                 clientLinkId: clientLinkId,
@@ -20003,6 +22290,10 @@ class $$CanvasLinksTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -20081,6 +22372,10 @@ typedef $$CanvasAttachmentsTableCreateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 typedef $$CanvasAttachmentsTableUpdateCompanionBuilder =
@@ -20092,6 +22387,10 @@ typedef $$CanvasAttachmentsTableUpdateCompanionBuilder =
       Value<int> updatedAt,
       Value<String?> layerId,
       Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
       Value<int> rowid,
     });
 
@@ -20165,6 +22464,26 @@ class $$CanvasAttachmentsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$PagesTableFilterComposer get pageId {
     final $$PagesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -20228,6 +22547,26 @@ class $$CanvasAttachmentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PagesTableOrderingComposer get pageId {
     final $$PagesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -20284,6 +22623,18 @@ class $$CanvasAttachmentsTableAnnotationComposer
     column: $table.syncedWithCloud,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
 
   $$PagesTableAnnotationComposer get pageId {
     final $$PagesTableAnnotationComposer composer = $composerBuilder(
@@ -20349,6 +22700,10 @@ class $$CanvasAttachmentsTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAttachmentsCompanion(
                 clientAttachmentId: clientAttachmentId,
@@ -20358,6 +22713,10 @@ class $$CanvasAttachmentsTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -20369,6 +22728,10 @@ class $$CanvasAttachmentsTableTableManager
                 Value<int> updatedAt = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CanvasAttachmentsCompanion.insert(
                 clientAttachmentId: clientAttachmentId,
@@ -20378,6 +22741,10 @@ class $$CanvasAttachmentsTableTableManager
                 updatedAt: updatedAt,
                 layerId: layerId,
                 syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:caderno_digital_app/features/canvas/providers/canvas_viewport_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -11,11 +12,28 @@ import '../models/table_types.dart';
 import '../models/canvas_enums.dart';
 import '../models/canvas_action_model.dart';
 import '../providers/canvas_document_provider.dart';
-import '../providers/canvas_viewport_provider.dart';
+import '../tools/canvas_tool.dart';
+import '../tools/brush_tool.dart';
+import '../tools/select_tool.dart';
+import '../tools/lasso_tool.dart';
+import '../tools/eraser_tool.dart';
+import '../tools/text_tool.dart';
+import '../tools/table_tool.dart';
+import '../tools/pan_tool.dart';
+import '../tools/pixel_eraser_tool.dart';
+import '../tools/organizer_tool.dart';
+import '../tools/animation_tool.dart';
 
-enum HandleType { none, topLeft, topCenter, topRight, middleRight, bottomRight, bottomCenter, bottomLeft, middleLeft, rotate }
+enum HandleType { 
+  none, 
+  topLeft, topCenter, topRight, 
+  middleRight, bottomRight, bottomCenter, 
+  bottomLeft, middleLeft, 
+  rotate,
+  tableColResize, 
+  tableRowResize
+}
 
-/// 🚀 v10.1: Estado de Interação com Suporte a Grupos e Hierarquia.
 class CanvasInteractionState {
   final ToolMode activeTool;
   final ToolMode? previousTool;
@@ -25,7 +43,28 @@ class CanvasInteractionState {
   final double selectedThickness;
   final BrushType selectedBrushType;
   final bool isHighlighter;
-  final bool isSmoothingEnabled;
+  final double smoothingLevel; 
+  final PalmRejectionMode palmRejectionMode; 
+
+  final double? _brushOpacity;
+  final LineStyle? _selectedLineStyle;
+  final List<ToolMode>? _toolOrder;
+  final bool? _isTopToolbarVisible;
+  
+  final TextEditCategory activeTextCategory; 
+  final TableEditCategory activeTableCategory; 
+  final GeneralEditCategory activeGeneralCategory; 
+  final EraserEditCategory activeEraserCategory;
+
+  double get brushOpacity => _brushOpacity ?? 1.0;
+  LineStyle get selectedLineStyle => _selectedLineStyle ?? LineStyle.continuous;
+  bool get isTopToolbarVisible => _isTopToolbarVisible ?? true;
+  
+  List<ToolMode> get toolOrder => _toolOrder ?? const [
+    ToolMode.select, ToolMode.draw, ToolMode.text, 
+    ToolMode.table, ToolMode.eraser, ToolMode.lasso, 
+    ToolMode.pan, ToolMode.video, ToolMode.organizer
+  ];
 
   final Set<String> selectedObjectIds;
   final Set<TableCellKey> selectedTableCells;
@@ -37,10 +76,14 @@ class CanvasInteractionState {
   
   final TableCellKey? tableSelectionStart;
   final TableCellKey? tableSelectionEnd;
+  final int? activeTableResizeIndex;
 
   final Offset? selectionRectStart;
   final Offset? selectionRectEnd;
   final List<Offset>? lassoPath; 
+
+  final String? liveStrokeId;
+  final List<Offset> livePoints;
 
   final bool isTransformMode;
   final bool isMovingSelection;
@@ -61,7 +104,16 @@ class CanvasInteractionState {
     this.selectedThickness = 3.0,
     this.selectedBrushType = BrushType.gel,
     this.isHighlighter = false,
-    this.isSmoothingEnabled = false,
+    this.smoothingLevel = 0.5,
+    this.palmRejectionMode = PalmRejectionMode.auto,
+    double brushOpacity = 1.0,
+    LineStyle selectedLineStyle = LineStyle.continuous,
+    List<ToolMode>? toolOrder,
+    bool isTopToolbarVisible = true,
+    this.activeTextCategory = TextEditCategory.format,
+    this.activeTableCategory = TableEditCategory.structure,
+    this.activeGeneralCategory = GeneralEditCategory.style,
+    this.activeEraserCategory = EraserEditCategory.mode,
     this.selectedObjectIds = const {},
     this.selectedTableCells = const {},
     this.activeInlineTarget = InlineTarget.none,
@@ -70,9 +122,12 @@ class CanvasInteractionState {
     this.activeTableCell,
     this.tableSelectionStart,
     this.tableSelectionEnd,
+    this.activeTableResizeIndex,
     this.selectionRectStart,
     this.selectionRectEnd,
     this.lassoPath, 
+    this.liveStrokeId,
+    this.livePoints = const [],
     this.isTransformMode = false,
     this.isMovingSelection = false,
     this.totalSelectionDelta = Offset.zero,
@@ -83,7 +138,10 @@ class CanvasInteractionState {
     this.initialPosition = Offset.zero,
     this.initialSize = Size.zero,
     this.initialRotation = 0.0,
-  });
+  }) : _brushOpacity = brushOpacity,
+       _selectedLineStyle = selectedLineStyle,
+       _isTopToolbarVisible = isTopToolbarVisible,
+       _toolOrder = toolOrder;
 
   CanvasInteractionState copyWith({
     ToolMode? activeTool,
@@ -93,7 +151,14 @@ class CanvasInteractionState {
     double? selectedThickness,
     BrushType? selectedBrushType,
     bool? isHighlighter,
-    bool? isSmoothingEnabled,
+    double? smoothingLevel,
+    PalmRejectionMode? palmRejectionMode,
+    double? brushOpacity,
+    LineStyle? selectedLineStyle,
+    TextEditCategory? activeTextCategory,
+    TableEditCategory? activeTableCategory,
+    GeneralEditCategory? activeGeneralCategory,
+    EraserEditCategory? activeEraserCategory,
     Set<String>? selectedObjectIds,
     Set<TableCellKey>? selectedTableCells,
     InlineTarget? activeInlineTarget,
@@ -102,9 +167,12 @@ class CanvasInteractionState {
     TableCellKey? Function()? activeTableCell,
     TableCellKey? Function()? tableSelectionStart,
     TableCellKey? Function()? tableSelectionEnd,
+    int? Function()? activeTableResizeIndex,
     Offset? Function()? selectionRectStart,
     Offset? Function()? selectionRectEnd,
     List<Offset>? Function()? lassoPath, 
+    String? Function()? liveStrokeId,
+    List<Offset>? livePoints,
     bool? isTransformMode,
     bool? isMovingSelection,
     Offset? totalSelectionDelta,
@@ -115,6 +183,8 @@ class CanvasInteractionState {
     Offset? initialPosition,
     Size? initialSize,
     double? initialRotation,
+    List<ToolMode>? toolOrder,
+    bool? isTopToolbarVisible,
   }) {
     return CanvasInteractionState(
       activeTool: activeTool ?? this.activeTool,
@@ -124,7 +194,14 @@ class CanvasInteractionState {
       selectedThickness: selectedThickness ?? this.selectedThickness,
       selectedBrushType: selectedBrushType ?? this.selectedBrushType,
       isHighlighter: isHighlighter ?? this.isHighlighter,
-      isSmoothingEnabled: isSmoothingEnabled ?? this.isSmoothingEnabled,
+      smoothingLevel: smoothingLevel ?? this.smoothingLevel,
+      palmRejectionMode: palmRejectionMode ?? this.palmRejectionMode,
+      brushOpacity: brushOpacity ?? this.brushOpacity,
+      selectedLineStyle: selectedLineStyle ?? this.selectedLineStyle,
+      activeTextCategory: activeTextCategory ?? this.activeTextCategory,
+      activeTableCategory: activeTableCategory ?? this.activeTableCategory,
+      activeGeneralCategory: activeGeneralCategory ?? this.activeGeneralCategory,
+      activeEraserCategory: activeEraserCategory ?? this.activeEraserCategory,
       selectedObjectIds: selectedObjectIds ?? this.selectedObjectIds,
       selectedTableCells: selectedTableCells ?? this.selectedTableCells,
       activeInlineTarget: activeInlineTarget ?? this.activeInlineTarget,
@@ -133,9 +210,12 @@ class CanvasInteractionState {
       activeTableCell: activeTableCell != null ? activeTableCell() : this.activeTableCell,
       tableSelectionStart: tableSelectionStart != null ? tableSelectionStart() : this.tableSelectionStart,
       tableSelectionEnd: tableSelectionEnd != null ? tableSelectionEnd() : this.tableSelectionEnd,
+      activeTableResizeIndex: activeTableResizeIndex != null ? activeTableResizeIndex() : this.activeTableResizeIndex,
       selectionRectStart: selectionRectStart != null ? selectionRectStart() : this.selectionRectStart,
       selectionRectEnd: selectionRectEnd != null ? selectionRectEnd() : this.selectionRectEnd,
       lassoPath: lassoPath != null ? lassoPath() : this.lassoPath, 
+      liveStrokeId: liveStrokeId != null ? liveStrokeId() : this.liveStrokeId,
+      livePoints: livePoints ?? this.livePoints,
       isTransformMode: isTransformMode ?? this.isTransformMode,
       isMovingSelection: isMovingSelection ?? this.isMovingSelection,
       totalSelectionDelta: totalSelectionDelta ?? this.totalSelectionDelta,
@@ -146,19 +226,58 @@ class CanvasInteractionState {
       initialPosition: initialPosition ?? this.initialPosition,
       initialSize: initialSize ?? this.initialSize,
       initialRotation: initialRotation ?? this.initialRotation,
+      toolOrder: toolOrder ?? this.toolOrder,
+      isTopToolbarVisible: isTopToolbarVisible ?? this.isTopToolbarVisible,
     );
   }
 }
 
 class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionState> {
+  Map<ToolMode, CanvasTool>? _tools;
+
   @override
-  CanvasInteractionState build() => CanvasInteractionState();
+  CanvasInteractionState build() {
+    _tools ??= {
+      ToolMode.draw: const BrushTool(),
+      ToolMode.select: const SelectTool(),
+      ToolMode.lasso: const LassoTool(),
+      ToolMode.eraser: const EraserTool(),
+      ToolMode.pixelEraser: const PixelEraserTool(),
+      ToolMode.text: const TextTool(),
+      ToolMode.table: const TableTool(),
+      ToolMode.pan: const PanTool(),
+      ToolMode.organizer: const OrganizerTool(),
+      ToolMode.video: const AnimationTool(),
+    };
+    return CanvasInteractionState();
+  }
+
+  CanvasTool get activeToolLogic => _tools![state.activeTool] ?? _tools![ToolMode.select]!;
 
   void switchTool(ToolMode tool) {
     if (state.activeTool == tool && (state.activeTextBlock != null || state.activeTableCell != null)) return;
+    activeToolLogic.onToolDeactivated();
     if (state.activeTextBlock != null || state.activeTableCell != null) exitWritingMode();
+    
+    final List<ToolMode> newOrder = List.from(state.toolOrder);
+    newOrder.remove(tool);
+    newOrder.insert(0, tool);
+
     final bool canKeepTransform = tool == ToolMode.text || tool == ToolMode.table || tool == ToolMode.select || tool == ToolMode.lasso || tool == ToolMode.organizer;
-    state = state.copyWith(activeTool: tool, isTransformMode: canKeepTransform ? state.isTransformMode : false, interactionMode: CanvasInteractionStateMode.idle, selectionRectStart: () => null, selectionRectEnd: () => null, lassoPath: () => null, activeInlineTarget: InlineTarget.none, activeTextBlock: () => null, activeTableId: () => null, activeTableCell: () => null, selectedTableCells: {});
+    state = state.copyWith(
+      activeTool: tool, 
+      toolOrder: newOrder,
+      isTransformMode: canKeepTransform ? state.isTransformMode : false, 
+      interactionMode: CanvasInteractionStateMode.idle, 
+      selectionRectStart: () => null, 
+      selectionRectEnd: () => null, 
+      lassoPath: () => null, 
+      activeInlineTarget: InlineTarget.none, 
+      activeTextBlock: () => null, 
+      activeTableId: () => null, 
+      activeTableCell: () => null, 
+      selectedTableCells: {}
+    );
   }
 
   void enterTemporaryPan() { if (state.activeTool == ToolMode.pan) return; state = state.copyWith(previousTool: () => state.activeTool, activeTool: ToolMode.pan, interactionMode: CanvasInteractionStateMode.panning); }
@@ -237,8 +356,15 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
   }
 
   void exitWritingMode() {
-    final bool wasInTable = state.activeTableId != null || state.activeTool == ToolMode.table;
-    state = state.copyWith(activeTool: wasInTable ? ToolMode.table : ToolMode.draw, interactionMode: wasInTable ? CanvasInteractionStateMode.tableEditing : CanvasInteractionStateMode.idle, activeInlineTarget: InlineTarget.none, activeTextBlock: () => null, activeTableCell: () => null, activeTableId: () => wasInTable ? state.activeTableId : null, selectedTableCells: {}, isTransformMode: false);
+    state = state.copyWith(
+      interactionMode: CanvasInteractionStateMode.idle, 
+      activeInlineTarget: InlineTarget.none, 
+      activeTextBlock: () => null, 
+      activeTableCell: () => null, 
+      activeTableId: () => state.activeTool == ToolMode.table ? state.activeTableId : null, 
+      selectedTableCells: {}, 
+      isTransformMode: false
+    );
   }
 
   void stopEditing() => state = state.copyWith(activeInlineTarget: InlineTarget.none, activeTextBlock: () => null, activeTableCell: () => null, tableSelectionStart: () => null, tableSelectionEnd: () => null, selectedTableCells: {});
@@ -270,7 +396,15 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
   void setThickness(double th) => state = state.copyWith(selectedThickness: th);
   void setBrushType(BrushType t) => state = state.copyWith(selectedBrushType: t);
   void toggleHighlighterMode(bool v) => state = state.copyWith(isHighlighter: v);
-  void setSmoothing(bool v) => state = state.copyWith(isSmoothingEnabled: v);
+  void setSmoothingLevel(double v) => state = state.copyWith(smoothingLevel: v);
+  void setPalmRejectionMode(PalmRejectionMode mode) => state = state.copyWith(palmRejectionMode: mode);
+  void setBrushOpacity(double v) => state = state.copyWith(brushOpacity: v);
+  void setLineStyle(LineStyle v) => state = state.copyWith(selectedLineStyle: v);
+  void setTextCategory(TextEditCategory cat) => state = state.copyWith(activeTextCategory: cat); 
+  void setTableCategory(TableEditCategory cat) => state = state.copyWith(activeTableCategory: cat); 
+  void setGeneralCategory(GeneralEditCategory cat) => state = state.copyWith(activeGeneralCategory: cat); 
+  void setEraserCategory(EraserEditCategory cat) => state = state.copyWith(activeEraserCategory: cat);
+  void toggleTopToolbar([bool? visible]) => state = state.copyWith(isTopToolbarVisible: visible ?? !state.isTopToolbarVisible);
 
   void setMovingSelection(bool v) => state = state.copyWith(isMovingSelection: v, interactionMode: v ? CanvasInteractionStateMode.moving : CanvasInteractionStateMode.idle);
   void updateSelectionDelta(Offset d) => state = state.copyWith(totalSelectionDelta: state.totalSelectionDelta + d);
@@ -284,14 +418,60 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
   void setTableCellEditing(TableObject table, CellCoordinate coords) {
     final cellKey = TableCellKey(table.id, coords);
     if (state.activeTableCell == cellKey) return;
-    final proxyPos = table.position + Offset(coords.col * 100.0, coords.row * 40.0);
-    final proxy = TextBlock(id: 'proxy_${table.id}_${coords.row},${coords.col}', text: table.cells[coords]?.value ?? '', position: proxyPos, zIndex: 999, rotation: table.rotation);
-    state = state.copyWith(activeInlineTarget: InlineTarget.block, activeTextBlock: () => proxy, activeTableCell: () => cellKey, interactionMode: CanvasInteractionStateMode.tableEditing, activeTableId: () => table.id);
+    
+    double leftOffset = 0;
+    for (int i = 0; i < coords.col; i++) leftOffset += table.columnWidths[i];
+    
+    double topOffset = 0;
+    for (int i = 0; i < coords.row; i++) topOffset += table.rowHeights[i];
+
+    final proxyPos = table.position + Offset(leftOffset, topOffset);
+    
+    final proxy = TextBlock(
+      id: 'proxy_${table.id}_${coords.row},${coords.col}', 
+      text: table.cells[coords]?.value ?? '', 
+      position: proxyPos, 
+      zIndex: 999, 
+      rotation: table.rotation,
+      fontSize: table.cells[coords]?.style.fontSize ?? 14.0,
+      textColorHex: table.cells[coords]?.style.textColorHex ?? '#000000',
+    );
+    
+    state = state.copyWith(
+      activeInlineTarget: InlineTarget.block, 
+      activeTextBlock: () => proxy, 
+      activeTableCell: () => cellKey, 
+      interactionMode: CanvasInteractionStateMode.tableEditing, 
+      activeTableId: () => table.id
+    );
   }
 
   void toggleTableCellSelection(TableCellKey cell) { final newSelection = Set<TableCellKey>.from(state.selectedTableCells); if (newSelection.contains(cell)) newSelection.remove(cell); else newSelection.add(cell); state = state.copyWith(selectedTableCells: newSelection); }
   void clearTableCellSelection() => state = state.copyWith(selectedTableCells: {}, tableSelectionStart: () => null, tableSelectionEnd: () => null);
-  void updateTableSelectionRange(CellCoordinate coords, TableObject table) { final cellKey = TableCellKey(table.id, coords); final start = state.tableSelectionStart ?? cellKey; final range = table.getKeysInRange(start.coordinate, coords); state = state.copyWith(tableSelectionStart: () => start, tableSelectionEnd: () => cellKey, selectedTableCells: range.map((c) => TableCellKey(table.id, c)).toSet()); }
+  void updateTableSelectionRange(CellCoordinate coords, TableObject table) { 
+    final cellKey = TableCellKey(table.id, coords); 
+    final start = state.tableSelectionStart ?? cellKey; 
+    final range = table.getKeysInRange(start.coordinate, coords); 
+    state = state.copyWith(tableSelectionStart: () => start, tableSelectionEnd: () => cellKey, selectedTableCells: range.map((c) => TableCellKey(table.id, c)).toSet()); 
+  }
+  
+  void startTableResize(HandleType handle, int index, Offset initialPos) {
+    state = state.copyWith(
+      activeHandle: handle,
+      activeTableResizeIndex: () => index,
+      initialPosition: initialPos,
+      interactionMode: CanvasInteractionStateMode.transforming,
+    );
+  }
+
+  void endTableResize() {
+    state = state.copyWith(
+      activeHandle: HandleType.none,
+      activeTableResizeIndex: () => null,
+      interactionMode: CanvasInteractionStateMode.idle,
+    );
+  }
+
   void forceExitTableMode() => state = state.copyWith(activeTableId: () => null, activeTableCell: () => null, selectedTableCells: {}, interactionMode: CanvasInteractionStateMode.idle);
 
   void setSelectionRect(Offset? start, Offset? end, [LocalPage? page]) {
@@ -319,6 +499,18 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
       }
       state = state.copyWith(selectedObjectIds: newIds);
     }
+  }
+
+  void startLiveStroke(String id, Offset startPos) {
+    state = state.copyWith(liveStrokeId: () => id, livePoints: [startPos], interactionMode: CanvasInteractionStateMode.drawing);
+  }
+
+  void updateLiveStroke(Offset pos) {
+    state = state.copyWith(livePoints: [...state.livePoints, pos]);
+  }
+
+  void endLiveStroke() {
+    state = state.copyWith(liveStrokeId: () => null, livePoints: [], interactionMode: CanvasInteractionStateMode.idle);
   }
 
   bool _isPointInPolygon(Offset point, List<Offset> polygon) { bool result = false; int j = polygon.length - 1; for (int i = 0; i < polygon.length; i++) { if ((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy) && (point.dx < (polygon[j].dx - polygon[i].dx) * (point.dy - polygon[i].dy) / (polygon[j].dy - polygon[i].dy) + polygon[i].dx)) result = !result; j = i; } return result; }

@@ -143,11 +143,13 @@ class AudioBlock implements PageObject {
       position: Offset(json['x']?.toDouble() ?? 0.0, json['y']?.toDouble() ?? 0.0),
       size: Size(json['width']?.toDouble() ?? 180.0, json['height']?.toDouble() ?? 60.0),
       rotation: json['rotation']?.toDouble() ?? 0.0, zIndex: json['z_index'] ?? 0,
-      isLocked: json['is_locked'] == 1, isVisible: json['is_visible'] == 1,
+      isLocked: json['is_locked'] == 1 || json['is_locked'] == true,
+      isVisible: json['is_visible'] == null ? true : (json['is_visible'] == 1 || json['is_visible'] == true),
       opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
       updatedAt: json['updated_at'], version: json['version'] ?? 1,
-      isDeleted: json['is_deleted'] == 1, syncedWithCloud: json['synced_with_cloud'] == 1,
-      deletedInSession: json['deleted_in_session'] == 1, pageNumber: json['page_number'],
+      isDeleted: json['is_deleted'] == 1 || json['is_deleted'] == true,
+      syncedWithCloud: json['synced_with_cloud'] == 1 || json['synced_with_cloud'] == true,
+      deletedInSession: json['deleted_in_session'] == 1 || json['deleted_in_session'] == true,
       creatorId: json['creator_id'], layerId: json['layer_id'],
     );
   }

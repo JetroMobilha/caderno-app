@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:io' as io;
 import 'dart:math' as math;
 import '../models/table_cell_model.dart';
-import '../models/table_types.dart'; // 🚀 v9.7
+import '../models/table_types.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/page_object.dart';
@@ -23,6 +23,9 @@ import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
 
+/// 🚀 v10.4: Renderizador de Objetos Limpo.
+/// Responsável APENAS por desenhar o conteúdo do objeto.
+/// A lógica de Seleção e Transformação foi movida para [SelectionOverlay].
 class ObjectRenderer extends ConsumerStatefulWidget {
   final PageObject object;
   final bool isReadOnly;
@@ -88,7 +91,7 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
     return Positioned(
       left: position.dx, top: position.dy,
       child: Opacity(
-        opacity: (widget.movementDelta != null || widget.liveScale != null || widget.liveRotation != null) ? 0.6 : 1.0,
+        opacity: (widget.movementDelta != null || widget.liveScale != null || widget.liveRotation != null) ? 0.6 : widget.object.opacity,
         child: Transform.rotate(
           angle: rotation, alignment: Alignment.center,
           child: SizedBox(
@@ -151,22 +154,22 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
 
   Widget _buildTable(TableObject table) {
     final toolState = ref.watch(canvasToolProvider);
-    final isSelected = toolState.selectedTableIds.contains(table.id);
+    final isSelected = toolState.selectedObjectIds.contains(table.id);
     List<double> colOffsets = [0]; for (double w in table.columnWidths) colOffsets.add(colOffsets.last + w);
     List<double> rowOffsets = [0]; for (double h in table.rowHeights) rowOffsets.add(rowOffsets.last + h);
-    final bool showResizeHandles = isSelected && toolState.activeTableCell == null && toolState.isTransformMode;
+    
     return Container(
       width: table.size.width, height: table.size.height,
-      decoration: BoxDecoration(color: table.tableBackgroundColorHex != null ? Color(int.parse(table.tableBackgroundColorHex!.replaceFirst('#', '0xFF'))) : Colors.white.withOpacity(0.9), border: Border.all(color: Color(int.parse(table.borderColor.replaceFirst('#', '0xFF'))), width: table.borderWidth), boxShadow: isSelected ? [BoxShadow(color: Colors.blueAccent.withOpacity(0.2), blurRadius: 10)] : null),
+      decoration: BoxDecoration(
+        color: table.tableBackgroundColorHex != null ? Color(int.parse(table.tableBackgroundColorHex!.replaceFirst('#', '0xFF'))) : Colors.white.withOpacity(0.9), 
+        border: Border.all(color: Color(int.parse(table.borderColor.replaceFirst('#', '0xFF'))), width: table.borderWidth),
+      ),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           ..._buildTableGrid(table, colOffsets, rowOffsets, isSelected),
-          if (isSelected && toolState.selectedTableCells.length > 1 && !toolState.isTransformMode) _buildRangeSelectionOverlay(table, colOffsets, rowOffsets, toolState.selectedTableCells),
-          if (showResizeHandles) ...[
-            for (int i = 0; i < table.columnWidths.length - 1; i++) Positioned(left: colOffsets[i+1] - 10, top: 0, bottom: 0, child: _buildColumnResizeHandle(table, i)),
-            for (int i = 0; i < table.rowHeights.length - 1; i++) Positioned(top: rowOffsets[i+1] - 10, left: 0, right: 0, child: _buildRowResizeHandle(table, i)),
-          ],
+          if (isSelected && toolState.selectedTableCells.length > 1 && !toolState.isTransformMode) 
+            _buildRangeSelectionOverlay(table, colOffsets, rowOffsets, toolState.selectedTableCells),
         ],
       ),
     );
@@ -185,22 +188,6 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
     final double width = colOffsets[maxC + 1] - left, height = rowOffsets[maxR + 1] - top;
     return Positioned(left: left, top: top, width: width, height: height, child: IgnorePointer(child: Container(decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.1), border: Border.all(color: Colors.blueAccent, width: 2)))));
   }
-
-  Widget _buildColumnResizeHandle(TableObject table, int index) => GestureDetector(onHorizontalDragUpdate: (details) {
-    if (table.columnWidths[index] + details.delta.dx > 30) {
-      final List<double> newWidths = List.from(table.columnWidths); newWidths[index] += details.delta.dx;
-      final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.objects.any((o) => o.id == table.id));
-      ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths));
-    }
-  }, child: MouseRegion(cursor: SystemMouseCursors.resizeLeftRight, child: Container(width: 20, color: Colors.transparent, child: Center(child: Container(width: 2, height: 20, decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.5), borderRadius: BorderRadius.circular(2)))))));
-
-  Widget _buildRowResizeHandle(TableObject table, int index) => GestureDetector(onVerticalDragUpdate: (details) {
-    if (table.rowHeights[index] + details.delta.dy > 20) {
-      final List<double> newHeights = List.from(table.rowHeights); newHeights[index] += details.delta.dy;
-      final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.objects.any((o) => o.id == table.id));
-      ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
-    }
-  }, child: MouseRegion(cursor: SystemMouseCursors.resizeUpDown, child: Container(height: 20, color: Colors.transparent, child: Center(child: Container(height: 2, width: 20, decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.5), borderRadius: BorderRadius.circular(2)))))));
 
   List<Widget> _buildTableGrid(TableObject table, List<double> colOffsets, List<double> rowOffsets, bool isSelected) {
     final List<Widget> widgets = []; final Set<CellCoordinate> occupied = {};
@@ -229,12 +216,12 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
       left: left, top: top, width: width, height: height,
       child: MouseRegion(cursor: toolState.isTransformMode ? SystemMouseCursors.move : SystemMouseCursors.text, child: GestureDetector(
         onTap: toolState.isTransformMode ? null : () { 
-          if (!isTableSelected) ref.read(canvasToolProvider.notifier).selectIds(tableIds: {table.id});
+          if (!isTableSelected) ref.read(canvasToolProvider.notifier).selectIds(objectIds: {table.id});
           ref.read(canvasToolProvider.notifier).selectIds(tableCells: {cellKey});
           if (toolState.tableSelectionStart == null) ref.read(canvasToolProvider.notifier).setTableCellEditing(table, coords);
         },
         onLongPress: toolState.isTransformMode ? null : () { 
-          if (!isTableSelected) ref.read(canvasToolProvider.notifier).selectIds(tableIds: {table.id});
+          if (!isTableSelected) ref.read(canvasToolProvider.notifier).selectIds(objectIds: {table.id});
           ref.read(canvasToolProvider.notifier).toggleTableCellSelection(cellKey);
         },
         child: Container(

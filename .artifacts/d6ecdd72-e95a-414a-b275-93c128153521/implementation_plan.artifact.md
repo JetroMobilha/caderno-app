@@ -1,41 +1,32 @@
-# Plano de Implementação - Sistema de Grupos e Hierarquia (v10.1)
+# Plano de Implementação - Refinamento Profissional de Tabelas (v10.25)
 
-Este plano descreve a implementação da funcionalidade de agrupamento de objetos, permitindo manipular múltiplos elementos como uma única entidade.
+Este plano foca em transformar a ferramenta de Tabelas numa experiência fluida e poderosa, alinhada com o novo design ultra-fino e categorizado do sistema.
 
 ## Mudanças Propostas
 
-### 1. Persistência de Metadados (Database)
-- **Modificar [app_database.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/core/database/app_database.dart)**:
-    - Adicionar colunas `parentId` (TEXT), `isVisible` (INT), `isLocked` (INT), `opacity` (REAL) às tabelas:
-        - `CanvasStrokes`, `CanvasTextBlocks`, `CanvasImageBlocks`, `CanvasShapes`, `CanvasAudioBlocks`, `CanvasAnimations`, `CanvasTables`, `CanvasLinks`, `CanvasAttachments`.
-    - Incrementar a versão do esquema para `31`.
+### 1. Sistema de Redimensionamento Bidimensional
+- **[MODIFY] [table_tool.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/tools/table_tool.dart)**:
+    - Expandir `_detectBorderHit` para detectar também as bordas horizontais (linhas).
+    - Implementar `_handleRowResize` para ajustar a altura das linhas dinamicamente.
+    - Adicionar suporte a `HandleType.tableRowResize` no `onPanUpdate`.
 
-### 2. Repositório de Dados (Data Layer)
-- **Modificar [canvas_repository.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/repositories/canvas_repository.dart)**:
-    - Atualizar os métodos de leitura (`getPageByClientId`, `loadPageContent`) para extrair os novos campos das linhas do banco.
-    - Atualizar os métodos de gravação (`saveSingleStroke`, `saveSingleTextBlock`, etc.) para persistir os metadados de grupo, visibilidade e bloqueio.
+### 2. Interface Contextual Ultra-Fina
+- **[MODIFY] [canvas_toolbar.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/canvas_toolbar.dart)**:
+    - Refinar `_buildTableContextZone` para ser mais compacta (remover divisores desnecessários).
+    - Garantir que as abas (`Estrutura`, `Célula`, `Estilo`, `Ações`) ocupam o mínimo de espaço vertical.
+    - Adicionar botões rápidos para **Mesclar** e **Dividir** na aba de `Estrutura` ou `Ações`.
 
-### 3. Lógica de Agrupamento (Interaction Provider)
-- **Modificar [canvas_tool_provider.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/providers/canvas_tool_provider.dart)**:
-    - Implementar `groupSelectedObjects()`: gera um novo UUID e atribui como `parentId` de todos os objetos selecionados.
-    - Implementar `ungroupSelectedObjects()`: remove o `parentId` dos objetos selecionados que pertençam a um grupo.
-    - **Seleção Inteligente**: Atualizar `selectAt` para que, ao tocar num objeto com `parentId`, todos os "irmãos" (objetos com o mesmo parent) sejam selecionados automaticamente.
+### 3. Melhoria na Renderização e Seleção
+- **[MODIFY] [object_renderer.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/object_renderer.dart)**:
+    - Melhorar o feedback visual da grelha de seleção.
+    - Garantir que o `IgnorePointer` no overlay de seleção de intervalo não bloqueia edições rápidas.
+- **[MODIFY] [selection_overlay.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/layers/selection_overlay.dart)**:
+    - Adicionar alças visuais específicas para redimensionamento de linhas/colunas quando a ferramenta de Tabela está ativa.
 
-### 4. Interface (UI)
-- **Modificar [canvas_toolbar.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/canvas_toolbar.dart)**:
-    - Adicionar botão "Agrupar" (Icons.group_work) na **Zona Contextual** quando > 1 objeto estiver selecionado.
-    - Adicionar botão "Desagrupar" quando o objeto selecionado tiver um `parentId`.
-- **Modificar [layer_manager_sheet.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/dialogs/layer_manager_sheet.dart)**:
-    - Visualizar grupos na lista (opcional nesta fase, ou apenas indicar o ID do grupo no subtítulo).
+### 4. Gestão de Dados e Performance
+- Otimizar o `TableObject.copyWith` para evitar recriações profundas desnecessárias durante o redimensionamento live.
 
-## Plano de Verificação
-
-### Testes de Funcionalidade
-1. **Agrupar**: Selecionar um desenho e um texto, clicar em "Agrupar". Tentar mover um deles; ambos devem mover-se juntos.
-2. **Persistência**: Agrupar objetos, fechar o caderno e reabrir. O vínculo de grupo deve ser mantido.
-3. **Desagrupar**: Selecionar um grupo, clicar em "Desagrupar". Verificar se os objetos voltam a ser independentes.
-4. **Cadeado de Grupo**: Bloquear um dos membros do grupo. O grupo inteiro deve ficar protegido ou apenas o membro? (Padrão: O bloqueio de um membro impede a transformação do grupo).
-
----
-
-**Podemos avançar com a atualização da base de dados e lógica de grupos?**
+## Verificação
+- **Redimensionamento**: Arrastar a borda de uma coluna e de uma linha para verificar se a tabela se ajusta suavemente.
+- **Edição Multi-Célula**: Selecionar várias células e aplicar uma cor de fundo simultaneamente.
+- **Mesclagem**: Criar uma tabela, selecionar 2x2 células e mesclá-las numa única.

@@ -107,10 +107,10 @@ class CanvasStrokes extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
   TextColumn get layerId => text().nullable()(); 
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientStrokeId};
 }
@@ -127,10 +127,10 @@ class CanvasTextBlocks extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
   TextColumn get layerId => text().nullable()(); 
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientTextId};
 }
@@ -152,10 +152,10 @@ class CanvasImageBlocks extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get creatorId => text().nullable()();
   TextColumn get layerId => text().nullable()(); 
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientImageId};
 }
@@ -169,10 +169,10 @@ class CanvasShapes extends Table {
   IntColumn get version => integer().withDefault(const Constant(1))();
   TextColumn get layerId => text().nullable()();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientShapeId};
 }
@@ -185,10 +185,10 @@ class CanvasAudioBlocks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientAudioId};
 }
@@ -201,10 +201,10 @@ class CanvasAnimations extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientAnimationId};
 }
@@ -217,10 +217,10 @@ class CanvasTables extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientTableId};
 }
@@ -233,10 +233,10 @@ class CanvasLinks extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientLinkId};
 }
@@ -249,10 +249,10 @@ class CanvasAttachments extends Table {
   IntColumn get updatedAt => integer().withDefault(const Constant(0))();
   TextColumn get layerId => text().nullable()();
   IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
-  TextColumn get parentId => text().nullable()(); // 🚀 v31
-  IntColumn get isVisible => integer().withDefault(const Constant(1))(); // 🚀 v31
-  IntColumn get isLocked => integer().withDefault(const Constant(0))(); // 🚀 v31
-  RealColumn get opacity => real().withDefault(const Constant(1.0))(); // 🚀 v31
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
   @override
   Set<Column> get primaryKey => {clientAttachmentId};
 }
@@ -469,16 +469,17 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 31) {
           // 🚀 v31: Metadados de Grupo, Visibilidade e Bloqueio
-          final List<TableInfo> canvasTablesList = [
-            canvasStrokes, canvasTextBlocks, canvasImageBlocks, 
-            canvasShapes, canvasAudioBlocks, canvasAnimations, 
-            canvasTables, canvasLinks, canvasAttachments
+          // NOTA: Acesso via customStatement para evitar dependência do código gerado
+          final tables = [
+            'canvas_strokes', 'canvas_text_blocks', 'canvas_image_blocks',
+            'canvas_shapes', 'canvas_audio_blocks', 'canvas_animations',
+            'canvas_tables', 'canvas_links', 'canvas_attachments'
           ];
-          for (var table in canvasTablesList) {
-            await m.addColumn(table, table.parentId as GeneratedColumn);
-            await m.addColumn(table, table.isVisible as GeneratedColumn);
-            await m.addColumn(table, table.isLocked as GeneratedColumn);
-            await m.addColumn(table, table.opacity as GeneratedColumn);
+          for (var t in tables) {
+            await customStatement('ALTER TABLE $t ADD COLUMN parent_id TEXT');
+            await customStatement('ALTER TABLE $t ADD COLUMN is_visible INTEGER DEFAULT 1');
+            await customStatement('ALTER TABLE $t ADD COLUMN is_locked INTEGER DEFAULT 0');
+            await customStatement('ALTER TABLE $t ADD COLUMN opacity REAL DEFAULT 1.0');
           }
         }
       },

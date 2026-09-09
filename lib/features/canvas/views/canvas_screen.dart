@@ -15,6 +15,7 @@ import '../widgets/canvas_page_drawer.dart';
 import '../widgets/canvas_toolbar.dart';
 import '../widgets/layers/interaction_layer.dart';
 import '../widgets/layers/live_text_edit_layer.dart'; 
+import '../widgets/toolbars/top_action_toolbar.dart'; // 🚀 v10.14
 import '../widgets/page_canvas.dart'; 
 import '../widgets/selection_overlay.dart'; 
 import '../../explanations/widgets/explanation_layer.dart'; 
@@ -188,7 +189,21 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                   textFocusNode: _textFocusNode,
                 ),
               ),
-                if (!ref.watch(canvasViewportProvider.select((s) => s.isFocusMode)))
+
+              // 🚀 v10.14: Barra de Ferramentas Superior (Ações de Criação Inteligentes)
+              if (!isFocusMode)
+                Positioned(
+                  top: 15, left: 0, right: 0,
+                  child: Center(
+                    child: TopActionToolbar(
+                      currentPage: currentPage!,
+                      onAddImageTap: () => ref.read(canvasDocumentProvider.notifier).pickAndInsertImage(currentPage),
+                    ),
+                  ),
+                ),
+
+              // 🚀 v10.11: Barra de Ferramentas Horizontal (Propriedades e Sistema)
+                if (!isFocusMode)
                   Positioned(
                     bottom: 20, left: 0, right: 0,
                     child: Center(
@@ -376,10 +391,6 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
                       clipBehavior: Clip.none,
                       children: [
                         PageCanvas(
-                          page: widget.page,
-                          pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
-                        ),
-                        SelectionOverlay(
                           page: widget.page,
                           pageSize: Size(widget.page.pageWidthPx, widget.page.pageHeightPx),
                         ),

@@ -1,9 +1,7 @@
-# Tarefas: Implementação de Grupos (v10.1)
-
-- `[ ]` Adicionar colunas de metadados em `AppDatabase` (parentId, isVisible, isLocked, opacity)
-- `[ ]` Implementar Migração v31 para o banco de dados Drift
-- `[ ]` Atualizar `CanvasRepository` para ler/escrever novos metadados
-- `[ ]` Implementar `groupSelectedObjects` e `ungroupSelectedObjects` no `CanvasInteractionNotifier`
-- `[ ]` Atualizar lógica de `selectAt` para suportar seleção de grupos
-- `[ ]` Adicionar botões de Agrupar/Desagrupar na `CanvasToolbar`
-- `[ ]` Implementar `GroupAction` em `canvas_action_model.dart` para Undo/Redo
+- `[x]` Implementar Bounding Box Universal e Unificação de Transformação
+- `[x]` Refinar Coordenadas de Documento (v10.6)
+- `[/]` Correção de Erros de Tipo e Visibilidade (v10.7)
+    - `[ ]` Resolver erro `WidgetRef` vs `Ref` em `CanvasTool`
+    - `[ ]` Robustecer `fromJson` de `TableObject` e outros modelos
+    - `[ ]` Validar mapeamento de visibilidade em `CanvasRepository`
+    - `[ ]` Verificar lógica de `zIndex` no `PageCanvas`

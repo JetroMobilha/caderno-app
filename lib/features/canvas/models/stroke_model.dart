@@ -14,7 +14,7 @@ class Stroke implements PageObject {
   final String? parentId; // 🚀 v10
   
   final BrushType brushType;
-  final bool isSmoothed;
+  final double smoothingLevel; // 🚀 v10.16: Substitui isSmoothed (0.0 a 1.0)
   final String color;
   final double thickness;
   final List<Offset> points;
@@ -67,7 +67,7 @@ class Stroke implements PageObject {
     this.syncedWithCloud = false,
     this.isHighlighter = false,
     this.brushType = BrushType.gel,
-    this.isSmoothed = false,
+    this.smoothingLevel = 0.0,
     this.zIndex = 0,
     this.isLocked = false,
     this.isVisible = true,
@@ -121,9 +121,10 @@ class Stroke implements PageObject {
     bool? syncedWithCloud,
     bool? deletedInSession,
     int? pageNumber,
+    String? creatorId,
     String? layerId,
     BrushType? brushType,
-    bool? isSmoothed,
+    double? smoothingLevel,
     String? color,
     double? thickness,
     List<Offset>? points,
@@ -161,11 +162,11 @@ class Stroke implements PageObject {
       updatedAt: updatedAt ?? TimeService().nowMs(),
       version: version ?? (this.version + 1),
       pageNumber: pageNumber ?? this.pageNumber,
-      creatorId: creatorId,
+      creatorId: creatorId ?? this.creatorId,
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       isHighlighter: isHighlighter ?? this.isHighlighter,
       brushType: brushType ?? this.brushType,
-      isSmoothed: isSmoothed ?? this.isSmoothed,
+      smoothingLevel: smoothingLevel ?? this.smoothingLevel,
       zIndex: zIndex ?? this.zIndex,
       isLocked: isLocked ?? this.isLocked,
       isVisible: isVisible ?? this.isVisible,
@@ -191,7 +192,7 @@ class Stroke implements PageObject {
       'synced_with_cloud': syncedWithCloud ? 1 : 0,
       'is_highlighter': isHighlighter ? 1 : 0,
       'brush_type': brushType.name,
-      'is_smoothed': isSmoothed ? 1 : 0,
+      'smoothing_level': smoothingLevel,
       'z_index': zIndex,
       'is_locked': isLocked ? 1 : 0,
       'is_visible': isVisible ? 1 : 0,
@@ -199,8 +200,8 @@ class Stroke implements PageObject {
       'layer_id': layerId,
       if (pageNumber != null) 'page_number': pageNumber,
       if (includePoints) 'points': points.map((p) => {
-        'dx': double.parse(p.dx.toStringAsFixed(1)),
-        'dy': double.parse(p.dy.toStringAsFixed(1))
+        'dx': double.parse(p.dx.toStringAsFixed(3)),
+        'dy': double.parse(p.dy.toStringAsFixed(3))
       }).toList(),
     };
   }
@@ -220,7 +221,7 @@ class Stroke implements PageObject {
       syncedWithCloud: json['synced_with_cloud'] == null ? true : (json['synced_with_cloud'] == true || json['synced_with_cloud'] == 1),
       isHighlighter: json['is_highlighter'] == true || json['is_highlighter'] == 1,
       brushType: BrushType.values.firstWhere((e) => e.name == (json['brush_type'] ?? 'gel'), orElse: () => BrushType.gel),
-      isSmoothed: json['is_smoothed'] == true || json['is_smoothed'] == 1,
+      smoothingLevel: (json['smoothing_level'] as num?)?.toDouble() ?? (json['is_smoothed'] == 1 || json['is_smoothed'] == true ? 1.0 : 0.0),
       zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == true || json['is_locked'] == 1,
       isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),

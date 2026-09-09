@@ -21,6 +21,17 @@ enum InlineTarget { none, block, title, footer }
 
 enum TableCellType { text, number, date, time, checkbox, link, image }
 
+enum TextEditCategory { basics, format, organize, structure, box } // 🚀 v10.12
+enum TableEditCategory { structure, cell, style, actions } // 🚀 v10.12
+enum GeneralEditCategory { transform, style, actions } // 🚀 v10.23
+enum EraserEditCategory { mode, actions } // 🚀 v10.24
+
+/// 🚀 v10.15: Estilos de Geometria de Traço
+enum LineStyle { continuous, dashed, dotted }
+
+/// 🚀 v10.16: Modos de Palm Rejection
+enum PalmRejectionMode { auto, enabled, disabled }
+
 /// 🚀 v10.0: Estados explícitos de interação com o canvas.
 enum CanvasInteractionStateMode {
   idle,           // Neutro

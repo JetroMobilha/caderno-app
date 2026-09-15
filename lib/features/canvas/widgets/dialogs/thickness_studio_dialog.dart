@@ -15,7 +15,6 @@ class ThicknessStudioDialog extends ConsumerStatefulWidget {
 class _ThicknessStudioDialogState extends ConsumerState<ThicknessStudioDialog> {
   late double _thickness;
   late double _opacity;
-  late double _smoothing;
   late PalmRejectionMode _palmMode;
 
   @override
@@ -24,7 +23,6 @@ class _ThicknessStudioDialogState extends ConsumerState<ThicknessStudioDialog> {
     final state = ref.read(canvasInteractionProvider);
     _thickness = state.selectedThickness;
     _opacity = state.brushOpacity;
-    _smoothing = state.smoothingLevel;
     _palmMode = state.palmRejectionMode;
   }
 
@@ -54,14 +52,6 @@ class _ThicknessStudioDialogState extends ConsumerState<ThicknessStudioDialog> {
               onChanged: (v) => setState(() => _opacity = v),
             ),
 
-            // Suavização
-            _buildLabel('Suavização do Traço', '${(_smoothing * 100).toInt()}%'),
-            Slider(
-              value: _smoothing, min: 0.0, max: 1.0,
-              activeColor: Colors.blueAccent,
-              onChanged: (v) => setState(() => _smoothing = v),
-            ),
-
             const Divider(height: 32),
 
             // Palm Rejection
@@ -87,7 +77,6 @@ class _ThicknessStudioDialogState extends ConsumerState<ThicknessStudioDialog> {
             final notifier = ref.read(canvasInteractionProvider.notifier);
             notifier.setThickness(_thickness);
             notifier.setBrushOpacity(_opacity);
-            notifier.setSmoothingLevel(_smoothing);
             notifier.setPalmRejectionMode(_palmMode);
             Navigator.pop(context);
           },

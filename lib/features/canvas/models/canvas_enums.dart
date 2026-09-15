@@ -23,7 +23,7 @@ enum TableCellType { text, number, date, time, checkbox, link, image }
 
 enum TextEditCategory { basics, format, organize, structure, box } // 🚀 v10.12
 enum TableEditCategory { structure, cell, style, actions } // 🚀 v10.12
-enum GeneralEditCategory { transform, style, actions } // 🚀 v10.23
+enum GeneralEditCategory { transform, style, organize } // 🚀 v10.27
 enum EraserEditCategory { mode, actions } // 🚀 v10.24
 
 /// 🚀 v10.15: Estilos de Geometria de Traço

@@ -4583,6 +4583,17 @@ class $CanvasStrokesTable extends CanvasStrokes
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _cropDataMeta = const VerificationMeta(
+    'cropData',
+  );
+  @override
+  late final GeneratedColumn<String> cropData = GeneratedColumn<String>(
+    'crop_data',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isVisibleMeta = const VerificationMeta(
     'isVisible',
   );
@@ -4633,6 +4644,7 @@ class $CanvasStrokesTable extends CanvasStrokes
     creatorId,
     layerId,
     parentId,
+    cropData,
     isVisible,
     isLocked,
     opacity,
@@ -4736,6 +4748,12 @@ class $CanvasStrokesTable extends CanvasStrokes
         parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
       );
     }
+    if (data.containsKey('crop_data')) {
+      context.handle(
+        _cropDataMeta,
+        cropData.isAcceptableOrUnknown(data['crop_data']!, _cropDataMeta),
+      );
+    }
     if (data.containsKey('is_visible')) {
       context.handle(
         _isVisibleMeta,
@@ -4811,6 +4829,10 @@ class $CanvasStrokesTable extends CanvasStrokes
         DriftSqlType.string,
         data['${effectivePrefix}parent_id'],
       ),
+      cropData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}crop_data'],
+      ),
       isVisible: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}is_visible'],
@@ -4845,6 +4867,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
   final String? creatorId;
   final String? layerId;
   final String? parentId;
+  final String? cropData;
   final int isVisible;
   final int isLocked;
   final double opacity;
@@ -4861,6 +4884,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     this.creatorId,
     this.layerId,
     this.parentId,
+    this.cropData,
     required this.isVisible,
     required this.isLocked,
     required this.opacity,
@@ -4887,6 +4911,9 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     }
     if (!nullToAbsent || parentId != null) {
       map['parent_id'] = Variable<String>(parentId);
+    }
+    if (!nullToAbsent || cropData != null) {
+      map['crop_data'] = Variable<String>(cropData);
     }
     map['is_visible'] = Variable<int>(isVisible);
     map['is_locked'] = Variable<int>(isLocked);
@@ -4916,6 +4943,9 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       parentId: parentId == null && nullToAbsent
           ? const Value.absent()
           : Value(parentId),
+      cropData: cropData == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cropData),
       isVisible: Value(isVisible),
       isLocked: Value(isLocked),
       opacity: Value(opacity),
@@ -4940,6 +4970,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       creatorId: serializer.fromJson<String?>(json['creatorId']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       parentId: serializer.fromJson<String?>(json['parentId']),
+      cropData: serializer.fromJson<String?>(json['cropData']),
       isVisible: serializer.fromJson<int>(json['isVisible']),
       isLocked: serializer.fromJson<int>(json['isLocked']),
       opacity: serializer.fromJson<double>(json['opacity']),
@@ -4961,6 +4992,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       'creatorId': serializer.toJson<String?>(creatorId),
       'layerId': serializer.toJson<String?>(layerId),
       'parentId': serializer.toJson<String?>(parentId),
+      'cropData': serializer.toJson<String?>(cropData),
       'isVisible': serializer.toJson<int>(isVisible),
       'isLocked': serializer.toJson<int>(isLocked),
       'opacity': serializer.toJson<double>(opacity),
@@ -4980,6 +5012,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     Value<String?> creatorId = const Value.absent(),
     Value<String?> layerId = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
+    Value<String?> cropData = const Value.absent(),
     int? isVisible,
     int? isLocked,
     double? opacity,
@@ -4996,6 +5029,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
     layerId: layerId.present ? layerId.value : this.layerId,
     parentId: parentId.present ? parentId.value : this.parentId,
+    cropData: cropData.present ? cropData.value : this.cropData,
     isVisible: isVisible ?? this.isVisible,
     isLocked: isLocked ?? this.isLocked,
     opacity: opacity ?? this.opacity,
@@ -5022,6 +5056,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      cropData: data.cropData.present ? data.cropData.value : this.cropData,
       isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
       isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
       opacity: data.opacity.present ? data.opacity.value : this.opacity,
@@ -5043,6 +5078,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
           ..write('parentId: $parentId, ')
+          ..write('cropData: $cropData, ')
           ..write('isVisible: $isVisible, ')
           ..write('isLocked: $isLocked, ')
           ..write('opacity: $opacity')
@@ -5064,6 +5100,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
     creatorId,
     layerId,
     parentId,
+    cropData,
     isVisible,
     isLocked,
     opacity,
@@ -5084,6 +5121,7 @@ class CanvasStroke extends DataClass implements Insertable<CanvasStroke> {
           other.creatorId == this.creatorId &&
           other.layerId == this.layerId &&
           other.parentId == this.parentId &&
+          other.cropData == this.cropData &&
           other.isVisible == this.isVisible &&
           other.isLocked == this.isLocked &&
           other.opacity == this.opacity);
@@ -5102,6 +5140,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
   final Value<String?> creatorId;
   final Value<String?> layerId;
   final Value<String?> parentId;
+  final Value<String?> cropData;
   final Value<int> isVisible;
   final Value<int> isLocked;
   final Value<double> opacity;
@@ -5119,6 +5158,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
     this.parentId = const Value.absent(),
+    this.cropData = const Value.absent(),
     this.isVisible = const Value.absent(),
     this.isLocked = const Value.absent(),
     this.opacity = const Value.absent(),
@@ -5137,6 +5177,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
     this.parentId = const Value.absent(),
+    this.cropData = const Value.absent(),
     this.isVisible = const Value.absent(),
     this.isLocked = const Value.absent(),
     this.opacity = const Value.absent(),
@@ -5157,6 +5198,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Expression<String>? creatorId,
     Expression<String>? layerId,
     Expression<String>? parentId,
+    Expression<String>? cropData,
     Expression<int>? isVisible,
     Expression<int>? isLocked,
     Expression<double>? opacity,
@@ -5175,6 +5217,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       if (creatorId != null) 'creator_id': creatorId,
       if (layerId != null) 'layer_id': layerId,
       if (parentId != null) 'parent_id': parentId,
+      if (cropData != null) 'crop_data': cropData,
       if (isVisible != null) 'is_visible': isVisible,
       if (isLocked != null) 'is_locked': isLocked,
       if (opacity != null) 'opacity': opacity,
@@ -5195,6 +5238,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     Value<String?>? creatorId,
     Value<String?>? layerId,
     Value<String?>? parentId,
+    Value<String?>? cropData,
     Value<int>? isVisible,
     Value<int>? isLocked,
     Value<double>? opacity,
@@ -5213,6 +5257,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
       creatorId: creatorId ?? this.creatorId,
       layerId: layerId ?? this.layerId,
       parentId: parentId ?? this.parentId,
+      cropData: cropData ?? this.cropData,
       isVisible: isVisible ?? this.isVisible,
       isLocked: isLocked ?? this.isLocked,
       opacity: opacity ?? this.opacity,
@@ -5259,6 +5304,9 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
     if (parentId.present) {
       map['parent_id'] = Variable<String>(parentId.value);
     }
+    if (cropData.present) {
+      map['crop_data'] = Variable<String>(cropData.value);
+    }
     if (isVisible.present) {
       map['is_visible'] = Variable<int>(isVisible.value);
     }
@@ -5289,6 +5337,7 @@ class CanvasStrokesCompanion extends UpdateCompanion<CanvasStroke> {
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
           ..write('parentId: $parentId, ')
+          ..write('cropData: $cropData, ')
           ..write('isVisible: $isVisible, ')
           ..write('isLocked: $isLocked, ')
           ..write('opacity: $opacity, ')
@@ -5442,6 +5491,17 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _cropDataMeta = const VerificationMeta(
+    'cropData',
+  );
+  @override
+  late final GeneratedColumn<String> cropData = GeneratedColumn<String>(
+    'crop_data',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isVisibleMeta = const VerificationMeta(
     'isVisible',
   );
@@ -5492,6 +5552,7 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
     creatorId,
     layerId,
     parentId,
+    cropData,
     isVisible,
     isLocked,
     opacity,
@@ -5595,6 +5656,12 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
       );
     }
+    if (data.containsKey('crop_data')) {
+      context.handle(
+        _cropDataMeta,
+        cropData.isAcceptableOrUnknown(data['crop_data']!, _cropDataMeta),
+      );
+    }
     if (data.containsKey('is_visible')) {
       context.handle(
         _isVisibleMeta,
@@ -5670,6 +5737,10 @@ class $CanvasTextBlocksTable extends CanvasTextBlocks
         DriftSqlType.string,
         data['${effectivePrefix}parent_id'],
       ),
+      cropData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}crop_data'],
+      ),
       isVisible: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}is_visible'],
@@ -5704,6 +5775,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
   final String? creatorId;
   final String? layerId;
   final String? parentId;
+  final String? cropData;
   final int isVisible;
   final int isLocked;
   final double opacity;
@@ -5720,6 +5792,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     this.creatorId,
     this.layerId,
     this.parentId,
+    this.cropData,
     required this.isVisible,
     required this.isLocked,
     required this.opacity,
@@ -5746,6 +5819,9 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     }
     if (!nullToAbsent || parentId != null) {
       map['parent_id'] = Variable<String>(parentId);
+    }
+    if (!nullToAbsent || cropData != null) {
+      map['crop_data'] = Variable<String>(cropData);
     }
     map['is_visible'] = Variable<int>(isVisible);
     map['is_locked'] = Variable<int>(isLocked);
@@ -5775,6 +5851,9 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       parentId: parentId == null && nullToAbsent
           ? const Value.absent()
           : Value(parentId),
+      cropData: cropData == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cropData),
       isVisible: Value(isVisible),
       isLocked: Value(isLocked),
       opacity: Value(opacity),
@@ -5799,6 +5878,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       creatorId: serializer.fromJson<String?>(json['creatorId']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       parentId: serializer.fromJson<String?>(json['parentId']),
+      cropData: serializer.fromJson<String?>(json['cropData']),
       isVisible: serializer.fromJson<int>(json['isVisible']),
       isLocked: serializer.fromJson<int>(json['isLocked']),
       opacity: serializer.fromJson<double>(json['opacity']),
@@ -5820,6 +5900,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       'creatorId': serializer.toJson<String?>(creatorId),
       'layerId': serializer.toJson<String?>(layerId),
       'parentId': serializer.toJson<String?>(parentId),
+      'cropData': serializer.toJson<String?>(cropData),
       'isVisible': serializer.toJson<int>(isVisible),
       'isLocked': serializer.toJson<int>(isLocked),
       'opacity': serializer.toJson<double>(opacity),
@@ -5839,6 +5920,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     Value<String?> creatorId = const Value.absent(),
     Value<String?> layerId = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
+    Value<String?> cropData = const Value.absent(),
     int? isVisible,
     int? isLocked,
     double? opacity,
@@ -5855,6 +5937,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
     layerId: layerId.present ? layerId.value : this.layerId,
     parentId: parentId.present ? parentId.value : this.parentId,
+    cropData: cropData.present ? cropData.value : this.cropData,
     isVisible: isVisible ?? this.isVisible,
     isLocked: isLocked ?? this.isLocked,
     opacity: opacity ?? this.opacity,
@@ -5879,6 +5962,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      cropData: data.cropData.present ? data.cropData.value : this.cropData,
       isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
       isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
       opacity: data.opacity.present ? data.opacity.value : this.opacity,
@@ -5900,6 +5984,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
           ..write('parentId: $parentId, ')
+          ..write('cropData: $cropData, ')
           ..write('isVisible: $isVisible, ')
           ..write('isLocked: $isLocked, ')
           ..write('opacity: $opacity')
@@ -5921,6 +6006,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
     creatorId,
     layerId,
     parentId,
+    cropData,
     isVisible,
     isLocked,
     opacity,
@@ -5941,6 +6027,7 @@ class CanvasTextBlock extends DataClass implements Insertable<CanvasTextBlock> {
           other.creatorId == this.creatorId &&
           other.layerId == this.layerId &&
           other.parentId == this.parentId &&
+          other.cropData == this.cropData &&
           other.isVisible == this.isVisible &&
           other.isLocked == this.isLocked &&
           other.opacity == this.opacity);
@@ -5959,6 +6046,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
   final Value<String?> creatorId;
   final Value<String?> layerId;
   final Value<String?> parentId;
+  final Value<String?> cropData;
   final Value<int> isVisible;
   final Value<int> isLocked;
   final Value<double> opacity;
@@ -5976,6 +6064,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
     this.parentId = const Value.absent(),
+    this.cropData = const Value.absent(),
     this.isVisible = const Value.absent(),
     this.isLocked = const Value.absent(),
     this.opacity = const Value.absent(),
@@ -5994,6 +6083,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
     this.parentId = const Value.absent(),
+    this.cropData = const Value.absent(),
     this.isVisible = const Value.absent(),
     this.isLocked = const Value.absent(),
     this.opacity = const Value.absent(),
@@ -6014,6 +6104,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Expression<String>? creatorId,
     Expression<String>? layerId,
     Expression<String>? parentId,
+    Expression<String>? cropData,
     Expression<int>? isVisible,
     Expression<int>? isLocked,
     Expression<double>? opacity,
@@ -6032,6 +6123,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       if (creatorId != null) 'creator_id': creatorId,
       if (layerId != null) 'layer_id': layerId,
       if (parentId != null) 'parent_id': parentId,
+      if (cropData != null) 'crop_data': cropData,
       if (isVisible != null) 'is_visible': isVisible,
       if (isLocked != null) 'is_locked': isLocked,
       if (opacity != null) 'opacity': opacity,
@@ -6052,6 +6144,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     Value<String?>? creatorId,
     Value<String?>? layerId,
     Value<String?>? parentId,
+    Value<String?>? cropData,
     Value<int>? isVisible,
     Value<int>? isLocked,
     Value<double>? opacity,
@@ -6070,6 +6163,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
       creatorId: creatorId ?? this.creatorId,
       layerId: layerId ?? this.layerId,
       parentId: parentId ?? this.parentId,
+      cropData: cropData ?? this.cropData,
       isVisible: isVisible ?? this.isVisible,
       isLocked: isLocked ?? this.isLocked,
       opacity: opacity ?? this.opacity,
@@ -6116,6 +6210,9 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
     if (parentId.present) {
       map['parent_id'] = Variable<String>(parentId.value);
     }
+    if (cropData.present) {
+      map['crop_data'] = Variable<String>(cropData.value);
+    }
     if (isVisible.present) {
       map['is_visible'] = Variable<int>(isVisible.value);
     }
@@ -6146,6 +6243,7 @@ class CanvasTextBlocksCompanion extends UpdateCompanion<CanvasTextBlock> {
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
           ..write('parentId: $parentId, ')
+          ..write('cropData: $cropData, ')
           ..write('isVisible: $isVisible, ')
           ..write('isLocked: $isLocked, ')
           ..write('opacity: $opacity, ')
@@ -6346,6 +6444,17 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _cropDataMeta = const VerificationMeta(
+    'cropData',
+  );
+  @override
+  late final GeneratedColumn<String> cropData = GeneratedColumn<String>(
+    'crop_data',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isVisibleMeta = const VerificationMeta(
     'isVisible',
   );
@@ -6401,6 +6510,7 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
     creatorId,
     layerId,
     parentId,
+    cropData,
     isVisible,
     isLocked,
     opacity,
@@ -6544,6 +6654,12 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
       );
     }
+    if (data.containsKey('crop_data')) {
+      context.handle(
+        _cropDataMeta,
+        cropData.isAcceptableOrUnknown(data['crop_data']!, _cropDataMeta),
+      );
+    }
     if (data.containsKey('is_visible')) {
       context.handle(
         _isVisibleMeta,
@@ -6639,6 +6755,10 @@ class $CanvasImageBlocksTable extends CanvasImageBlocks
         DriftSqlType.string,
         data['${effectivePrefix}parent_id'],
       ),
+      cropData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}crop_data'],
+      ),
       isVisible: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}is_visible'],
@@ -6679,6 +6799,7 @@ class CanvasImageBlock extends DataClass
   final String? creatorId;
   final String? layerId;
   final String? parentId;
+  final String? cropData;
   final int isVisible;
   final int isLocked;
   final double opacity;
@@ -6700,6 +6821,7 @@ class CanvasImageBlock extends DataClass
     this.creatorId,
     this.layerId,
     this.parentId,
+    this.cropData,
     required this.isVisible,
     required this.isLocked,
     required this.opacity,
@@ -6731,6 +6853,9 @@ class CanvasImageBlock extends DataClass
     }
     if (!nullToAbsent || parentId != null) {
       map['parent_id'] = Variable<String>(parentId);
+    }
+    if (!nullToAbsent || cropData != null) {
+      map['crop_data'] = Variable<String>(cropData);
     }
     map['is_visible'] = Variable<int>(isVisible);
     map['is_locked'] = Variable<int>(isLocked);
@@ -6765,6 +6890,9 @@ class CanvasImageBlock extends DataClass
       parentId: parentId == null && nullToAbsent
           ? const Value.absent()
           : Value(parentId),
+      cropData: cropData == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cropData),
       isVisible: Value(isVisible),
       isLocked: Value(isLocked),
       opacity: Value(opacity),
@@ -6794,6 +6922,7 @@ class CanvasImageBlock extends DataClass
       creatorId: serializer.fromJson<String?>(json['creatorId']),
       layerId: serializer.fromJson<String?>(json['layerId']),
       parentId: serializer.fromJson<String?>(json['parentId']),
+      cropData: serializer.fromJson<String?>(json['cropData']),
       isVisible: serializer.fromJson<int>(json['isVisible']),
       isLocked: serializer.fromJson<int>(json['isLocked']),
       opacity: serializer.fromJson<double>(json['opacity']),
@@ -6820,6 +6949,7 @@ class CanvasImageBlock extends DataClass
       'creatorId': serializer.toJson<String?>(creatorId),
       'layerId': serializer.toJson<String?>(layerId),
       'parentId': serializer.toJson<String?>(parentId),
+      'cropData': serializer.toJson<String?>(cropData),
       'isVisible': serializer.toJson<int>(isVisible),
       'isLocked': serializer.toJson<int>(isLocked),
       'opacity': serializer.toJson<double>(opacity),
@@ -6844,6 +6974,7 @@ class CanvasImageBlock extends DataClass
     Value<String?> creatorId = const Value.absent(),
     Value<String?> layerId = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
+    Value<String?> cropData = const Value.absent(),
     int? isVisible,
     int? isLocked,
     double? opacity,
@@ -6865,6 +6996,7 @@ class CanvasImageBlock extends DataClass
     creatorId: creatorId.present ? creatorId.value : this.creatorId,
     layerId: layerId.present ? layerId.value : this.layerId,
     parentId: parentId.present ? parentId.value : this.parentId,
+    cropData: cropData.present ? cropData.value : this.cropData,
     isVisible: isVisible ?? this.isVisible,
     isLocked: isLocked ?? this.isLocked,
     opacity: opacity ?? this.opacity,
@@ -6894,6 +7026,7 @@ class CanvasImageBlock extends DataClass
       creatorId: data.creatorId.present ? data.creatorId.value : this.creatorId,
       layerId: data.layerId.present ? data.layerId.value : this.layerId,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      cropData: data.cropData.present ? data.cropData.value : this.cropData,
       isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
       isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
       opacity: data.opacity.present ? data.opacity.value : this.opacity,
@@ -6920,6 +7053,7 @@ class CanvasImageBlock extends DataClass
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
           ..write('parentId: $parentId, ')
+          ..write('cropData: $cropData, ')
           ..write('isVisible: $isVisible, ')
           ..write('isLocked: $isLocked, ')
           ..write('opacity: $opacity')
@@ -6928,7 +7062,7 @@ class CanvasImageBlock extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     clientImageId,
     serverId,
     pageId,
@@ -6946,10 +7080,11 @@ class CanvasImageBlock extends DataClass
     creatorId,
     layerId,
     parentId,
+    cropData,
     isVisible,
     isLocked,
     opacity,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -6971,6 +7106,7 @@ class CanvasImageBlock extends DataClass
           other.creatorId == this.creatorId &&
           other.layerId == this.layerId &&
           other.parentId == this.parentId &&
+          other.cropData == this.cropData &&
           other.isVisible == this.isVisible &&
           other.isLocked == this.isLocked &&
           other.opacity == this.opacity);
@@ -6994,6 +7130,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
   final Value<String?> creatorId;
   final Value<String?> layerId;
   final Value<String?> parentId;
+  final Value<String?> cropData;
   final Value<int> isVisible;
   final Value<int> isLocked;
   final Value<double> opacity;
@@ -7016,6 +7153,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
     this.parentId = const Value.absent(),
+    this.cropData = const Value.absent(),
     this.isVisible = const Value.absent(),
     this.isLocked = const Value.absent(),
     this.opacity = const Value.absent(),
@@ -7039,6 +7177,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     this.creatorId = const Value.absent(),
     this.layerId = const Value.absent(),
     this.parentId = const Value.absent(),
+    this.cropData = const Value.absent(),
     this.isVisible = const Value.absent(),
     this.isLocked = const Value.absent(),
     this.opacity = const Value.absent(),
@@ -7069,6 +7208,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Expression<String>? creatorId,
     Expression<String>? layerId,
     Expression<String>? parentId,
+    Expression<String>? cropData,
     Expression<int>? isVisible,
     Expression<int>? isLocked,
     Expression<double>? opacity,
@@ -7092,6 +7232,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       if (creatorId != null) 'creator_id': creatorId,
       if (layerId != null) 'layer_id': layerId,
       if (parentId != null) 'parent_id': parentId,
+      if (cropData != null) 'crop_data': cropData,
       if (isVisible != null) 'is_visible': isVisible,
       if (isLocked != null) 'is_locked': isLocked,
       if (opacity != null) 'opacity': opacity,
@@ -7117,6 +7258,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     Value<String?>? creatorId,
     Value<String?>? layerId,
     Value<String?>? parentId,
+    Value<String?>? cropData,
     Value<int>? isVisible,
     Value<int>? isLocked,
     Value<double>? opacity,
@@ -7140,6 +7282,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
       creatorId: creatorId ?? this.creatorId,
       layerId: layerId ?? this.layerId,
       parentId: parentId ?? this.parentId,
+      cropData: cropData ?? this.cropData,
       isVisible: isVisible ?? this.isVisible,
       isLocked: isLocked ?? this.isLocked,
       opacity: opacity ?? this.opacity,
@@ -7201,6 +7344,9 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
     if (parentId.present) {
       map['parent_id'] = Variable<String>(parentId.value);
     }
+    if (cropData.present) {
+      map['crop_data'] = Variable<String>(cropData.value);
+    }
     if (isVisible.present) {
       map['is_visible'] = Variable<int>(isVisible.value);
     }
@@ -7236,6 +7382,7 @@ class CanvasImageBlocksCompanion extends UpdateCompanion<CanvasImageBlock> {
           ..write('creatorId: $creatorId, ')
           ..write('layerId: $layerId, ')
           ..write('parentId: $parentId, ')
+          ..write('cropData: $cropData, ')
           ..write('isVisible: $isVisible, ')
           ..write('isLocked: $isLocked, ')
           ..write('opacity: $opacity, ')
@@ -18491,6 +18638,7 @@ typedef $$CanvasStrokesTableCreateCompanionBuilder =
       Value<String?> creatorId,
       Value<String?> layerId,
       Value<String?> parentId,
+      Value<String?> cropData,
       Value<int> isVisible,
       Value<int> isLocked,
       Value<double> opacity,
@@ -18510,6 +18658,7 @@ typedef $$CanvasStrokesTableUpdateCompanionBuilder =
       Value<String?> creatorId,
       Value<String?> layerId,
       Value<String?> parentId,
+      Value<String?> cropData,
       Value<int> isVisible,
       Value<int> isLocked,
       Value<double> opacity,
@@ -18603,6 +18752,11 @@ class $$CanvasStrokesTableFilterComposer
 
   ColumnFilters<String> get parentId => $composableBuilder(
     column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cropData => $composableBuilder(
+    column: $table.cropData,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18709,6 +18863,11 @@ class $$CanvasStrokesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get cropData => $composableBuilder(
+    column: $table.cropData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get isVisible => $composableBuilder(
     column: $table.isVisible,
     builder: (column) => ColumnOrderings(column),
@@ -18798,6 +18957,9 @@ class $$CanvasStrokesTableAnnotationComposer
   GeneratedColumn<String> get parentId =>
       $composableBuilder(column: $table.parentId, builder: (column) => column);
 
+  GeneratedColumn<String> get cropData =>
+      $composableBuilder(column: $table.cropData, builder: (column) => column);
+
   GeneratedColumn<int> get isVisible =>
       $composableBuilder(column: $table.isVisible, builder: (column) => column);
 
@@ -18871,6 +19033,7 @@ class $$CanvasStrokesTableTableManager
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> cropData = const Value.absent(),
                 Value<int> isVisible = const Value.absent(),
                 Value<int> isLocked = const Value.absent(),
                 Value<double> opacity = const Value.absent(),
@@ -18888,6 +19051,7 @@ class $$CanvasStrokesTableTableManager
                 creatorId: creatorId,
                 layerId: layerId,
                 parentId: parentId,
+                cropData: cropData,
                 isVisible: isVisible,
                 isLocked: isLocked,
                 opacity: opacity,
@@ -18907,6 +19071,7 @@ class $$CanvasStrokesTableTableManager
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> cropData = const Value.absent(),
                 Value<int> isVisible = const Value.absent(),
                 Value<int> isLocked = const Value.absent(),
                 Value<double> opacity = const Value.absent(),
@@ -18924,6 +19089,7 @@ class $$CanvasStrokesTableTableManager
                 creatorId: creatorId,
                 layerId: layerId,
                 parentId: parentId,
+                cropData: cropData,
                 isVisible: isVisible,
                 isLocked: isLocked,
                 opacity: opacity,
@@ -19010,6 +19176,7 @@ typedef $$CanvasTextBlocksTableCreateCompanionBuilder =
       Value<String?> creatorId,
       Value<String?> layerId,
       Value<String?> parentId,
+      Value<String?> cropData,
       Value<int> isVisible,
       Value<int> isLocked,
       Value<double> opacity,
@@ -19029,6 +19196,7 @@ typedef $$CanvasTextBlocksTableUpdateCompanionBuilder =
       Value<String?> creatorId,
       Value<String?> layerId,
       Value<String?> parentId,
+      Value<String?> cropData,
       Value<int> isVisible,
       Value<int> isLocked,
       Value<double> opacity,
@@ -19123,6 +19291,11 @@ class $$CanvasTextBlocksTableFilterComposer
 
   ColumnFilters<String> get parentId => $composableBuilder(
     column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cropData => $composableBuilder(
+    column: $table.cropData,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19229,6 +19402,11 @@ class $$CanvasTextBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get cropData => $composableBuilder(
+    column: $table.cropData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get isVisible => $composableBuilder(
     column: $table.isVisible,
     builder: (column) => ColumnOrderings(column),
@@ -19316,6 +19494,9 @@ class $$CanvasTextBlocksTableAnnotationComposer
   GeneratedColumn<String> get parentId =>
       $composableBuilder(column: $table.parentId, builder: (column) => column);
 
+  GeneratedColumn<String> get cropData =>
+      $composableBuilder(column: $table.cropData, builder: (column) => column);
+
   GeneratedColumn<int> get isVisible =>
       $composableBuilder(column: $table.isVisible, builder: (column) => column);
 
@@ -19391,6 +19572,7 @@ class $$CanvasTextBlocksTableTableManager
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> cropData = const Value.absent(),
                 Value<int> isVisible = const Value.absent(),
                 Value<int> isLocked = const Value.absent(),
                 Value<double> opacity = const Value.absent(),
@@ -19408,6 +19590,7 @@ class $$CanvasTextBlocksTableTableManager
                 creatorId: creatorId,
                 layerId: layerId,
                 parentId: parentId,
+                cropData: cropData,
                 isVisible: isVisible,
                 isLocked: isLocked,
                 opacity: opacity,
@@ -19427,6 +19610,7 @@ class $$CanvasTextBlocksTableTableManager
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> cropData = const Value.absent(),
                 Value<int> isVisible = const Value.absent(),
                 Value<int> isLocked = const Value.absent(),
                 Value<double> opacity = const Value.absent(),
@@ -19444,6 +19628,7 @@ class $$CanvasTextBlocksTableTableManager
                 creatorId: creatorId,
                 layerId: layerId,
                 parentId: parentId,
+                cropData: cropData,
                 isVisible: isVisible,
                 isLocked: isLocked,
                 opacity: opacity,
@@ -19537,6 +19722,7 @@ typedef $$CanvasImageBlocksTableCreateCompanionBuilder =
       Value<String?> creatorId,
       Value<String?> layerId,
       Value<String?> parentId,
+      Value<String?> cropData,
       Value<int> isVisible,
       Value<int> isLocked,
       Value<double> opacity,
@@ -19561,6 +19747,7 @@ typedef $$CanvasImageBlocksTableUpdateCompanionBuilder =
       Value<String?> creatorId,
       Value<String?> layerId,
       Value<String?> parentId,
+      Value<String?> cropData,
       Value<int> isVisible,
       Value<int> isLocked,
       Value<double> opacity,
@@ -19684,6 +19871,11 @@ class $$CanvasImageBlocksTableFilterComposer
 
   ColumnFilters<String> get parentId => $composableBuilder(
     column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cropData => $composableBuilder(
+    column: $table.cropData,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19815,6 +20007,11 @@ class $$CanvasImageBlocksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get cropData => $composableBuilder(
+    column: $table.cropData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get isVisible => $composableBuilder(
     column: $table.isVisible,
     builder: (column) => ColumnOrderings(column),
@@ -19917,6 +20114,9 @@ class $$CanvasImageBlocksTableAnnotationComposer
   GeneratedColumn<String> get parentId =>
       $composableBuilder(column: $table.parentId, builder: (column) => column);
 
+  GeneratedColumn<String> get cropData =>
+      $composableBuilder(column: $table.cropData, builder: (column) => column);
+
   GeneratedColumn<int> get isVisible =>
       $composableBuilder(column: $table.isVisible, builder: (column) => column);
 
@@ -20000,6 +20200,7 @@ class $$CanvasImageBlocksTableTableManager
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> cropData = const Value.absent(),
                 Value<int> isVisible = const Value.absent(),
                 Value<int> isLocked = const Value.absent(),
                 Value<double> opacity = const Value.absent(),
@@ -20022,6 +20223,7 @@ class $$CanvasImageBlocksTableTableManager
                 creatorId: creatorId,
                 layerId: layerId,
                 parentId: parentId,
+                cropData: cropData,
                 isVisible: isVisible,
                 isLocked: isLocked,
                 opacity: opacity,
@@ -20046,6 +20248,7 @@ class $$CanvasImageBlocksTableTableManager
                 Value<String?> creatorId = const Value.absent(),
                 Value<String?> layerId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> cropData = const Value.absent(),
                 Value<int> isVisible = const Value.absent(),
                 Value<int> isLocked = const Value.absent(),
                 Value<double> opacity = const Value.absent(),
@@ -20068,6 +20271,7 @@ class $$CanvasImageBlocksTableTableManager
                 creatorId: creatorId,
                 layerId: layerId,
                 parentId: parentId,
+                cropData: cropData,
                 isVisible: isVisible,
                 isLocked: isLocked,
                 opacity: opacity,

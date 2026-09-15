@@ -1,32 +1,37 @@
-# Plano de Implementação - Refinamento Profissional de Tabelas (v10.25)
+# Plano de Implementação - Remoção de Filtragem de Desenho (v10.36)
 
-Este plano foca em transformar a ferramenta de Tabelas numa experiência fluida e poderosa, alinhada com o novo design ultra-fino e categorizado do sistema.
+Este plano visa simplificar o processamento de desenhos na aplicação, eliminando a suavização por curvas de Bézier e a filtragem local, uma vez que estas tarefas agora são geridas pelo servidor. Isso resultará em desenhos mais rápidos e com resposta imediata.
 
 ## Mudanças Propostas
 
-### 1. Sistema de Redimensionamento Bidimensional
-- **[MODIFY] [table_tool.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/tools/table_tool.dart)**:
-    - Expandir `_detectBorderHit` para detectar também as bordas horizontais (linhas).
-    - Implementar `_handleRowResize` para ajustar a altura das linhas dinamicamente.
-    - Adicionar suporte a `HandleType.tableRowResize` no `onPanUpdate`.
+### 1. Modelo de Dados e Estado
+- **[MODIFY] [stroke_model.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/models/stroke_model.dart)**:
+    - Remover ou ignorar o campo `smoothingLevel`.
+- **[MODIFY] [canvas_tool_provider.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/providers/canvas_tool_provider.dart)**:
+    - Remover `smoothingLevel` do `CanvasInteractionState` e o método `setSmoothingLevel`.
 
-### 2. Interface Contextual Ultra-Fina
+### 2. Renderização de Traços
+- **[MODIFY] [canvas_painter.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/canvas_painter.dart)**:
+    - Eliminar a função `buildSmoothPath`.
+    - Atualizar os pintores (`StrokesPainter`, `ActiveStrokePainter`, `RemoteLiveStrokesPainter`) para utilizarem exclusivamente a função `buildPath` (linhas retas entre pontos).
+
+### 3. Captura de Traços
+- **[MODIFY] [brush_tool.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/tools/brush_tool.dart)**:
+    - Remover a simplificação de pontos RDP (`RdpSimplifier.simplify`) no final do traço.
+    - Enviar todos os pontos capturados para garantir a fidelidade máxima exigida pelo servidor.
+
+### 4. Interface de Utilizador (Cleanup)
 - **[MODIFY] [canvas_toolbar.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/canvas_toolbar.dart)**:
-    - Refinar `_buildTableContextZone` para ser mais compacta (remover divisores desnecessários).
-    - Garantir que as abas (`Estrutura`, `Célula`, `Estilo`, `Ações`) ocupam o mínimo de espaço vertical.
-    - Adicionar botões rápidos para **Mesclar** e **Dividir** na aba de `Estrutura` ou `Ações`.
-
-### 3. Melhoria na Renderização e Seleção
-- **[MODIFY] [object_renderer.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/object_renderer.dart)**:
-    - Melhorar o feedback visual da grelha de seleção.
-    - Garantir que o `IgnorePointer` no overlay de seleção de intervalo não bloqueia edições rápidas.
-- **[MODIFY] [selection_overlay.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/layers/selection_overlay.dart)**:
-    - Adicionar alças visuais específicas para redimensionamento de linhas/colunas quando a ferramenta de Tabela está ativa.
-
-### 4. Gestão de Dados e Performance
-- Otimizar o `TableObject.copyWith` para evitar recriações profundas desnecessárias durante o redimensionamento live.
+    - Remover o botão de alternância de suavização (ícone `Icons.auto_awesome_rounded`).
+- **[MODIFY] [thickness_studio_dialog.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/dialogs/thickness_studio_dialog.dart)**:
+    - Remover o slider de "Suavização do Traço".
+- **[MODIFY] [brush_style_sheet.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/widgets/dialogs/brush_style_sheet.dart)**:
+    - Remover as opções de suavização.
 
 ## Verificação
-- **Redimensionamento**: Arrastar a borda de uma coluna e de uma linha para verificar se a tabela se ajusta suavemente.
-- **Edição Multi-Célula**: Selecionar várias células e aplicar uma cor de fundo simultaneamente.
-- **Mesclagem**: Criar uma tabela, selecionar 2x2 células e mesclá-las numa única.
+- **Desenho**: Verificar se o traço segue exatamente a ponta da caneta/dedo sem arredondamentos artificiais.
+- **Performance**: Validar se o desenho parece mais "leve" e instantâneo.
+- **UI**: Confirmar que não restam controlos de suavização na barra de ferramentas ou diálogos.
+
+> [!NOTE]
+> Ao remover a filtragem local, a aplicação passará a enviar mais dados de pontos para o servidor, o que é desejado já que o servidor possui filtros mais avançados.

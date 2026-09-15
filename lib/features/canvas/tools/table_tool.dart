@@ -15,6 +15,16 @@ class TableTool extends CanvasTool {
   @override
   void onTapDown(Offset localPos, dynamic ref, LocalPage page) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
+    final toolState = ref.read(canvasInteractionProvider);
+
+    // 🚀 v10.30: Proteção para hastes no onTapDown
+    if (toolState.selectedObjectIds.length == 1) {
+      final table = page.objects.whereType<TableObject>().where((t) => t.id == toolState.selectedObjectIds.first).firstOrNull;
+      if (table != null && toolState.isTableStructuralMode) {
+        if (_detectHasteHit(localPos, table, ref) != null) return;
+      }
+    }
+
     final hitObj = _findHitObject(localPos, toolNotifier, page);
 
     if (hitObj is TableObject) {
@@ -34,11 +44,14 @@ class TableTool extends CanvasTool {
     final table = page.objects.whereType<TableObject>().where((t) => toolState.selectedObjectIds.contains(t.id)).firstOrNull;
     if (table == null) return;
 
-    // Verificar se tocou numa borda para redimensionar
-    final resizeIndex = _detectBorderHit(localPos, table);
-    if (resizeIndex != null) {
-      toolNotifier.startTableResize(HandleType.tableColResize, resizeIndex, localPos);
-      return;
+    // 🚀 v10.29: Prioridade para hastes externas se modo estrutural ativo
+    if (toolState.isTableStructuralMode) {
+      final hit = _detectHasteHit(localPos, table, ref);
+      if (hit != null) {
+        toolNotifier.startTableResize(hit.isVertical ? HandleType.tableColResize : HandleType.tableRowResize, hit.index, localPos);
+        return;
+      }
+      return; // 🚀 v10.30: Bloqueia seleção de células se clicou fora das hastes no modo estrutural
     }
 
     final coords = _findCellAt(localPos, table);
@@ -53,9 +66,13 @@ class TableTool extends CanvasTool {
     final table = page.objects.whereType<TableObject>().where((t) => toolState.selectedObjectIds.contains(t.id)).firstOrNull;
     if (table == null) return;
 
-    if (toolState.activeHandle == HandleType.tableColResize && toolState.activeTableResizeIndex != null) {
+    if (toolState.activeTableResizeIndex != null) {
       final Offset docDelta = ref.read(canvasViewportProvider.notifier).screenDeltaToDocumentDelta(delta);
-      _handleColumnResize(table, toolState.activeTableResizeIndex!, docDelta.dx, ref, page);
+      if (toolState.activeHandle == HandleType.tableColResize) {
+        _handleColumnResize(table, toolState.activeTableResizeIndex!, docDelta.dx, ref, page);
+      } else if (toolState.activeHandle == HandleType.tableRowResize) {
+        _handleRowResize(table, toolState.activeTableResizeIndex!, docDelta.dy, ref, page);
+      }
       return;
     }
 
@@ -68,16 +85,35 @@ class TableTool extends CanvasTool {
     ref.read(canvasToolProvider.notifier).endTableResize();
   }
 
-  int? _detectBorderHit(Offset localPos, TableObject table) {
+  _TableBorderHit? _detectHasteHit(Offset localPos, TableObject table, dynamic ref) {
     final center = (table.position & table.size).center;
     final relPos = _rotatePoint(localPos, center, -table.rotation) - table.position;
     
-    double currentX = 0;
-    const double tolerance = 8.0;
+    final viewportState = ref.read(canvasViewportProvider);
+    final double currentScale = viewportState.currentPageClientId != null 
+        ? ref.read(canvasViewportProvider.notifier).getControllerFor(viewportState.currentPageClientId!).value.getMaxScaleOnAxis()
+        : 1.0;
+    
+    final double tolerance = 35.0 / currentScale; // 🚀 v10.30: Maior tolerância
 
-    for (int i = 0; i < table.columnWidths.length; i++) {
+    // 1. Colunas (Hastes Superiores)
+    double currentX = 0;
+    for (int i = 0; i < table.columnWidths.length - 1; i++) {
       currentX += table.columnWidths[i];
-      if ((relPos.dx - currentX).abs() < tolerance) return i;
+      // 🚀 v10.30: Sincronizado com offset -35
+      if ((relPos.dx - currentX).abs() < tolerance && (relPos.dy + 35 / currentScale).abs() < tolerance) {
+        return _TableBorderHit(i, true);
+      }
+    }
+
+    // 2. Linhas (Hastes Esquerdas)
+    double currentY = 0;
+    for (int i = 0; i < table.rowHeights.length - 1; i++) {
+      currentY += table.rowHeights[i];
+      // 🚀 v10.30: Sincronizado com offset -35
+      if ((relPos.dy - currentY).abs() < tolerance && (relPos.dx + 35 / currentScale).abs() < tolerance) {
+        return _TableBorderHit(i, false);
+      }
     }
     return null;
   }
@@ -85,11 +121,15 @@ class TableTool extends CanvasTool {
   void _handleColumnResize(TableObject table, int index, double deltaX, dynamic ref, LocalPage page) {
     if (deltaX == 0) return;
     final List<double> newWidths = List.from(table.columnWidths);
-    final double minWidth = 30.0;
-    
-    newWidths[index] = (newWidths[index] + deltaX).clamp(minWidth, 1000.0);
-    
+    newWidths[index] = (newWidths[index] + deltaX).clamp(30.0, 1500.0);
     ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths));
+  }
+
+  void _handleRowResize(TableObject table, int index, double deltaY, dynamic ref, LocalPage page) {
+    if (deltaY == 0) return;
+    final List<double> newHeights = List.from(table.rowHeights);
+    newHeights[index] = (newHeights[index] + deltaY).clamp(20.0, 1000.0);
+    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
   }
 
   dynamic _findHitObject(Offset localPos, CanvasToolNotifier toolNotifier, LocalPage page) {
@@ -123,4 +163,10 @@ class TableTool extends CanvasTool {
     final dx = point.dx - center.dx, dy = point.dy - center.dy;
     return Offset(center.dx + dx * cosA - dy * sinA, center.dy + dx * sinA + dy * cosA);
   }
+}
+
+class _TableBorderHit {
+  final int index;
+  final bool isVertical; // true para colunas, false para linhas
+  _TableBorderHit(this.index, this.isVertical);
 }

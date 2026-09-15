@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:caderno_digital_app/features/canvas/providers/canvas_viewport_provider.dart';
+import 'package:caderno_digital_app/features/canvas/services/transform_service.dart'; // 🚀 v10.27
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -31,7 +32,10 @@ enum HandleType {
   bottomLeft, middleLeft, 
   rotate,
   tableColResize, 
-  tableRowResize
+  tableRowResize,
+  cropTopLeft, cropTopCenter, cropTopRight,
+  cropMiddleLeft, cropMiddleRight,
+  cropBottomLeft, cropBottomCenter, cropBottomRight, // 🚀 v10.34
 }
 
 class CanvasInteractionState {
@@ -43,7 +47,6 @@ class CanvasInteractionState {
   final double selectedThickness;
   final BrushType selectedBrushType;
   final bool isHighlighter;
-  final double smoothingLevel; 
   final PalmRejectionMode palmRejectionMode; 
 
   final double? _brushOpacity;
@@ -80,12 +83,10 @@ class CanvasInteractionState {
 
   final Offset? selectionRectStart;
   final Offset? selectionRectEnd;
-  final List<Offset>? lassoPath; 
-
-  final String? liveStrokeId;
-  final List<Offset> livePoints;
 
   final bool isTransformMode;
+  final bool isTableStructuralMode; 
+  final bool isImageCropping; // 🚀 v10.34
   final bool isMovingSelection;
   final Offset totalSelectionDelta;
   final Size liveScale; 
@@ -101,10 +102,9 @@ class CanvasInteractionState {
     this.previousTool,
     this.interactionMode = CanvasInteractionStateMode.idle,
     this.selectedColorHex = '#2C3E50',
-    this.selectedThickness = 3.0,
+    this.selectedThickness = 1.0,
     this.selectedBrushType = BrushType.gel,
     this.isHighlighter = false,
-    this.smoothingLevel = 0.5,
     this.palmRejectionMode = PalmRejectionMode.auto,
     double brushOpacity = 1.0,
     LineStyle selectedLineStyle = LineStyle.continuous,
@@ -112,7 +112,7 @@ class CanvasInteractionState {
     bool isTopToolbarVisible = true,
     this.activeTextCategory = TextEditCategory.format,
     this.activeTableCategory = TableEditCategory.structure,
-    this.activeGeneralCategory = GeneralEditCategory.style,
+    this.activeGeneralCategory = GeneralEditCategory.organize,
     this.activeEraserCategory = EraserEditCategory.mode,
     this.selectedObjectIds = const {},
     this.selectedTableCells = const {},
@@ -125,10 +125,9 @@ class CanvasInteractionState {
     this.activeTableResizeIndex,
     this.selectionRectStart,
     this.selectionRectEnd,
-    this.lassoPath, 
-    this.liveStrokeId,
-    this.livePoints = const [],
     this.isTransformMode = false,
+    this.isTableStructuralMode = false,
+    this.isImageCropping = false,
     this.isMovingSelection = false,
     this.totalSelectionDelta = Offset.zero,
     this.liveScale = const Size(1, 1),
@@ -151,7 +150,6 @@ class CanvasInteractionState {
     double? selectedThickness,
     BrushType? selectedBrushType,
     bool? isHighlighter,
-    double? smoothingLevel,
     PalmRejectionMode? palmRejectionMode,
     double? brushOpacity,
     LineStyle? selectedLineStyle,
@@ -170,10 +168,9 @@ class CanvasInteractionState {
     int? Function()? activeTableResizeIndex,
     Offset? Function()? selectionRectStart,
     Offset? Function()? selectionRectEnd,
-    List<Offset>? Function()? lassoPath, 
-    String? Function()? liveStrokeId,
-    List<Offset>? livePoints,
     bool? isTransformMode,
+    bool? isTableStructuralMode,
+    bool? isImageCropping,
     bool? isMovingSelection,
     Offset? totalSelectionDelta,
     Size? liveScale,
@@ -194,7 +191,6 @@ class CanvasInteractionState {
       selectedThickness: selectedThickness ?? this.selectedThickness,
       selectedBrushType: selectedBrushType ?? this.selectedBrushType,
       isHighlighter: isHighlighter ?? this.isHighlighter,
-      smoothingLevel: smoothingLevel ?? this.smoothingLevel,
       palmRejectionMode: palmRejectionMode ?? this.palmRejectionMode,
       brushOpacity: brushOpacity ?? this.brushOpacity,
       selectedLineStyle: selectedLineStyle ?? this.selectedLineStyle,
@@ -213,10 +209,9 @@ class CanvasInteractionState {
       activeTableResizeIndex: activeTableResizeIndex != null ? activeTableResizeIndex() : this.activeTableResizeIndex,
       selectionRectStart: selectionRectStart != null ? selectionRectStart() : this.selectionRectStart,
       selectionRectEnd: selectionRectEnd != null ? selectionRectEnd() : this.selectionRectEnd,
-      lassoPath: lassoPath != null ? lassoPath() : this.lassoPath, 
-      liveStrokeId: liveStrokeId != null ? liveStrokeId() : this.liveStrokeId,
-      livePoints: livePoints ?? this.livePoints,
       isTransformMode: isTransformMode ?? this.isTransformMode,
+      isTableStructuralMode: isTableStructuralMode ?? this.isTableStructuralMode,
+      isImageCropping: isImageCropping ?? this.isImageCropping,
       isMovingSelection: isMovingSelection ?? this.isMovingSelection,
       totalSelectionDelta: totalSelectionDelta ?? this.totalSelectionDelta,
       liveScale: liveScale ?? this.liveScale,
@@ -271,7 +266,6 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
       interactionMode: CanvasInteractionStateMode.idle, 
       selectionRectStart: () => null, 
       selectionRectEnd: () => null, 
-      lassoPath: () => null, 
       activeInlineTarget: InlineTarget.none, 
       activeTextBlock: () => null, 
       activeTableId: () => null, 
@@ -292,15 +286,15 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
         clearSelection();
         if (obj.parentId != null) {
           final groupIds = page.objects.where((o) => o.parentId == obj.parentId).map((o) => o.id).toSet();
-          state = state.copyWith(selectedObjectIds: groupIds);
-        } else { state = state.copyWith(selectedObjectIds: {obj.id}); }
+          state = state.copyWith(selectedObjectIds: groupIds, isTransformMode: true, isTableStructuralMode: false);
+        } else { state = state.copyWith(selectedObjectIds: {obj.id}, isTransformMode: true, isTableStructuralMode: false); }
         return;
       }
     }
     clearSelection();
   }
 
-  void clearSelection() => state = state.copyWith(selectedObjectIds: {}, selectedTableCells: {}, selectionRectStart: () => null, selectionRectEnd: () => null, lassoPath: () => null, isMovingSelection: false, totalSelectionDelta: Offset.zero, liveScale: const Size(1, 1), liveRotation: 0.0);
+  void clearSelection() => state = state.copyWith(selectedObjectIds: {}, selectedTableCells: {}, selectionRectStart: () => null, selectionRectEnd: () => null, isMovingSelection: false, totalSelectionDelta: Offset.zero, liveScale: const Size(1, 1), liveRotation: 0.0, isTableStructuralMode: false, isImageCropping: false);
 
   void selectIds({Set<String>? objectIds, Set<TableCellKey>? tableCells, Set<String>? tableIds}) {
     Set<String> finalIds = objectIds ?? (tableIds ?? state.selectedObjectIds);
@@ -350,6 +344,26 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
     state = state.copyWith(selectedObjectIds: Set.from(action.objectIds));
   }
 
+  // 🚀 v10.27: Alinhamento de Objetos
+  void alignSelectedObjects(LocalPage page, String alignment) {
+    if (state.selectedObjectIds.length < 2) return;
+    final objects = page.objects.where((o) => state.selectedObjectIds.contains(o.id)).toList();
+    final bounds = TransformService.getCombinedBounds(objects);
+    
+    for (var obj in objects) {
+      Offset newPos = obj.position;
+      switch (alignment) {
+        case 'left': newPos = Offset(bounds.left, obj.position.dy); break;
+        case 'center': newPos = Offset(bounds.center.dx - obj.size.width / 2, obj.position.dy); break;
+        case 'right': newPos = Offset(bounds.right - obj.size.width, obj.position.dy); break;
+        case 'top': newPos = Offset(obj.position.dx, bounds.top); break;
+        case 'middle': newPos = Offset(obj.position.dx, bounds.center.dy - obj.size.height / 2); break;
+        case 'bottom': newPos = Offset(obj.position.dx, bounds.bottom - obj.size.height); break;
+      }
+      if (newPos != obj.position) ref.read(canvasDocumentProvider.notifier).updateObject(page, obj.copyWith(position: newPos));
+    }
+  }
+
   void setTextEditing(InlineTarget target, [TextBlock? block]) {
     final bool isProxy = block?.id.startsWith('proxy_') ?? false;
     state = state.copyWith(activeInlineTarget: target, activeTextBlock: () => block, interactionMode: CanvasInteractionStateMode.textEditing, selectedObjectIds: isProxy ? state.selectedObjectIds : {}, activeTableId: () => isProxy ? state.activeTableId : null, activeTableCell: () => isProxy ? state.activeTableCell : null);
@@ -396,7 +410,6 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
   void setThickness(double th) => state = state.copyWith(selectedThickness: th);
   void setBrushType(BrushType t) => state = state.copyWith(selectedBrushType: t);
   void toggleHighlighterMode(bool v) => state = state.copyWith(isHighlighter: v);
-  void setSmoothingLevel(double v) => state = state.copyWith(smoothingLevel: v);
   void setPalmRejectionMode(PalmRejectionMode mode) => state = state.copyWith(palmRejectionMode: mode);
   void setBrushOpacity(double v) => state = state.copyWith(brushOpacity: v);
   void setLineStyle(LineStyle v) => state = state.copyWith(selectedLineStyle: v);
@@ -410,6 +423,8 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
   void updateSelectionDelta(Offset d) => state = state.copyWith(totalSelectionDelta: state.totalSelectionDelta + d);
   void resetSelectionDelta() => state = state.copyWith(totalSelectionDelta: Offset.zero);
   void toggleTransformMode() => state = state.copyWith(isTransformMode: !state.isTransformMode);
+  void toggleTableStructuralMode() => state = state.copyWith(isTableStructuralMode: !state.isTableStructuralMode);
+  void toggleImageCropping() => state = state.copyWith(isImageCropping: !state.isImageCropping); // 🚀 v10.34
   
   void startHandleTransform(HandleType h, Offset p, Size s, double r) => state = state.copyWith(activeHandle: h, interactionMode: CanvasInteractionStateMode.transforming, initialPosition: p, initialSize: s, initialRotation: r, liveScale: const Size(1, 1), liveRotation: 0);
   void updateLiveTransform({Size? scale, double? rotation}) => state = state.copyWith(liveScale: scale ?? state.liveScale, liveRotation: rotation ?? state.liveRotation);
@@ -475,7 +490,7 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
   void forceExitTableMode() => state = state.copyWith(activeTableId: () => null, activeTableCell: () => null, selectedTableCells: {}, interactionMode: CanvasInteractionStateMode.idle);
 
   void setSelectionRect(Offset? start, Offset? end, [LocalPage? page]) {
-    state = state.copyWith(selectionRectStart: () => start, selectionRectEnd: () => end, lassoPath: () => null, interactionMode: CanvasInteractionStateMode.selecting);
+    state = state.copyWith(selectionRectStart: () => start, selectionRectEnd: () => end, interactionMode: CanvasInteractionStateMode.selecting);
     if (start != null && end != null && page != null) {
       final rect = Rect.fromPoints(start, end);
       final newIds = <String>{};
@@ -488,9 +503,8 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
     }
   }
 
-  void setLassoPath(List<Offset>? path, [LocalPage? page]) {
-    state = state.copyWith(lassoPath: () => path, selectionRectStart: () => null, selectionRectEnd: () => null, interactionMode: CanvasInteractionStateMode.lassoSelecting);
-    if (path != null && path.length > 3 && page != null) {
+  void selectByLasso(List<Offset> path, LocalPage page) {
+    if (path.length > 3) {
       final newIds = <String>{};
       for (var obj in page.objects) {
         if (obj.isDeleted) continue;
@@ -501,17 +515,6 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
     }
   }
 
-  void startLiveStroke(String id, Offset startPos) {
-    state = state.copyWith(liveStrokeId: () => id, livePoints: [startPos], interactionMode: CanvasInteractionStateMode.drawing);
-  }
-
-  void updateLiveStroke(Offset pos) {
-    state = state.copyWith(livePoints: [...state.livePoints, pos]);
-  }
-
-  void endLiveStroke() {
-    state = state.copyWith(liveStrokeId: () => null, livePoints: [], interactionMode: CanvasInteractionStateMode.idle);
-  }
 
   bool _isPointInPolygon(Offset point, List<Offset> polygon) { bool result = false; int j = polygon.length - 1; for (int i = 0; i < polygon.length; i++) { if ((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy) && (point.dx < (polygon[j].dx - polygon[i].dx) * (point.dy - polygon[i].dy) / (polygon[j].dy - polygon[i].dy) + polygon[i].dx)) result = !result; j = i; } return result; }
 }

@@ -18,6 +18,9 @@ class ImageBlock implements PageObject {
 
   final String imagePath;
   
+  // 🚀 v10.34: Recorte não-destrutivo (Valores normalizados 0.0 a 1.0)
+  final Rect? cropRect;
+
   @override
   final Offset position;
   final double width;
@@ -56,6 +59,7 @@ class ImageBlock implements PageObject {
     String? id,
     this.parentId,
     required this.imagePath,
+    this.cropRect, // 🚀 v10.34
     required this.position,
     this.width = 300.0,
     this.height = 200.0,
@@ -98,11 +102,13 @@ class ImageBlock implements PageObject {
     String? creatorId,
     String? layerId,
     String? imagePath,
+    Rect? cropRect, // 🚀 v10.34
   }) {
     return ImageBlock(
       id: id ?? this.id,
       parentId: parentId ?? this.parentId,
       imagePath: imagePath ?? this.imagePath,
+      cropRect: cropRect ?? this.cropRect, // 🚀 v10.34
       position: position ?? this.position,
       width: size?.width ?? this.width,
       height: size?.height ?? this.height,
@@ -134,6 +140,7 @@ class ImageBlock implements PageObject {
       'height': double.parse(height.toStringAsFixed(3)),
       'rotation': double.parse(rotation.toStringAsFixed(4)),
       'image_path': imagePath,
+      'crop_rect': cropRect != null ? {'l': cropRect!.left, 't': cropRect!.top, 'w': cropRect!.width, 'h': cropRect!.height} : null, // 🚀 v10.34
       'is_deleted': isDeleted,
       'deleted_in_session': deletedInSession,
       'page_number': pageNumber,
@@ -184,6 +191,12 @@ class ImageBlock implements PageObject {
       id: json['id']?.toString() ?? const Uuid().v4(),
       parentId: json['parent_id']?.toString(),
       imagePath: path,
+      cropRect: json['crop_rect'] != null ? Rect.fromLTWH(
+        (json['crop_rect']['l'] as num).toDouble(),
+        (json['crop_rect']['t'] as num).toDouble(),
+        (json['crop_rect']['w'] as num).toDouble(),
+        (json['crop_rect']['h'] as num).toDouble(),
+      ) : null,
       position: Offset((json['dx'] as num?)?.toDouble() ?? 0.0, (json['dy'] as num?)?.toDouble() ?? 0.0),
       width: (json['width'] as num?)?.toDouble() ?? 300.0,
       height: (json['height'] as num?)?.toDouble() ?? 200.0,

@@ -42,33 +42,6 @@ class BrushStyleSheet extends ConsumerWidget {
           Text('ESTÚDIO DE CANETAS', style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           const SizedBox(height: 24),
           
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(16)),
-            child: Row(
-              children: [
-                const Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.blueAccent),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Suavização Bézier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text('Arredonda traços automaticamente', style: TextStyle(fontSize: 11, color: Colors.black.withValues(alpha: 0.4))),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: toolState.smoothingLevel > 0, 
-                  onChanged: (v) => toolNotifier.setSmoothingLevel(v ? 0.5 : 0.0),
-                  activeColor: Colors.blueAccent,
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 24),
-          
           SizedBox(
             height: 320,
             child: GridView.builder(

@@ -53,7 +53,12 @@ class CanvasToolbar extends ConsumerWidget {
     final uiState = ref.watch(canvasUiProvider);
 
     final bool isTextMode = interactionState.activeTextBlock != null || interactionState.activeInlineTarget == InlineTarget.title;
-    final bool isTableMode = interactionState.activeTableId != null || interactionState.selectedTableCells.isNotEmpty;
+    
+    // 🚀 v10.27: Detecção inteligente de Tabela (mesmo sem células selecionadas)
+    final bool isSingleTableSelected = interactionState.selectedObjectIds.length == 1 && 
+        currentPage.objects.any((o) => o.id == interactionState.selectedObjectIds.first && o is TableObject);
+    final bool isTableMode = interactionState.activeTableId != null || interactionState.selectedTableCells.isNotEmpty || isSingleTableSelected;
+
     final bool isBrushMode = interactionState.activeTool == ToolMode.draw && interactionState.selectedObjectIds.isEmpty;
     final bool isEraserMode = (interactionState.activeTool == ToolMode.eraser || interactionState.activeTool == ToolMode.pixelEraser) && interactionState.selectedObjectIds.isEmpty;
     final bool isLassoMode = interactionState.activeTool == ToolMode.lasso && interactionState.selectedObjectIds.isEmpty;
@@ -65,27 +70,27 @@ class CanvasToolbar extends ConsumerWidget {
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
-      opacity: uiState.isHudMode ? 0.15 : 1.0,
+      opacity: uiState.isHudMode ? 0.10 : 1.0,
       child: IgnorePointer(
         ignoring: uiState.isHudMode,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), // 🚀 v10.25: Ultra-fino
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), // 🚀 v10.26: Minimizado
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 4))],
-            border: Border.all(color: Colors.black.withOpacity(0.05)),
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
+            border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
           ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: isSmallScreen ? MediaQuery.of(context).size.width - 40 : 600, // 🚀 Compacto
+              maxWidth: isSmallScreen ? MediaQuery.of(context).size.width - 10 : 700, // 🚀 Compacto
             ),
             child: Wrap(
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 4,
+              runSpacing: 1, // 🚀 Minimizado
               children: [
                 // Zona Contextual
                 isTextMode 
@@ -100,7 +105,7 @@ class CanvasToolbar extends ConsumerWidget {
                           ? _buildLassoContextZone(context, interactionState, interactionNotifier)
                           : _buildGeneralContextZone(context, interactionState, interactionNotifier, docNotifier),
 
-                if (!isSmallScreen) Container(width: 0.5, height: 18, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                if (!isSmallScreen) Container(width: 0.5, height: 16, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
                 _buildSystemZone(context, ref, docState, docNotifier, isSmallScreen),
               ],
@@ -127,7 +132,7 @@ class CanvasToolbar extends ConsumerWidget {
           children: [
             _buildCategoryTab(GeneralEditCategory.transform, Icons.open_with_rounded, 'Transformar', state.activeGeneralCategory, (c) => notifier.setGeneralCategory(c as GeneralEditCategory)),
             _buildCategoryTab(GeneralEditCategory.style, Icons.palette_outlined, 'Estilo', state.activeGeneralCategory, (c) => notifier.setGeneralCategory(c as GeneralEditCategory)),
-            _buildCategoryTab(GeneralEditCategory.actions, Icons.layers_outlined, 'Ações', state.activeGeneralCategory, (c) => notifier.setGeneralCategory(c as GeneralEditCategory)),
+            _buildCategoryTab(GeneralEditCategory.organize, Icons.auto_awesome_motion_rounded, 'Estrutura', state.activeGeneralCategory, (c) => notifier.setGeneralCategory(c as GeneralEditCategory)),
           ],
         ),
       ],
@@ -139,6 +144,7 @@ class CanvasToolbar extends ConsumerWidget {
       case GeneralEditCategory.transform:
         return Row(mainAxisSize: MainAxisSize.min, children: [
           _buildFormatToggle(Icons.transform_rounded, state.isTransformMode, () => notifier.toggleTransformMode()),
+          if (obj is ImageBlock) _buildFormatToggle(Icons.crop_rounded, state.isImageCropping, () => notifier.toggleImageCropping()), // 🚀 v10.34
           if (obj != null) _buildFormatToggle(obj.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, obj.isLocked, () { docNotifier.updateObject(currentPage, obj.copyWith(isLocked: !obj.isLocked)); }),
           if (obj is ImageBlock) _buildContextIconButton(Icons.rotate_90_degrees_ccw_rounded, () => docNotifier.updateObject(currentPage, obj.copyWith(rotation: obj.rotation + (math.pi / 2))), Colors.blueGrey),
         ]);
@@ -154,16 +160,59 @@ class CanvasToolbar extends ConsumerWidget {
           ],
           if (obj is ImageBlock) _buildContextIconButton(Icons.image_search_rounded, () => docNotifier.pickAndInsertImage(currentPage), Colors.teal),
         ]);
-      case GeneralEditCategory.actions:
+      case GeneralEditCategory.organize:
+        final bool canGroup = state.selectedObjectIds.length > 1;
+        final bool isMultiple = state.selectedObjectIds.length > 1;
+        final bool hasGrouped = currentPage.objects.any((o) => state.selectedObjectIds.contains(o.id) && o.parentId != null);
+
         return Row(mainAxisSize: MainAxisSize.min, children: [
+          // 🚀 Alinhamento (Apenas se múltiplos)
+          if (isMultiple) ...[
+            _buildContextIconButton(Icons.align_horizontal_left_rounded, () => notifier.alignSelectedObjects(currentPage, 'left'), Colors.blueGrey, size: 16),
+            _buildContextIconButton(Icons.align_horizontal_center_rounded, () => notifier.alignSelectedObjects(currentPage, 'center'), Colors.blueGrey, size: 16),
+            _buildContextIconButton(Icons.align_vertical_top_rounded, () => notifier.alignSelectedObjects(currentPage, 'top'), Colors.blueGrey, size: 16),
+            const VerticalDivider(width: 8, indent: 8, endIndent: 8),
+          ],
+
+          // 🚀 Agrupamento
+          if (canGroup) _buildContextIconButton(Icons.group_work_rounded, () => notifier.groupSelectedObjects(currentPage), const Color(0xFF1976D2), size: 20),
+          if (hasGrouped) _buildContextIconButton(Icons.group_work_outlined, () => notifier.ungroupSelectedObjects(currentPage), Colors.orangeAccent, size: 20),
+          
+          if (canGroup || hasGrouped) const VerticalDivider(width: 12, indent: 6, endIndent: 6),
+
+          // 🚀 Duplicação
+          _buildContextIconButton(Icons.copy_rounded, () {
+            for (var id in state.selectedObjectIds) {
+              final o = currentPage.objects.firstWhere((ob) => ob.id == id);
+              final clone = o.clone(newId: const Uuid().v4());
+              if (clone is TextBlock) docNotifier.addTextBlock(currentPage, clone.copyWith(position: o.position + const Offset(20, 20)));
+              else if (clone is Stroke) docNotifier.addStroke(currentPage, clone.copyWith(points: clone.points.map((p) => p + const Offset(20, 20)).toList()));
+              else if (clone is TableObject) docNotifier.addTable(currentPage, clone.copyWith(position: o.position + const Offset(20, 20)));
+              else docNotifier.updateObject(currentPage, clone.copyWith(position: o.position + const Offset(20, 20)));
+            }
+          }, Colors.black54, size: 18),
+
+          // 🚀 Ordenação de Camadas
           _buildContextIconButton(Icons.flip_to_front_rounded, () { 
             int maxZ = 0; for (var o in currentPage.objects) if (o.zIndex > maxZ) maxZ = o.zIndex;
             for (var id in state.selectedObjectIds) {
               final o = currentPage.objects.firstWhere((ob) => ob.id == id);
               docNotifier.updateObject(currentPage, o.copyWith(zIndex: maxZ + 1));
             }
-          }, Colors.black87),
-          _buildContextIconButton(Icons.delete_outline_rounded, () { docNotifier.deleteObjects(currentPage, state.selectedObjectIds.toList()); notifier.clearSelection(); }, Colors.redAccent),
+          }, Colors.black87, size: 18),
+          
+          if (!isMultiple) ...[
+            _buildContextIconButton(Icons.arrow_upward_rounded, () => docNotifier.moveForward(currentPage, state.selectedObjectIds.first), Colors.black54, size: 16),
+            _buildContextIconButton(Icons.arrow_downward_rounded, () => docNotifier.moveBackward(currentPage, state.selectedObjectIds.first), Colors.black54, size: 16),
+          ],
+
+          const VerticalDivider(width: 12, indent: 6, endIndent: 6),
+
+          // 🚀 Eliminação
+          _buildContextIconButton(Icons.delete_outline_rounded, () { 
+            docNotifier.deleteObjects(currentPage, state.selectedObjectIds.toList()); 
+            notifier.clearSelection(); 
+          }, Colors.redAccent, size: 20),
         ]);
     }
   }
@@ -180,14 +229,25 @@ class CanvasToolbar extends ConsumerWidget {
         
         const VerticalDivider(width: 8, thickness: 0.5, indent: 8, endIndent: 8),
 
-        // --- NÍVEL 2: ESPESSURA ---
+        // --- NÍVEL 2: ESPESSURA (Slider de Precisão) ---
         _buildThicknessButton(context, state),
+        SizedBox(
+          width: 80,
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 2, 
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              activeTrackColor: const Color(0xFF0F4C5C),
+              inactiveTrackColor: Colors.black12,
+            ),
+            child: Slider(value: state.selectedThickness, min: 1, max: 30, onChanged: (v) => notifier.setThickness(v)),
+          ),
+        ),
 
         const VerticalDivider(width: 8, thickness: 0.5, indent: 8, endIndent: 8),
 
         // --- NÍVEL 3: TOGGLES ---
         _buildFormatToggle(Icons.border_color_rounded, state.isHighlighter, () => notifier.toggleHighlighterMode(!state.isHighlighter)),
-        _buildFormatToggle(Icons.auto_awesome_rounded, state.smoothingLevel > 0, () => notifier.setSmoothingLevel(state.smoothingLevel > 0 ? 0.0 : 0.5)),
         
         // Mais Configurações (Acesso ao Estúdio)
         _buildContextIconButton(Icons.tune_rounded, () => showDialog(context: context, builder: (_) => const ThicknessStudioDialog()), Colors.blueGrey, size: 16),
@@ -324,36 +384,95 @@ class CanvasToolbar extends ConsumerWidget {
     switch (state.activeTableCategory) {
       case TableEditCategory.structure:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          _buildContextIconButton(Icons.table_rows_rounded, () { int insertAt = table.rows; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.row + 1; docNotifier.updateObject(currentPage, table.insertRowAt(insertAt)); }, const Color(0xFF0F4C5C)),
-          _buildContextIconButton(Icons.view_column_rounded, () { int insertAt = table.cols; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.col + 1; docNotifier.updateObject(currentPage, table.insertColumnAt(insertAt)); }, const Color(0xFF0F4C5C)),
-          const VerticalDivider(width: 12),
-          _buildContextIconButton(Icons.delete_sweep_rounded, () { if (table.rows > 1) { int deleteAt = table.rows - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.row; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteRowAt(deleteAt)); } }, Colors.redAccent),
+          // 🚀 v10.29: Alternar modo de redimensionamento interno (Hastes)
+          _buildFormatToggle(
+            Icons.grid_goldenratio_rounded, 
+            state.isTableStructuralMode, 
+            () => notifier.toggleTableStructuralMode(),
+          ),
+          const VerticalDivider(width: 8, indent: 6, endIndent: 6),
+          _buildContextIconButton(Icons.table_rows_rounded, () { int insertAt = table.rows; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.row + 1; docNotifier.updateObject(currentPage, table.insertRowAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
+          _buildContextIconButton(Icons.view_column_rounded, () { int insertAt = table.cols; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.col + 1; docNotifier.updateObject(currentPage, table.insertColumnAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
+          const VerticalDivider(width: 8, indent: 6, endIndent: 6),
+          _buildContextIconButton(Icons.select_all_outlined, () {
+            if (selectedKeys.isEmpty) return;
+            final int row = selectedKeys.first.coordinate.row;
+            final Set<TableCellKey> keys = {}; for (int c = 0; c < table.cols; c++) keys.add(TableCellKey(table.id, CellCoordinate(row, c)));
+            notifier.selectIds(tableCells: keys);
+          }, Colors.blueAccent, size: 16),
+          _buildContextIconButton(Icons.view_week_outlined, () {
+            if (selectedKeys.isEmpty) return;
+            final int col = selectedKeys.first.coordinate.col;
+            final Set<TableCellKey> keys = {}; for (int r = 0; r < table.rows; r++) keys.add(TableCellKey(table.id, CellCoordinate(r, col)));
+            notifier.selectIds(tableCells: keys);
+          }, Colors.blueAccent, size: 16),
+          const VerticalDivider(width: 8, indent: 6, endIndent: 6),
+          _buildContextIconButton(Icons.delete_sweep_rounded, () { if (table.rows > 1) { int deleteAt = table.rows - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.row; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteRowAt(deleteAt)); } }, Colors.redAccent, size: 16),
+          _buildContextIconButton(Icons.view_week_rounded, () { if (table.cols > 1) { int deleteAt = table.cols - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.col; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteColumnAt(deleteAt)); } }, Colors.redAccent, size: 16),
         ]);
       case TableEditCategory.cell:
         if (selectedKeys.isEmpty) return const Text('SELECIONE CÉLULAS', style: TextStyle(fontSize: 9, color: Colors.black26));
         final refCell = table.cells[selectedKeys.first.coordinate] ?? TableCellModel();
         return Row(mainAxisSize: MainAxisSize.min, children: [
           _buildCellTypeDropdown(table, selectedKeys, docNotifier),
+          const VerticalDivider(width: 12),
+          _buildFormatToggle(Icons.format_bold, refCell.style.bold, () {
+            final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
+            final bool newVal = !refCell.style.bold;
+            for (var key in selectedKeys) { final c = table.cells[key.coordinate] ?? TableCellModel(); newCells[key.coordinate] = c.copyWith(style: c.style.copyWith(bold: newVal)); }
+            docNotifier.updateObject(currentPage, table.copyWith(cells: newCells));
+          }),
+          _buildFormatToggle(Icons.format_italic, refCell.style.italic, () {
+            final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
+            final bool newVal = !refCell.style.italic;
+            for (var key in selectedKeys) { final c = table.cells[key.coordinate] ?? TableCellModel(); newCells[key.coordinate] = c.copyWith(style: c.style.copyWith(italic: newVal)); }
+            docNotifier.updateObject(currentPage, table.copyWith(cells: newCells));
+          }),
           _buildColorCircle(context, refCell.style.backgroundColorHex ?? '#FFFFFF', (hex) {
             final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
             for (var key in selectedKeys) { final coords = key.coordinate; final cell = table.cells[coords] ?? TableCellModel(); newCells[coords] = cell.copyWith(style: cell.style.copyWith(backgroundColorHex: hex)); }
             docNotifier.updateObject(currentPage, table.copyWith(cells: newCells));
           }, title: 'Fundo da Célula'),
+          const VerticalDivider(width: 8),
+          _buildFormatToggle(Icons.align_vertical_top_rounded, refCell.style.verticalAlign == 0, () {
+            final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
+            for (var key in selectedKeys) { final c = table.cells[key.coordinate] ?? TableCellModel(); newCells[key.coordinate] = c.copyWith(style: c.style.copyWith(verticalAlign: 0)); }
+            docNotifier.updateObject(currentPage, table.copyWith(cells: newCells));
+          }),
           _buildFormatToggle(Icons.align_vertical_center_rounded, refCell.style.verticalAlign == 1, () {
              final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
              for (var key in selectedKeys) { final coords = key.coordinate; final cell = table.cells[coords] ?? TableCellModel(); newCells[coords] = cell.copyWith(style: cell.style.copyWith(verticalAlign: 1)); }
              docNotifier.updateObject(currentPage, table.copyWith(cells: newCells));
           }),
+          _buildFormatToggle(Icons.align_vertical_bottom_rounded, refCell.style.verticalAlign == 2, () {
+            final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
+            for (var key in selectedKeys) { final c = table.cells[key.coordinate] ?? TableCellModel(); newCells[key.coordinate] = c.copyWith(style: c.style.copyWith(verticalAlign: 2)); }
+            docNotifier.updateObject(currentPage, table.copyWith(cells: newCells));
+          }),
         ]);
       case TableEditCategory.style:
         return Row(mainAxisSize: MainAxisSize.min, children: [
           _buildColorCircle(context, table.borderColor, (hex) { docNotifier.updateObject(currentPage, table.copyWith(borderColor: hex)); }, title: 'Cor da Borda'),
+          _buildColorCircle(context, table.tableBackgroundColorHex ?? '#FFFFFF', (hex) { docNotifier.updateObject(currentPage, table.copyWith(tableBackgroundColorHex: hex)); }, title: 'Fundo da Tabela'),
+          const VerticalDivider(width: 12),
           _buildFormatToggle(Icons.view_headline_rounded, table.showHeader, () { docNotifier.updateObject(currentPage, table.copyWith(showHeader: !table.showHeader)); }),
         ]);
       case TableEditCategory.actions:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          _buildContextIconButton(Icons.delete_outline_rounded, () { docNotifier.deleteObjects(currentPage, [table.id]); notifier.clearSelection(); }, Colors.redAccent),
-          _buildContextIconButton(Icons.select_all_rounded, () { final allKeys = <TableCellKey>{}; for (int r = 0; r < table.rows; r++) { for (int c = 0; c < table.cols; c++) { allKeys.add(TableCellKey(table.id, CellCoordinate(r, c))); } } notifier.selectIds(tableCells: allKeys); }, const Color(0xFF0F4C5C)),
+          _buildContextIconButton(Icons.merge_type_rounded, selectedKeys.length > 1 ? () => _handleMerge(table, selectedKeys, docNotifier) : null, selectedKeys.length > 1 ? Colors.blueAccent : Colors.black12, size: 18),
+          _buildContextIconButton(Icons.call_split_rounded, () => _handleSplit(table, selectedKeys, docNotifier), Colors.orangeAccent, size: 18),
+          const VerticalDivider(width: 8),
+          _buildContextIconButton(Icons.copy_rounded, () {
+            final clone = table.clone(newId: const Uuid().v4()).copyWith(position: table.position + const Offset(20, 20));
+            docNotifier.addTable(currentPage, clone);
+          }, Colors.black54, size: 16),
+          _buildContextIconButton(Icons.cleaning_services_rounded, () {
+            final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
+            for (var key in selectedKeys) { final c = table.cells[key.coordinate] ?? TableCellModel(); newCells[key.coordinate] = c.copyWith(value: ''); }
+            docNotifier.updateObject(currentPage, table.copyWith(cells: newCells));
+          }, Colors.blueGrey, size: 16),
+          _buildContextIconButton(Icons.delete_outline_rounded, () { docNotifier.deleteObjects(currentPage, [table.id]); notifier.clearSelection(); }, Colors.redAccent, size: 18),
+          _buildContextIconButton(Icons.select_all_rounded, () { final allKeys = <TableCellKey>{}; for (int r = 0; r < table.rows; r++) { for (int c = 0; c < table.cols; c++) { allKeys.add(TableCellKey(table.id, CellCoordinate(r, c))); } } notifier.selectIds(tableCells: allKeys); }, const Color(0xFF0F4C5C), size: 18),
         ]);
     }
   }
@@ -424,6 +543,37 @@ class CanvasToolbar extends ConsumerWidget {
     } else {
       docNotifier.updateObject(currentPage, block);
     }
+  }
+
+  void _handleMerge(TableObject table, Set<TableCellKey> selectedKeys, CanvasDocumentNotifier docNotifier) {
+    if (selectedKeys.length < 2) return;
+    int minR = 999, maxR = -1, minC = 999, maxC = -1;
+    for (var key in selectedKeys) {
+      final coords = key.coordinate;
+      if (coords.row < minR) minR = coords.row; if (coords.row > maxR) maxR = coords.row;
+      if (coords.col < minC) minC = coords.col; if (coords.col > maxC) maxC = coords.col;
+    }
+    int rowSpan = (maxR - minR) + 1; int colSpan = (maxC - minC) + 1;
+    final topLeftCoord = CellCoordinate(minR, minC);
+    final Map<CellCoordinate, CellCoordinate> newSpans = Map.from(table.cellSpans);
+    newSpans[topLeftCoord] = CellCoordinate(rowSpan, colSpan);
+    final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
+    for (int r = minR; r <= maxR; r++) { for (int c = minC; c <= maxC; c++) { if (r == minR && c == minC) continue; newCells.remove(CellCoordinate(r, c)); } }
+    docNotifier.updateObject(currentPage, table.copyWith(cellSpans: newSpans, cells: newCells));
+  }
+
+  void _handleSplit(TableObject table, Set<TableCellKey> selectedKeys, CanvasDocumentNotifier docNotifier) {
+    final Map<CellCoordinate, CellCoordinate> newSpans = Map.from(table.cellSpans);
+    final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
+    for (var key in selectedKeys) {
+      final coords = key.coordinate;
+      if (newSpans.containsKey(coords)) {
+        final span = newSpans[coords]!;
+        newSpans.remove(coords);
+        for (int r = coords.row; r < coords.row + span.row; r++) { for (int c = coords.col; c < coords.col + span.col; c++) { if (r == coords.row && c == coords.col) continue; newCells[CellCoordinate(r, c)] = TableCellModel(); } }
+      }
+    }
+    docNotifier.updateObject(currentPage, table.copyWith(cellSpans: newSpans, cells: newCells));
   }
 
   Widget _buildBrushSelectorButton(BuildContext context, CanvasInteractionState state) {

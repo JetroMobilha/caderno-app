@@ -370,6 +370,9 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
         maxScale: 6.0,
         constrained: false,
         interactionEndFrictionCoefficient: 0.01,
+        // 🚀 v10.43: Bloqueio inteligente de PAN para ferramentas de desenho e seleção
+        panEnabled: widget.toolState.activeTool == ToolMode.pan || viewportState.activePointerCount > 1,
+        scaleEnabled: viewportState.activePointerCount > 1 || widget.toolState.activeTool == ToolMode.pan,
         child: IgnorePointer(
           ignoring: viewportState.activePointerCount > 1, // 🚀 v7.5: Bloqueio global da folha no multi-toque
           child: SizedBox(

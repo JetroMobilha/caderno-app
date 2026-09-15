@@ -94,8 +94,12 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
         opacity: (widget.movementDelta != null || widget.liveScale != null || widget.liveRotation != null) ? 0.6 : widget.object.opacity,
         child: Transform.rotate(
           angle: rotation, alignment: Alignment.center,
-          child: SizedBox(
-            width: size.width, height: size.height,
+          child: ConstrainedBox( // 🚀 v10.27: Flexibilidade para evitar overflow visual
+            constraints: BoxConstraints(
+              minWidth: size.width, 
+              minHeight: size.height,
+              maxWidth: widget.object is TextBlock ? double.infinity : size.width,
+            ),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -113,27 +117,62 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
     final List<String> lines = tb.text.split('\n');
     final Color textColor = Color(int.parse(tb.textColorHex.replaceFirst('#', '0xFF')));
     return Container(
-      width: tb.size.width, padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(color: tb.backgroundColorHex != null ? Color(int.parse(tb.backgroundColorHex!.replaceFirst('#', '0xFF'))) : null, borderRadius: BorderRadius.circular(4)),
+      width: tb.size.width, 
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: tb.backgroundColorHex != null ? Color(int.parse(tb.backgroundColorHex!.replaceFirst('#', '0xFF'))) : null, 
+        borderRadius: BorderRadius.circular(4)
+      ),
       child: Column(
-        mainAxisSize: MainAxisSize.min, crossAxisAlignment: _getCrossAxisAlignment(tb.textAlign),
+        mainAxisSize: MainAxisSize.min, 
+        crossAxisAlignment: _getCrossAxisAlignment(tb.textAlign),
         children: lines.asMap().entries.map((entry) {
           Widget prefix = const SizedBox.shrink();
-          if (tb.listType == ListType.bullet) prefix = Padding(padding: const EdgeInsets.only(right: 8), child: Icon(Icons.circle, size: tb.fontSize * 0.4, color: textColor));
-          else if (tb.listType == ListType.numbered) prefix = Padding(padding: const EdgeInsets.only(right: 8), child: Text('${entry.key + 1}.', style: GoogleFonts.inter(fontSize: tb.fontSize * 0.8, color: textColor, fontWeight: FontWeight.bold)));
-          else if (tb.listType == ListType.checklist) {
+          if (tb.listType == ListType.bullet) {
+            prefix = Padding(padding: const EdgeInsets.only(right: 8, top: 4), child: Icon(Icons.circle, size: tb.fontSize * 0.4, color: textColor));
+          } else if (tb.listType == ListType.numbered) {
+            prefix = Padding(padding: const EdgeInsets.only(right: 8), child: Text('${entry.key + 1}.', style: GoogleFonts.inter(fontSize: tb.fontSize * 0.8, color: textColor, fontWeight: FontWeight.bold)));
+          } else if (tb.listType == ListType.checklist) {
             final bool isChecked = tb.checkedLineIndices.contains(entry.key);
-            prefix = GestureDetector(onTap: widget.isReadOnly ? null : () {
-              final List<int> newIndices = List.from(tb.checkedLineIndices);
-              if (isChecked) newIndices.remove(entry.key); else newIndices.add(entry.key);
-              final pageClientId = ref.read(canvasViewportProvider).currentPageClientId;
-              if (pageClientId != null) {
-                final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.clientId == pageClientId);
-                ref.read(canvasDocumentProvider.notifier).updateObject(page, tb.copyWith(checkedLineIndices: newIndices));
-              }
-            }, child: Padding(padding: const EdgeInsets.only(right: 6), child: Icon(isChecked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, size: tb.fontSize, color: isChecked ? Colors.green : textColor)));
+            prefix = GestureDetector(
+              onTap: widget.isReadOnly ? null : () {
+                final List<int> newIndices = List.from(tb.checkedLineIndices);
+                if (isChecked) newIndices.remove(entry.key); else newIndices.add(entry.key);
+                final pageClientId = ref.read(canvasViewportProvider).currentPageClientId;
+                if (pageClientId != null) {
+                  final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.clientId == pageClientId);
+                  ref.read(canvasDocumentProvider.notifier).updateObject(page, tb.copyWith(checkedLineIndices: newIndices));
+                }
+              }, 
+              child: Padding(padding: const EdgeInsets.only(right: 6), child: Icon(isChecked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, size: tb.fontSize, color: isChecked ? Colors.green : textColor))
+            );
           }
-          return Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [prefix, Expanded(child: Text(entry.value, textAlign: tb.textAlign, style: GoogleFonts.getFont(tb.fontFamily ?? 'Inter', fontSize: tb.fontSize, height: tb.lineHeight, fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal, fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal, decoration: TextDecoration.combine([if (tb.isUnderline) TextDecoration.underline, if (tb.isStrikethrough) TextDecoration.lineThrough]), color: textColor)))]);
+          return Row(
+            mainAxisSize: MainAxisSize.min, 
+            crossAxisAlignment: CrossAxisAlignment.start, // 🚀 v10.27: Alinhamento no topo para evitar overflow em múltiplas linhas
+            children: [
+              prefix, 
+              Expanded(
+                child: Text(
+                  entry.value, 
+                  textAlign: tb.textAlign, 
+                  softWrap: true, // 🚀 v10.27: Quebra de linha forçada
+                  style: GoogleFonts.getFont(
+                    tb.fontFamily ?? 'Inter', 
+                    fontSize: tb.fontSize, 
+                    height: tb.lineHeight, 
+                    fontWeight: tb.isBold ? FontWeight.bold : FontWeight.normal, 
+                    fontStyle: tb.isItalic ? FontStyle.italic : FontStyle.normal, 
+                    decoration: TextDecoration.combine([
+                      if (tb.isUnderline) TextDecoration.underline, 
+                      if (tb.isStrikethrough) TextDecoration.lineThrough
+                    ]), 
+                    color: textColor
+                  )
+                )
+              )
+            ]
+          );
         }).toList(),
       ),
     );
@@ -143,7 +182,71 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
     switch (align) { case TextAlign.center: return CrossAxisAlignment.center; case TextAlign.right: return CrossAxisAlignment.end; default: return CrossAxisAlignment.start; }
   }
 
-  Widget _buildImage(ImageBlock img) => SizedBox(width: img.width, height: img.height, child: img.imagePath.startsWith('http') ? Image.network(img.imagePath, fit: BoxFit.fill) : Image.file(io.File(img.imagePath), fit: BoxFit.fill));
+  Widget _buildImage(ImageBlock img) {
+    final toolState = ref.watch(canvasToolProvider);
+    final bool isCropping = toolState.isImageCropping && toolState.selectedObjectIds.contains(img.id);
+    final bool hasCrop = img.cropRect != null;
+    
+    Widget baseImage(BoxFit fit, [Alignment alignment = Alignment.center]) {
+      final ImageProvider provider = img.imagePath.startsWith('http') 
+          ? NetworkImage(img.imagePath) 
+          : FileImage(io.File(img.imagePath)) as ImageProvider;
+
+      return Image(
+        image: provider,
+        fit: fit,
+        alignment: alignment,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey.withValues(alpha: 0.1),
+          child: const Center(child: Icon(Icons.broken_image_rounded, color: Colors.grey, size: 20)),
+        ),
+      );
+    }
+
+    if (!hasCrop && !isCropping) return SizedBox(width: img.width, height: img.height, child: baseImage(BoxFit.fill));
+
+    // 🚀 v10.34: Renderização Imersiva de Recorte
+    final crop = img.cropRect ?? const Rect.fromLTWH(0, 0, 1, 1);
+    
+    return SizedBox(
+      width: img.width,
+      height: img.height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Fundo esmaecido (Imagem Inteira) - Apenas se estiver em modo de edição de corte
+          if (isCropping)
+            Positioned.fill(
+              child: OverflowBox(
+                alignment: Alignment(
+                  (crop.center.dx * 2) - 1,
+                  (crop.center.dy * 2) - 1,
+                ),
+                minWidth: 0, minHeight: 0,
+                maxWidth: img.width / crop.width.clamp(0.01, 1.0),
+                maxHeight: img.height / crop.height.clamp(0.01, 1.0),
+                child: Opacity(opacity: 0.3, child: baseImage(BoxFit.fill)),
+              ),
+            ),
+            
+          // Imagem Recortada (Destaque)
+          Positioned.fill(
+            child: ClipRect(
+              child: FractionallySizedBox(
+                widthFactor: 1 / crop.width.clamp(0.01, 1.0),
+                heightFactor: 1 / crop.height.clamp(0.01, 1.0),
+                alignment: Alignment(
+                  (crop.center.dx * 2) - 1,
+                  (crop.center.dy * 2) - 1,
+                ),
+                child: baseImage(BoxFit.fill),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Widget _buildShape(ShapeObject shape) => CustomPaint(size: shape.size, painter: _ShapePainter(shape: shape));
   Widget _buildAudio(AudioBlock audio) => Container(width: audio.size.width, height: audio.size.height, decoration: BoxDecoration(color: const Color(0xFF0F4C5C).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF0F4C5C).withValues(alpha: 0.3))), padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [const Icon(Icons.play_circle_fill_rounded, color: Color(0xFF0F4C5C), size: 28), const SizedBox(width: 10), Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(audio.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F4C5C))), Text('${(audio.durationSeconds / 60).floor()}:${(audio.durationSeconds % 60).toString().padLeft(2, '0')}', style: TextStyle(fontSize: 9, color: Colors.black.withValues(alpha: 0.5)))]))]));
 
@@ -211,10 +314,13 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
     final double left = colOffsets[coords.col], top = rowOffsets[coords.row];
     double width = 0; for (int i = 0; i < cs; i++) width += table.columnWidths[coords.col + i];
     double height = 0; for (int i = 0; i < rs; i++) height += table.rowHeights[coords.row + i];
-    final Color gridColor = Color(int.parse(table.borderColor.replaceFirst('#', '0xFF'))).withOpacity(0.3);
+    
+    final Color gridColor = Color(int.parse(table.borderColor.replaceFirst('#', '0xFF'))).withValues(alpha: 0.15); // 🚀 Mais subtil
+    final Color selectionColor = const Color(0xFF1976D2);
+
     return Positioned(
       left: left, top: top, width: width, height: height,
-      child: MouseRegion(cursor: toolState.isTransformMode ? SystemMouseCursors.move : SystemMouseCursors.text, child: GestureDetector(
+      child: GestureDetector(
         onTap: toolState.isTransformMode ? null : () { 
           if (!isTableSelected) ref.read(canvasToolProvider.notifier).selectIds(objectIds: {table.id});
           ref.read(canvasToolProvider.notifier).selectIds(tableCells: {cellKey});
@@ -225,10 +331,35 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
           ref.read(canvasToolProvider.notifier).toggleTableCellSelection(cellKey);
         },
         child: Container(
-          decoration: BoxDecoration(color: cell.style.backgroundColorHex != null ? Color(int.parse(cell.style.backgroundColorHex!.replaceFirst('#', '0xFF'))) : null, border: Border(right: (coords.col + cs) >= table.cols ? BorderSide.none : BorderSide(color: gridColor, width: table.borderWidth), bottom: (coords.row + rs) >= table.rows ? BorderSide.none : BorderSide(color: gridColor, width: table.borderWidth), left: isCellSelected ? const BorderSide(color: Colors.blueAccent, width: 2) : BorderSide.none, top: isCellSelected ? const BorderSide(color: Colors.blueAccent, width: 2) : BorderSide.none)),
-          alignment: _getVerticalAlignment(cell.style.verticalAlign), padding: const EdgeInsets.all(4), child: Stack(children: [if (isCellSelected) Positioned.fill(child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.blueAccent, width: 2)))), _buildCellContent(cell, height)]),
+          decoration: BoxDecoration(
+            color: cell.style.backgroundColorHex != null ? Color(int.parse(cell.style.backgroundColorHex!.replaceFirst('#', '0xFF'))) : null, 
+            border: Border(
+              right: BorderSide(color: gridColor, width: 0.5),
+              bottom: BorderSide(color: gridColor, width: 0.5),
+            ),
+          ),
+          child: Stack(
+            children: [
+              if (isCellSelected) 
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: selectionColor.withOpacity(0.05),
+                      border: Border.all(color: selectionColor, width: 1.5),
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(4),
+                child: Align(
+                  alignment: _getVerticalAlignment(cell.style.verticalAlign),
+                  child: _buildCellContent(cell, height),
+                ),
+              ),
+            ],
+          ),
         ),
-      )),
+      ),
     );
   }
 

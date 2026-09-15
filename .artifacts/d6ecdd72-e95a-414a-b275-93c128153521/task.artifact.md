@@ -1,7 +1,7 @@
-- `[x]` Implementar Bounding Box Universal e Unificação de Transformação
-- `[x]` Refinar Coordenadas de Documento (v10.6)
-- `[/]` Correção de Erros de Tipo e Visibilidade (v10.7)
-    - `[ ]` Resolver erro `WidgetRef` vs `Ref` em `CanvasTool`
-    - `[ ]` Robustecer `fromJson` de `TableObject` e outros modelos
-    - `[ ]` Validar mapeamento de visibilidade em `CanvasRepository`
-    - `[ ]` Verificar lógica de `zIndex` no `PageCanvas`
+- `[ ]` Remover `smoothingLevel` de `stroke_model.dart`
+- `[ ]` Remover `smoothingLevel` de `canvas_tool_provider.dart`
+- `[ ]` Simplificar `canvas_painter.dart` (remover Bézier)
+- `[ ]` Remover simplificação RDP de `brush_tool.dart`
+- `[ ]` Remover controlos de suavização de `canvas_toolbar.dart`
+- `[ ]` Remover slider de suavização de `thickness_studio_dialog.dart`
+- `[ ]` Limpar `brush_style_sheet.dart`

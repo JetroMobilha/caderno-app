@@ -84,6 +84,10 @@ class LocalDatabaseService {
   // 🚀 NOVO: SALVA UM BLOCO DE IMAGEM ISOLADO
   // =========================================================================
   Future<void> saveImageBlockLocally(int pageId, ImageBlock img) async {
+    final String? cropJson = img.cropRect != null 
+        ? jsonEncode({'l': img.cropRect!.left, 't': img.cropRect!.top, 'w': img.cropRect!.width, 'h': img.cropRect!.height}) 
+        : null;
+
     await _db.into(_db.canvasImageBlocks).insertOnConflictUpdate(
       CanvasImageBlocksCompanion.insert(
         clientImageId: img.id,
@@ -94,9 +98,14 @@ class LocalDatabaseService {
         width: img.width,
         height: img.height,
         rotation: img.rotation,
+        cropData: Value(cropJson), // 🚀 v10.35
         isDeleted: const Value(0),
         syncedWithCloud: const Value(0),
         updatedAt: Value(TimeService().nowMs()),
+        parentId: Value(img.parentId),
+        isLocked: Value(img.isLocked ? 1 : 0),
+        isVisible: Value(img.isVisible ? 1 : 0),
+        opacity: Value(img.opacity),
       ),
     );
   }
@@ -145,14 +154,33 @@ class LocalDatabaseService {
         final bool isValidImage = path.startsWith('http') || (!kIsWeb && io.File(path).existsSync());
 
         if (isValidImage) {
+          Rect? crop;
+          final dynamic row = m;
+          if (row.cropData != null) {
+            try {
+              final data = jsonDecode(row.cropData!);
+              crop = Rect.fromLTWH(
+                (data['l'] as num).toDouble(),
+                (data['t'] as num).toDouble(),
+                (data['w'] as num).toDouble(),
+                (data['h'] as num).toDouble(),
+              );
+            } catch (e) { debugPrint('⚠️ Erro decode crop: $e'); }
+          }
+
           safeImages.add(
             ImageBlock(
               id: m.clientImageId,
               imagePath: path,
+              cropRect: crop, 
               position: Offset(m.posX, m.posY),
               width: m.width,
               height: m.height,
               rotation: m.rotation,
+              parentId: row.parentId,
+              isLocked: row.isLocked == 1,
+              isVisible: row.isVisible != 0, 
+              opacity: (row.opacity as num?)?.toDouble() ?? 1.0,
             ),
           );
         }

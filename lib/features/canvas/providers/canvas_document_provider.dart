@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:caderno_digital_app/core/utils/rdp_simplifier.dart';
 import 'package:caderno_digital_app/core/utils/stroke_utils.dart';
 import '../../notebooks/models/notebook_configuration.dart'; 
 import '../models/animation_object_model.dart';
@@ -186,6 +185,19 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   Future<void> deleteObjects(LocalPage page, List<String> objectIds) async { if (objectIds.isEmpty) return; await _executeAction(DeleteAction(pageClientId: page.clientId, pageNumber: page.pageNumber, objectIds: objectIds), targetPage: page); }
   Future<void> updateObject(LocalPage page, PageObject obj) async { final oldObj = page.objects.firstWhere((o) => o.id == obj.id); await _executeAction(UpdateObjectAction(pageClientId: page.clientId, pageNumber: page.pageNumber, objectId: obj.id, oldState: oldObj.toJson(), newState: obj.toJson()), targetPage: page); }
 
+  // 🚀 v10.27: Movimentação de Camadas Relativa
+  Future<void> moveForward(LocalPage page, String objectId) async {
+    final idx = page.objects.indexWhere((o) => o.id == objectId);
+    if (idx == -1 || idx >= page.objects.length - 1) return;
+    await reorderObject(page, idx, idx + 1);
+  }
+
+  Future<void> moveBackward(LocalPage page, String objectId) async {
+    final idx = page.objects.indexWhere((o) => o.id == objectId);
+    if (idx <= 0) return;
+    await reorderObject(page, idx, idx - 1);
+  }
+
   Future<void> executeInteractionAction(CanvasAction action) async { await _executeAction(action); }
 
   Future<void> reorderObject(LocalPage page, int oldIndex, int newIndex) async {
@@ -197,6 +209,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     for (int i = 0; i < objects.length; i++) finalObjects.add(objects[i].copyWith(zIndex: i));
     final updatedPage = page.copyWith(objects: finalObjects);
     await _repository.savePage(updatedPage, state.liveNotebookSid);
+    await _repository.markPageAsUnsynced(page.clientId); // 🚀 v10.55
     state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updatedPage : p).toList());
   }
 
@@ -208,6 +221,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     for (int i = 0; i < objects.length; i++) finalObjects.add(objects[i].copyWith(zIndex: i));
     final updatedPage = page.copyWith(objects: finalObjects);
     await _repository.savePage(updatedPage, state.liveNotebookSid);
+    await _repository.markPageAsUnsynced(page.clientId); // 🚀 v10.55
     state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updatedPage : p).toList());
   }
 
@@ -222,9 +236,11 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     final now = TimeService().nowMs();
     final newObjects = page.objects.map((o) { if (o is Stroke && strokeIds.contains(o.id)) { final updated = o.copyWith(color: colorHex, updatedAt: now); updatedStrokes.add(updated); return updated; } return o; }).toList();
     if (updatedStrokes.isNotEmpty) {
-      final updatedPage = page.copyWith(objects: newObjects, updatedAt: now);
       state = state.copyWith(pages: state.pages.map((p) => p.clientId == page.clientId ? updatedPage : p).toList());
       for (var s in updatedStrokes) { await _repository.saveSingleStroke(page.clientId, s, pageId: page.id, updatedAt: now); _realtimeService.broadcastStroke(notebookId: state.liveNotebookSid!, myUserId: state.myUserId, strokeData: {'page_client_id': page.clientId, 'page_number': page.pageNumber, 'strokes': [s.toJson()]}); }
+      
+      // 🚀 v10.55: Marcar página como não sincronizada após alteração de cor
+      await _repository.markPageAsUnsynced(page.clientId, updatedAt: now);
     }
   }
 
@@ -290,8 +306,15 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
           else if (obj is AnimationObject) await _repository.saveSingleAnimationObject(cid, obj, pageId: pid, updatedAt: updatedAt);
         }
       }
-      else if (action is DeleteAction) { for (var oid in action.objectIds) await _repository.deleteObjectById(oid); await _repository.markPageAsUnsynced(cid, updatedAt: updatedAt); }
-    } catch (e) {}
+      else if (action is DeleteAction) { 
+        for (var oid in action.objectIds) await _repository.deleteObjectById(oid); 
+      }
+      
+      // 🚀 v10.55: Garantir que a página é marcada como "suja" para o SyncService
+      await _repository.markPageAsUnsynced(cid, updatedAt: updatedAt);
+    } catch (e) {
+      debugPrint('🚨 [CanvasDocument] Erro ao persistir ação incremental: $e');
+    }
   }
 
   void _broadcastAction(CanvasAction action) {
@@ -338,7 +361,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     await _executeAction(action, targetPage: page); 
   }
   
-  void broadcastLiveStroke({required String pageClientId, required int pageNumber, required String strokeId, required List<Offset> points, required String color, required double thickness, required bool isHighlighter, BrushType brushType = BrushType.gel, double smoothingLevel = 0.0, bool isFinal = false}) { 
+  void broadcastLiveStroke({required String pageClientId, required int pageNumber, required String strokeId, required List<Offset> points, required String color, required double thickness, required bool isHighlighter, BrushType brushType = BrushType.gel, bool isFinal = false}) { 
     if (!state.isCollaborationEnabled || state.liveNotebookSid == null) return; 
     final data = {
       'page_client_id': pageClientId, 
@@ -350,7 +373,6 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
         'is_final': isFinal, 
         'is_highlighter': isHighlighter ? 1 : 0, 
         'brush_type': brushType.name, 
-        'smoothing_level': smoothingLevel, 
         'points': points.map((pt) => {'x': pt.dx, 'y': pt.dy}).toList()
       }]
     }; 

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Offset, Size, debugPrint;
+import 'package:flutter/material.dart' show Offset, Size, Rect, debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:vector_math/vector_math_64.dart';
@@ -85,6 +85,13 @@ class CanvasRepository {
     final imgRows = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).get();
     final imageBlocks = imgRows.map((i) {
       final dynamic row = i;
+      Rect? crop;
+      if (row.cropData != null) {
+        try {
+          final data = jsonDecode(row.cropData);
+          crop = Rect.fromLTWH((data['l'] as num).toDouble(), (data['t'] as num).toDouble(), (data['w'] as num).toDouble(), (data['h'] as num).toDouble());
+        } catch (_) {}
+      }
       return ImageBlock.fromJson({
         'id': i.clientImageId,
         'image_path': i.imagePath,
@@ -93,6 +100,7 @@ class CanvasRepository {
         'width': i.width,
         'height': i.height,
         'rotation': i.rotation,
+        'crop_rect': crop != null ? {'l': crop.left, 't': crop.top, 'w': crop.width, 'h': crop.height} : null,
         'updated_at': i.updatedAt,
         'is_deleted': i.isDeleted == 1,
         'deleted_in_session': i.deletedInSession == 1,
@@ -348,8 +356,13 @@ class CanvasRepository {
   Future<void> saveSingleImageBlock(String pageClientId, ImageBlock i, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
     final dynamic table = _db.canvasImageBlocks;
+    final String? cropJson = i.cropRect != null 
+        ? jsonEncode({'l': i.cropRect!.left, 't': i.cropRect!.top, 'w': i.cropRect!.width, 'h': i.cropRect!.height}) 
+        : null;
+
     final companion = table.companion(
       clientImageId: Value(i.id), pageId: Value(page.id), imagePath: Value(i.imagePath), posX: Value(i.position.dx), posY: Value(i.position.dy), width: Value(i.width), height: Value(i.height), rotation: Value(i.rotation),
+      cropData: Value(cropJson), // 🚀 v10.35
       isDeleted: Value(i.isDeleted ? 1 : 0), deletedInSession: Value(i.deletedInSession ? 1 : 0),
       creatorId: Value(i.creatorId), updatedAt: Value(updatedAt ?? i.updatedAt), syncedWithCloud: Value(i.syncedWithCloud ? 1 : 0),
       parentId: Value(i.parentId), isVisible: Value(i.isVisible ? 1 : 0), isLocked: Value(i.isLocked ? 1 : 0), opacity: Value(i.opacity),
@@ -450,8 +463,15 @@ class CanvasRepository {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingleOrNull();
     if (page == null) return;
     final now = updatedAt ?? TimeService().nowMs();
-    await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId))).write(PagesCompanion(syncedWithCloud: const Value(0), updatedAt: Value(now)));
-    await (_db.update(_db.notebooks)..where((t) => t.id.equals(page.notebookId))).write(NotebooksCompanion(updatedAt: Value(now), syncedWithCloud: const Value(0)));
+    
+    await _db.transaction(() async {
+      await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId))).write(
+        PagesCompanion(syncedWithCloud: const Value(0), updatedAt: Value(now))
+      );
+      await (_db.update(_db.notebooks)..where((t) => t.id.equals(page.notebookId))).write(
+        NotebooksCompanion(updatedAt: Value(now), syncedWithCloud: const Value(0))
+      );
+    });
   }
 
   Future<void> deletePagesBatch(List<int> pageIds) async { await (_db.update(_db.pages)..where((t) => t.id.isIn(pageIds))).write(PagesCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(TimeService().nowMs()))); }

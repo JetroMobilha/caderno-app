@@ -5,40 +5,24 @@ import '../models/canvas_enums.dart';
 import '../models/stroke_model.dart';
 import 'background_engine.dart';
 
+/// Constrói um objeto [Path] do Flutter a partir de uma lista de pontos.
+/// 
+/// Implementa uma conexão linear simples (`lineTo`) para garantir **Fidelidade Bruta**.
+/// Devido à captura de alta frequência do sistema, o traço mantém um aspecto suave
+/// sem os artefactos de arredondamento de algoritmos de suavização artificial.
 Path buildPath(List<Offset> points) {
   final path = Path();
   if (points.isEmpty) return path;
+
   path.moveTo(points.first.dx, points.first.dy);
   if (points.length == 1) {
     path.addOval(Rect.fromCircle(center: points.first, radius: 0.1));
     return path;
   }
+
   for (int i = 1; i < points.length; i++) {
     path.lineTo(points[i].dx, points[i].dy);
   }
-  return path;
-}
-
-/// 🚀 v10.21: Suavização Bézier Opcional com Nível e Performance Otimizada
-Path buildSmoothPath(List<Offset> points, [double level = 0.5]) {
-  final path = Path();
-  if (points.length < 3 || level <= 0.05) return buildPath(points);
-  
-  path.moveTo(points.first.dx, points.first.dy);
-  
-  for (int i = 1; i < points.length - 2; i++) {
-    final xc = (points[i].dx + points[i + 1].dx) / 2;
-    final yc = (points[i].dy + points[i + 1].dy) / 2;
-    path.quadraticBezierTo(points[i].dx, points[i].dy, xc, yc);
-  }
-  
-  path.quadraticBezierTo(
-    points[points.length - 2].dx, 
-    points[points.length - 2].dy, 
-    points.last.dx, 
-    points.last.dy
-  );
-  
   return path;
 }
 
@@ -113,6 +97,10 @@ class BackgroundPainter extends CustomPainter {
       oldDelegate.notebookConfig != notebookConfig;
 }
 
+/// Painter responsável por desenhar a coleção de traços persistidos numa página.
+/// 
+/// Utiliza o estado imutável do documento para renderizar todos os desenhos que 
+/// já foram finalizados e salvos.
 class StrokesPainter extends CustomPainter {
   final List<Stroke> strokes;
   final Set<String> selectedStrokeIds;
@@ -155,9 +143,7 @@ class StrokesPainter extends CustomPainter {
         canvas.translate(selectionDelta.dx, selectionDelta.dy);
       }
 
-      final path = stroke.smoothingLevel > 0 
-          ? buildSmoothPath(stroke.points, stroke.smoothingLevel) 
-          : buildPath(stroke.points);
+      final path = buildPath(stroke.points);
           
       _renderArtisticStroke(
         canvas: canvas, 
@@ -200,6 +186,11 @@ class StrokesPainter extends CustomPainter {
   }
 }
 
+/// Painter especializado para o traço "ao vivo" (feedback imediato).
+/// 
+/// Esta classe é invocada centenas de vezes por segundo durante o desenho.
+/// Ela é otimizada para renderizar apenas o traço que está a ser criado pelo 
+/// usuário no momento, operando com os dados do [LiveStrokeProvider].
 class ActiveStrokePainter extends CustomPainter {
   final List<Offset> currentPoints;
   final Color visualColor; 
@@ -207,7 +198,6 @@ class ActiveStrokePainter extends CustomPainter {
   final double opacity; 
   final bool isHighlighter;
   final BrushType brushType;
-  final double smoothingLevel;
 
   ActiveStrokePainter({
     required this.currentPoints, 
@@ -216,15 +206,12 @@ class ActiveStrokePainter extends CustomPainter {
     this.opacity = 1.0,
     this.isHighlighter = false,
     this.brushType = BrushType.gel,
-    this.smoothingLevel = 0.0,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (currentPoints.isEmpty) return;
-    final path = smoothingLevel > 0 
-        ? buildSmoothPath(currentPoints, smoothingLevel) 
-        : buildPath(currentPoints);
+    final path = buildPath(currentPoints);
         
     _renderArtisticStroke(
       canvas: canvas, 
@@ -240,12 +227,10 @@ class ActiveStrokePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ActiveStrokePainter oldDelegate) {
-    return oldDelegate.visualColor != visualColor ||
-           oldDelegate.currentThickness != currentThickness ||
-           oldDelegate.brushType != brushType ||
-           oldDelegate.smoothingLevel != smoothingLevel ||
-           oldDelegate.opacity != opacity ||
-           !listEquals(oldDelegate.currentPoints, currentPoints);
+    // 🚀 v10.51: Sempre repintar durante o desenho ativo para garantir latência zero.
+    // Como esta classe é usada dentro de um RepaintBoundary e apenas durante o 
+    // movimento, o custo é mínimo e resolve o problema de listas mutáveis.
+    return true;
   }
 }
 
@@ -277,9 +262,7 @@ class RemoteLiveStrokesPainter extends CustomPainter {
       canvas.save();
       if (stroke.liveOffset != Offset.zero) canvas.translate(stroke.liveOffset.dx, stroke.liveOffset.dy);
       
-      final path = stroke.smoothingLevel > 0 
-          ? buildSmoothPath(stroke.points, stroke.smoothingLevel) 
-          : buildPath(stroke.points);
+      final path = buildPath(stroke.points);
           
       _renderArtisticStroke(
         canvas: canvas, 
@@ -401,4 +384,31 @@ class RemotePointersPainter extends CustomPainter {
   bool shouldRepaint(RemotePointersPainter oldDelegate) {
     return oldDelegate.targetPageNumber != targetPageNumber || !mapEquals(oldDelegate.pointers, pointers) || !listEquals(oldDelegate.onlineUsers, onlineUsers);
   }
+}
+
+/// 🚀 v10.51: Painter ultra-simples para o feedback visual do laço.
+class LiveLassoPainter extends CustomPainter {
+  final List<Offset> path;
+  LiveLassoPainter(this.path);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (path.isEmpty) return;
+    final Path lasso = Path()..moveTo(path.first.dx, path.first.dy);
+    for (int i = 1; i < path.length; i++) {
+      lasso.lineTo(path[i].dx, path[i].dy);
+    }
+    canvas.drawPath(lasso, Paint()
+      ..color = const Color(0x190F4C5C)
+      ..style = PaintingStyle.fill);
+    canvas.drawPath(lasso, Paint()
+      ..color = const Color(0xFF0F4C5C)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round);
+  }
+
+  @override
+  bool shouldRepaint(LiveLassoPainter oldDelegate) => true;
 }

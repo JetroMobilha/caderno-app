@@ -48,13 +48,21 @@ class SyncIsolates {
             ));
             break;
           case 'image':
+            final crop = obj['crop_rect'];
+            final String? cropJson = crop != null ? jsonEncode(crop) : null;
             images.add(CanvasImageBlocksCompanion.insert(
               clientImageId: id, pageId: localPageId, imagePath: obj['image_path'] ?? '',
               posX: (obj['dx'] as num?)?.toDouble() ?? 0.0, posY: (obj['dy'] as num?)?.toDouble() ?? 0.0,
               width: (obj['width'] as num?)?.toDouble() ?? 300.0, height: (obj['height'] as num?)?.toDouble() ?? 200.0,
               rotation: (obj['rotation'] as num?)?.toDouble() ?? 0.0,
+              cropData: Value(cropJson),
               isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
-              syncedWithCloud: const Value(1), updatedAt: Value(ts), layerId: Value(layerId)
+              syncedWithCloud: const Value(1), updatedAt: Value(ts), 
+              layerId: Value(layerId),
+              parentId: Value(obj['parent_id']?.toString()),
+              isVisible: Value(obj['is_visible'] == false ? 0 : 1),
+              isLocked: Value(obj['is_locked'] == true ? 1 : 0),
+              opacity: Value((obj['opacity'] as num?)?.toDouble() ?? 1.0),
             ));
             break;
           case 'shape':

@@ -108,6 +108,7 @@ class CanvasStrokes extends Table {
   TextColumn get creatorId => text().nullable()();
   TextColumn get layerId => text().nullable()(); 
   TextColumn get parentId => text().nullable()(); 
+  TextColumn get cropData => text().nullable()(); // 🚀 v10.35: JSON do cropRect
   IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
   IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
   RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
@@ -128,6 +129,7 @@ class CanvasTextBlocks extends Table {
   TextColumn get creatorId => text().nullable()();
   TextColumn get layerId => text().nullable()(); 
   TextColumn get parentId => text().nullable()(); 
+  TextColumn get cropData => text().nullable()(); // 🚀 v10.35: JSON do cropRect
   IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
   IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
   RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
@@ -153,6 +155,7 @@ class CanvasImageBlocks extends Table {
   TextColumn get creatorId => text().nullable()();
   TextColumn get layerId => text().nullable()(); 
   TextColumn get parentId => text().nullable()(); 
+  TextColumn get cropData => text().nullable()(); // 🚀 v10.35: JSON do cropRect
   IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
   IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
   RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
@@ -482,12 +485,18 @@ class AppDatabase extends _$AppDatabase {
             await customStatement('ALTER TABLE $t ADD COLUMN opacity REAL DEFAULT 1.0');
           }
         }
+        if (from < 32) {
+          // 🚀 v32: Suporte para recorte de imagem
+          try {
+            await m.addColumn(canvasImageBlocks, canvasImageBlocks.cropData);
+          } catch (_) {}
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 32;
 
   Future<void> clearAllData() async {
     await delete(canvasImageBlocks).go();

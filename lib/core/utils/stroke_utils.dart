@@ -38,7 +38,6 @@ class StrokeUtils {
       points: pts,
       isHighlighter: stroke.isHighlighter,
       brushType: stroke.brushType,
-      smoothingLevel: stroke.smoothingLevel,
       zIndex: stroke.zIndex,
       layerId: stroke.layerId,
       creatorId: stroke.creatorId,

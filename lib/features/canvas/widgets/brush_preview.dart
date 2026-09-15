@@ -23,7 +23,8 @@ class BrushPreviewPainter extends CustomPainter {
 
     final path = Path()
       ..moveTo(size.width * 0.1, size.height * 0.8)
-      ..quadraticBezierTo(size.width * 0.5, size.height * 0.1, size.width * 0.9, size.height * 0.8);
+      ..lineTo(size.width * 0.5, size.height * 0.2)
+      ..lineTo(size.width * 0.9, size.height * 0.8);
 
     if (type == BrushType.neon) {
       canvas.drawPath(path, paint..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0)..strokeWidth = strokeWidth * 2);

@@ -14,7 +14,7 @@ class LassoTool extends CanvasTool {
   }
 
   @override
-  void onPanStart(Offset localPos, dynamic ref, LocalPage page, [double pressure = 0.5]) {
+  void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final liveNotifier = ref.read(liveStrokeProvider);
     
@@ -24,7 +24,7 @@ class LassoTool extends CanvasTool {
   }
 
   @override
-  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, [double pressure = 0.5]) {
+  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId}) {
     final liveNotifier = ref.read(liveStrokeProvider);
     if (liveNotifier.lassoPath != null) {
       liveNotifier.updateLasso(localPos);
@@ -32,13 +32,13 @@ class LassoTool extends CanvasTool {
   }
 
   @override
-  void onPanEnd(dynamic ref, LocalPage page) {
+  void onPanEnd(dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final liveNotifier = ref.read(liveStrokeProvider);
     
     if (liveNotifier.lassoPath != null && liveNotifier.lassoPath!.length > 3) {
       // 🚀 v10.50: Executar a seleção final
-      toolNotifier.selectByLasso(List.from(liveNotifier.lassoPath!), page);
+      toolNotifier.selectByLasso(List<Offset>.from(liveNotifier.lassoPath!), page);
     }
     
     liveNotifier.clear();

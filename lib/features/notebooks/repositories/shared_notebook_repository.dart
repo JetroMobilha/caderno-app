@@ -96,6 +96,7 @@ class SharedNotebookRepository {
   Stream<List<Notebook>> watchSharedNotebooks(int currentUserId) {
     final query = _db.select(_db.notebooks).join([
       innerJoin(_db.notebookUser, _db.notebookUser.notebookId.equalsExp(_db.notebooks.id)),
+      leftOuterJoin(_db.pages, _db.pages.notebookId.equalsExp(_db.notebooks.id)),
     ]);
 
     query.where(_db.notebookUser.userId.equals(currentUserId));

@@ -341,8 +341,8 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
         _activePointers++;
         widget.viewportNotifier.updatePointerCount(_activePointers);
         
-        // 🚀 v9.8: Atalho Multi-toque para Pan
-        if (_activePointers > 1) {
+        // 🚀 v10.60: Atalho Multi-toque para Pan (Exige 3 dedos agora)
+        if (_activePointers >= 3) {
           widget.toolNotifier.enterTemporaryPan();
         }
       },
@@ -370,11 +370,12 @@ class _IsolateViewportItemState extends ConsumerState<_IsolateViewportItem> {
         maxScale: 6.0,
         constrained: false,
         interactionEndFrictionCoefficient: 0.01,
-        // 🚀 v10.43: Bloqueio inteligente de PAN para ferramentas de desenho e seleção
-        panEnabled: widget.toolState.activeTool == ToolMode.pan || viewportState.activePointerCount > 1,
-        scaleEnabled: viewportState.activePointerCount > 1 || widget.toolState.activeTool == ToolMode.pan,
+        // 🚀 v10.60: Bloqueio inteligente de PAN para ferramentas de desenho e seleção
+        // A navegação exige 3 dedos se uma ferramenta de edição estiver ativa
+        panEnabled: widget.toolState.activeTool == ToolMode.pan || viewportState.activePointerCount >= 3,
+        scaleEnabled: viewportState.activePointerCount >= 3 || widget.toolState.activeTool == ToolMode.pan,
         child: IgnorePointer(
-          ignoring: viewportState.activePointerCount > 1, // 🚀 v7.5: Bloqueio global da folha no multi-toque
+          ignoring: viewportState.activePointerCount >= 3, // 🚀 v10.60: Bloqueio total da folha para navegar
           child: SizedBox(
             width: widget.page.pageWidthPx,
             height: widget.page.pageHeightPx,

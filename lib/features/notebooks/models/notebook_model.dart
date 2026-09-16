@@ -207,7 +207,7 @@ class Notebook {
       participantsTotal: 1,
       lastUpdatedByName: null,
       notificationsEnabled: true,
-      tags: List.from(tags),
+      tags: List<String>.from(tags),
       configuration: configuration?.copyWith(),
     );
   }

@@ -20,7 +20,7 @@ class StrokeUtils {
       } else {
         if (currentSegment.isNotEmpty) {
           if (currentSegment.length > 1) {
-            newSegments.add(List.from(currentSegment));
+            newSegments.add(List<Offset>.from(currentSegment));
           }
           currentSegment = [];
         }

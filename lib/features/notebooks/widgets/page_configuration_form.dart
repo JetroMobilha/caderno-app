@@ -399,7 +399,7 @@ class _PageConfigurationFormState extends State<PageConfigurationForm> {
               final bool isSelected = hf.fields.contains(field);
               return InkWell(
                 onTap: () {
-                   final List<String> newFields = List.from(hf.fields);
+                   final List<String> newFields = List<String>.from(hf.fields);
                    if (isSelected) {
                      newFields.remove(field);
                    } else {

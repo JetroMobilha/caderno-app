@@ -199,8 +199,8 @@ class Stroke implements PageObject {
       'layer_id': layerId,
       if (pageNumber != null) 'page_number': pageNumber,
       if (includePoints) 'points': points.map((p) => {
-        'dx': double.parse(p.dx.toStringAsFixed(4)),
-        'dy': double.parse(p.dy.toStringAsFixed(4))
+        'dx': double.parse(p.dx.toStringAsFixed(3)),
+        'dy': double.parse(p.dy.toStringAsFixed(3))
       }).toList(),
     };
   }

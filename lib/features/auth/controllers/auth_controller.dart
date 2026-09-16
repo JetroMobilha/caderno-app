@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'package:caderno_digital_app/core/network/sync_provider.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
@@ -153,6 +154,12 @@ class AuthController extends Notifier<AuthState> {
         tempDir.listSync().forEach((file) {
           if (file is File && file.path.contains('sync_img_')) file.deleteSync();
         });
+        
+        final appDir = await getApplicationDocumentsDirectory();
+        final recordingsDir = Directory('${appDir.path}/recordings');
+        if (await recordingsDir.exists()) {
+          await recordingsDir.delete(recursive: true);
+        }
       } catch (_) {}
     }
 

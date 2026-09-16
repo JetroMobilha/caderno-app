@@ -192,7 +192,7 @@ class StrokesPainter extends CustomPainter {
 /// Ela é otimizada para renderizar apenas o traço que está a ser criado pelo 
 /// usuário no momento, operando com os dados do [LiveStrokeProvider].
 class ActiveStrokePainter extends CustomPainter {
-  final List<Offset> currentPoints;
+  final Map<int, List<Offset>> activeStrokes;
   final Color visualColor; 
   final double currentThickness;
   final double opacity; 
@@ -200,7 +200,7 @@ class ActiveStrokePainter extends CustomPainter {
   final BrushType brushType;
 
   ActiveStrokePainter({
-    required this.currentPoints, 
+    required this.activeStrokes, 
     required this.visualColor, 
     required this.currentThickness, 
     this.opacity = 1.0,
@@ -210,19 +210,23 @@ class ActiveStrokePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (currentPoints.isEmpty) return;
-    final path = buildPath(currentPoints);
-        
-    _renderArtisticStroke(
-      canvas: canvas, 
-      path: path, 
-      brushType: brushType, 
-      color: visualColor, 
-      thickness: currentThickness, 
-      opacity: opacity,
-      isHighlighter: isHighlighter, 
-      points: currentPoints,
-    );
+    if (activeStrokes.isEmpty) return;
+
+    for (final points in activeStrokes.values) {
+      if (points.isEmpty) continue;
+      final path = buildPath(points);
+          
+      _renderArtisticStroke(
+        canvas: canvas, 
+        path: path, 
+        brushType: brushType, 
+        color: visualColor, 
+        thickness: currentThickness, 
+        opacity: opacity,
+        isHighlighter: isHighlighter, 
+        points: points,
+      );
+    }
   }
 
   @override

@@ -37,6 +37,7 @@ abstract class CanvasAction {
       case 'move': return MoveAction.fromMap(data);
       case 'update_object': return UpdateObjectAction.fromMap(data);
       case 'group': return GroupAction.fromMap(data);
+      case 'pixel_erase': return PixelEraseAction.fromMap(data);
       default: return null;
     }
   }
@@ -67,7 +68,7 @@ class AddTextAction extends CanvasAction {
   final TextBlock block;
   AddTextAction({required super.pageClientId, required super.pageNumber, required this.block});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(block), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(block), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != block.id).toList(), updatedAt: timestamp);
   @override
@@ -79,7 +80,7 @@ class AddImageAction extends CanvasAction {
   final ImageBlock block;
   AddImageAction({required super.pageClientId, required super.pageNumber, required this.block});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(block), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(block), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != block.id).toList(), updatedAt: timestamp);
   @override
@@ -91,7 +92,7 @@ class AddShapeAction extends CanvasAction {
   final ShapeObject shape;
   AddShapeAction({required super.pageClientId, required super.pageNumber, required this.shape});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(shape), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(shape), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != shape.id).toList(), updatedAt: timestamp);
   @override
@@ -103,7 +104,7 @@ class AddAudioAction extends CanvasAction {
   final AudioBlock audio;
   AddAudioAction({required super.pageClientId, required super.pageNumber, required this.audio});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(audio), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(audio), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != audio.id).toList(), updatedAt: timestamp);
   @override
@@ -115,7 +116,7 @@ class AddAnimationAction extends CanvasAction {
   final AnimationObject animation;
   AddAnimationAction({required super.pageClientId, required super.pageNumber, required this.animation});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(animation), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(animation), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != animation.id).toList(), updatedAt: timestamp);
   @override
@@ -127,7 +128,7 @@ class AddTableAction extends CanvasAction {
   final TableObject table;
   AddTableAction({required super.pageClientId, required super.pageNumber, required this.table});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(table), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(table), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != table.id).toList(), updatedAt: timestamp);
   @override
@@ -139,7 +140,7 @@ class AddLinkAction extends CanvasAction {
   final LinkObject link;
   AddLinkAction({required super.pageClientId, required super.pageNumber, required this.link});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(link), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(link), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != link.id).toList(), updatedAt: timestamp);
   @override
@@ -151,7 +152,7 @@ class AddAttachmentAction extends CanvasAction {
   final AttachmentObject attach;
   AddAttachmentAction({required super.pageClientId, required super.pageNumber, required this.attach});
   @override
-  LocalPage execute(LocalPage page) => page.copyWith(objects: List.from(page.objects)..add(attach), updatedAt: timestamp);
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(attach), updatedAt: timestamp);
   @override
   LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != attach.id).toList(), updatedAt: timestamp);
   @override

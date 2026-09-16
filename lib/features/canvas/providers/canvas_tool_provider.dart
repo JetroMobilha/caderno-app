@@ -64,9 +64,15 @@ class CanvasInteractionState {
   bool get isTopToolbarVisible => _isTopToolbarVisible ?? true;
   
   List<ToolMode> get toolOrder => _toolOrder ?? const [
-    ToolMode.select, ToolMode.draw, ToolMode.text, 
-    ToolMode.table, ToolMode.eraser, ToolMode.lasso, 
-    ToolMode.pan, ToolMode.video, ToolMode.organizer
+    ToolMode.draw,      // Pincel
+    ToolMode.eraser,    // Borracha
+    ToolMode.pan,       // Mão (Mover folha)
+    ToolMode.text,      // Texto
+    ToolMode.table,     // Tabela
+    ToolMode.select,    // Selecionar
+    ToolMode.organizer, // Organizar
+    ToolMode.video,     // Animação
+    ToolMode.lasso,     // Laço
   ];
 
   final Set<String> selectedObjectIds;
@@ -254,14 +260,9 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
     activeToolLogic.onToolDeactivated();
     if (state.activeTextBlock != null || state.activeTableCell != null) exitWritingMode();
     
-    final List<ToolMode> newOrder = List.from(state.toolOrder);
-    newOrder.remove(tool);
-    newOrder.insert(0, tool);
-
     final bool canKeepTransform = tool == ToolMode.text || tool == ToolMode.table || tool == ToolMode.select || tool == ToolMode.lasso || tool == ToolMode.organizer;
     state = state.copyWith(
       activeTool: tool, 
-      toolOrder: newOrder,
       isTransformMode: canKeepTransform ? state.isTransformMode : false, 
       interactionMode: CanvasInteractionStateMode.idle, 
       selectionRectStart: () => null, 

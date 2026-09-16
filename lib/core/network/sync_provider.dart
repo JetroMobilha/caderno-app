@@ -36,8 +36,21 @@ class SyncNotifier extends StateNotifier<SyncState> {
         // A. Forçar reinício do WebSocket (Realtime)
         ref.read(realtimeServiceProvider).initConnection();
         
-        // B. Disparar Sincronização Leve (Metadata) imediatamente
-        performSync(forced: true, metadataOnly: true);
+        // B. Disparar Sincronização Leve (Metadata) imediatamente, depois a Total
+        Future(() async {
+          await performSync(forced: true, metadataOnly: true);
+          
+          debugPrint('🔄 [Sync] Sincronização leve concluída. Iniciando sincronização total das páginas...');
+          if (mounted) {
+            ref.read(showFullSyncLoadingProvider.notifier).state = true;
+          }
+          
+          await performSync(forced: true, metadataOnly: false);
+          
+          if (mounted) {
+            ref.read(showFullSyncLoadingProvider.notifier).state = false;
+          }
+        });
       }
     });
   }
@@ -103,6 +116,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
 }
 
 enum SyncState { idle, syncing, error }
+
+final showFullSyncLoadingProvider = StateProvider<bool>((ref) => false);
 
 final appSyncServiceProvider = Provider<SyncService>((ref) {
   final apiService = ref.watch(apiServiceProvider);

@@ -14,17 +14,17 @@ class EraserTool extends CanvasTool {
   }
 
   @override
-  void onPanStart(Offset localPos, dynamic ref, LocalPage page, [double pressure = 0.5]) {
+  void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId}) {
     _eraseAt(localPos, ref, page);
   }
 
   @override
-  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, [double pressure = 0.5]) {
+  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId}) {
     _eraseAt(localPos, ref, page);
   }
 
   @override
-  void onPanEnd(dynamic ref, LocalPage page) {}
+  void onPanEnd(dynamic ref, LocalPage page, {int? pointerId}) {}
 
   void _eraseAt(Offset localPos, dynamic ref, LocalPage page) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);

@@ -32,7 +32,7 @@ class SelectTool extends CanvasTool {
   }
 
   @override
-  void onPanStart(Offset localPos, dynamic ref, LocalPage page, [double pressure = 0.5]) {
+  void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
 
@@ -72,7 +72,7 @@ class SelectTool extends CanvasTool {
   }
 
   @override
-  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, [double pressure = 0.5]) {
+  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
     final Offset docDelta = ref.read(canvasViewportProvider.notifier).screenDeltaToDocumentDelta(delta);
@@ -100,7 +100,7 @@ class SelectTool extends CanvasTool {
   }
 
   @override
-  void onPanEnd(dynamic ref, LocalPage page) {
+  void onPanEnd(dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
     if (toolState.activeTableResizeIndex != null) { toolNotifier.endTableResize(); }
@@ -143,14 +143,14 @@ class SelectTool extends CanvasTool {
 
   void _handleTableColumnResize(TableObject table, int index, double deltaX, dynamic ref, LocalPage page) {
     if (deltaX == 0) return;
-    final List<double> newWidths = List.from(table.columnWidths);
+    final List<double> newWidths = List<double>.from(table.columnWidths);
     newWidths[index] = (newWidths[index] + deltaX).clamp(30.0, 1500.0);
     ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths));
   }
 
   void _handleTableRowResize(TableObject table, int index, double deltaY, dynamic ref, LocalPage page) {
     if (deltaY == 0) return;
-    final List<double> newHeights = List.from(table.rowHeights);
+    final List<double> newHeights = List<double>.from(table.rowHeights);
     newHeights[index] = (newHeights[index] + deltaY).clamp(20.0, 1000.0);
     ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
   }

@@ -106,16 +106,20 @@ class NotebookRepository {
   // 📡 ASSINAR CADERNOS DA DISCIPLINA (REATIVO)
   // =========================================================================
   Stream<List<Notebook>> watchNotebooksBySubject(int subjectId) {
-    final notebooksStream = (_db.select(_db.notebooks)
-          ..where((t) => t.isDeleted.equals(0) & t.subjectId.equals(subjectId))
-          ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]))
-        .watch();
+    final query = _db.select(_db.notebooks).join([
+      leftOuterJoin(_db.pages, _db.pages.notebookId.equalsExp(_db.notebooks.id)),
+    ]);
 
-    return notebooksStream.asyncMap((rows) async {
+    query.where(_db.notebooks.isDeleted.equals(0) & _db.notebooks.subjectId.equals(subjectId));
+    query.groupBy([_db.notebooks.id]);
+    query.orderBy([OrderingTerm(expression: _db.notebooks.updatedAt, mode: OrderingMode.desc)]);
+
+    return query.watch().asyncMap((rows) async {
       final List<Notebook> notebooks = [];
       for (final row in rows) {
-        final pCount = await _getPageCount(row.id);
-        notebooks.add(_mapNotebook(row, pCount));
+        final notebookRow = row.readTable(_db.notebooks);
+        final pCount = await _getPageCount(notebookRow.id);
+        notebooks.add(_mapNotebook(notebookRow, pCount));
       }
       return notebooks;
     });

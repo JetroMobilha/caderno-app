@@ -35,17 +35,29 @@ class TopActionToolbar extends ConsumerWidget {
 
     final screenWidth = MediaQuery.of(context).size.width;
     
-    // 🚀 v10.14: Lógica Adaptativa
-    // Tablet/Desktop (> 700px): Mostra todas as ferramentas de ação.
-    // Mobile (< 700px): Mostra apenas as 3-5 ferramentas mais recentes para poupar espaço.
-    final bool isWide = screenWidth > 540;
-    final int visibleCount = isWide ? interactionState.toolOrder.length : (screenWidth < 380 ? 5 : 6);
+    // 🚀 v10.85: Garantir que ferramentas críticas nunca sumam
+    final List<ToolMode> permanentTools = [
+      ToolMode.draw, 
+      ToolMode.eraser, 
+      ToolMode.pan
+    ];
     
-    final visibleTools = interactionState.toolOrder.take(visibleCount).toList();
-    final overflowTools = isWide ? <ToolMode>[] : interactionState.toolOrder.skip(visibleCount).toList();
+    // Filtrar a lista para evitar duplicados nas ferramentas flexíveis
+    final List<ToolMode> flexibleTools = interactionState.toolOrder
+        .where((t) => !permanentTools.contains(t))
+        .toList();
+
+    final bool isWide = screenWidth > 540;
+    // Ajustar contagem para acomodar as permanentes + flexíveis
+    final int flexibleVisibleCount = isWide 
+        ? flexibleTools.length 
+        : (screenWidth < 380 ? 2 : 3);
+    
+    final visibleFlexible = flexibleTools.take(flexibleVisibleCount).toList();
+    final overflowTools = flexibleTools.skip(flexibleVisibleCount).toList();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), // Mais fina
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), 
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.98),
         borderRadius: BorderRadius.circular(32),
@@ -70,8 +82,8 @@ class TopActionToolbar extends ConsumerWidget {
           ),
           const VerticalDivider(width: 12, thickness: 0.5, indent: 8, endIndent: 8),
 
-          // Ferramentas Principais (MRU)
-          ...visibleTools.map((mode) => _buildToolButton(
+          // 1. FERRAMENTAS PERMANENTES (Pincel, Borracha, Mão)
+          ...permanentTools.map((mode) => _buildToolButton(
             interactionNotifier, 
             _getIconForTool(mode), 
             mode, 
@@ -80,14 +92,23 @@ class TopActionToolbar extends ConsumerWidget {
             context
           )),
 
+          const VerticalDivider(width: 8, thickness: 0.3, indent: 10, endIndent: 10),
 
+          // 2. FERRAMENTAS FLEXÍVEIS (Texto, Tabela, etc.)
+          ...visibleFlexible.map((mode) => _buildToolButton(
+            interactionNotifier, 
+            _getIconForTool(mode), 
+            mode, 
+            _getLabelForTool(mode), 
+            interactionState.activeTool,
+            context
+          )),
 
-          if (!isWide && overflowTools.isNotEmpty) ...[
+          if (overflowTools.isNotEmpty) ...[
             _buildMoreMenu(context, ref, interactionNotifier, overflowTools, interactionState.activeTool),
           ],
 
           _buildInsertionMenu(context, ref),
-
         ],
       ),
     );
@@ -196,8 +217,8 @@ class TopActionToolbar extends ConsumerWidget {
       case ToolMode.draw: return Icons.brush_outlined;
       case ToolMode.text: return Icons.text_fields_rounded;
       case ToolMode.table: return Icons.grid_on_rounded;
-      case ToolMode.eraser: return Icons.auto_fix_normal_outlined;
-      case ToolMode.pixelEraser: return Icons.cleaning_services_rounded;
+      case ToolMode.eraser: return Icons.auto_fix_high_rounded;
+      case ToolMode.pixelEraser: return Icons.auto_fix_normal_rounded;
       case ToolMode.lasso: return Icons.gesture_rounded;
       case ToolMode.pan: return Icons.pan_tool_outlined;
       case ToolMode.video: return Icons.animation_rounded;

@@ -171,7 +171,7 @@ class _HandwritingTrainingScreenState extends ConsumerState<HandwritingTrainingS
                                 },
                                 onPanEnd: (_) {
                                   if (_activePointsNotifier.value.isNotEmpty) {
-                                    notifier.addFullStroke(List.from(_activePointsNotifier.value));
+                                    notifier.addFullStroke(List<Offset>.from(_activePointsNotifier.value));
                                     _activePointsNotifier.value = [];
                                   }
                                 },

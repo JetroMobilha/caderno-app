@@ -26,16 +26,31 @@ Um ecossistema de produtividade focado em escrita manual fluida, colaboração e
     *   **Soft Delete (Lixeira):** Sistema de eliminação em dois níveis para evitar perda acidental de dados.
     *   **Arquivo:** Possibilidade de arquivar matérias e cadernos antigos para manter o foco no presente.
 
-### 🖌️ Canvas Inteligente (Motor de Edição)
-O coração do SyncScribe, focado em precisão e ergonomia:
-*   **Escrita e Desenho:** Pincéis realistas (Gel, Caneta, Marcador) com suavização de traço via curvas de Bezier.
-*   **Blocos de Texto:** Editor WYSIWYG com suporte a negrito, itálico, cores, tipos de letra e listas dinâmicas (bullets, numeradas e checklists).
-*   **Tabelas Complexas:**
-    *   Criação dinâmica de linhas e colunas.
-    *   **União de Células (Merge):** Lógica avançada de spans que permite criar layouts de dados complexos.
-    *   Redimensionamento individual de colunas e linhas.
-*   **Modo de Transformação Declarativo:** Sistema de proteção que "tranca" o conteúdo durante a edição, exigindo uma ativação explícita para mover ou redimensionar objetos, evitando erros de precisão tátil.
-*   **Navegação Multi-Toque (v7.5):** Detecção inteligente de dedos que prioriza automaticamente o Zoom e Pan quando dois ou mais dedos tocam no ecrã, garantindo que o desenho nunca interfira na navegação.
+### 🖌️ Canvas Inteligente (Motor de Interação de Alta Fidelidade)
+O coração do SyncScribe, redesenhado para oferecer uma experiência de escrita manual comparável a apps profissionais como Procreate e Notability:
+
+*   **Inteligência Cinética de Arbitragem (Arena de Palmas v2):**
+    *   **Duelo de Intenções:** Sistema de "Rei e Desafiantes" que permite que múltiplos pontos (dedo e palma) desenhem instantaneamente para garantir latência zero.
+    *   **Golpe de Estado Cinético:** Algoritmo que avalia a velocidade, linearidade e distância (Score) de cada toque. Se o sistema deteta que um "Desafiante" é um dedo de escrita e o "Rei" atual é uma palma, o trono é trocado e a linha da palma é apagada instantaneamente sem rasto.
+    *   **Consolidação por Movimento:** Um toque só é validado como "Sénior" (imune) após provar intenção real de desenho (60px de movimento fluido), eliminando o "vício" no primeiro toque.
+*   **Gestão Avançada de Hardware:**
+    *   **Prioridade Absoluta:** Stylus (Caneta) e Mouse possuem autoridade máxima, "roubando" o foco do desenho de qualquer toque de dedo no momento do contacto.
+    *   **Navegação Blindada (3 Dedos):** Para evitar que o apoio da mão mova a folha, o Zoom e o Pan exigem **3 dedos simultâneos**. Toques de 1 ou 2 dedos são reservados exclusivamente para desenho e interação com objetos.
+    *   **Isolamento Multi-ID:** Cada ponto de contacto possui um canal de dados independente, garantindo que o sistema nunca misture pontos de dedos diferentes.
+*   **Expressividade Artística:**
+    *   **Pincéis Realistas:** Mais de 12 tipos de pontas, incluindo *Gel, Fountain (Caneta de Tinteiro), Neon, Watercolor, Crayon e Airbrush*.
+    *   **Motor Live de Latência Zero:** Utiliza buffers mutáveis isolados para renderizar traços em milissegundos, ignorando a latência da árvore de widgets do Flutter.
+*   **Edição de Objetos e Texto:**
+    *   **Editor WYSIWYG:** Suporte total a formatação rica, fontes Google Fonts e listas inteligentes.
+    *   **Tabelas Dinâmicas:** Lógica avançada de união de células (Merge/Span) e redimensionamento tátil de alta precisão.
+    *   **Modo de Transformação Declarativo:** Sistema de proteção que exige ativação explícita para mover ou redimensionar objetos, evitando erros durante a escrita.
+*   **Tecnologia de Apagamento Híbrido:**
+    *   **Borracha Mágica (Objetos):** Remove instantaneamente objetos inteiros (traços, tabelas, imagens) ao contacto, com suporte inteligente a eliminação de grupos selecionados.
+    *   **Borracha de Precisão (Pixels):** Apaga segmentos específicos de traços através de um motor de fragmentação de curvas de Bezier em tempo real.
+    *   **Feedback Visual Dinâmico:** Cursor circular com mira central que reflete exatamente a área de atuação da borracha de pixels.
+    *   **Espessura Variável:** Controlo total sobre o diâmetro de apagamento (1px a 30px), independente da espessura da caneta.
+    *   **Limpeza de Página:** Função de "Vassoura" que limpa a folha inteira instantaneamente, preservando o histórico para recuperação (Undo).
+
 
 ### 🎨 Motor de Cores (Color Engine v2)
 *   **Estúdio HSV:** Seletor visual tátil para ajuste fino de Matiz, Saturação e Brilho.

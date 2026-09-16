@@ -39,9 +39,9 @@ class TextTool extends CanvasTool {
     }
   }
 
-  @override void onPanStart(Offset localPos, dynamic ref, LocalPage page, [double pressure = 0.5]) {}
-  @override void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, [double pressure = 0.5]) {}
-  @override void onPanEnd(dynamic ref, LocalPage page) {}
+  @override void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId}) {}
+  @override void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId}) {}
+  @override void onPanEnd(dynamic ref, LocalPage page, {int? pointerId}) {}
 
   void _createNewTextBlock(Offset pos, dynamic ref, LocalPage page) {
     final toolState = ref.read(canvasToolProvider);

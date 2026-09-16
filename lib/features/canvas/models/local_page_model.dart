@@ -322,20 +322,41 @@ class LocalPage {
 
   factory LocalPage.fromJson(Map<String, dynamic> json) {
     final List<PageObject> objs = [];
-    if (json['objects_data'] != null) {
-      for (var item in json['objects_data']) {
+    final dynamic objectsData = json['objects_data'];
+    if (objectsData != null && objectsData is List) {
+      for (var item in objectsData) {
+        if (item is! Map) continue;
         final type = item['type'];
-        if (type == 'stroke') objs.add(Stroke.fromJson(item));
-        else if (type == 'text') objs.add(TextBlock.fromJson(item));
-        else if (type == 'image') objs.add(ImageBlock.fromJson(item));
-        else if (type == 'shape') objs.add(ShapeObject.fromJson(item));
-        else if (type == 'audio') objs.add(AudioBlock.fromJson(item));
-        else if (type == 'animation') objs.add(AnimationObject.fromJson(item));
-        else if (type == 'table') objs.add(TableObject.fromJson(item));
-        else if (type == 'link') objs.add(LinkObject.fromJson(item));
-        else if (type == 'attachment') objs.add(AttachmentObject.fromJson(item));
+        try {
+          if (type == 'stroke') objs.add(Stroke.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'text') objs.add(TextBlock.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'image') objs.add(ImageBlock.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'shape') objs.add(ShapeObject.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'audio') objs.add(AudioBlock.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'animation') objs.add(AnimationObject.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'table') objs.add(TableObject.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'link') objs.add(LinkObject.fromJson(Map<String, dynamic>.from(item)));
+          else if (type == 'attachment') objs.add(AttachmentObject.fromJson(Map<String, dynamic>.from(item)));
+        } catch (e) {
+          debugPrint('🚨 [LocalPage] Erro ao carregar objeto $type: $e');
+        }
       }
     }
+
+    final dynamic layersJson = json['layers'];
+    List<LayerDefinition>? layers;
+    if (layersJson != null && layersJson is List) {
+      layers = layersJson.whereType<Map<String, dynamic>>().map((l) => LayerDefinition.fromJson(l)).toList();
+    }
+
+    final dynamic viewportJson = json['viewport_matrix'];
+    Matrix4? matrix;
+    if (viewportJson != null && viewportJson is List && viewportJson.length >= 16) {
+      try {
+        matrix = Matrix4.fromList(List<double>.from(viewportJson));
+      } catch (_) {}
+    }
+
     return LocalPage(
       serverId: json['id'] != null ? int.tryParse(json['id'].toString()) : null,
       clientId: json['client_id']?.toString(),
@@ -355,13 +376,21 @@ class LocalPage {
       footer: LocalPage.parseMeta(json['footer_data']),
       extractedText: json['extracted_text']?.toString(),
       objects: objs,
-      layers: json['layers'] != null ? (json['layers'] as List).map((l) => LayerDefinition.fromJson(l)).toList() : null,
+      layers: layers,
       backgroundConfig: json['background_config'] != null ? BackgroundConfig.fromJson(json['background_config']) : null,
-      viewportMatrix: json['viewport_matrix'] != null ? Matrix4.fromList(List<double>.from(json['viewport_matrix'])) : null,
+      viewportMatrix: matrix,
       syncedWithCloud: json['synced_with_cloud'] ?? 0,
-      updatedAt: (json['updated_at_ms'] ?? json['updated_at']) as int?,
+      updatedAt: _parseSafeInt(json['updated_at_ms'] ?? json['updated_at']),
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
     );
+  }
+
+  static int? _parseSafeInt(dynamic val) {
+    if (val == null) return null;
+    if (val is int) return val;
+    if (val is num) return val.toInt();
+    if (val is String) return int.tryParse(val);
+    return null;
   }
 
   static String parseMeta(dynamic data) {

@@ -499,14 +499,23 @@ class AppDatabase extends _$AppDatabase {
   int get schemaVersion => 32;
 
   Future<void> clearAllData() async {
-    await delete(canvasImageBlocks).go();
-    await delete(canvasTextBlocks).go();
-    await delete(canvasStrokes).go();
-    await delete(pages).go();
-    await delete(notebookUser).go();
-    await delete(notebooks).go();
-    await delete(subjects).go();
-    await delete(payments).go();
-    await delete(users).go();
+    await transaction(() async {
+      await delete(canvasImageBlocks).go();
+      await delete(canvasTextBlocks).go();
+      await delete(canvasStrokes).go();
+      await delete(canvasShapes).go();
+      await delete(canvasAudioBlocks).go();
+      await delete(canvasAnimations).go();
+      await delete(canvasTables).go();
+      await delete(canvasLinks).go();
+      await delete(canvasAttachments).go();
+      await delete(lessonRecordings).go();
+      await delete(pages).go();
+      await delete(notebookUser).go();
+      await delete(notebooks).go();
+      await delete(subjects).go();
+      await delete(payments).go();
+      await delete(users).go();
+    });
   }
 }

@@ -16,38 +16,38 @@ import '../models/canvas_enums.dart';
 
  */
 class LiveStrokeNotifier extends ChangeNotifier {
-  final List<Offset> _points = [];
-  String? _id;
+  // 🚀 v10.80: Isolamento Total por Ponteiro (Fix: Linhas Fantasmas)
+  final Map<int, List<Offset>> _strokes = {};
+  final Map<int, String> _pointerIds = {}; // Map de ID de Toque -> UUID do Banco
+  
   BrushType _brushType = BrushType.gel;
   String _colorHex = '#000000';
   double _thickness = 1.0;
   double _opacity = 1.0;
   bool _isHighlighter = false;
 
-  // Feedback visual do Laço (Lasso)
   List<Offset>? _lassoPath;
 
-  /// Lista mutável de pontos do traço em curso.
-  List<Offset> get points => _points;
+  Map<int, List<Offset>> get activeStrokes => _strokes;
   
-  /// ID temporário do traço atual.
-  String? get id => _id;
+  // Getter de conveniência para ferramentas legadas (retorna o primeiro ativo)
+  String? get id => _pointerIds.values.isNotEmpty ? _pointerIds.values.first : null;
+  
+  // Retorna o UUID específico de um ponteiro
+  String? getStrokeId(int pointerId) => _pointerIds[pointerId];
   
   BrushType get brushType => _brushType;
   String get colorHex => _colorHex;
   double get thickness => _thickness;
   double get opacity => _opacity;
   bool get isHighlighter => _isHighlighter;
-  
-  /// Caminho do laço de seleção ativa.
   List<Offset>? get lassoPath => _lassoPath;
 
-  /// Verifica se não há atividade de desenho no momento.
-  bool get isEmpty => _points.isEmpty && _lassoPath == null;
+  bool get isEmpty => _strokes.isEmpty && _lassoPath == null;
 
-  /// Inicializa um novo traço live com as propriedades da caneta selecionada.
   void start({
-    required String id,
+    required int pointerId,
+    required String globalId,
     required Offset startPos,
     required BrushType brushType,
     required String colorHex,
@@ -55,46 +55,65 @@ class LiveStrokeNotifier extends ChangeNotifier {
     double opacity = 1.0,
     bool isHighlighter = false,
   }) {
-    _id = id;
-    _points.clear();
-    _points.add(startPos);
     _brushType = brushType;
     _colorHex = colorHex;
     _thickness = thickness;
     _opacity = opacity;
     _isHighlighter = isHighlighter;
     _lassoPath = null;
+    
+    _pointerIds[pointerId] = globalId;
+    _strokes[pointerId] = [startPos];
     notifyListeners();
   }
 
-  /// Adiciona um novo ponto à lista mutável sem recriar a lista.
-  /// Operação O(1) que garante a fluidez em traços longos.
-  void update(Offset pos) {
-    _points.add(pos);
-    notifyListeners(); // 🚀 Notifica apenas quem observa o LiveStroke
+  void update(int pointerId, Offset pos) {
+    if (_strokes.containsKey(pointerId)) {
+      _strokes[pointerId]!.add(pos);
+      notifyListeners();
+    }
   }
 
-  /// Inicia o feedback visual para a ferramenta de Laço.
+  void removeStroke(int pointerId) {
+    _strokes.remove(pointerId);
+    _pointerIds.remove(pointerId);
+    notifyListeners();
+  }
+
+  void keepOnly(int winnerPointerId) {
+    final winnerPoints = _strokes[winnerPointerId];
+    final winnerId = _pointerIds[winnerPointerId];
+    
+    _strokes.clear();
+    _pointerIds.clear();
+    
+    if (winnerPoints != null && winnerId != null) {
+      _strokes[winnerPointerId] = winnerPoints;
+      _pointerIds[winnerPointerId] = winnerId;
+    }
+    notifyListeners();
+  }
+
   void startLasso(Offset startPos) {
     _lassoPath = [startPos];
-    _points.clear();
-    _id = null;
+    _strokes.clear();
+    _pointerIds.clear();
     notifyListeners();
   }
 
-  /// Atualiza o caminho do laço em tempo real.
   void updateLasso(Offset pos) {
     _lassoPath?.add(pos);
     notifyListeners();
   }
 
-  /// Limpa todos os dados live, preparando para o próximo toque.
   void clear() {
-    _id = null;
-    _points.clear();
+    _strokes.clear();
+    _pointerIds.clear();
     _lassoPath = null;
     notifyListeners();
   }
+
+  List<Offset> getPoints(int pointerId) => _strokes[pointerId] ?? [];
 }
 
 final liveStrokeProvider = ChangeNotifierProvider<LiveStrokeNotifier>((ref) {

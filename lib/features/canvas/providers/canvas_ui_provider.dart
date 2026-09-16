@@ -1,25 +1,31 @@
+import 'dart:ui';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class CanvasUiState {
   final bool isGridView;
   final Set<String> collapsedSections;
   final bool isHudMode; // 🚀 v2: Oculta toolbar durante movimento
+  final Offset? eraserPosition; // 🚀 v10.86: Feedback visual da borracha
 
   CanvasUiState({
     this.isGridView = false,
     this.collapsedSections = const {},
     this.isHudMode = false,
+    this.eraserPosition,
   });
 
   CanvasUiState copyWith({
     bool? isGridView,
     Set<String>? collapsedSections,
     bool? isHudMode,
+    Offset? Function()? eraserPosition,
   }) {
     return CanvasUiState(
       isGridView: isGridView ?? this.isGridView,
       collapsedSections: collapsedSections ?? this.collapsedSections,
       isHudMode: isHudMode ?? this.isHudMode,
+      eraserPosition: eraserPosition != null ? eraserPosition() : this.eraserPosition,
     );
   }
 }
@@ -44,6 +50,12 @@ class CanvasUiNotifier extends AutoDisposeNotifier<CanvasUiState> {
       newCollapsed.add(sectionTitle);
     }
     state = state.copyWith(collapsedSections: newCollapsed);
+  }
+
+  void setEraserPosition(Offset? pos) {
+    if (state.eraserPosition != pos) {
+      state = state.copyWith(eraserPosition: () => pos);
+    }
   }
 }
 

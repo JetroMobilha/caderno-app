@@ -215,7 +215,8 @@ class SyncService {
       while (nextUrl != null) {
         final response = await _apiService.get(nextUrl);
         if (response.statusCode == 200) {
-          final Map<String, dynamic> responseData = await compute<String, Map<String, dynamic>>((jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>, response.body);
+          final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
+        final Map<String, dynamic> responseData = decoded is Map ? Map<String, dynamic>.from(decoded) : {'data': decoded};
           final List serverSubjects = responseData['data'] ?? responseData['subjects'] ?? [];
         final String? serverTime = _parseMetaTime(responseData['meta']);
         if (serverTime != null) await prefs.setString('last_subjects_sync', serverTime);
@@ -428,7 +429,8 @@ class SyncService {
       while (nextUrl != null) {
         final response = await _apiService.get(nextUrl);
         if (response.statusCode == 200) {
-          final Map<String, dynamic> responseData = await compute<String, Map<String, dynamic>>((jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>, response.body);
+          final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
+        final Map<String, dynamic> responseData = decoded is Map ? Map<String, dynamic>.from(decoded) : {'data': decoded};
           final List serverNotebooks = responseData['data'] ?? responseData['notebooks'] ?? [];
         final String? serverTime = _parseMetaTime(responseData['meta']);
         if (serverTime != null) await prefs.setString('last_notebooks_sync', serverTime);
@@ -623,57 +625,93 @@ class SyncService {
             final List<int> localIdsToPull = [];
             final Map<int, Map<String, dynamic>> serverDataForPull = {};
 
-            for (var syncedPageMap in syncedPages) {
-              final String? cId = syncedPageMap['client_id'];
-              final String? status = syncedPageMap['status']?.toString();
-              final int? sNbId = syncedPageMap['notebook_id'];
+            for (var syncedPageData in syncedPages) {
+              try {
+                final Map<String, dynamic> syncedPageMap = syncedPageData is Map 
+                    ? Map<String, dynamic>.from(syncedPageData) 
+                    : {};
+                
+                if (syncedPageMap.isEmpty) continue;
 
-              if (cId == null) continue;
-              
-              // No logout (pushOnly), não precisamos de puxar dados ignorados ou deltas do servidor
-              if (pushOnly) {
-                 // Apenas marcamos como sincronizado localmente se o servidor confirmou
-                 final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                 if (localPage != null) {
-                    await _markPageItemsAsSynced(localPage.id);
-                    await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
-                 }
-                 continue;
-              }
-
-              if (status == 'ignored_old' && sNbId != null) {
-                await pullSpecificPage(sNbId, syncedPageMap['page_number'] ?? 0, clientId: cId);
-                continue;
-              }
-              
-              if (status == 'deleted') {
-                final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                if (localPage != null) {
-                  // 🚀 PRESERVAÇÃO: Não apagar fisicamente. 
-                  // Apenas marcar como sincronizado para que o utilizador possa restaurar se quiser.
-                  await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                final String? cId = syncedPageMap['client_id'];
+                final String? status = syncedPageMap['status']?.toString();
+                final int? sNbId = syncedPageMap['notebook_id'] != null 
+                    ? int.tryParse(syncedPageMap['notebook_id'].toString()) 
+                    : null;
+                
+                // Procurar notebook local para garantir que existe antes de salvar (Fix FOREIGN KEY)
+                int? localNbId;
+                if (sNbId != null) {
+                  final nbRow = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
+                  localNbId = nbRow?.id;
                 }
-                continue;
-              }
 
-              final int localId = await _canvasRepository.savePageFromMap(syncedPageMap, sNbId);
-              if (syncedPageMap['_sync_status'] == 'already_current') {
-                await _markPageItemsAsSynced(localId);
-              } else {
-                localIdsToPull.add(localId);
-                serverDataForPull[localId] = syncedPageMap;
+                if (cId == null) continue;
+                
+                if (localNbId == null && sNbId != null) {
+                  debugPrint('⚠️ [Sync] Página ignorada: Caderno servidor $sNbId não encontrado localmente.');
+                  continue;
+                }
+                
+                // No logout (pushOnly), não precisamos de puxar dados ignorados ou deltas do servidor
+                if (pushOnly) {
+                   // Apenas marcamos como sincronizado localmente se o servidor confirmou
+                   final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                   if (localPage != null) {
+                      await _markPageItemsAsSynced(localPage.id);
+                      await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                      await _canvasRepository.purgeSyncedDeletedObjects(localPage.id);
+                   }
+                   continue;
+                }
+
+                if (status == 'ignored_old' && sNbId != null) {
+                  await pullSpecificPage(sNbId, syncedPageMap['page_number'] ?? 0, clientId: cId);
+                  continue;
+                }
+                
+                if (status == 'deleted') {
+                  final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                  if (localPage != null) {
+                    await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                  }
+                  continue;
+                }
+
+                final int localId = await _canvasRepository.savePageFromMap(syncedPageMap, sNbId);
+                if (syncedPageMap['_sync_status'] == 'already_current') {
+                  await _markPageItemsAsSynced(localId);
+                } else {
+                  localIdsToPull.add(localId);
+                  serverDataForPull[localId] = syncedPageMap;
+                }
+                await (_db.update(_db.pages)..where((t) => t.id.equals(localId))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                await _canvasRepository.purgeSyncedDeletedObjects(localId);
+              } catch (e) {
+                debugPrint('🚨 [Sync-Push-Batch] Erro ao processar confirmação de página: $e');
               }
-              await (_db.update(_db.pages)..where((t) => t.id.equals(localId))).write(const PagesCompanion(syncedWithCloud: Value(1)));
             }
 
             // 2. Processar Novidades do Servidor (Resultados do PULL) - Pular se pushOnly
             if (!pushOnly) {
               final List updates = data['server_updates'] ?? [];
-              for (var updMap in updates) {
-                 final int sNbId = updMap['notebook_id'] is int ? updMap['notebook_id'] : int.parse(updMap['notebook_id'].toString());
-                 final localId = await _canvasRepository.savePageFromMap(updMap, sNbId);
-                 localIdsToPull.add(localId);
-                 serverDataForPull[localId] = updMap;
+              for (var updData in updates) {
+                try {
+                  final Map<String, dynamic> updMap = updData is Map 
+                      ? Map<String, dynamic>.from(updData) 
+                      : {};
+                  if (updMap.isEmpty) continue;
+
+                  final int sNbId = updMap['notebook_id'] is int 
+                      ? updMap['notebook_id'] 
+                      : int.parse(updMap['notebook_id'].toString());
+                  
+                  final localId = await _canvasRepository.savePageFromMap(updMap, sNbId);
+                  localIdsToPull.add(localId);
+                  serverDataForPull[localId] = updMap;
+                } catch (e) {
+                  debugPrint('🚨 [Sync-Push-Batch] Erro ao processar update do servidor: $e');
+                }
               }
 
               if (localIdsToPull.isNotEmpty) {
@@ -732,7 +770,11 @@ class SyncService {
       while (nextUrl != null) {
         final response = await _apiService.get(nextUrl);
         if (response.statusCode == 200) {
-          final Map<String, dynamic> responseData = await compute<String, Map<String, dynamic>>((jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>, response.body);
+          final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
+          final Map<String, dynamic> responseData = decoded is Map 
+              ? Map<String, dynamic>.from(decoded) 
+              : (decoded is List ? {'data': decoded} : {});
+          
           final List serverPages = responseData['data'] ?? responseData['pages'] ?? [];
           final String? serverTime = _parseMetaTime(responseData['meta']);
           
@@ -744,33 +786,40 @@ class SyncService {
             anyChanges = true;
             final List<int> localPageIdsForBatch = [];
             final Map<int, Map<String, dynamic>> serverPageDataMap = {};
-            for (var sPage in serverPages) {
-              final int sNbId = sPage['notebook_id'] is int ? sPage['notebook_id'] : int.parse(sPage['notebook_id'].toString());
-              final int sId = sPage['id'] is int ? sPage['id'] : int.parse(sPage['id'].toString());
-              final String? cId = sPage['client_id']?.toString();
-              if (cId != null) serverClientIds.add(cId);
-              
-              // 🚀 JÁ NÃO APAGAMOS FISICAMENTE NO PULL
-              // O savePageFromMap tratará de marcar isDeleted=1 ou 0
-              // permitindo que o restauro funcione entre dispositivos.
-              
-              final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
-              if (notebook == null) continue;
-              final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
-              final int serverTs = sPage['updated_at_ms'] ?? 0;
-              if (existingPage != null && existingPage.syncedWithCloud == 0 && existingPage.updatedAt > serverTs) {
-                localPageIdsForBatch.add(existingPage.id);
-                serverPageDataMap[existingPage.id] = sPage;
-                continue;
+            for (var sPageData in serverPages) {
+              try {
+                final Map<String, dynamic> sPage = sPageData is Map 
+                    ? Map<String, dynamic>.from(sPageData) 
+                    : {};
+                if (sPage.isEmpty) continue;
+
+                final int sNbId = sPage['notebook_id'] is int ? sPage['notebook_id'] : int.parse(sPage['notebook_id'].toString());
+                final String? cId = sPage['client_id']?.toString();
+                if (cId != null) serverClientIds.add(cId);
+                
+                final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
+                if (notebook == null) continue;
+                final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
+                final int serverTs = sPage['updated_at_ms'] ?? sPage['updated_at'] ?? 0;
+                
+                if (existingPage != null && existingPage.syncedWithCloud == 0 && existingPage.updatedAt > serverTs) {
+                  localPageIdsForBatch.add(existingPage.id);
+                  serverPageDataMap[existingPage.id] = sPage;
+                  continue;
+                }
+                final localPageId = await _canvasRepository.savePageFromMap(sPage, sNbId);
+                localPageIdsForBatch.add(localPageId);
+                serverPageDataMap[localPageId] = sPage;
+              } catch (e) {
+                debugPrint('🚨 [Sync-Pull] Erro ao processar página do servidor: $e');
               }
-              final localPageId = await _canvasRepository.savePageFromMap(sPage, sNbId);
-              localPageIdsForBatch.add(localPageId);
-              serverPageDataMap[localPageId] = sPage;
             }
             if (localPageIdsForBatch.isNotEmpty) await _pullCanvasDataBatch(localPageIdsForBatch, serverPageDataMap);
           }
           nextUrl = _extractNextUrl(responseData);
-        } else { throw Exception('Erro ${response.statusCode} no PULL Pages'); }
+        } else { 
+          throw Exception('Erro ${response.statusCode} no PULL Pages'); 
+        }
       }
       if (forceFull) {
         final query = _db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(1));
@@ -791,16 +840,27 @@ class SyncService {
       if (clientId != null) url += '&client_id=$clientId'; else url += '&page_number=$pageNumber';
       final response = await _apiService.get(url);
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = await compute<String, Map<String, dynamic>>((jsonStr) => jsonDecode(jsonStr) as Map<String, dynamic>, response.body);
+        final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
+        final Map<String, dynamic> responseData = decoded is Map 
+            ? Map<String, dynamic>.from(decoded) 
+            : (decoded is List ? {'data': decoded} : {});
+        
         final List serverPages = responseData['data'] ?? responseData['pages'] ?? [];
         if (serverPages.isNotEmpty) {
-          final sPage = serverPages.first;
+          final dynamic sPageData = serverPages.first;
+          final Map<String, dynamic> sPage = sPageData is Map 
+              ? Map<String, dynamic>.from(sPageData) 
+              : {};
+          
+          if (sPage.isEmpty) return;
+
           final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookServerId))).getSingleOrNull();
           if (notebook == null) return;
           final localId = await _canvasRepository.savePageFromMap(sPage, notebookServerId);
           await _pullCanvasData(localId, sPage);
         }
-      } else if (!isRetry && response.statusCode != 429) {
+      }
+ else if (!isRetry && response.statusCode != 429) {
         await Future.delayed(const Duration(seconds: 2));
         return pullSpecificPage(notebookServerId, pageNumber, isRetry: true);
       }
@@ -877,6 +937,10 @@ class SyncService {
            batch.update(_db.pages, PagesCompanion(updatedAt: Value(TimeService().nowMs()), syncedWithCloud: const Value(1)), where: (t) => t.id.equals(id));
         }
       });
+      // 🚀 v10.88: Purge após pull massivo
+      for (var id in finalPageIds) {
+        await _canvasRepository.purgeSyncedDeletedObjects(id);
+      }
       debugPrint('✅ [Sync-Batch] Sincronizados ${strokes.length} elementos em ${finalPageIds.length} páginas.');
     } catch (e) { 
       debugPrint('🚨 [Sync-Batch] Falha crítica: $e'); 

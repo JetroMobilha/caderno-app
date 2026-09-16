@@ -37,7 +37,7 @@ class BrushTool extends CanvasTool {
   /// 2. Gera um UUID único para o novo traço.
   /// 3. Regista o ponto inicial no motor de latência zero.
   @override
-  void onPanStart(Offset localPos, dynamic ref, LocalPage page) {
+  void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasInteractionProvider);
     
@@ -47,7 +47,8 @@ class BrushTool extends CanvasTool {
     final String id = const Uuid().v4();
     
     ref.read(liveStrokeProvider).start(
-      id: id,
+      pointerId: pointerId ?? 0,
+      globalId: id,
       startPos: localPos,
       brushType: toolState.selectedBrushType,
       colorHex: toolState.selectedColorHex,
@@ -62,14 +63,17 @@ class BrushTool extends CanvasTool {
   /// 2. Envia o ponto para o motor de renderização "live".
   /// 3. Dispara o broadcast em tempo real para colaboradores (com throttle).
   @override
-  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page) {
+  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId}) {
     final liveNotifier = ref.read(liveStrokeProvider);
     final toolState = ref.read(canvasInteractionProvider);
     
-    if (liveNotifier.id == null || _isCorrupted) return;
+    final int pid = pointerId ?? 0;
+    final String? strokeId = liveNotifier.getStrokeId(pid);
+    if (strokeId == null || _isCorrupted) return;
     
-    if (liveNotifier.points.isNotEmpty) {
-      final double dist = (localPos - liveNotifier.points.last).distance;
+    final points = liveNotifier.getPoints(pid);
+    if (points.isNotEmpty) {
+      final double dist = (localPos - points.last).distance;
       
       if (dist > _maxAllowedJump) {
         debugPrint('⚠️ [BrushTool] Salto anómalo detetado ($dist px). Traço corrompido.');
@@ -78,8 +82,8 @@ class BrushTool extends CanvasTool {
       }
     }
     
-    liveNotifier.update(localPos);
-    _throttledBroadcast(ref, page, liveNotifier.id!, liveNotifier.points, toolState);
+    liveNotifier.update(pid, localPos);
+    _throttledBroadcast(ref, page, strokeId, liveNotifier.getPoints(pid), toolState);
   }
 
   /// Finaliza o traço e torna-o permanente.
@@ -87,24 +91,27 @@ class BrushTool extends CanvasTool {
   /// 2. Adiciona o traço ao documento oficial da página.
   /// 3. Limpa o motor live para o próximo movimento.
   @override
-  void onPanEnd(dynamic ref, LocalPage page) {
+  void onPanEnd(dynamic ref, LocalPage page, {int? pointerId}) {
     final liveNotifier = ref.read(liveStrokeProvider);
+    final int pid = pointerId ?? 0;
+    final points = liveNotifier.getPoints(pid);
+    final String? strokeId = liveNotifier.getStrokeId(pid);
     
-    if (liveNotifier.id != null && liveNotifier.points.isNotEmpty && !_isCorrupted) {
+    if (strokeId != null && points.isNotEmpty && !_isCorrupted) {
       ref.read(canvasDocumentProvider.notifier).addStroke(
         page, 
         Stroke(
-          id: liveNotifier.id!,
+          id: strokeId,
           color: liveNotifier.colorHex,
           thickness: liveNotifier.thickness,
-          points: List.from(liveNotifier.points), 
+          points: List<Offset>.from(points), 
           isHighlighter: liveNotifier.isHighlighter,
           brushType: liveNotifier.brushType,
           opacity: liveNotifier.opacity,
         ),
       );
     }
-    liveNotifier.clear();
+    liveNotifier.removeStroke(pid); // 🚀 FIX: Remover apenas este ponteiro
   }
 
   void _throttledBroadcast(dynamic ref, LocalPage page, String id, List<Offset> points, CanvasToolState toolState) {

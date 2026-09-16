@@ -125,7 +125,10 @@ class CanvasToolbar extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildActiveGeneralCategoryContent(context, state, notifier, docNotifier, obj),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _buildActiveGeneralCategoryContent(context, state, notifier, docNotifier, obj),
+        ),
         const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -244,13 +247,6 @@ class CanvasToolbar extends ConsumerWidget {
           ),
         ),
 
-        const VerticalDivider(width: 8, thickness: 0.5, indent: 8, endIndent: 8),
-
-        // --- NÍVEL 3: TOGGLES ---
-        _buildFormatToggle(Icons.border_color_rounded, state.isHighlighter, () => notifier.toggleHighlighterMode(!state.isHighlighter)),
-        
-        // Mais Configurações (Acesso ao Estúdio)
-        _buildContextIconButton(Icons.tune_rounded, () => showDialog(context: context, builder: (_) => const ThicknessStudioDialog()), Colors.blueGrey, size: 16),
       ],
     );
   }
@@ -259,29 +255,55 @@ class CanvasToolbar extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildFormatToggle(Icons.layers_clear_rounded, state.activeTool == ToolMode.eraser, () => notifier.switchTool(ToolMode.eraser)),
-            _buildFormatToggle(Icons.cleaning_services_rounded, state.activeTool == ToolMode.pixelEraser, () => notifier.switchTool(ToolMode.pixelEraser)),
-            const VerticalDivider(width: 12),
-            _buildContextIconButton(Icons.delete_sweep_rounded, () { docNotifier.deleteObjects(currentPage, currentPage.objects.map((o) => o.id).toList()); notifier.clearSelection(); }, Colors.redAccent),
-          ],
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildFormatToggle(Icons.auto_fix_high_rounded, state.activeTool == ToolMode.eraser, () => notifier.switchTool(ToolMode.eraser)),
+              _buildFormatToggle(Icons.auto_fix_normal_rounded, state.activeTool == ToolMode.pixelEraser, () => notifier.switchTool(ToolMode.pixelEraser)),
+              
+              if (state.activeTool == ToolMode.pixelEraser) ...[
+                const VerticalDivider(width: 12),
+                _buildThicknessButton(context, state),
+                SizedBox(
+                  width: 60,
+                  child: SliderTheme(
+                    data: SliderThemeData(
+                      trackHeight: 2, 
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                      activeTrackColor: const Color(0xFF0F4C5C),
+                      inactiveTrackColor: Colors.black12,
+                    ),
+                    child: Slider(
+                      value: state.selectedThickness.clamp(1, 30), 
+                      min: 1, max: 30, 
+                      onChanged: (v) => notifier.setThickness(v)
+                    ),
+                  ),
+                ),
+              ],
+
+              const VerticalDivider(width: 12),
+              _buildContextIconButton(Icons.delete_sweep_rounded, () { docNotifier.deleteObjects(currentPage, currentPage.objects.map((o) => o.id).toList()); notifier.clearSelection(); }, Colors.redAccent),
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        _buildCategoryTab(EraserEditCategory.mode, Icons.settings_accessibility_rounded, 'Modo', state.activeEraserCategory, (c) => notifier.setEraserCategory(c as EraserEditCategory)),
       ],
     );
   }
 
   Widget _buildLassoContextZone(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildContextIconButton(Icons.deselect_rounded, () => notifier.clearSelection(), Colors.black54),
-        const SizedBox(width: 8),
-        const Text('LAÇO ATIVO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black26)),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildContextIconButton(Icons.deselect_rounded, () => notifier.clearSelection(), Colors.black54),
+          const SizedBox(width: 8),
+          const Text('LAÇO ATIVO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black26)),
+        ],
+      ),
     );
   }
 
@@ -293,7 +315,10 @@ class CanvasToolbar extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Conteúdo da Aba Ativa
-        _buildActiveTextCategoryContent(context, state, notifier, docNotifier, block),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _buildActiveTextCategoryContent(context, state, notifier, docNotifier, block),
+        ),
         const SizedBox(height: 4),
         // Linha de Abas (Polegar)
         SingleChildScrollView(
@@ -360,7 +385,10 @@ class CanvasToolbar extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildActiveTableCategoryContent(context, state, notifier, docNotifier, table),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _buildActiveTableCategoryContent(context, state, notifier, docNotifier, table),
+        ),
         const SizedBox(height: 4),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -390,10 +418,10 @@ class CanvasToolbar extends ConsumerWidget {
             state.isTableStructuralMode, 
             () => notifier.toggleTableStructuralMode(),
           ),
-          const VerticalDivider(width: 8, indent: 6, endIndent: 6),
+
           _buildContextIconButton(Icons.table_rows_rounded, () { int insertAt = table.rows; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.row + 1; docNotifier.updateObject(currentPage, table.insertRowAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
           _buildContextIconButton(Icons.view_column_rounded, () { int insertAt = table.cols; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.col + 1; docNotifier.updateObject(currentPage, table.insertColumnAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
-          const VerticalDivider(width: 8, indent: 6, endIndent: 6),
+
           _buildContextIconButton(Icons.select_all_outlined, () {
             if (selectedKeys.isEmpty) return;
             final int row = selectedKeys.first.coordinate.row;
@@ -406,7 +434,7 @@ class CanvasToolbar extends ConsumerWidget {
             final Set<TableCellKey> keys = {}; for (int r = 0; r < table.rows; r++) keys.add(TableCellKey(table.id, CellCoordinate(r, col)));
             notifier.selectIds(tableCells: keys);
           }, Colors.blueAccent, size: 16),
-          const VerticalDivider(width: 8, indent: 6, endIndent: 6),
+          
           _buildContextIconButton(Icons.delete_sweep_rounded, () { if (table.rows > 1) { int deleteAt = table.rows - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.row; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteRowAt(deleteAt)); } }, Colors.redAccent, size: 16),
           _buildContextIconButton(Icons.view_week_rounded, () { if (table.cols > 1) { int deleteAt = table.cols - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.col; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteColumnAt(deleteAt)); } }, Colors.redAccent, size: 16),
         ]);

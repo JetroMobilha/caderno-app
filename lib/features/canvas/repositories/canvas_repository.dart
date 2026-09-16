@@ -300,8 +300,18 @@ class CanvasRepository {
   }
 
   Future<int> savePage(LocalPage page, int? notebookSid) async {
+    // 🚀 v10.57: Prevenir conflitos de UNIQUE constraint em client_id
+    // Procuramos se já existe uma página local com este clientId para reaproveitar o ID primário.
+    int? localId = page.id;
+    if (localId == null) {
+      final existing = await (_db.select(_db.pages)..where((t) => t.clientId.equals(page.clientId))).getSingleOrNull();
+      if (existing != null) {
+        localId = existing.id;
+      }
+    }
+
     final companion = PagesCompanion.insert(
-      id: page.id != null ? Value(page.id!) : const Value.absent(),
+      id: localId != null ? Value(localId) : const Value.absent(),
       serverId: Value(page.serverId),
       clientId: Value(page.clientId),
       notebookId: page.notebookId,
@@ -323,18 +333,34 @@ class CanvasRepository {
   }
 
   Future<int> savePageFromMap(Map<String, dynamic> data, int? notebookSid) async {
-     final page = LocalPage.fromJson(data);
+     LocalPage page = LocalPage.fromJson(data);
+     
+     // 🚀 v10.58: Tradução de server_id do caderno para ID local (Fix FOREIGN KEY error)
+     if (notebookSid != null) {
+       final nbRow = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookSid))).getSingleOrNull();
+       if (nbRow != null) {
+         page = page.copyWith(notebookId: nbRow.id);
+       }
+     }
+     
      return await savePage(page, notebookSid);
   }
 
   Future<void> saveSingleStroke(String pageClientId, Stroke s, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasStrokes;
-    final companion = table.companion(
-      clientStrokeId: Value(s.id), pageId: Value(page.id), strokeData: Value(jsonEncode(s.toJson())),
-      isDeleted: Value(s.isDeleted ? 1 : 0), deletedInSession: Value(s.deletedInSession ? 1 : 0),
-      creatorId: Value(s.creatorId), updatedAt: Value(updatedAt ?? s.updatedAt), syncedWithCloud: Value(s.syncedWithCloud ? 1 : 0),
-      parentId: Value(s.parentId), isVisible: Value(s.isVisible ? 1 : 0), isLocked: Value(s.isLocked ? 1 : 0), opacity: Value(s.opacity),
+    final companion = CanvasStrokesCompanion(
+      clientStrokeId: Value(s.id), 
+      pageId: Value(page.id), 
+      strokeData: Value(jsonEncode(s.toJson())),
+      isDeleted: Value(s.isDeleted ? 1 : 0), 
+      deletedInSession: Value(s.deletedInSession ? 1 : 0),
+      creatorId: Value(s.creatorId), 
+      updatedAt: Value(updatedAt ?? s.updatedAt), 
+      syncedWithCloud: Value(s.syncedWithCloud ? 1 : 0),
+      parentId: Value(s.parentId), 
+      isVisible: Value(s.isVisible ? 1 : 0), 
+      isLocked: Value(s.isLocked ? 1 : 0), 
+      opacity: Value(s.opacity),
       layerId: Value(s.layerId),
     );
     await _db.into(_db.canvasStrokes).insertOnConflictUpdate(companion);
@@ -342,8 +368,7 @@ class CanvasRepository {
 
   Future<void> saveSingleTextBlock(String pageClientId, TextBlock t, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasTextBlocks;
-    final companion = table.companion(
+    final companion = CanvasTextBlocksCompanion(
       clientTextId: Value(t.id), pageId: Value(page.id), textData: Value(jsonEncode(t.toJson())),
       isDeleted: Value(t.isDeleted ? 1 : 0), deletedInSession: Value(t.deletedInSession ? 1 : 0),
       creatorId: Value(t.creatorId), updatedAt: Value(updatedAt ?? t.updatedAt), syncedWithCloud: Value(t.syncedWithCloud ? 1 : 0),
@@ -355,17 +380,29 @@ class CanvasRepository {
 
   Future<void> saveSingleImageBlock(String pageClientId, ImageBlock i, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasImageBlocks;
     final String? cropJson = i.cropRect != null 
         ? jsonEncode({'l': i.cropRect!.left, 't': i.cropRect!.top, 'w': i.cropRect!.width, 'h': i.cropRect!.height}) 
         : null;
 
-    final companion = table.companion(
-      clientImageId: Value(i.id), pageId: Value(page.id), imagePath: Value(i.imagePath), posX: Value(i.position.dx), posY: Value(i.position.dy), width: Value(i.width), height: Value(i.height), rotation: Value(i.rotation),
-      cropData: Value(cropJson), // 🚀 v10.35
-      isDeleted: Value(i.isDeleted ? 1 : 0), deletedInSession: Value(i.deletedInSession ? 1 : 0),
-      creatorId: Value(i.creatorId), updatedAt: Value(updatedAt ?? i.updatedAt), syncedWithCloud: Value(i.syncedWithCloud ? 1 : 0),
-      parentId: Value(i.parentId), isVisible: Value(i.isVisible ? 1 : 0), isLocked: Value(i.isLocked ? 1 : 0), opacity: Value(i.opacity),
+    final companion = CanvasImageBlocksCompanion(
+      clientImageId: Value(i.id), 
+      pageId: Value(page.id), 
+      imagePath: Value(i.imagePath), 
+      posX: Value(i.position.dx), 
+      posY: Value(i.position.dy), 
+      width: Value(i.width), 
+      height: Value(i.height), 
+      rotation: Value(i.rotation),
+      cropData: Value(cropJson), 
+      isDeleted: Value(i.isDeleted ? 1 : 0), 
+      deletedInSession: Value(i.deletedInSession ? 1 : 0),
+      creatorId: Value(i.creatorId), 
+      updatedAt: Value(updatedAt ?? i.updatedAt), 
+      syncedWithCloud: Value(i.syncedWithCloud ? 1 : 0),
+      parentId: Value(i.parentId), 
+      isVisible: Value(i.isVisible ? 1 : 0), 
+      isLocked: Value(i.isLocked ? 1 : 0), 
+      opacity: Value(i.opacity),
       layerId: Value(i.layerId),
     );
     await _db.into(_db.canvasImageBlocks).insertOnConflictUpdate(companion);
@@ -373,11 +410,16 @@ class CanvasRepository {
 
   Future<void> saveSingleShape(String pageClientId, ShapeObject s, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasShapes;
-    final companion = table.companion(
-      clientShapeId: Value(s.id), pageId: Value(page.id), shapeData: Value(jsonEncode(s.toJson())),
-      isDeleted: Value(s.isDeleted ? 1 : 0), updatedAt: Value(updatedAt ?? s.updatedAt),
-      parentId: Value(s.parentId), isVisible: Value(s.isVisible ? 1 : 0), isLocked: Value(s.isLocked ? 1 : 0), opacity: Value(s.opacity),
+    final companion = CanvasShapesCompanion(
+      clientShapeId: Value(s.id), 
+      pageId: Value(page.id), 
+      shapeData: Value(jsonEncode(s.toJson())),
+      isDeleted: Value(s.isDeleted ? 1 : 0), 
+      updatedAt: Value(updatedAt ?? s.updatedAt),
+      parentId: Value(s.parentId), 
+      isVisible: Value(s.isVisible ? 1 : 0), 
+      isLocked: Value(s.isLocked ? 1 : 0), 
+      opacity: Value(s.opacity),
       layerId: Value(s.layerId),
     );
     await _db.into(_db.canvasShapes).insertOnConflictUpdate(companion);
@@ -385,11 +427,16 @@ class CanvasRepository {
 
   Future<void> saveSingleTable(String pageClientId, TableObject t, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasTables;
-    final companion = table.companion(
-      clientTableId: Value(t.id), pageId: Value(page.id), tableData: Value(jsonEncode(t.toJson())),
-      isDeleted: Value(t.isDeleted ? 1 : 0), updatedAt: Value(updatedAt ?? t.updatedAt),
-      parentId: Value(t.parentId), isVisible: Value(t.isVisible ? 1 : 0), isLocked: Value(t.isLocked ? 1 : 0), opacity: Value(t.opacity),
+    final companion = CanvasTablesCompanion(
+      clientTableId: Value(t.id), 
+      pageId: Value(page.id), 
+      tableData: Value(jsonEncode(t.toJson())),
+      isDeleted: Value(t.isDeleted ? 1 : 0), 
+      updatedAt: Value(updatedAt ?? t.updatedAt),
+      parentId: Value(t.parentId), 
+      isVisible: Value(t.isVisible ? 1 : 0), 
+      isLocked: Value(t.isLocked ? 1 : 0), 
+      opacity: Value(t.opacity),
       layerId: Value(t.layerId),
     );
     await _db.into(_db.canvasTables).insertOnConflictUpdate(companion);
@@ -397,11 +444,16 @@ class CanvasRepository {
 
   Future<void> saveSingleLink(String pageClientId, LinkObject l, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasLinks;
-    final companion = table.companion(
-      clientLinkId: Value(l.id), pageId: Value(page.id), linkData: Value(jsonEncode(l.toJson())),
-      isDeleted: Value(l.isDeleted ? 1 : 0), updatedAt: Value(updatedAt ?? l.updatedAt),
-      parentId: Value(l.parentId), isVisible: Value(l.isVisible ? 1 : 0), isLocked: Value(l.isLocked ? 1 : 0), opacity: Value(l.opacity),
+    final companion = CanvasLinksCompanion(
+      clientLinkId: Value(l.id), 
+      pageId: Value(page.id), 
+      linkData: Value(jsonEncode(l.toJson())),
+      isDeleted: Value(l.isDeleted ? 1 : 0), 
+      updatedAt: Value(updatedAt ?? l.updatedAt),
+      parentId: Value(l.parentId), 
+      isVisible: Value(l.isVisible ? 1 : 0), 
+      isLocked: Value(l.isLocked ? 1 : 0), 
+      opacity: Value(l.opacity),
       layerId: Value(l.layerId),
     );
     await _db.into(_db.canvasLinks).insertOnConflictUpdate(companion);
@@ -409,11 +461,16 @@ class CanvasRepository {
 
   Future<void> saveSingleAttachment(String pageClientId, AttachmentObject a, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasAttachments;
-    final companion = table.companion(
-      clientAttachmentId: Value(a.id), pageId: Value(page.id), attachmentData: Value(jsonEncode(a.toJson())),
-      isDeleted: Value(a.isDeleted ? 1 : 0), updatedAt: Value(updatedAt ?? a.updatedAt),
-      parentId: Value(a.parentId), isVisible: Value(a.isVisible ? 1 : 0), isLocked: Value(a.isLocked ? 1 : 0), opacity: Value(a.opacity),
+    final companion = CanvasAttachmentsCompanion(
+      clientAttachmentId: Value(a.id), 
+      pageId: Value(page.id), 
+      attachmentData: Value(jsonEncode(a.toJson())),
+      isDeleted: Value(a.isDeleted ? 1 : 0), 
+      updatedAt: Value(updatedAt ?? a.updatedAt),
+      parentId: Value(a.parentId), 
+      isVisible: Value(a.isVisible ? 1 : 0), 
+      isLocked: Value(a.isLocked ? 1 : 0), 
+      opacity: Value(a.opacity),
       layerId: Value(a.layerId),
     );
     await _db.into(_db.canvasAttachments).insertOnConflictUpdate(companion);
@@ -421,11 +478,16 @@ class CanvasRepository {
 
   Future<void> saveSingleAudioBlock(String pageClientId, AudioBlock a, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasAudioBlocks;
-    final companion = table.companion(
-      clientAudioId: Value(a.id), pageId: Value(page.id), audioData: Value(jsonEncode(a.toJson())),
-      isDeleted: Value(a.isDeleted ? 1 : 0), updatedAt: Value(updatedAt ?? a.updatedAt),
-      parentId: Value(a.parentId), isVisible: Value(a.isVisible ? 1 : 0), isLocked: Value(a.isLocked ? 1 : 0), opacity: Value(a.opacity),
+    final companion = CanvasAudioBlocksCompanion(
+      clientAudioId: Value(a.id), 
+      pageId: Value(page.id), 
+      audioData: Value(jsonEncode(a.toJson())),
+      isDeleted: Value(a.isDeleted ? 1 : 0), 
+      updatedAt: Value(updatedAt ?? a.updatedAt),
+      parentId: Value(a.parentId), 
+      isVisible: Value(a.isVisible ? 1 : 0), 
+      isLocked: Value(a.isLocked ? 1 : 0), 
+      opacity: Value(a.opacity),
       layerId: Value(a.layerId),
     );
     await _db.into(_db.canvasAudioBlocks).insertOnConflictUpdate(companion);
@@ -433,11 +495,16 @@ class CanvasRepository {
 
   Future<void> saveSingleAnimationObject(String pageClientId, AnimationObject a, {int? pageId, int? updatedAt}) async {
     final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
-    final dynamic table = _db.canvasAnimations;
-    final companion = table.companion(
-      clientAnimationId: Value(a.id), pageId: Value(page.id), animationData: Value(jsonEncode(a.toJson())),
-      isDeleted: Value(a.isDeleted ? 1 : 0), updatedAt: Value(updatedAt ?? a.updatedAt),
-      parentId: Value(a.parentId), isVisible: Value(a.isVisible ? 1 : 0), isLocked: Value(a.isLocked ? 1 : 0), opacity: Value(a.opacity),
+    final companion = CanvasAnimationsCompanion(
+      clientAnimationId: Value(a.id), 
+      pageId: Value(page.id), 
+      animationData: Value(jsonEncode(a.toJson())),
+      isDeleted: Value(a.isDeleted ? 1 : 0), 
+      updatedAt: Value(updatedAt ?? a.updatedAt),
+      parentId: Value(a.parentId), 
+      isVisible: Value(a.isVisible ? 1 : 0), 
+      isLocked: Value(a.isLocked ? 1 : 0), 
+      opacity: Value(a.opacity),
       layerId: Value(a.layerId),
     );
     await _db.into(_db.canvasAnimations).insertOnConflictUpdate(companion);
@@ -523,6 +590,23 @@ class CanvasRepository {
       if (response.statusCode == 200) { final data = jsonDecode(await response.stream.bytesToString()); return data['url']; }
     } catch (e) {}
     return null;
+  }
+
+  /// 🚀 v10.88: Limpeza física de registos apagados e já sincronizados.
+  /// Evita que a base de dados cresça indefinidamente com lixo.
+  Future<void> purgeSyncedDeletedObjects(int pageId) async {
+    await _db.transaction(() async {
+      await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasShapes)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasTables)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasLinks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      await (_db.delete(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+    });
+    debugPrint('🧹 [Purge] Limpeza física concluída para a página $pageId.');
   }
 }
 

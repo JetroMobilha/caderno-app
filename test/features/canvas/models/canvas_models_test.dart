@@ -52,8 +52,8 @@ void main() {
         text: 'Item 1\nItem 2',
         position: const Offset(50, 50),
         isChecklist: true,
+        checkedLineIndices: const [1],
       );
-      text.checkedLineIndices.add(1);
 
       final json = text.toJson();
       expect(json['is_checklist'], true);

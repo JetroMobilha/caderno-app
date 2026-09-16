@@ -24,13 +24,13 @@ class LayerManagerSheet extends ConsumerWidget {
 
     final objects = page.objects.where((o) => !o.isDeleted).toList().reversed.toList();
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
+    return Material(
+      color: Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
@@ -146,7 +146,7 @@ class LayerManagerSheet extends ConsumerWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildObjectIcon(PageObject obj) {

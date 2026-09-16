@@ -26,7 +26,9 @@ class SyncIsolates {
       // 🚀 v29: Processar lista unificada de objetos
       final List objects = sPage['objects_data'] ?? [];
       
-      for (var obj in objects) {
+      for (var objData in objects) {
+        if (objData is! Map) continue;
+        final Map<String, dynamic> obj = Map<String, dynamic>.from(objData);
         final String type = obj['type']?.toString() ?? '';
         final String id = obj['id']?.toString() ?? 'err';
         final int ts = (obj['updated_at'] as num?)?.toInt() ?? currentTime;

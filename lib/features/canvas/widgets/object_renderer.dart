@@ -136,7 +136,7 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
             final bool isChecked = tb.checkedLineIndices.contains(entry.key);
             prefix = GestureDetector(
               onTap: widget.isReadOnly ? null : () {
-                final List<int> newIndices = List.from(tb.checkedLineIndices);
+                final List<int> newIndices = List<int>.from(tb.checkedLineIndices);
                 if (isChecked) newIndices.remove(entry.key); else newIndices.add(entry.key);
                 final pageClientId = ref.read(canvasViewportProvider).currentPageClientId;
                 if (pageClientId != null) {

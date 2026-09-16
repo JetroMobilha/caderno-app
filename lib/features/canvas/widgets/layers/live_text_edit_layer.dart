@@ -167,7 +167,7 @@ class LiveTextEditLayer extends ConsumerWidget {
     final textPainter = TextPainter(text: TextSpan(text: text.isEmpty ? " " : text, style: GoogleFonts.getFont(block.fontFamily ?? 'Inter', fontSize: block.fontSize)), textDirection: TextDirection.ltr)..layout(maxWidth: width - 16);
     double finalHeight = math.max(40.0, textPainter.height + 16);
     if (finalHeight != table.rowHeights[rowIndex]) {
-      final List<double> newHeights = List.from(table.rowHeights);
+      final List<double> newHeights = List<double>.from(table.rowHeights);
       newHeights[rowIndex] = finalHeight;
       ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
     }

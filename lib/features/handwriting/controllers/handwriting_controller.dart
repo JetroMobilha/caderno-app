@@ -65,14 +65,14 @@ class HandwritingController extends StateNotifier<HandwritingState> {
   /// ✍️ Adicionar um traço completo (vindo do canvas fluido)
   void addFullStroke(List<Offset> points) {
     if (points.isEmpty) return;
-    final List<List<Offset>> newStrokes = List.from(state.currentStrokes);
+    final List<List<Offset>> newStrokes = List<List<Offset>>.from(state.currentStrokes);
     newStrokes.add(points);
     state = state.copyWith(currentStrokes: newStrokes);
   }
 
   /// ✍️ Adicionar um novo traço (ponto inicial) - Legado/Realtime manual
   void startStroke(Offset point) {
-    final List<List<Offset>> newStrokes = List.from(state.currentStrokes);
+    final List<List<Offset>> newStrokes = List<List<Offset>>.from(state.currentStrokes);
     newStrokes.add([point]);
     state = state.copyWith(currentStrokes: newStrokes);
   }
@@ -84,8 +84,8 @@ class HandwritingController extends StateNotifier<HandwritingState> {
     final lastStroke = state.currentStrokes.last;
     if (lastStroke.isNotEmpty && (point - lastStroke.last).distance < 1.2) return;
 
-    final List<List<Offset>> newStrokes = List.from(state.currentStrokes);
-    newStrokes.last = List.from(lastStroke)..add(point);
+    final List<List<Offset>> newStrokes = List<List<Offset>>.from(state.currentStrokes);
+    newStrokes.last = List<Offset>.from(lastStroke)..add(point);
     state = state.copyWith(currentStrokes: newStrokes);
   }
 
@@ -97,7 +97,7 @@ class HandwritingController extends StateNotifier<HandwritingState> {
   /// ↩️ Desfazer o último traço
   void undoLastStroke() {
     if (state.currentStrokes.isEmpty) return;
-    final List<List<Offset>> newStrokes = List.from(state.currentStrokes);
+    final List<List<Offset>> newStrokes = List<List<Offset>>.from(state.currentStrokes);
     newStrokes.removeLast();
     state = state.copyWith(currentStrokes: newStrokes);
   }

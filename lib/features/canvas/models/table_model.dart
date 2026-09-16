@@ -177,7 +177,7 @@ class TableObject implements PageObject {
       if (entry.key.row >= index) newSpans[CellCoordinate(entry.key.row + 1, entry.key.col)] = entry.value;
       else newSpans[entry.key] = entry.value;
     }
-    final List<double> newHeights = List.from(rowHeights)..insert(index, 40.0);
+    final List<double> newHeights = List<double>.from(rowHeights)..insert(index, 40.0);
     return copyWith(rows: rows + 1, cells: newCells, cellSpans: newSpans, rowHeights: newHeights);
   }
 
@@ -193,7 +193,7 @@ class TableObject implements PageObject {
       if (entry.key.row < index) newSpans[entry.key] = entry.value;
       else if (entry.key.row > index) newSpans[CellCoordinate(entry.key.row - 1, entry.key.col)] = entry.value;
     }
-    final List<double> newHeights = List.from(rowHeights)..removeAt(index);
+    final List<double> newHeights = List<double>.from(rowHeights)..removeAt(index);
     return copyWith(rows: rows - 1, cells: newCells, cellSpans: newSpans, rowHeights: newHeights);
   }
 
@@ -208,7 +208,7 @@ class TableObject implements PageObject {
       if (entry.key.col >= index) newSpans[CellCoordinate(entry.key.row, entry.key.col + 1)] = entry.value;
       else newSpans[entry.key] = entry.value;
     }
-    final List<double> newWidths = List.from(columnWidths)..insert(index, 100.0);
+    final List<double> newWidths = List<double>.from(columnWidths)..insert(index, 100.0);
     return copyWith(cols: cols + 1, cells: newCells, cellSpans: newSpans, columnWidths: newWidths);
   }
 
@@ -224,7 +224,7 @@ class TableObject implements PageObject {
       if (entry.key.col < index) newSpans[entry.key] = entry.value;
       else if (entry.key.col > index) newSpans[CellCoordinate(entry.key.row, entry.key.col - 1)] = entry.value;
     }
-    final List<double> newWidths = List.from(columnWidths)..removeAt(index);
+    final List<double> newWidths = List<double>.from(columnWidths)..removeAt(index);
     return copyWith(cols: cols - 1, cells: newCells, cellSpans: newSpans, columnWidths: newWidths);
   }
 
@@ -270,18 +270,22 @@ class TableObject implements PageObject {
 
   factory TableObject.fromJson(Map<String, dynamic> json) {
     final Map<CellCoordinate, TableCellModel> cellsMap = {};
-    if (json['cells'] != null) {
-      (json['cells'] as Map).forEach((k, v) => cellsMap[CellCoordinate.fromString(k.toString())] = TableCellModel.fromJson(Map<String, dynamic>.from(v)));
+    final dynamic cellsJson = json['cells'];
+    if (cellsJson != null && cellsJson is Map) {
+      cellsJson.forEach((k, v) => cellsMap[CellCoordinate.fromString(k.toString())] = TableCellModel.fromJson(Map<String, dynamic>.from(v)));
     }
+    
     final Map<CellCoordinate, CellCoordinate> spansMap = {};
-    if (json['cell_spans'] != null) {
-      (json['cell_spans'] as Map).forEach((k, v) => spansMap[CellCoordinate.fromString(k.toString())] = CellCoordinate.fromString(v.toString()));
+    final dynamic spansJson = json['cell_spans'];
+    if (spansJson != null && spansJson is Map) {
+      spansJson.forEach((k, v) => spansMap[CellCoordinate.fromString(k.toString())] = CellCoordinate.fromString(v.toString()));
     }
+    
     int rows = json['rows'] ?? 3, cols = json['cols'] ?? 3;
     return TableObject(
       id: json['id'], parentId: json['parent_id'], rows: rows, cols: cols,
-      rowHeights: json['row_heights'] != null ? List<double>.from(json['row_heights']) : List.filled(rows, 40.0),
-      columnWidths: json['column_widths'] != null ? List<double>.from(json['column_widths']) : List.filled(cols, 100.0),
+      rowHeights: json['row_heights'] != null ? (json['row_heights'] as List).map((e) => (e as num).toDouble()).toList() : List.filled(rows, 40.0),
+      columnWidths: json['column_widths'] != null ? (json['column_widths'] as List).map((e) => (e as num).toDouble()).toList() : List.filled(cols, 100.0),
       cells: cellsMap, cellSpans: spansMap,
       position: Offset(json['x']?.toDouble() ?? 0, json['y']?.toDouble() ?? 0),
       rotation: json['rotation']?.toDouble() ?? 0.0, zIndex: json['z_index'] ?? 0,

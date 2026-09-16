@@ -8,9 +8,9 @@ abstract class CanvasTool {
   const CanvasTool(this.mode);
 
   void onTapDown(Offset localPos, dynamic ref, LocalPage page);
-  void onPanStart(Offset localPos, dynamic ref, LocalPage page);
-  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page);
-  void onPanEnd(dynamic ref, LocalPage page);
+  void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId});
+  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId});
+  void onPanEnd(dynamic ref, LocalPage page, {int? pointerId});
   
   /// Chamado quando a ferramenta é desativada.
   void onToolDeactivated() {}

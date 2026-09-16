@@ -18,13 +18,13 @@ class AnimationTool extends CanvasTool {
   }
 
   @override
-  void onPanStart(Offset localPos, dynamic ref, LocalPage page, [double pressure = 0.5]) {}
+  void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId}) {}
 
   @override
-  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, [double pressure = 0.5]) {}
+  void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId}) {}
 
   @override
-  void onPanEnd(dynamic ref, LocalPage page) {}
+  void onPanEnd(dynamic ref, LocalPage page, {int? pointerId}) {}
 
   void _insertDefaultAnimation(Offset pos, dynamic ref, LocalPage page) {
     final anim = AnimationObject(

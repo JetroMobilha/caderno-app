@@ -7,6 +7,7 @@ import '../../canvas/views/canvas_screen.dart';
 import '../../notebooks/controllers/notebooks_controller.dart';
 import '../../notebooks/models/notebook_model.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../../core/network/sync_provider.dart';
 
 class NotificationOverlay extends ConsumerStatefulWidget {
   final Widget child;
@@ -164,6 +165,45 @@ class _NotificationOverlayState extends ConsumerState<NotificationOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(showFullSyncLoadingProvider, (previous, next) {
+      if (next) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(days: 1), // Fica visível até que termine explicitamente
+            backgroundColor: const Color(0xFF0F4C5C),
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'A carregar todas as páginas dos seus cadernos... 📚',
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (previous == true && !next) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 4),
+            backgroundColor: const Color(0xFF27AE60),
+            content: Text(
+              'Todas as páginas foram carregadas com sucesso! ✨',
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+        );
+      }
+    });
+
     return widget.child;
   }
 }

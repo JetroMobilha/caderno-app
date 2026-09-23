@@ -17,6 +17,12 @@ class TableTool extends CanvasTool {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasInteractionProvider);
 
+    // 🚀 v10.60: Sempre finalizar edição de texto ativa ao dar um toque simples (Seleção)
+    if (toolState.activeTextBlock != null) {
+      ref.read(canvasDocumentProvider.notifier).cleanupIfEmpty(page, toolState.activeTextBlock!.id);
+      toolNotifier.stopTextEditing();
+    }
+
     // 🚀 v10.30: Proteção para hastes no onTapDown
     if (toolState.selectedObjectIds.length == 1) {
       final table = page.objects.whereType<TableObject>().where((t) => t.id == toolState.selectedObjectIds.first).firstOrNull;
@@ -30,9 +36,26 @@ class TableTool extends CanvasTool {
     if (hitObj is TableObject) {
       toolNotifier.selectIds(objectIds: {hitObj.id});
       final coords = _findCellAt(localPos, hitObj);
-      if (coords != null) toolNotifier.setTableCellEditing(hitObj, coords);
+      if (coords != null) {
+        // 🚀 v10.60: Clique simples apenas seleciona a célula (ferramenta de tabela ativa)
+        toolNotifier.selectIds(tableCells: {TableCellKey(hitObj.id, coords)});
+      }
     } else {
       toolNotifier.clearSelection();
+    }
+  }
+
+  @override
+  void onDoubleTap(Offset localPos, dynamic ref, LocalPage page) {
+    final toolNotifier = ref.read(canvasToolProvider.notifier);
+    final hitObj = _findHitObject(localPos, toolNotifier, page);
+
+    if (hitObj is TableObject) {
+      final coords = _findCellAt(localPos, hitObj);
+      if (coords != null) {
+        // 🚀 v10.60: Clique duplo ativa a edição (muda para ferramenta de texto)
+        toolNotifier.setTableCellEditing(hitObj, coords);
+      }
     }
   }
 
@@ -41,7 +64,8 @@ class TableTool extends CanvasTool {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasInteractionProvider);
 
-    final table = page.objects.whereType<TableObject>().where((t) => toolState.selectedObjectIds.contains(t.id)).firstOrNull;
+    final table = page.objects.whereType<TableObject>().where((t) => toolState.selectedObjectIds.contains(t.id)).firstOrNull
+        ?? page.objects.whereType<TableObject>().firstOrNull;
     if (table == null) return;
 
     // 🚀 v10.29: Prioridade para hastes externas se modo estrutural ativo
@@ -51,7 +75,7 @@ class TableTool extends CanvasTool {
         toolNotifier.startTableResize(hit.isVertical ? HandleType.tableColResize : HandleType.tableRowResize, hit.index, localPos);
         return;
       }
-      return; // 🚀 v10.30: Bloqueia seleção de células se clicou fora das hastes no modo estrutural
+      // Se não clicou na haste, permite a seleção normal de células em vez de bloquear
     }
 
     final coords = _findCellAt(localPos, table);
@@ -67,7 +91,8 @@ class TableTool extends CanvasTool {
     if (table == null) return;
 
     if (toolState.activeTableResizeIndex != null) {
-      final Offset docDelta = ref.read(canvasViewportProvider.notifier).screenDeltaToDocumentDelta(delta);
+      // 🚀 v10.98: O delta já vem escalonado corretamente pelo InteractiveViewer
+      final Offset docDelta = delta;
       if (toolState.activeHandle == HandleType.tableColResize) {
         _handleColumnResize(table, toolState.activeTableResizeIndex!, docDelta.dx, ref, page);
       } else if (toolState.activeHandle == HandleType.tableRowResize) {
@@ -98,22 +123,20 @@ class TableTool extends CanvasTool {
 
     // 1. Colunas (Hastes Superiores)
     double currentX = 0;
-    for (int i = 0; i < table.columnWidths.length - 1; i++) {
-      currentX += table.columnWidths[i];
-      // 🚀 v10.30: Sincronizado com offset -35
+    for (int i = 0; i <= table.columnWidths.length; i++) {
       if ((relPos.dx - currentX).abs() < tolerance && (relPos.dy + 35 / currentScale).abs() < tolerance) {
         return _TableBorderHit(i, true);
       }
+      if (i < table.columnWidths.length) currentX += table.columnWidths[i];
     }
 
     // 2. Linhas (Hastes Esquerdas)
     double currentY = 0;
-    for (int i = 0; i < table.rowHeights.length - 1; i++) {
-      currentY += table.rowHeights[i];
-      // 🚀 v10.30: Sincronizado com offset -35
+    for (int i = 0; i <= table.rowHeights.length; i++) {
       if ((relPos.dy - currentY).abs() < tolerance && (relPos.dx + 35 / currentScale).abs() < tolerance) {
         return _TableBorderHit(i, false);
       }
+      if (i < table.rowHeights.length) currentY += table.rowHeights[i];
     }
     return null;
   }
@@ -121,15 +144,40 @@ class TableTool extends CanvasTool {
   void _handleColumnResize(TableObject table, int index, double deltaX, dynamic ref, LocalPage page) {
     if (deltaX == 0) return;
     final List<double> newWidths = List<double>.from(table.columnWidths);
-    newWidths[index] = (newWidths[index] + deltaX).clamp(30.0, 1500.0);
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths));
+    Offset newPos = table.position;
+
+    if (index == 0) {
+      // Redimensionar primeira coluna pela esquerda
+      final double oldW = newWidths[0];
+      newWidths[0] = (oldW - deltaX).clamp(30.0, 1500.0);
+      final double actualDelta = oldW - newWidths[0];
+      // Mover a tabela para compensar o redimensionamento da borda esquerda
+      newPos += Offset(actualDelta, 0);
+    } else {
+      // Redimensionar coluna anterior pela direita
+      newWidths[index - 1] = (newWidths[index - 1] + deltaX).clamp(30.0, 1500.0);
+    }
+
+    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths, position: newPos));
   }
 
   void _handleRowResize(TableObject table, int index, double deltaY, dynamic ref, LocalPage page) {
     if (deltaY == 0) return;
     final List<double> newHeights = List<double>.from(table.rowHeights);
-    newHeights[index] = (newHeights[index] + deltaY).clamp(20.0, 1000.0);
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
+    Offset newPos = table.position;
+
+    if (index == 0) {
+      // Redimensionar primeira linha pelo topo
+      final double oldH = newHeights[0];
+      newHeights[0] = (oldH - deltaY).clamp(20.0, 1000.0);
+      final double actualDelta = oldH - newHeights[0];
+      newPos += Offset(0, actualDelta);
+    } else {
+      // Redimensionar linha anterior pela base
+      newHeights[index - 1] = (newHeights[index - 1] + deltaY).clamp(20.0, 1000.0);
+    }
+
+    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights, position: newPos));
   }
 
   dynamic _findHitObject(Offset localPos, CanvasToolNotifier toolNotifier, LocalPage page) {

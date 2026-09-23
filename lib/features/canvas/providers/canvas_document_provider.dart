@@ -181,6 +181,19 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   Future<void> addTable(LocalPage page, TableObject table) async { await _executeAction(AddTableAction(pageClientId: page.clientId, pageNumber: page.pageNumber, table: table.copyWith(layerId: 'default')), targetPage: page); }
   Future<void> addLink(LocalPage page, LinkObject link) async { await _executeAction(AddLinkAction(pageClientId: page.clientId, pageNumber: page.pageNumber, link: link.copyWith(layerId: 'default')), targetPage: page); }
   Future<void> addAttachment(LocalPage page, AttachmentObject attach) async { await _executeAction(AddAttachmentAction(pageClientId: page.clientId, pageNumber: page.pageNumber, attach: attach.copyWith(layerId: 'default')), targetPage: page); }
+  Future<void> addImage(LocalPage page, ImageBlock image) async { await _executeAction(AddImageAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: image.copyWith(layerId: 'default')), targetPage: page); }
+  
+  Future<void> addObject(LocalPage page, PageObject obj) async {
+    if (obj is Stroke) await addStroke(page, obj);
+    else if (obj is TextBlock) await addTextBlock(page, obj);
+    else if (obj is ImageBlock) await addImage(page, obj);
+    else if (obj is ShapeObject) await addShape(page, obj);
+    else if (obj is AudioBlock) await addAudioBlock(page, obj);
+    else if (obj is AnimationObject) await addAnimation(page, obj);
+    else if (obj is TableObject) await addTable(page, obj);
+    else if (obj is LinkObject) await addLink(page, obj);
+    else if (obj is AttachmentObject) await addAttachment(page, obj);
+  }
   Future<void> deleteObjects(LocalPage page, List<String> objectIds) async { if (objectIds.isEmpty) return; await _executeAction(DeleteAction(pageClientId: page.clientId, pageNumber: page.pageNumber, objectIds: objectIds), targetPage: page); }
   Future<void> updateObject(LocalPage page, PageObject obj) async { final oldObj = page.objects.firstWhere((o) => o.id == obj.id); await _executeAction(UpdateObjectAction(pageClientId: page.clientId, pageNumber: page.pageNumber, objectId: obj.id, oldState: oldObj.toJson(), newState: obj.toJson()), targetPage: page); }
 

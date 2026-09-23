@@ -60,7 +60,7 @@ class _TableEditToolbarState extends ConsumerState<TableEditToolbar> {
             _buildCustomIconButton(icon: Icons.check_circle_rounded, onTap: _handleExit, color: Colors.greenAccent, size: 22),
             _buildCustomIconButton(icon: Icons.open_with_rounded, onTap: () => toolNotifier.toggleTransformMode(), color: toolState.isTransformMode ? Colors.orangeAccent : Colors.black54, size: 22),
             const VerticalDivider(width: 24, indent: 8, endIndent: 8),
-            Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [_buildCategoryTab(TableEditCategory.structure, Icons.grid_view_rounded, 'Estrutura'), _buildCategoryTab(TableEditCategory.cell, Icons.edit_attributes_rounded, 'Célula'), _buildCategoryTab(TableEditCategory.style, Icons.palette_rounded, 'Estilo'), _buildCategoryTab(TableEditCategory.actions, Icons.layers_outlined, 'Ações')]))),
+            Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [_buildCategoryTab(TableEditCategory.structure, Icons.grid_on_rounded, 'Estrutura'), _buildCategoryTab(TableEditCategory.cell, Icons.border_all_rounded, 'Célula'), _buildCategoryTab(TableEditCategory.style, Icons.color_lens_rounded, 'Estilo'), _buildCategoryTab(TableEditCategory.actions, Icons.auto_awesome_rounded, 'Ações')]))),
           ]),
           const Divider(height: 16, color: Colors.black12, indent: 4, endIndent: 4),
           Center(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _buildActiveCategoryContent(context, table, toolNotifier, docNotifier, page))),
@@ -84,31 +84,35 @@ class _TableEditToolbarState extends ConsumerState<TableEditToolbar> {
     switch (_activeCategory) {
       case TableEditCategory.structure:
         return Row(children: [
-          _buildCustomIconButton(icon: Icons.table_rows_rounded, onTap: () {
+          _buildCustomIconButton(icon: Icons.architecture_rounded, onTap: () {
+            toolNotifier.toggleTableStructuralMode();
+            if (toolState.selectedObjectIds.isEmpty) toolNotifier.selectIds(objectIds: {table.id});
+          }, color: toolState.isTableStructuralMode ? Colors.orangeAccent : const Color(0xFF0F4C5C)),
+          _buildCustomIconButton(icon: Icons.playlist_add_rounded, onTap: () {
             int insertAt = table.rows;
             if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.row + 1;
             docNotifier.updateObject(page, table.insertRowAt(insertAt));
           }, color: const Color(0xFF0F4C5C)),
-          _buildCustomIconButton(icon: Icons.view_column_rounded, onTap: () {
+          _buildCustomIconButton(icon: Icons.view_week_rounded, onTap: () {
             int insertAt = table.cols;
             if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.col + 1;
             docNotifier.updateObject(page, table.insertColumnAt(insertAt));
           }, color: const Color(0xFF0F4C5C)),
           const VerticalDivider(width: 12),
-          _buildCustomIconButton(icon: Icons.select_all_outlined, onTap: () {
+          _buildCustomIconButton(icon: Icons.view_stream_rounded, onTap: () {
             if (selectedKeys.isEmpty) return;
             final int row = selectedKeys.first.coordinate.row;
             final Set<TableCellKey> keys = {}; for (int c = 0; c < table.cols; c++) { keys.add(TableCellKey(table.id, CellCoordinate(row, c))); }
             toolNotifier.selectIds(tableCells: keys);
           }, color: Colors.blueAccent, size: 18),
-          _buildCustomIconButton(icon: Icons.view_week_outlined, onTap: () {
+          _buildCustomIconButton(icon: Icons.view_column_outlined, onTap: () {
             if (selectedKeys.isEmpty) return;
             final int col = selectedKeys.first.coordinate.col;
             final Set<TableCellKey> keys = {}; for (int r = 0; r < table.rows; r++) { keys.add(TableCellKey(table.id, CellCoordinate(r, col))); }
             toolNotifier.selectIds(tableCells: keys);
           }, color: Colors.blueAccent, size: 18),
           const VerticalDivider(width: 20),
-          _buildCustomIconButton(icon: Icons.delete_sweep_rounded, onTap: () {
+          _buildCustomIconButton(icon: Icons.layers_clear_rounded, onTap: () {
             if (table.rows > 1) {
               int deleteAt = table.rows - 1;
               if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.row;
@@ -116,7 +120,7 @@ class _TableEditToolbarState extends ConsumerState<TableEditToolbar> {
               docNotifier.updateObject(page, table.deleteRowAt(deleteAt));
             }
           }, color: Colors.redAccent),
-          _buildCustomIconButton(icon: Icons.view_week_rounded, onTap: () {
+          _buildCustomIconButton(icon: Icons.view_array_rounded, onTap: () {
             if (table.cols > 1) {
               int deleteAt = table.cols - 1;
               if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.col;
@@ -204,13 +208,35 @@ class _TableEditToolbarState extends ConsumerState<TableEditToolbar> {
         ]);
       case TableEditCategory.style:
         return Row(children: [
-          _buildColorCircle(context, table.borderColor, (hex) { docNotifier.updateObject(page, table.copyWith(borderColor: hex)); }, label: 'Borda'),
-          const SizedBox(width: 8),
+          _buildColorCircle(context, table.borderColor, (hex) { docNotifier.updateObject(page, table.copyWith(borderColor: hex)); }, label: 'Cor da Borda'),
+          const VerticalDivider(width: 12, indent: 8, endIndent: 8),
+          
+          // 🚀 v10.91: Controle Unificado de Exterior
+          _buildBorderSideControl(
+            label: 'EXTERIOR',
+            currentStyle: table.lineStyle,
+            currentThickness: table.borderWidth,
+            onStyleChanged: (s) => docNotifier.updateObject(page, table.copyWith(lineStyle: s)),
+            onThicknessChanged: (v) => docNotifier.updateObject(page, table.copyWith(borderWidth: v)),
+          ),
+
+          const VerticalDivider(width: 12, indent: 8, endIndent: 8),
+
+          // 🚀 v10.91: Controle Unificado de Interior
+          _buildBorderSideControl(
+            label: 'GRADE',
+            currentStyle: table.internalLineStyle,
+            currentThickness: table.internalBorderWidth,
+            onStyleChanged: (s) => docNotifier.updateObject(page, table.copyWith(internalLineStyle: s)),
+            onThicknessChanged: (v) => docNotifier.updateObject(page, table.copyWith(internalBorderWidth: v)),
+          ),
+
+          const VerticalDivider(width: 12, indent: 8, endIndent: 8),
+          
           _buildCustomIconButton(icon: Icons.format_paint_rounded, onTap: () async {
             final hex = await ColorEngine.show(context, initialColor: table.tableBackgroundColorHex ?? '#FFFFFF', title: 'Fundo da Tabela');
             if (hex != null) docNotifier.updateObject(page, table.copyWith(tableBackgroundColorHex: hex));
           }, color: table.tableBackgroundColorHex != null ? Color(int.parse(table.tableBackgroundColorHex!.replaceFirst('#', '0xFF'))) : Colors.black26),
-          const VerticalDivider(width: 20),
           _buildFormatToggle(Icons.view_headline_rounded, table.showHeader, () { docNotifier.updateObject(page, table.copyWith(showHeader: !table.showHeader)); }),
         ]);
       case TableEditCategory.actions:
@@ -292,13 +318,102 @@ class _TableEditToolbarState extends ConsumerState<TableEditToolbar> {
     return _buildCustomIconButton(icon: icon, onTap: onTap, color: active ? Colors.blueAccent : Colors.black54, size: 18);
   }
 
-  Widget _buildColorCircle(BuildContext context, String initialColor, Function(String) onSelected, {String? label}) {
-    return InkWell(
-      onTap: () async {
-        final hex = await ColorEngine.show(context, initialColor: initialColor, title: label ?? 'Cor');
-        if (hex != null) onSelected(hex);
+  Widget _buildBorderSideControl({
+    required String label,
+    required LineStyle currentStyle,
+    required double currentThickness,
+    required Function(LineStyle) onStyleChanged,
+    required Function(double) onThicknessChanged,
+  }) {
+    return MenuAnchor(
+      builder: (context, controller, child) {
+        return InkWell(
+          onTap: () => controller.isOpen ? controller.close() : controller.open(),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.black38)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_getLineStyleIcon(currentStyle), size: 14, color: const Color(0xFF0F4C5C)),
+                    const SizedBox(width: 4),
+                    Text('${currentThickness.toStringAsFixed(1)}', style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black54)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
       },
-      child: Padding(padding: const EdgeInsets.all(6.0), child: CircleAvatar(radius: 11, backgroundColor: Color(int.parse(initialColor.replaceFirst('#', '0xFF'))), child: Container(decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.black12, width: 1))))),
+      menuChildren: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: StatefulBuilder(
+            builder: (context, setMenuState) {
+              return SizedBox(
+                width: 220,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Estilo de $label', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: LineStyle.values.map((style) {
+                        final bool isSelected = currentStyle == style;
+                        return InkWell(
+                          onTap: () => onStyleChanged(style),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.1) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent),
+                            ),
+                            child: Icon(_getLineStyleIcon(style), color: isSelected ? const Color(0xFF0F4C5C) : Colors.black45, size: 20),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Espessura', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text('${currentThickness.toStringAsFixed(1)}px', style: const TextStyle(fontSize: 10, color: Color(0xFF0F4C5C), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Slider(
+                      value: currentThickness,
+                      min: 0.0,
+                      max: 10.0,
+                      divisions: 100,
+                      activeColor: const Color(0xFF0F4C5C),
+                      onChanged: (v) {
+                        setMenuState(() {}); // Força build do StatefulBuilder local
+                        onThicknessChanged(v); // Atualiza o Riverpod
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }
+          ),
+        ),
+      ],
     );
+  }
+
+  IconData _getLineStyleIcon(LineStyle style) {
+    switch (style) {
+      case LineStyle.dashed: return Icons.more_horiz_rounded;
+      case LineStyle.dotted: return Icons.more_vert_rounded;
+      default: return Icons.maximize_rounded;
+    }
   }
 }

@@ -17,7 +17,6 @@ import '../widgets/layers/interaction_layer.dart';
 import '../widgets/layers/live_text_edit_layer.dart'; 
 import '../widgets/toolbars/top_action_toolbar.dart'; // 🚀 v10.14
 import '../widgets/page_canvas.dart'; 
-import '../widgets/selection_overlay.dart'; 
 import '../../explanations/widgets/explanation_layer.dart'; 
 import '../widgets/dialogs/thickness_studio_dialog.dart';
 import '../widgets/dialogs/paper_style_dialog.dart';
@@ -94,9 +93,9 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
     final toolState = ref.watch(canvasToolProvider);
     final toolNotifier = ref.read(canvasToolProvider.notifier); // 🚀 FIX: Definir o notifier
     
-    // 🚀 v4.5: Sincronizar o TextEditingController quando um bloco entra em edição
+    // 🚀 v4.5: Sincronizar o TextEditingController quando um bloco entra em edição pela primeira vez
     ref.listen<CanvasToolState>(canvasToolProvider, (previous, next) {
-      if (next.activeTextBlock != null && next.activeTextBlock != previous?.activeTextBlock) {
+      if (next.activeTextBlock != null && next.activeTextBlock?.id != previous?.activeTextBlock?.id) {
         _textController.text = next.activeTextBlock!.text;
         _textController.selection = TextSelection.fromPosition(
           TextPosition(offset: _textController.text.length),
@@ -209,6 +208,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
                     child: Center(
                       child: CanvasToolbar(
                         currentPage: currentPage!,
+                        textController: _textController, // 🚀 v10.58
                         onColorTap: () async {
                           if (toolState.selectedStrokeIds.isNotEmpty) {
                             final hex = await ColorEngine.show(context, initialColor: toolState.selectedColorHex, title: 'Cor da Seleção');

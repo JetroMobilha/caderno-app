@@ -9,6 +9,7 @@ import '../../models/image_block_model.dart';
 import '../../models/stroke_model.dart';
 import '../../models/shape_model.dart';
 import '../../models/table_model.dart';
+import '../../../explanations/models/explanation_model.dart';
 
 class ObjectExplorerSheet extends ConsumerWidget {
   final String pageClientId;
@@ -123,6 +124,15 @@ class ObjectExplorerSheet extends ConsumerWidget {
     } else if (obj is ShapeObject) {
       title = 'Forma: ${obj.shapeType.name.toUpperCase()}';
       icon = Icons.interests_rounded;
+    } else if (obj is MathExplanation) {
+      title = 'Ilustração (Matemática)';
+      icon = Icons.auto_awesome_motion_rounded;
+    } else if (obj is PhysicsExplanation) {
+      title = 'Ilustração (Física)';
+      icon = Icons.auto_awesome_motion_rounded;
+    } else if (obj is EngineeringExplanation) {
+      title = 'Ilustração (Engenharia)';
+      icon = Icons.auto_awesome_motion_rounded;
     }
 
     return ListTile(

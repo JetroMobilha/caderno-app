@@ -32,7 +32,7 @@ abstract class PageObject {
   
   PageObject copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,

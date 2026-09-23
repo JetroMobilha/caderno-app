@@ -15,6 +15,7 @@ import 'table_model.dart';
 import 'link_model.dart';
 import 'attachment_model.dart';
 import 'page_object.dart';
+import '../../explanations/models/explanation_model.dart';
 import '../../notebooks/models/notebook_configuration.dart';
 
 /// 🚀 v9.0: Definição de Camada Imutável.
@@ -337,6 +338,9 @@ class LocalPage {
           else if (type == 'table') objs.add(TableObject.fromJson(Map<String, dynamic>.from(item)));
           else if (type == 'link') objs.add(LinkObject.fromJson(Map<String, dynamic>.from(item)));
           else if (type == 'attachment') objs.add(AttachmentObject.fromJson(Map<String, dynamic>.from(item)));
+          else if (type != null && (type.toString().startsWith('explanation') || type == 'mathFunction' || type == 'physicsBody' || type == 'engineeringMechanism')) {
+            objs.add(ExplanationModel.fromJson(Map<String, dynamic>.from(item)));
+          }
         } catch (e) {
           debugPrint('🚨 [LocalPage] Erro ao carregar objeto $type: $e');
         }

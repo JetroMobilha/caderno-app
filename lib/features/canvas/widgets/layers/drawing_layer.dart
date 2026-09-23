@@ -54,7 +54,6 @@ class DrawingLayer extends ConsumerWidget {
                 selectionRect: toolState.selectionRectStart != null && toolState.selectionRectEnd != null
                     ? Rect.fromPoints(toolState.selectionRectStart!, toolState.selectionRectEnd!)
                     : null,
-                lassoPath: toolState.lassoPath,
                 pageVersion: page.version,
                 remoteMovingStrokeIds: collabService.remoteMovingStrokeIds,
                 userColors: collabService.userColorsMap,

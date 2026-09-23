@@ -72,7 +72,7 @@ class AudioBlock implements PageObject {
   @override
   AudioBlock copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -91,7 +91,7 @@ class AudioBlock implements PageObject {
   }) {
     return AudioBlock(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       audioPath: audioPath,
       title: title ?? this.title,
       durationSeconds: durationSeconds,

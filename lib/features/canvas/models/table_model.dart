@@ -1,3 +1,4 @@
+import 'package:caderno_digital_app/features/canvas/models/canvas_enums.dart';
 import 'package:flutter/material.dart';
 import 'page_object.dart';
 import 'table_cell_model.dart';
@@ -61,6 +62,9 @@ class TableObject implements PageObject {
 
   final String borderColor;
   final double borderWidth;
+  final LineStyle lineStyle; 
+  final double internalBorderWidth; // 🚀 v10.91
+  final LineStyle internalLineStyle; // 🚀 v10.91
   final bool showHeader;
   final String? tableBackgroundColorHex;
 
@@ -88,6 +92,9 @@ class TableObject implements PageObject {
     this.layerId,
     this.borderColor = '#0F4C5C',
     this.borderWidth = 1.0,
+    this.lineStyle = LineStyle.continuous,
+    this.internalBorderWidth = 0.5, // 🚀 v10.91: Grid padrão mais fino
+    this.internalLineStyle = LineStyle.continuous, // 🚀 v10.91
     this.showHeader = true,
     this.tableBackgroundColorHex,
     Map<CellCoordinate, TableCellModel>? cells,
@@ -100,7 +107,7 @@ class TableObject implements PageObject {
   @override
   TableObject copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -123,6 +130,9 @@ class TableObject implements PageObject {
     Map<CellCoordinate, CellCoordinate>? cellSpans,
     String? borderColor,
     double? borderWidth,
+    LineStyle? lineStyle,
+    double? internalBorderWidth,
+    LineStyle? internalLineStyle,
     bool? showHeader,
     String? tableBackgroundColorHex,
   }) {
@@ -138,7 +148,7 @@ class TableObject implements PageObject {
 
     return TableObject(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       rows: rows ?? this.rows,
       cols: cols ?? this.cols,
       cells: cells ?? this.cells,
@@ -161,6 +171,9 @@ class TableObject implements PageObject {
       layerId: layerId ?? this.layerId,
       borderColor: borderColor ?? this.borderColor,
       borderWidth: borderWidth ?? this.borderWidth,
+      lineStyle: lineStyle ?? this.lineStyle,
+      internalBorderWidth: internalBorderWidth ?? this.internalBorderWidth,
+      internalLineStyle: internalLineStyle ?? this.internalLineStyle,
       showHeader: showHeader ?? this.showHeader,
       tableBackgroundColorHex: tableBackgroundColorHex ?? this.tableBackgroundColorHex,
     );
@@ -253,6 +266,68 @@ class TableObject implements PageObject {
     return current;
   }
 
+  /// 🚀 v10.60: Retorna o offset local da célula (em relação ao topo/esquerda da tabela)
+  Offset getCellOffset(CellCoordinate coords) {
+    final CellCoordinate master = resolveMasterCell(coords.row, coords.col);
+    double left = 0;
+    for (int i = 0; i < master.col; i++) {
+      if (i < columnWidths.length) left += columnWidths[i];
+    }
+    double top = 0;
+    for (int i = 0; i < master.row; i++) {
+      if (i < rowHeights.length) top += rowHeights[i];
+    }
+    return Offset(left, top);
+  }
+
+  /// 🚀 v10.60: Retorna o tamanho real da célula (considerando spans)
+  Size getCellSize(CellCoordinate coords) {
+    final CellCoordinate master = resolveMasterCell(coords.row, coords.col);
+    int cs = 1;
+    if (cellSpans.containsKey(master)) cs = cellSpans[master]!.col;
+    int rs = 1;
+    if (cellSpans.containsKey(master)) rs = cellSpans[master]!.row;
+
+    double width = 0;
+    for (int i = 0; i < cs; i++) {
+      if (master.col + i < columnWidths.length) width += columnWidths[master.col + i];
+    }
+    double height = 0;
+    for (int i = 0; i < rs; i++) {
+      if (master.row + i < rowHeights.length) height += rowHeights[master.row + i];
+    }
+    return Size(width, height);
+  }
+
+  /// 🚀 v10.60: Calcula a altura necessária para uma linha específica
+  double calculateRequiredRowHeight(int rowIndex, double Function(CellCoordinate, double width) heightCalculator) {
+    double maxHeight = 40.0;
+    for (int col = 0; col < cols; col++) {
+      final CellCoordinate master = resolveMasterCell(rowIndex, col);
+      
+      // Largura da célula mestre
+      int cs = 1;
+      if (cellSpans.containsKey(master)) cs = cellSpans[master]!.col;
+      double cellWidth = 0;
+      for (int i = 0; i < cs; i++) {
+        if (master.col + i < columnWidths.length) cellWidth += columnWidths[master.col + i];
+      }
+
+      // Calcular altura necessária (via callback para suportar texto "live")
+      final double totalNeededHeight = heightCalculator(master, cellWidth);
+
+      // Distribuir peso se houver rowSpan
+      int rs = 1;
+      if (cellSpans.containsKey(master)) rs = cellSpans[master]!.row;
+      final double weightForThisRow = totalNeededHeight / rs;
+
+      if (weightForThisRow > maxHeight) maxHeight = weightForThisRow;
+      
+      if (cs > 1) col += (cs - 1);
+    }
+    return maxHeight;
+  }
+
   @override
   Map<String, dynamic> toJson() => {
     'id': id, 'type': type, 'parent_id': parentId, 'rows': rows, 'cols': cols,
@@ -265,6 +340,9 @@ class TableObject implements PageObject {
     'synced_with_cloud': syncedWithCloud ? 1 : 0, 'deleted_in_session': deletedInSession ? 1 : 0,
     'page_number': pageNumber, 'creator_id': creatorId, 'layer_id': layerId,
     'border_color': borderColor, 'border_width': borderWidth,
+    'line_style': lineStyle.name, 
+    'internal_border_width': internalBorderWidth, // 🚀 v10.91
+    'internal_line_style': internalLineStyle.name, // 🚀 v10.91
     'show_header': showHeader ? 1 : 0, 'table_bg_color': tableBackgroundColorHex,
   };
 
@@ -299,6 +377,9 @@ class TableObject implements PageObject {
       pageNumber: json['page_number'],
       creatorId: json['creator_id'], layerId: json['layer_id'],
       borderColor: json['border_color'] ?? '#0F4C5C', borderWidth: json['border_width']?.toDouble() ?? 1.0,
+      lineStyle: LineStyle.values.firstWhere((e) => e.name == (json['line_style'] ?? 'continuous'), orElse: () => LineStyle.continuous),
+      internalBorderWidth: (json['internal_border_width'] as num?)?.toDouble() ?? 0.5, // 🚀 v10.91
+      internalLineStyle: LineStyle.values.firstWhere((e) => e.name == (json['internal_line_style'] ?? 'continuous'), orElse: () => LineStyle.continuous), // 🚀 v10.91
       showHeader: json['show_header'] == 1 || json['show_header'] == true, 
       tableBackgroundColorHex: json['table_bg_color'],
     );

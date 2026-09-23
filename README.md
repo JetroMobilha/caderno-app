@@ -41,8 +41,21 @@ O coração do SyncScribe, redesenhado para oferecer uma experiência de escrita
     *   **Pincéis Realistas:** Mais de 12 tipos de pontas, incluindo *Gel, Fountain (Caneta de Tinteiro), Neon, Watercolor, Crayon e Airbrush*.
     *   **Motor Live de Latência Zero:** Utiliza buffers mutáveis isolados para renderizar traços em milissegundos, ignorando a latência da árvore de widgets do Flutter.
 *   **Edição de Objetos e Texto:**
-    *   **Editor WYSIWYG:** Suporte total a formatação rica, fontes Google Fonts e listas inteligentes.
-    *   **Tabelas Dinâmicas:** Lógica avançada de união de células (Merge/Span) e redimensionamento tátil de alta precisão.
+    *   **Motor de Texto Profissional (v10.60):**
+        *   **Listas Inteligentes Multilével:** Suporte a listas de múltiplos níveis (aninhadas) com detecção automática de recuo.
+        *   **Design de Marcadores Híbridos:** Os ícones das listas mudam dinamicamente conforme a profundidade (Bullets: ● ➔ ○ ➔ ■ | Numerada: 1. ➔ a. ➔ -).
+        *   **Auto-Indentação Inteligente:** Propagação automática do nível de recuo ao pressionar *Enter*, mantendo a hierarquia sem esforço manual.
+        *   **Controlo de Tipografia Avançada:** Ajuste fino de *LineHeight* (1.6x para máxima legibilidade), tamanho de fonte e alinhamento (Esquerda, Centro, Direita, Justificado).
+        *   **Formatação Rica:** Estilos de Negrito, Itálico, Sublinhado e Riscado integrados.
+        *   **Acessibilidade de Edição:** Hitbox expandida com margem de segurança de 60px para facilitar o toque e seleção de linhas finais ou vazias.
+    *   **Tabelas Dinâmicas de Alta Performance (v10.95):**
+        *   **Gestão Estrutural Intuitiva:** Redimensionamento tátil de linhas e colunas através de hastes inteligentes (ícone `Architecture`) com compensação automática de posição para preservar o layout.
+        *   **Independência de Bordas (Dual-Layer):** Controlo totalmente independente para a **Borda Exterior** (contorno) e a **Grade Interior** (divisórias internas).
+        *   **Estilização Avançada:** Suporte total a estilos de linha **Contínuo, Tracejado e Pontilhado** através de um motor de desenho customizado de alta fidelidade.
+        *   **Ajuste Live de Espessura:** Seletores dinâmicos (sliders) integrados via `MenuAnchor`, permitindo ajustes fluidos com feedback visual instantâneo.
+        *   **Células Inteligentes:** Suporte a múltiplos tipos de dados, incluindo Texto, Números, Datas e **Checkboxes interativos**.
+        *   **Geometria de Seleção Adaptativa:** Moldura de seleção azul com "sangria central" que se ajusta dinamicamente à espessura da borda e garante sobreposição absoluta (Z-Order).
+        *   **Operações Complexas:** Lógica de união de células (Merge/Span), duplicação de tabelas inteiras e limpeza inteligente de intervalos.
     *   **Modo de Transformação Declarativo:** Sistema de proteção que exige ativação explícita para mover ou redimensionar objetos, evitando erros durante a escrita.
 *   **Tecnologia de Apagamento Híbrido:**
     *   **Borracha Mágica (Objetos):** Remove instantaneamente objetos inteiros (traços, tabelas, imagens) ao contacto, com suporte inteligente a eliminação de grupos selecionados.

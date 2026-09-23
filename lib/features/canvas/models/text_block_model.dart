@@ -80,7 +80,7 @@ class TextBlock implements PageObject {
     this.fontSize = 18.0,
     this.textAlign = TextAlign.left,
     this.fontFamily,
-    this.lineHeight = 1.2,
+    this.lineHeight = 1.6, // 🚀 v10.60: Aumentado para 1.6 para maior legibilidade
     this.listType = ListType.none,
     this.letterSpacing = 0.0,
     this.paragraphSpacing = 0.0,
@@ -106,23 +106,34 @@ class TextBlock implements PageObject {
 
   @override
   Size get size {
-    double width = text.length * fontSize * 0.65;
-    if (width < 60) width = 60;
-    if (width > 500) width = 500;
-    
-    double height = fontSize * 1.6;
-    if (text.contains('\n')) {
-      height = (text.split('\n').length) * fontSize * 1.4;
+    // 🚀 v10.60: Cálculo de largura mais resiliente
+    final lines = text.split('\n');
+    double maxWidth = 0;
+    for (var line in lines) {
+      double w = line.length * fontSize * 0.6;
+      if (w > maxWidth) maxWidth = w;
     }
-    if (height < 44) height = 44; 
     
-    return Size(width, height);
+    if (maxWidth < 80) maxWidth = 80;
+    if (maxWidth > 600) maxWidth = 600;
+    
+    // 🚀 v10.60: O height deve respeitar o lineHeight real + padding de segurança
+    // Se lineHeight é 1.5, o multiplicador deve ser pelo menos esse.
+    final double effectiveMultiplier = lineHeight.clamp(1.2, 2.5);
+    double height = (lines.length) * fontSize * effectiveMultiplier;
+    
+    // Adicionamos uma margem de segurança para a hitbox (cliques na última linha)
+    height += 40; 
+    
+    if (height < 50) height = 50; 
+    
+    return Size(maxWidth, height);
   }
 
   @override
   TextBlock copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     String? text,
     Offset? position,
     Size? size, 
@@ -156,11 +167,18 @@ class TextBlock implements PageObject {
     List<int>? checkedLineIndices,
   }) {
     double finalFontSize = fontSize ?? this.fontSize;
-    if (size != null) finalFontSize = size.height / 1.2;
+    
+    // 🚀 v10.98: Correção Crítica - Evitar inflação exponencial de fonte.
+    // Usamos a proporção de altura real em vez de uma constante mágica,
+    // e apenas se houver uma mudança significativa.
+    if (size != null && (size.height - this.size.height).abs() > 0.1) {
+      final double ratio = size.height / this.size.height;
+      finalFontSize = (this.fontSize * ratio).clamp(8.0, 1000.0);
+    }
 
     return TextBlock(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       text: text ?? this.text,
       position: position ?? this.position,
       isBold: isBold ?? this.isBold,
@@ -248,7 +266,7 @@ class TextBlock implements PageObject {
     fontSize: (json['font_size'] as num?)?.toDouble() ?? (json['fontSize'] as num?)?.toDouble() ?? 18.0,
     textAlign: TextAlign.values[(json['text_align'] as int?) ?? 0],
     fontFamily: json['font_family']?.toString(),
-    lineHeight: (json['line_height'] as num?)?.toDouble() ?? 1.2,
+    lineHeight: (json['line_height'] as num?)?.toDouble() ?? 1.6, // 🚀 v10.60
     listType: ListType.values.firstWhere((e) => e.name == (json['list_type'] ?? 'none'), orElse: () => ListType.none),
     letterSpacing: (json['letter_spacing'] as num?)?.toDouble() ?? 0.0,
     paragraphSpacing: (json['paragraph_spacing'] as num?)?.toDouble() ?? 0.0,

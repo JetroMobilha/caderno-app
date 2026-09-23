@@ -1,0 +1,5 @@
+- [ ] Aumentar margem visual de animações no `TransformService.dart`
+- [ ] Adicionar `lastLocalPosition` ao estado e provedor de ferramentas
+- [ ] Refatorar movimentação 1:1 na `SelectTool.dart`
+- [ ] Aplicar deformação "live" em todos os widgets no `ObjectRenderer.dart`
+- [ ] Corrigir ordem de `scale/translate` no modelo `Stroke.dart`

@@ -28,28 +28,32 @@ class LiveTextEditLayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final toolState = ref.watch(canvasToolProvider);
-    final bool isEditing = toolState.activeTextBlock != null || 
-                           toolState.activeTableId != null || 
-                           toolState.activeInlineTarget == InlineTarget.title;
+    // 🚀 v10.85: Seletores otimizados para evitar re-renderizações por movimentos de outros objetos
+    final activeBlock = ref.watch(canvasToolProvider.select((s) => s.activeTextBlock));
+    final activeTableId = ref.watch(canvasToolProvider.select((s) => s.activeTableId));
+    final activeInlineTarget = ref.watch(canvasToolProvider.select((s) => s.activeInlineTarget));
+
+    final bool isEditing = activeBlock != null || 
+                           activeTableId != null || 
+                           activeInlineTarget == InlineTarget.title;
 
     if (!isEditing) return const SizedBox.shrink();
 
     return Stack(
       children: [
-        if (toolState.activeTextBlock != null)
-          _buildInlineTextEditor(context, ref, toolState.activeTextBlock!),
+        if (activeBlock != null)
+          _buildInlineTextEditor(context, ref, activeBlock, activeTableId),
         
         Positioned(
           top: 35, left: 0, right: 0,
           child: Center(
-            child: toolState.activeInlineTarget == InlineTarget.title
+            child: activeInlineTarget == InlineTarget.title
                 ? SizedBox(
                     width: 400,
                     child: TextField(
                       textAlign: TextAlign.center, autofocus: true,
                       controller: textController, focusNode: textFocusNode,
-                      style: GoogleFonts.lora(fontSize: 28, fontWeight: FontWeight.bold),
+                      style: _getSafeTextStyle('Lora', fontSize: 28, fontWeight: FontWeight.bold),
                       decoration: const InputDecoration(border: InputBorder.none, hintText: 'Título'),
                       onSubmitted: (v) {
                         final updatedPage = page.copyWith(title: v);
@@ -65,65 +69,161 @@ class LiveTextEditLayer extends ConsumerWidget {
     );
   }
 
-  Widget _buildInlineTextEditor(BuildContext context, WidgetRef ref, TextBlock block) {
-    final Color textColor = Color(int.parse(block.textColorHex.replaceFirst('#', '0xFF')));
-    final double lineHeightPx = block.fontSize * block.lineHeight;
+  Widget _buildInlineTextEditor(BuildContext context, WidgetRef ref, TextBlock block, String? activeTableId) {
+    final Color textColor = _parseColorHex(block.textColorHex);
     final bool isProxy = block.id.startsWith('proxy_');
     final toolState = ref.read(canvasToolProvider);
     
+    // 🚀 v10.60: Contadores por nível
+    final Map<int, int> levelCounters = {};
+
     double editorWidth = 500;
     double? minHeight;
+    Offset position = block.position; // 🚀 v10.60: Posição dinâmica reativa
     
-    if (isProxy && toolState.activeTableId != null && toolState.activeTableCell != null) {
-       final table = page.objects.whereType<TableObject>().where((t) => t.id == toolState.activeTableId).firstOrNull;
+    if (isProxy && activeTableId != null && toolState.activeTableCell != null) {
+       final table = page.objects.whereType<TableObject>().where((t) => t.id == activeTableId).firstOrNull;
        if (table != null) {
           final CellCoordinate coords = toolState.activeTableCell!.coordinate;
-          int cs = 1; if (table.cellSpans.containsKey(coords)) cs = table.cellSpans[coords]!.col;
-          editorWidth = 0; for (int i = 0; i < cs; i++) if (coords.col + i < table.columnWidths.length) editorWidth += table.columnWidths[coords.col + i];
-          int rs = 1; if (table.cellSpans.containsKey(coords)) rs = table.cellSpans[coords]!.row;
-          minHeight = 0; for (int i = 0; i < rs; i++) if (coords.row + i < table.rowHeights.length) minHeight = (minHeight ?? 0) + table.rowHeights[coords.row + i];
+          
+          // 🚀 v10.60: Utilizar nova API de geometria do modelo (Centralizado)
+          position = table.position + table.getCellOffset(coords);
+          final cellSize = table.getCellSize(coords);
+          
+          editorWidth = cellSize.width;
+          minHeight = cellSize.height;
        }
     }
 
     return Positioned(
-      left: block.position.dx, top: block.position.dy,
+      left: position.dx, top: position.dy,
       child: Transform.rotate(
         angle: block.rotation, alignment: Alignment.center,
         child: Container(
           width: editorWidth, constraints: minHeight != null ? BoxConstraints(minHeight: minHeight) : null,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          padding: EdgeInsets.zero, // 🚀 v10.60: Padding movido para o TextField para precisão
           decoration: BoxDecoration(
-            color: block.backgroundColorHex != null ? Color(int.parse(block.backgroundColorHex!.replaceFirst('#', '0xFF'))).withOpacity(0.2) : (isProxy ? Colors.white : null),
-            borderRadius: BorderRadius.circular(4), border: isProxy ? Border.all(color: Colors.blueAccent, width: 2) : null,
-            boxShadow: isProxy ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)] : null,
+            color: block.backgroundColorHex != null ? _parseColorHex(block.backgroundColorHex).withValues(alpha: 0.2) : (isProxy ? Colors.white : null),
+            borderRadius: BorderRadius.circular(isProxy ? 0 : 4), // Quadrado se for tabela
+            border: isProxy ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.8), width: 1.5) : null,
+            boxShadow: isProxy ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)] : null,
           ),
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              if (block.listType != ListType.none && !isProxy)
-                IgnorePointer(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: block.text.split('\n').asMap().entries.map((entry) {
-                      Widget prefix = const SizedBox.shrink();
-                      if (block.listType == ListType.bullet) prefix = Icon(Icons.circle, size: block.fontSize * 0.4, color: textColor.withOpacity(0.4));
-                      else if (block.listType == ListType.numbered) prefix = Text('${entry.key + 1}.', style: TextStyle(fontSize: block.fontSize * 0.8, color: textColor.withOpacity(0.4), fontWeight: FontWeight.bold));
-                      else if (block.listType == ListType.checklist) prefix = Icon(Icons.check_box_outline_blank_rounded, size: block.fontSize, color: textColor.withOpacity(0.3));
-                      return Container(height: lineHeightPx * 1.15, width: 25, alignment: Alignment.centerLeft, child: prefix);
-                    }).toList(),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4.0, top: 4.0), // 🚀 v10.63: Sincronizado com contentPadding.top e left do ObjectRenderer
+                  child: IgnorePointer(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: block.text.split('\n').asMap().entries.map((entry) {
+                        final line = entry.value;
+                        int spaces = 0;
+                        for (int i = 0; i < line.length; i++) {
+                          if (line[i] == ' ') {
+                            spaces++;
+                          } else {
+                            break;
+                          }
+                        }
+                        int level = spaces ~/ 2;
+
+                        Widget prefix = const SizedBox.shrink();
+                        if (block.listType == ListType.bullet) {
+                          IconData icon = Icons.circle;
+                          if (level == 1) icon = Icons.circle_outlined;
+                          else if (level >= 2) icon = Icons.square_rounded;
+                          prefix = Icon(icon, size: block.fontSize * (level == 0 ? 0.4 : 0.35), color: textColor.withValues(alpha: 0.4));
+                        } else if (block.listType == ListType.numbered) {
+                          levelCounters.removeWhere((k, v) => k > level);
+                          levelCounters[level] = (levelCounters[level] ?? 0) + 1;
+
+                          String label = '${levelCounters[level]}.';
+                          if (level == 1) {
+                            label = '${String.fromCharCode(96 + (levelCounters[level]! % 26))}.';
+                          } else if (level >= 2) {
+                            label = '-';
+                          }
+                          prefix = Text(label, style: TextStyle(fontSize: block.fontSize * 0.8, color: textColor.withValues(alpha: 0.4), fontWeight: FontWeight.bold));
+                        } else if (block.listType == ListType.checklist) {
+                          prefix = Icon(Icons.check_box_outline_blank_rounded, size: block.fontSize, color: textColor.withValues(alpha: 0.3));
+                        }
+
+                        // 🚀 v10.63: Cálculo de altura REAL sem margens extras para evitar deriva vertical
+                        final double paragraphHeight = _calculateHeight(
+                          line.trimLeft(), 
+                          block.fontFamily, 
+                          block.fontSize, 
+                          block.lineHeight, 
+                          editorWidth, 
+                          true
+                        );
+
+                        return Container(
+                          key: ValueKey('list_prefix_${entry.key}'), // 🚀 v10.85: Chave única para diffing otimizado
+                          height: paragraphHeight, 
+                          alignment: Alignment.topLeft, 
+                          padding: EdgeInsets.only(left: 1.0 + (level * 10.0), top: block.fontSize * 0.22), // 🚀 v10.63: Compensação de leading exata
+                          child: SizedBox(
+                            width: 24, 
+                            child: prefix,
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
               TextField(
                 controller: textController, focusNode: textFocusNode, maxLines: null, autofocus: true, textAlign: block.textAlign,
-                style: GoogleFonts.getFont(block.fontFamily ?? 'Inter', fontSize: block.fontSize, height: block.lineHeight, fontWeight: block.isBold ? FontWeight.bold : FontWeight.normal, fontStyle: block.isItalic ? FontStyle.italic : FontStyle.normal, decoration: TextDecoration.combine([if (block.isUnderline) TextDecoration.underline, if (block.isStrikethrough) TextDecoration.lineThrough]), color: Color(int.parse(block.textColorHex.replaceFirst('#', '0xFF')))),
-                decoration: InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.only(left: (block.listType != ListType.none && !isProxy) ? 30 : 8, top: 4, bottom: 4), isDense: true, hintText: isProxy ? '' : 'Escreva aqui...'),
+                style: _getSafeTextStyle(
+                  block.fontFamily,
+                  fontSize: block.fontSize,
+                  height: block.lineHeight,
+                  fontWeight: block.isBold ? FontWeight.bold : FontWeight.normal,
+                  fontStyle: block.isItalic ? FontStyle.italic : FontStyle.normal,
+                  decoration: TextDecoration.combine([
+                    if (block.isUnderline) TextDecoration.underline,
+                    if (block.isStrikethrough) TextDecoration.lineThrough
+                  ]),
+                  color: textColor,
+                ),
+                decoration: InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.only(left: (block.listType != ListType.none) ? 28 : 4, right: 4, top: 4, bottom: isProxy ? 4 : 60), isDense: true, hintText: isProxy ? '' : 'Escreva aqui...'),
                 onChanged: (v) {
-                  final updatedBlock = block.copyWith(text: v);
+                  String finalValue = v;
+                  final selection = textController.selection;
+
+                  if (v.length > block.text.length && selection.baseOffset > 0) {
+                    final lastChar = v[selection.baseOffset - 1];
+                    if (lastChar == '\n') {
+                      final textBeforeCursor = v.substring(0, selection.baseOffset - 1);
+                      final linesBefore = textBeforeCursor.split('\n');
+                      if (linesBefore.isNotEmpty) {
+                        final lastLine = linesBefore.last;
+                        int spacesCount = 0;
+                        for (int i = 0; i < lastLine.length; i++) {
+                          if (lastLine[i] == ' ') spacesCount++;
+                          else break;
+                        }
+                        if (spacesCount > 0) {
+                          final spacesStr = ' ' * spacesCount;
+                          final newValue = v.substring(0, selection.baseOffset) + spacesStr + v.substring(selection.baseOffset);
+                          finalValue = newValue;
+
+                          textController.text = newValue;
+                          textController.selection = TextSelection.fromPosition(
+                            TextPosition(offset: selection.baseOffset + spacesCount),
+                          );
+                        }
+                      }
+                    }
+                  }
+
+                  final updatedBlock = block.copyWith(text: finalValue);
                   ref.read(canvasToolProvider.notifier).setTextEditing(InlineTarget.block, updatedBlock);
                   if (isProxy) {
                     _syncProxyToTable(ref, updatedBlock);
-                    _autoAdjustRowHeight(v, updatedBlock, editorWidth, ref);
+                    _autoAdjustRowHeight(finalValue, updatedBlock, editorWidth, ref);
                   } else {
                     ref.read(canvasDocumentProvider.notifier).updateObject(page, updatedBlock);
                   }
@@ -151,6 +251,8 @@ class LiveTextEditLayer extends ConsumerWidget {
         strikethrough: proxy.isStrikethrough, fontSize: proxy.fontSize,
         textAlign: proxy.textAlign, fontFamily: proxy.fontFamily,
         textColorHex: proxy.textColorHex, backgroundColorHex: proxy.backgroundColorHex,
+        listType: proxy.listType, // 🚀 v10.60
+        checkedLineIndices: proxy.checkedLineIndices, // 🚀 v10.60
       ),
     );
 
@@ -159,17 +261,91 @@ class LiveTextEditLayer extends ConsumerWidget {
     ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(cells: newCells));
   }
 
+  double _calculateHeight(String text, String? fontFamily, double fontSize, double lineHeight, double width, bool hasList) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text.isEmpty ? " " : text, 
+        style: _getSafeTextStyle(fontFamily, fontSize: fontSize, height: lineHeight),
+      ), 
+      textDirection: TextDirection.ltr
+    )..layout(maxWidth: math.max(10.0, width - (hasList ? 32 : 8))); 
+    return textPainter.height; // 🚀 v10.63: Altura PURA para sincronização absoluta
+  }
+
   void _autoAdjustRowHeight(String text, TextBlock block, double width, WidgetRef ref) {
     final toolState = ref.read(canvasToolProvider);
     if (toolState.activeTableId == null || toolState.activeTableCell == null) return;
-    final table = page.objects.whereType<TableObject>().firstWhere((t) => t.id == toolState.activeTableId);
+    
+    final table = page.objects.whereType<TableObject>().where((t) => t.id == toolState.activeTableId).firstOrNull;
+    if (table == null) return;
+    
     final int rowIndex = toolState.activeTableCell!.coordinate.row;
-    final textPainter = TextPainter(text: TextSpan(text: text.isEmpty ? " " : text, style: GoogleFonts.getFont(block.fontFamily ?? 'Inter', fontSize: block.fontSize)), textDirection: TextDirection.ltr)..layout(maxWidth: width - 16);
-    double finalHeight = math.max(40.0, textPainter.height + 16);
-    if (finalHeight != table.rowHeights[rowIndex]) {
+    final CellCoordinate activeCoords = toolState.activeTableCell!.coordinate;
+    
+    // 🚀 v10.60: Utiliza nova lógica centralizada no modelo para varrimento de linha
+    final double maxHeight = table.calculateRequiredRowHeight(rowIndex, (coords, cellWidth) {
+      if (coords == activeCoords) {
+        return _calculateHeight(text, block.fontFamily, block.fontSize, block.lineHeight, cellWidth, block.listType != ListType.none) + 8.0;
+      } else {
+        final cell = table.cells[coords] ?? TableCellModel();
+        return _calculateHeight(cell.value, cell.style.fontFamily, cell.style.fontSize, 1.6, cellWidth, cell.style.listType != ListType.none) + 8.0;
+      }
+    });
+    
+    if ((maxHeight - table.rowHeights[rowIndex]).abs() > 0.5) {
       final List<double> newHeights = List<double>.from(table.rowHeights);
-      newHeights[rowIndex] = finalHeight;
-      ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
+      newHeights[rowIndex] = maxHeight;
+      
+      // 🚀 v10.85: Adiamento de mutação de estado para evitar colisão no ciclo de build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
+      });
+    }
+  }
+
+  // 🚀 v10.85: Helpers de segurança e performance
+
+  Color _parseColorHex(String? hex, {Color fallback = Colors.black}) {
+    if (hex == null || hex.isEmpty) return fallback;
+    try {
+      final String cleanHex = hex.replaceFirst('#', '');
+      if (cleanHex.length == 6) return Color(int.parse('0xFF$cleanHex'));
+      if (cleanHex.length == 8) return Color(int.parse('0x$cleanHex'));
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  TextStyle _getSafeTextStyle(String? fontFamily, {
+    double? fontSize,
+    double? height,
+    FontWeight? fontWeight,
+    FontStyle? fontStyle,
+    TextDecoration? decoration,
+    Color? color,
+  }) {
+    final String family = fontFamily ?? 'Inter';
+    try {
+      return GoogleFonts.getFont(
+        family,
+        fontSize: fontSize,
+        height: height,
+        fontWeight: fontWeight,
+        fontStyle: fontStyle,
+        decoration: decoration,
+        color: color,
+      );
+    } catch (_) {
+      return TextStyle(
+        fontFamily: family,
+        fontSize: fontSize,
+        height: height,
+        fontWeight: fontWeight,
+        fontStyle: fontStyle,
+        decoration: decoration,
+        color: color,
+      );
     }
   }
 }

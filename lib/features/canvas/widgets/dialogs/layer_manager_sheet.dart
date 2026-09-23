@@ -9,6 +9,7 @@ import '../../models/stroke_model.dart';
 import '../../models/text_block_model.dart';
 import '../../models/image_block_model.dart';
 import '../../models/table_model.dart';
+import '../../../explanations/models/explanation_model.dart';
 
 /// 🚀 v10.1: Gestor de Objetos e Camadas com Suporte a Grupos.
 class LayerManagerSheet extends ConsumerWidget {
@@ -155,6 +156,7 @@ class LayerManagerSheet extends ConsumerWidget {
     else if (obj is TextBlock) icon = Icons.text_fields_rounded;
     else if (obj is ImageBlock) icon = Icons.image_rounded;
     else if (obj is TableObject) icon = Icons.grid_on_rounded;
+    else if (obj is ExplanationModel) icon = Icons.auto_awesome_motion_rounded;
     else icon = Icons.extension_rounded;
     return Icon(icon, color: const Color(0xFF0F4C5C), size: 18);
   }
@@ -164,6 +166,9 @@ class LayerManagerSheet extends ConsumerWidget {
     if (obj is Stroke) return 'Traço de Desenho';
     if (obj is ImageBlock) return 'Imagem';
     if (obj is TableObject) return 'Tabela (${obj.rows}x${obj.cols})';
+    if (obj is MathExplanation) return 'Ilustração (Matemática)';
+    if (obj is PhysicsExplanation) return 'Ilustração (Física)';
+    if (obj is EngineeringExplanation) return 'Ilustração (Engenharia)';
     return obj.type.toUpperCase();
   }
 }

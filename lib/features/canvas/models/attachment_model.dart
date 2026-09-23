@@ -77,7 +77,7 @@ class AttachmentObject implements PageObject {
   @override
   AttachmentObject copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -95,7 +95,7 @@ class AttachmentObject implements PageObject {
   }) {
     return AttachmentObject(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       fileName: fileName,
       fileExtension: fileExtension,
       fileSize: fileSize,

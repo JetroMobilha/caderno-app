@@ -1,4 +1,4 @@
-enum ToolMode { draw, highlighter, pan, select, lasso, text, table, eraser, pixelEraser, insertImage, imageEdit, organizer, video, fileAnchor }
+enum ToolMode { draw, pan, select, text, table, eraser, pixelEraser, video }
 
 enum BrushType { 
   gel,          // Técnica/Precisão
@@ -37,7 +37,6 @@ enum CanvasInteractionStateMode {
   idle,           // Neutro
   drawing,        // A desenhar traços
   selecting,      // A criar rect de seleção
-  lassoSelecting, // A usar o laço
   moving,         // A mover objetos
   transforming,   // A redimensionar/rotacionar
   textEditing,    // Teclado aberto num bloco

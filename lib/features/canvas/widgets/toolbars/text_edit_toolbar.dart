@@ -18,7 +18,8 @@ enum TextEditCategory { basics, format, organize, structure, box }
 class TextEditToolbar extends ConsumerStatefulWidget {
   final TextBlock? block;
   final LocalPage currentPage;
-  const TextEditToolbar({super.key, required this.block, required this.currentPage});
+  final TextEditingController textController; // 🚀 v10.58
+  const TextEditToolbar({super.key, required this.block, required this.currentPage, required this.textController});
   @override
   ConsumerState<TextEditToolbar> createState() => _TextEditToolbarState();
 }
@@ -52,6 +53,8 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
           strikethrough: block.isStrikethrough, fontSize: block.fontSize,
           fontFamily: block.fontFamily, textColorHex: block.textColorHex,
           backgroundColorHex: block.backgroundColorHex, textAlign: block.textAlign,
+          listType: block.listType, // 🚀 v10.60
+          checkedLineIndices: block.checkedLineIndices, // 🚀 v10.60
         ),
       );
       
@@ -87,7 +90,7 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
               _buildCustomIconButton(icon: Icons.arrow_back_ios_new_rounded, onTap: _handleExit, color: const Color(0xFF0F4C5C), size: 18),
               _buildCustomIconButton(icon: Icons.open_with_rounded, onTap: () => toolNotifier.toggleTransformMode(), color: toolState.isTransformMode ? Colors.orangeAccent : Colors.black54, size: 20),
               const VerticalDivider(width: 24, indent: 8, endIndent: 8),
-              Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [_buildCategoryTab(TextEditCategory.basics, Icons.edit_note_rounded, 'Geral'), _buildCategoryTab(TextEditCategory.format, Icons.format_size_rounded, 'Estilo'), _buildCategoryTab(TextEditCategory.organize, Icons.format_align_center_rounded, 'Layout'), _buildCategoryTab(TextEditCategory.structure, Icons.format_list_bulleted_rounded, 'Lista'), _buildCategoryTab(TextEditCategory.box, Icons.inventory_2_outlined, 'Caixa')]))),
+              Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [_buildCategoryTab(TextEditCategory.basics, Icons.edit_note_rounded, 'Geral'), _buildCategoryTab(TextEditCategory.format, Icons.format_size_rounded, 'Estilo'), _buildCategoryTab(TextEditCategory.organize, Icons.format_align_center_rounded, 'Layout'), _buildCategoryTab(TextEditCategory.structure, Icons.format_list_bulleted_rounded, 'Lista')]))),
             ],
           ),
           const Divider(height: 16, color: Colors.black12, indent: 4, endIndent: 4),
@@ -109,14 +112,10 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
     switch (_activeCategory) {
       case TextEditCategory.basics:
         return Row(children: [
-          _buildCustomIconButton(icon: Icons.content_copy_rounded, onTap: () {}, color: Colors.black87),
-          _buildCustomIconButton(icon: Icons.undo_rounded,
-            onTap: docState.canUndo ? () => docNotifier.undo(widget.currentPage) : null,
-            color: docState.canUndo ? Colors.black87 : Colors.black12),
-          _buildCustomIconButton(icon: Icons.redo_rounded,
-            onTap: docState.canRedo ? () => docNotifier.redo(widget.currentPage) : null,
-            color: docState.canRedo ? Colors.black87 : Colors.black12),
-          _buildCustomIconButton(icon: Icons.select_all_rounded, onTap: () {}, color: Colors.black87)
+          _buildCustomIconButton(icon: Icons.copy_rounded, onTap: () => notifier.duplicateObjects(widget.currentPage, objectIds: {block.id}), color: Colors.black54),
+          _buildCustomIconButton(icon: Icons.flip_to_front_rounded, onTap: () { final page = docState.pages.firstWhere((p) => p.clientId == widget.currentPage.clientId); int maxZ = 0; if (page.objects.isNotEmpty) { for (var o in page.objects) { if (o.zIndex > maxZ) maxZ = o.zIndex; } } final nb = block.copyWith(zIndex: maxZ + 1); docNotifier.updateObject(page, nb); notifier.setTextEditing(InlineTarget.block, nb); }, color: Colors.black87),
+          _buildCustomIconButton(icon: block.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, onTap: () { final nb = block.copyWith(isLocked: !block.isLocked); notifier.setTextEditing(InlineTarget.block, nb); _updateBlock(docNotifier, nb); }, color: block.isLocked ? Colors.orange : Colors.black87),
+          _buildCustomIconButton(icon: Icons.delete_outline_rounded, onTap: () { final page = docState.pages.firstWhere((p) => p.clientId == widget.currentPage.clientId); docNotifier.deleteObjects(page, [block.id]); notifier.exitWritingMode(); }, color: Colors.redAccent),
         ]);
       case TextEditCategory.format:
         return Row(children: [
@@ -145,16 +144,48 @@ class _TextEditToolbarState extends ConsumerState<TextEditToolbar> {
           _buildFormatToggle(Icons.format_list_bulleted_rounded, block.listType == ListType.bullet, () { final nb = block.copyWith(listType: block.listType == ListType.bullet ? ListType.none : ListType.bullet); notifier.setTextEditing(InlineTarget.block, nb); _updateBlock(docNotifier, nb); }),
           _buildFormatToggle(Icons.format_list_numbered_rounded, block.listType == ListType.numbered, () { final nb = block.copyWith(listType: block.listType == ListType.numbered ? ListType.none : ListType.numbered); notifier.setTextEditing(InlineTarget.block, nb); _updateBlock(docNotifier, nb); }),
           _buildFormatToggle(Icons.checklist_rounded, block.listType == ListType.checklist, () { final nb = block.copyWith(listType: block.listType == ListType.checklist ? ListType.none : ListType.checklist); notifier.setTextEditing(InlineTarget.block, nb); _updateBlock(docNotifier, nb); }),
-          const SizedBox(width: 12),
+          _buildCustomIconButton(icon: Icons.format_indent_decrease_rounded, onTap: () {
+            final selection = widget.textController.selection;
+            if (selection.isValid && widget.textController.text.isNotEmpty) {
+              final text = widget.textController.text;
+              int start = selection.baseOffset;
+              while (start > 0 && text[start - 1] != '\n') { start--; }
+              int spacesToRemove = 0;
+              if (start < text.length && text[start] == ' ') {
+                spacesToRemove++;
+                if (start + 1 < text.length && text[start + 1] == ' ') {
+                  spacesToRemove++;
+                }
+              }
+              if (spacesToRemove > 0) {
+                final newText = text.substring(0, start) + text.substring(start + spacesToRemove);
+                widget.textController.text = newText;
+                widget.textController.selection = TextSelection.fromPosition(TextPosition(offset: (selection.baseOffset - spacesToRemove).clamp(start, newText.length)));
+                final nb = block.copyWith(text: newText);
+                notifier.setTextEditing(InlineTarget.block, nb);
+                _updateBlock(docNotifier, nb);
+              }
+            }
+          }, color: const Color(0xFF0F4C5C)),
+          _buildCustomIconButton(icon: Icons.format_indent_increase_rounded, onTap: () {
+            final selection = widget.textController.selection;
+            if (selection.isValid && widget.textController.text.isNotEmpty) {
+              final text = widget.textController.text;
+              int start = selection.baseOffset;
+              while (start > 0 && text[start - 1] != '\n') { start--; }
+              final newText = text.substring(0, start) + '  ' + text.substring(start);
+              widget.textController.text = newText;
+              widget.textController.selection = TextSelection.fromPosition(TextPosition(offset: selection.baseOffset + 2));
+              final nb = block.copyWith(text: newText);
+              notifier.setTextEditing(InlineTarget.block, nb);
+              _updateBlock(docNotifier, nb);
+            }
+          }, color: const Color(0xFF0F4C5C)),
+          const SizedBox(width: 4),
           _buildFormatToggle(Icons.title_rounded, block.fontSize > 24, () { final nb = block.copyWith(fontSize: (block.fontSize > 24) ? 18 : 32, isBold: block.fontSize <= 24); notifier.setTextEditing(InlineTarget.block, nb); _updateBlock(docNotifier, nb); }),
         ]);
-      case TextEditCategory.box:
-        return Row(children: [
-          _buildCustomIconButton(icon: Icons.copy_rounded, onTap: () { final page = docState.pages.firstWhere((p) => p.clientId == widget.currentPage.clientId); final clone = block.clone(newId: const Uuid().v4()).copyWith(position: block.position + const Offset(20, 20)); docNotifier.addTextBlock(page, clone as TextBlock); }, color: Colors.black54),
-          _buildCustomIconButton(icon: Icons.flip_to_front_rounded, onTap: () { final page = docState.pages.firstWhere((p) => p.clientId == widget.currentPage.clientId); int maxZ = 0; if (page.objects.isNotEmpty) { for (var o in page.objects) { if (o.zIndex > maxZ) maxZ = o.zIndex; } } final nb = block.copyWith(zIndex: maxZ + 1); docNotifier.updateObject(page, nb); notifier.setTextEditing(InlineTarget.block, nb); }, color: Colors.black87),
-          _buildCustomIconButton(icon: block.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, onTap: () { final nb = block.copyWith(isLocked: !block.isLocked); notifier.setTextEditing(InlineTarget.block, nb); _updateBlock(docNotifier, nb); }, color: block.isLocked ? Colors.orange : Colors.black87),
-          _buildCustomIconButton(icon: Icons.delete_outline_rounded, onTap: () { final page = docState.pages.firstWhere((p) => p.clientId == widget.currentPage.clientId); docNotifier.deleteObjects(page, [block.id]); notifier.exitWritingMode(); }, color: Colors.redAccent),
-        ]);
+      default:
+        return const SizedBox.shrink();
     }
   }
 

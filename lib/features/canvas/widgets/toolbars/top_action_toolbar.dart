@@ -11,6 +11,7 @@ import '../../models/table_model.dart';
 import '../../models/link_model.dart';
 import '../../models/attachment_model.dart';
 import 'package:caderno_digital_app/features/canvas/widgets/dialogs/table_creation_dialog.dart';
+import 'package:caderno_digital_app/features/explanations/widgets/simulation_studio_sheet.dart';
 import '../dialogs/brush_style_sheet.dart';
 
 /// 🚀 v10.14: Barra de ferramentas superior ultra-fina e inteligente.
@@ -191,13 +192,23 @@ class TopActionToolbar extends ConsumerWidget {
       offset: const Offset(0, 40),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (val) {
-        if (val == 'image') onAddImageTap?.call();
-        else if (val.startsWith('shape_')) _handleInsertShape(ref, val.replaceFirst('shape_', ''));
-        else if (val == 'table') _handleInsertTable(context, ref);
-        else if (val == 'link') _handleInsertLink(ref);
-        else if (val == 'attach') _handleInsertAttachment(ref);
+        if (val == 'simulation') {
+          SimulationStudioSheet.show(context, canvasSize: Size(currentPage.pageWidthPx, currentPage.pageHeightPx));
+        } else if (val == 'image') {
+          onAddImageTap?.call();
+        } else if (val.startsWith('shape_')) {
+          _handleInsertShape(ref, val.replaceFirst('shape_', ''));
+        } else if (val == 'table') {
+          _handleInsertTable(context, ref);
+        } else if (val == 'link') {
+          _handleInsertLink(ref);
+        } else if (val == 'attach') {
+          _handleInsertAttachment(ref);
+        }
       },
       itemBuilder: (context) => [
+        _buildPopupItem('simulation', Icons.auto_awesome_motion, 'Ilustração Animada'),
+        const PopupMenuDivider(),
         _buildPopupItem('image', Icons.image_outlined, 'Imagem'),
         const PopupMenuDivider(),
         _buildPopupItem('shape_rectangle', Icons.rectangle_outlined, 'Retângulo'),
@@ -219,11 +230,9 @@ class TopActionToolbar extends ConsumerWidget {
       case ToolMode.table: return Icons.grid_on_rounded;
       case ToolMode.eraser: return Icons.auto_fix_high_rounded;
       case ToolMode.pixelEraser: return Icons.auto_fix_normal_rounded;
-      case ToolMode.lasso: return Icons.gesture_rounded;
       case ToolMode.pan: return Icons.pan_tool_outlined;
       case ToolMode.video: return Icons.animation_rounded;
-      case ToolMode.organizer: return Icons.inventory_2_outlined;
-      default: return Icons.help_outline;
+      default: return Icons.near_me_outlined;
     }
   }
 
@@ -235,10 +244,8 @@ class TopActionToolbar extends ConsumerWidget {
       case ToolMode.table: return 'Tabela';
       case ToolMode.eraser: return 'Borracha';
       case ToolMode.pixelEraser: return 'Borracha Pixel';
-      case ToolMode.lasso: return 'Laço';
       case ToolMode.pan: return 'Mover';
       case ToolMode.video: return 'Animação';
-      case ToolMode.organizer: return 'Organizador';
       default: return 'Ferramenta';
     }
   }

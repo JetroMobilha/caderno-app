@@ -13,6 +13,8 @@ class TableCellStyle {
   final TextAlign textAlign;
   final double fontSize;
   final int verticalAlign;
+  final ListType listType; // 🚀 v10.60
+  final List<int> checkedLineIndices; // 🚀 v10.60
 
   TableCellStyle({
     this.bold = false,
@@ -25,7 +27,9 @@ class TableCellStyle {
     this.textAlign = TextAlign.center,
     this.fontSize = 12.0,
     this.verticalAlign = 1,
-  });
+    this.listType = ListType.none,
+    List<int>? checkedLineIndices,
+  }) : checkedLineIndices = List.unmodifiable(checkedLineIndices ?? []);
 
   TableCellStyle copyWith({
     bool? bold,
@@ -38,6 +42,8 @@ class TableCellStyle {
     TextAlign? textAlign,
     double? fontSize,
     int? verticalAlign,
+    ListType? listType,
+    List<int>? checkedLineIndices,
   }) {
     return TableCellStyle(
       bold: bold ?? this.bold,
@@ -50,22 +56,29 @@ class TableCellStyle {
       textAlign: textAlign ?? this.textAlign,
       fontSize: fontSize ?? this.fontSize,
       verticalAlign: verticalAlign ?? this.verticalAlign,
+      listType: listType ?? this.listType,
+      checkedLineIndices: checkedLineIndices ?? this.checkedLineIndices,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'bold': bold, 'italic': italic, 'underline': underline, 'strikethrough': strikethrough,
-    'text_color': textColorHex, 'background_color': backgroundColorHex,
+    'text_color_hex': textColorHex, 'background_color_hex': backgroundColorHex,
     'font_family': fontFamily, 'text_align': textAlign.index,
     'font_size': fontSize, 'vertical_align': verticalAlign,
+    'list_type': listType.name,
+    'checked_indices': checkedLineIndices,
   };
 
   factory TableCellStyle.fromJson(Map<String, dynamic> json) => TableCellStyle(
     bold: json['bold'] ?? false, italic: json['italic'] ?? false,
     underline: json['underline'] ?? false, strikethrough: json['strikethrough'] ?? false,
-    textColorHex: json['text_color'] ?? '#000000', backgroundColorHex: json['background_color'],
+    textColorHex: json['text_color_hex']?.toString() ?? json['text_color']?.toString() ?? '#000000', 
+    backgroundColorHex: json['background_color_hex']?.toString() ?? json['background_color']?.toString(),
     fontFamily: json['font_family'], textAlign: TextAlign.values[json['text_align'] ?? 4],
     fontSize: (json['font_size'] ?? 12.0).toDouble(), verticalAlign: json['vertical_align'] ?? 1,
+    listType: ListType.values.firstWhere((e) => e.name == (json['list_type'] ?? 'none'), orElse: () => ListType.none),
+    checkedLineIndices: (json['checked_indices'] as List<dynamic>?)?.map((e) => e as int).toList(),
   );
 
   TableCellStyle clone() => copyWith();

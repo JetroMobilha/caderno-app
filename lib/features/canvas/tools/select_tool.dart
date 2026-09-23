@@ -22,13 +22,13 @@ class SelectTool extends CanvasTool {
     if (_detectHandleHit(localPos, toolState, page, ref) != HandleType.none) return;
 
     if (toolState.selectedObjectIds.length == 1) {
-      final obj = page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first);
-      if (obj is TableObject && toolState.isTableStructuralMode) {
+      final obj = page.objects.where((o) => o.id == toolState.selectedObjectIds.first).firstOrNull;
+      if (obj != null && obj is TableObject && toolState.isTableStructuralMode) {
         if (_detectTableBorderHit(localPos, obj, ref) != null) return;
       }
     }
 
-    toolNotifier.selectAt(localPos, page, includeLocked: mode == ToolMode.organizer);
+    toolNotifier.selectAt(localPos, page, includeLocked: true);
   }
 
   @override
@@ -36,16 +36,17 @@ class SelectTool extends CanvasTool {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
 
-    if (toolState.selectedObjectIds.length == 1) {
-      final obj = page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first);
-      if (obj is TableObject && !obj.isLocked) {
-        final hit = _detectTableBorderHit(localPos, obj, ref);
-        if (hit != null) {
-          toolNotifier.startTableResize(hit.isVertical ? HandleType.tableColResize : HandleType.tableRowResize, hit.index, localPos);
-          return;
-        }
-        if (toolState.isTableStructuralMode) return; 
+    final TableObject? tableObj = (toolState.selectedObjectIds.length == 1 && page.objects.any((o) => o.id == toolState.selectedObjectIds.first && o is TableObject))
+        ? page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first) as TableObject
+        : (toolState.isTableStructuralMode ? page.objects.whereType<TableObject>().firstOrNull : null);
+
+    if (tableObj != null && !tableObj.isLocked) {
+      final hit = _detectTableBorderHit(localPos, tableObj, ref);
+      if (hit != null) {
+        toolNotifier.startTableResize(hit.isVertical ? HandleType.tableColResize : HandleType.tableRowResize, hit.index, localPos);
+        return;
       }
+      // Se não clicou na haste, permite mover a tabela normalmente em vez de travar
     }
 
     final hitHandle = _detectHandleHit(localPos, toolState, page, ref);
@@ -57,29 +58,24 @@ class SelectTool extends CanvasTool {
     }
 
     if (toolNotifier.isPointInSelection(localPos, page)) {
-      if (!_isAnySelectedLocked(toolState, page) || mode == ToolMode.organizer) {
-        toolNotifier.setMovingSelection(true);
-      }
+      toolNotifier.setMovingSelection(true, localPos);
       return;
     }
-    if (mode != ToolMode.organizer) {
-      toolNotifier.clearSelection();
-      toolNotifier.setSelectionRect(localPos, localPos, page);
-    } else {
-      toolNotifier.selectAt(localPos, page, includeLocked: true);
-      if (toolNotifier.isPointInSelection(localPos, page)) toolNotifier.setMovingSelection(true);
-    }
+    toolNotifier.clearSelection();
+    toolNotifier.setSelectionRect(localPos, localPos, page);
   }
 
   @override
   void onPanUpdate(Offset localPos, Offset delta, dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
-    final Offset docDelta = ref.read(canvasViewportProvider.notifier).screenDeltaToDocumentDelta(delta);
+    // 🚀 v10.98: O delta já vem escalonado corretamente pelo InteractiveViewer
+    final Offset docDelta = delta;
 
     if (toolState.activeTableResizeIndex != null) {
-      final obj = page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first);
-      if (obj is TableObject) {
+      final obj = page.objects.whereType<TableObject>().where((t) => toolState.selectedObjectIds.contains(t.id)).firstOrNull
+          ?? page.objects.whereType<TableObject>().firstOrNull;
+      if (obj != null) {
         if (toolState.activeHandle == HandleType.tableColResize) _handleTableColumnResize(obj, toolState.activeTableResizeIndex!, docDelta.dx, ref, page);
         else if (toolState.activeHandle == HandleType.tableRowResize) _handleTableRowResize(obj, toolState.activeTableResizeIndex!, docDelta.dy, ref, page);
         return;
@@ -123,20 +119,22 @@ class SelectTool extends CanvasTool {
     
     final double tolerance = 35.0 / currentScale;
 
+    // 1. Colunas (Hastes Superiores)
     double currentX = 0;
-    for (int i = 0; i < table.columnWidths.length - 1; i++) {
-      currentX += table.columnWidths[i];
+    for (int i = 0; i <= table.columnWidths.length; i++) {
       if ((relPos.dx - currentX).abs() < tolerance && (relPos.dy + 35 / currentScale).abs() < tolerance) {
         return _TableBorderHit(i, true);
       }
+      if (i < table.columnWidths.length) currentX += table.columnWidths[i];
     }
 
+    // 2. Linhas (Hastes Esquerdas)
     double currentY = 0;
-    for (int i = 0; i < table.rowHeights.length - 1; i++) {
-      currentY += table.rowHeights[i];
+    for (int i = 0; i <= table.rowHeights.length; i++) {
       if ((relPos.dy - currentY).abs() < tolerance && (relPos.dx + 35 / currentScale).abs() < tolerance) {
         return _TableBorderHit(i, false);
       }
+      if (i < table.rowHeights.length) currentY += table.rowHeights[i];
     }
     return null;
   }
@@ -144,25 +142,43 @@ class SelectTool extends CanvasTool {
   void _handleTableColumnResize(TableObject table, int index, double deltaX, dynamic ref, LocalPage page) {
     if (deltaX == 0) return;
     final List<double> newWidths = List<double>.from(table.columnWidths);
-    newWidths[index] = (newWidths[index] + deltaX).clamp(30.0, 1500.0);
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths));
+    Offset newPos = table.position;
+
+    if (index == 0) {
+      final double oldW = newWidths[0];
+      newWidths[0] = (oldW - deltaX).clamp(30.0, 1500.0);
+      final double actualDelta = oldW - newWidths[0];
+      newPos += Offset(actualDelta, 0);
+    } else {
+      newWidths[index - 1] = (newWidths[index - 1] + deltaX).clamp(30.0, 1500.0);
+    }
+
+    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths, position: newPos));
   }
 
   void _handleTableRowResize(TableObject table, int index, double deltaY, dynamic ref, LocalPage page) {
     if (deltaY == 0) return;
     final List<double> newHeights = List<double>.from(table.rowHeights);
-    newHeights[index] = (newHeights[index] + deltaY).clamp(20.0, 1000.0);
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
+    Offset newPos = table.position;
+
+    if (index == 0) {
+      final double oldH = newHeights[0];
+      newHeights[0] = (oldH - deltaY).clamp(20.0, 1000.0);
+      final double actualDelta = oldH - newHeights[0];
+      newPos += Offset(0, actualDelta);
+    } else {
+      newHeights[index - 1] = (newHeights[index - 1] + deltaY).clamp(20.0, 1000.0);
+    }
+
+    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights, position: newPos));
   }
 
   HandleType _detectHandleHit(Offset localPos, CanvasToolState toolState, LocalPage page, dynamic ref) {
-    if (toolState.selectedObjectIds.isEmpty || toolState.isTableStructuralMode) return HandleType.none;
+    if (toolState.selectedObjectIds.isEmpty || toolState.isTableStructuralMode || !toolState.isTransformMode) return HandleType.none;
     final selectedObjects = page.objects.where((o) => toolState.selectedObjectIds.contains(o.id)).toList();
-    if (selectedObjects.isEmpty || (selectedObjects.any((o) => o.isLocked) && mode != ToolMode.organizer)) return HandleType.none;
+    if (selectedObjects.isEmpty) return HandleType.none;
     
-    final bool canResize = selectedObjects.length == 1 && (selectedObjects.first.type == 'image' || 
-                           selectedObjects.first.type == 'shape' || 
-                           selectedObjects.first.type == 'table');
+    final bool canResize = selectedObjects.length == 1 && selectedObjects.first.type != 'stroke';
                            
     if (selectedObjects.length != 1 || !canResize) return HandleType.none;
 
@@ -221,31 +237,53 @@ class SelectTool extends CanvasTool {
       return;
     }
 
-    final totalDelta = localPos - toolState.initialPosition;
-    if (toolState.activeHandle == HandleType.bottomRight) {
-       toolNotifier.updateLiveTransform(scale: Size(((toolState.initialSize.width + totalDelta.dx) / toolState.initialSize.width).clamp(0.1, 10.0), ((toolState.initialSize.height + totalDelta.dy) / toolState.initialSize.height).clamp(0.1, 10.0)));
-    } else {
-       if (toolState.selectedObjectIds.length == 1) {
-          final obj = page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first);
-          final updatedObj = TransformService.calculateResize(object: obj, handle: toolState.activeHandle, delta: delta);
-          if (updatedObj != null) ref.read(canvasDocumentProvider.notifier).updateObject(page, updatedObj);
-       }
+    if (toolState.selectedObjectIds.length == 1) {
+      final obj = page.objects.where((o) => o.id == toolState.selectedObjectIds.first).firstOrNull;
+      if (obj == null) return;
+      
+      // 🚀 v10.96: Usar transformação imersiva unificada consciente de rotação
+      final totalGlobalDelta = localPos - toolState.initialPosition;
+      final transform = TransformService.calculateImmersiveTransform(
+        object: obj, 
+        handle: toolState.activeHandle, 
+        delta: totalGlobalDelta,
+        keepAspectRatio: false, // Pode ser expandido para Shift/Modificadores
+      );
+      
+      toolNotifier.updateLiveTransform(
+        scale: transform['scale'] as Size,
+        positionDelta: transform['positionDelta'] as Offset,
+      );
     }
   }
 
   void _finalizeTransform(CanvasToolState toolState, dynamic ref, CanvasToolNotifier toolNotifier, LocalPage page) {
     if (toolState.selectedObjectIds.length == 1) {
-      final obj = page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first);
-      if (toolState.liveRotation != 0 || toolState.liveScale != const Size(1, 1)) {
-        ref.read(canvasDocumentProvider.notifier).updateObject(page, obj.copyWith(rotation: obj.rotation + toolState.liveRotation, size: Size(obj.size.width * toolState.liveScale.width, obj.size.height * toolState.liveScale.height)));
+      final obj = page.objects.where((o) => o.id == toolState.selectedObjectIds.first).firstOrNull;
+      if (obj != null && (toolState.liveRotation != 0 || toolState.liveScale != const Size(1, 1) || toolState.livePositionDelta != Offset.zero)) {
+        final double finalRotation = obj.rotation + toolState.liveRotation;
+        final Size finalSize = Size(
+          obj.size.width * toolState.liveScale.width,
+          obj.size.height * toolState.liveScale.height,
+        );
+        final Offset finalPosition = obj.position + toolState.livePositionDelta;
+
+        ref.read(canvasDocumentProvider.notifier).updateObject(
+          page, 
+          obj.copyWith(
+            rotation: finalRotation, 
+            size: finalSize,
+            position: finalPosition,
+          ),
+        );
       }
     }
   }
 
   void _performCropTransform(Offset delta, CanvasToolState toolState, CanvasToolNotifier toolNotifier, LocalPage page, dynamic ref) {
     if (toolState.selectedObjectIds.length != 1) return;
-    final obj = page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first);
-    if (obj is! ImageBlock) return;
+    final obj = page.objects.where((o) => o.id == toolState.selectedObjectIds.first).firstOrNull;
+    if (obj == null || obj is! ImageBlock) return;
 
     Rect crop = obj.cropRect ?? const Rect.fromLTWH(0, 0, 1, 1);
     double nDX = delta.dx * crop.width / obj.width;

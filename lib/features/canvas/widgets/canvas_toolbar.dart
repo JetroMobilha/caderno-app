@@ -8,7 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_document_provider.dart';
 import '../models/local_page_model.dart';
-import '../models/canvas_enums.dart' hide CanvasInteractionStateMode;
+import '../models/canvas_enums.dart'; // 🚀 v10.60: Removido o 'hide' para permitir acesso aos modos de estado
 import '../providers/canvas_ui_provider.dart';
 import '../widgets/canvas_zoom_control.dart';
 import '../widgets/dialogs/layer_manager_sheet.dart'; 
@@ -26,6 +26,7 @@ import 'brush_preview.dart';
 /// 🚀 v10.23: Barra de ferramentas horizontal altamente categorizada e sem redundâncias.
 class CanvasToolbar extends ConsumerWidget {
   final LocalPage currentPage;
+  final TextEditingController textController; // 🚀 v10.58
   final VoidCallback onColorTap;
   final VoidCallback onThicknessTap;
   final VoidCallback onChangePaperTap;
@@ -36,6 +37,7 @@ class CanvasToolbar extends ConsumerWidget {
   const CanvasToolbar({
     super.key,
     required this.currentPage,
+    required this.textController,
     required this.onColorTap,
     required this.onThicknessTap,
     required this.onChangePaperTap,
@@ -52,16 +54,20 @@ class CanvasToolbar extends ConsumerWidget {
     final docNotifier = ref.read(canvasDocumentProvider.notifier);
     final uiState = ref.watch(canvasUiProvider);
 
-    final bool isTextMode = interactionState.activeTextBlock != null || interactionState.activeInlineTarget == InlineTarget.title;
+    // 🚀 v10.60: Lógica de precedência de Toolbars baseada em Ferramenta e Estado de Cursor
+    // O Modo de Texto só é "dono" da toolbar se houver um bloco ativo e estivermos em modo de edição (cursor presente)
+    final bool isEditingText = interactionState.activeTextBlock != null && 
+        (interactionState.interactionMode == CanvasInteractionStateMode.textEditing || 
+         interactionState.interactionMode == CanvasInteractionStateMode.tableEditing);
+
+    final bool isTextMode = isEditingText || interactionState.activeInlineTarget == InlineTarget.title;
     
-    // 🚀 v10.27: Detecção inteligente de Tabela (mesmo sem células selecionadas)
-    final bool isSingleTableSelected = interactionState.selectedObjectIds.length == 1 && 
-        currentPage.objects.any((o) => o.id == interactionState.selectedObjectIds.first && o is TableObject);
-    final bool isTableMode = interactionState.activeTableId != null || interactionState.selectedTableCells.isNotEmpty || isSingleTableSelected;
+    final bool isTableMode = interactionState.activeTool == ToolMode.table || 
+                             interactionState.activeTableId != null || 
+                             interactionState.selectedTableCells.isNotEmpty;
 
     final bool isBrushMode = interactionState.activeTool == ToolMode.draw && interactionState.selectedObjectIds.isEmpty;
     final bool isEraserMode = (interactionState.activeTool == ToolMode.eraser || interactionState.activeTool == ToolMode.pixelEraser) && interactionState.selectedObjectIds.isEmpty;
-    final bool isLassoMode = interactionState.activeTool == ToolMode.lasso && interactionState.selectedObjectIds.isEmpty;
 
     final bool hideDrawingTools = docState.currentUserRole == 'viewer';
     if (hideDrawingTools) return _buildCompactToolbar(context, docState);
@@ -101,9 +107,7 @@ class CanvasToolbar extends ConsumerWidget {
                       ? _buildBrushContextZone(context, interactionState, interactionNotifier)
                       : isEraserMode
                         ? _buildEraserContextZone(context, interactionState, interactionNotifier, docNotifier)
-                        : isLassoMode
-                          ? _buildLassoContextZone(context, interactionState, interactionNotifier)
-                          : _buildGeneralContextZone(context, interactionState, interactionNotifier, docNotifier),
+                        : _buildGeneralContextZone(context, interactionState, interactionNotifier, docNotifier),
 
                 if (!isSmallScreen) Container(width: 0.5, height: 16, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
@@ -121,103 +125,82 @@ class CanvasToolbar extends ConsumerWidget {
     
     final bool singleSelection = state.selectedObjectIds.length == 1;
     final obj = singleSelection ? currentPage.objects.where((o) => o.id == state.selectedObjectIds.first).firstOrNull : null;
+    final bool canGroup = state.selectedObjectIds.length > 1;
+    final bool isMultiple = state.selectedObjectIds.length > 1;
+    final bool hasGrouped = currentPage.objects.any((o) => state.selectedObjectIds.contains(o.id) && o.parentId != null);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: _buildActiveGeneralCategoryContent(context, state, notifier, docNotifier, obj),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildCategoryTab(GeneralEditCategory.transform, Icons.open_with_rounded, 'Transformar', state.activeGeneralCategory, (c) => notifier.setGeneralCategory(c as GeneralEditCategory)),
-            _buildCategoryTab(GeneralEditCategory.style, Icons.palette_outlined, 'Estilo', state.activeGeneralCategory, (c) => notifier.setGeneralCategory(c as GeneralEditCategory)),
-            _buildCategoryTab(GeneralEditCategory.organize, Icons.auto_awesome_motion_rounded, 'Estrutura', state.activeGeneralCategory, (c) => notifier.setGeneralCategory(c as GeneralEditCategory)),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 1. Transformações
+          _buildFormatToggle(Icons.transform_rounded, state.isTransformMode, () => notifier.toggleTransformMode(), tooltip: 'Modo de Transformação'),
+          if (obj is ImageBlock) ...[
+            _buildFormatToggle(Icons.crop_rounded, state.isImageCropping, () => notifier.toggleImageCropping(), tooltip: 'Cortar Imagem'),
+            _buildContextIconButton(Icons.rotate_90_degrees_ccw_rounded, () => docNotifier.updateObject(currentPage, obj.copyWith(rotation: obj.rotation + (math.pi / 2))), Colors.blueGrey, tooltip: 'Girar 90°'),
           ],
-        ),
-      ],
-    );
-  }
+          if (obj != null) _buildFormatToggle(obj.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, obj.isLocked, () { docNotifier.updateObject(currentPage, obj.copyWith(isLocked: !obj.isLocked)); }, tooltip: obj.isLocked ? 'Desbloquear Objeto' : 'Bloquear Objeto'),
+          
+          const VerticalDivider(width: 12, indent: 6, endIndent: 6),
 
-  Widget _buildActiveGeneralCategoryContent(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier, CanvasDocumentNotifier docNotifier, PageObject? obj) {
-    switch (state.activeGeneralCategory) {
-      case GeneralEditCategory.transform:
-        return Row(mainAxisSize: MainAxisSize.min, children: [
-          _buildFormatToggle(Icons.transform_rounded, state.isTransformMode, () => notifier.toggleTransformMode()),
-          if (obj is ImageBlock) _buildFormatToggle(Icons.crop_rounded, state.isImageCropping, () => notifier.toggleImageCropping()), // 🚀 v10.34
-          if (obj != null) _buildFormatToggle(obj.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, obj.isLocked, () { docNotifier.updateObject(currentPage, obj.copyWith(isLocked: !obj.isLocked)); }),
-          if (obj is ImageBlock) _buildContextIconButton(Icons.rotate_90_degrees_ccw_rounded, () => docNotifier.updateObject(currentPage, obj.copyWith(rotation: obj.rotation + (math.pi / 2))), Colors.blueGrey),
-        ]);
-      case GeneralEditCategory.style:
-        return Row(mainAxisSize: MainAxisSize.min, children: [
-          if (obj is Stroke || obj is TextBlock || obj is ShapeObject) _buildContextIconButton(Icons.palette_outlined, onColorTap, Colors.blueAccent),
+          // 2. Estilos (Cores e Espessuras)
+          if (obj is Stroke || obj is TextBlock || obj is ShapeObject) _buildContextIconButton(Icons.palette_outlined, onColorTap, Colors.blueAccent, tooltip: 'Alterar Cor'),
           if (obj is ShapeObject) ...[
             _buildContextIconButton(Icons.format_color_fill_rounded, () async {
               final hex = await ColorEngine.show(context, initialColor: obj.fillColor ?? '#FFFFFF', title: 'Preenchimento');
               if (hex != null) docNotifier.updateObject(currentPage, obj.copyWith(fillColor: hex));
-            }, Colors.purpleAccent),
-            _buildContextIconButton(Icons.line_weight_rounded, () => showDialog(context: context, builder: (_) => const ThicknessStudioDialog()), const Color(0xFF1A1A24)),
+            }, Colors.purpleAccent, tooltip: 'Cor de Preenchimento'),
+            _buildContextIconButton(Icons.line_weight_rounded, () => showDialog(context: context, builder: (_) => const ThicknessStudioDialog()), const Color(0xFF1A1A24), tooltip: 'Espessura da Linha'),
           ],
-          if (obj is ImageBlock) _buildContextIconButton(Icons.image_search_rounded, () => docNotifier.pickAndInsertImage(currentPage), Colors.teal),
-        ]);
-      case GeneralEditCategory.organize:
-        final bool canGroup = state.selectedObjectIds.length > 1;
-        final bool isMultiple = state.selectedObjectIds.length > 1;
-        final bool hasGrouped = currentPage.objects.any((o) => state.selectedObjectIds.contains(o.id) && o.parentId != null);
+          if (obj is ImageBlock) _buildContextIconButton(Icons.image_search_rounded, () => docNotifier.pickAndInsertImage(currentPage), Colors.teal, tooltip: 'Substituir Imagem'),
 
-        return Row(mainAxisSize: MainAxisSize.min, children: [
-          // 🚀 Alinhamento (Apenas se múltiplos)
+          const VerticalDivider(width: 12, indent: 6, endIndent: 6),
+
+          // 3. Alinhamento Espacial
           if (isMultiple) ...[
-            _buildContextIconButton(Icons.align_horizontal_left_rounded, () => notifier.alignSelectedObjects(currentPage, 'left'), Colors.blueGrey, size: 16),
-            _buildContextIconButton(Icons.align_horizontal_center_rounded, () => notifier.alignSelectedObjects(currentPage, 'center'), Colors.blueGrey, size: 16),
-            _buildContextIconButton(Icons.align_vertical_top_rounded, () => notifier.alignSelectedObjects(currentPage, 'top'), Colors.blueGrey, size: 16),
-            const VerticalDivider(width: 8, indent: 8, endIndent: 8),
+            _buildContextIconButton(Icons.align_horizontal_left_rounded, () => notifier.alignSelectedObjects(currentPage, 'left'), Colors.blueGrey, size: 16, tooltip: 'Alinhar à Esquerda'),
+            _buildContextIconButton(Icons.align_horizontal_center_rounded, () => notifier.alignSelectedObjects(currentPage, 'center'), Colors.blueGrey, size: 16, tooltip: 'Alinhar ao Centro'),
+            _buildContextIconButton(Icons.align_vertical_top_rounded, () => notifier.alignSelectedObjects(currentPage, 'top'), Colors.blueGrey, size: 16, tooltip: 'Alinhar ao Topo'),
+            const VerticalDivider(width: 12, indent: 6, endIndent: 6),
           ],
 
-          // 🚀 Agrupamento
-          if (canGroup) _buildContextIconButton(Icons.group_work_rounded, () => notifier.groupSelectedObjects(currentPage), const Color(0xFF1976D2), size: 20),
-          if (hasGrouped) _buildContextIconButton(Icons.group_work_outlined, () => notifier.ungroupSelectedObjects(currentPage), Colors.orangeAccent, size: 20),
+          // 4. Estrutura e Camadas
+          if (canGroup) _buildContextIconButton(Icons.group_work_rounded, () => notifier.groupSelectedObjects(currentPage), const Color(0xFF1976D2), size: 20, tooltip: 'Agrupar Objetos'),
+          if (hasGrouped) _buildContextIconButton(Icons.group_work_outlined, () => notifier.ungroupSelectedObjects(currentPage), Colors.indigo, size: 20, tooltip: 'Desagrupar / Desfazer Grupo'),
           
           if (canGroup || hasGrouped) const VerticalDivider(width: 12, indent: 6, endIndent: 6),
 
-          // 🚀 Duplicação
-          _buildContextIconButton(Icons.copy_rounded, () {
-            for (var id in state.selectedObjectIds) {
-              final o = currentPage.objects.firstWhere((ob) => ob.id == id);
-              final clone = o.clone(newId: const Uuid().v4());
-              if (clone is TextBlock) docNotifier.addTextBlock(currentPage, clone.copyWith(position: o.position + const Offset(20, 20)));
-              else if (clone is Stroke) docNotifier.addStroke(currentPage, clone.copyWith(points: clone.points.map((p) => p + const Offset(20, 20)).toList()));
-              else if (clone is TableObject) docNotifier.addTable(currentPage, clone.copyWith(position: o.position + const Offset(20, 20)));
-              else docNotifier.updateObject(currentPage, clone.copyWith(position: o.position + const Offset(20, 20)));
-            }
-          }, Colors.black54, size: 18),
+          _buildContextIconButton(
+            Icons.copy_rounded, 
+            () => notifier.duplicateObjects(currentPage), 
+            Colors.black54, 
+            size: 18, 
+            tooltip: 'Duplicar Seleção'
+          ),
 
-          // 🚀 Ordenação de Camadas
           _buildContextIconButton(Icons.flip_to_front_rounded, () { 
             int maxZ = 0; for (var o in currentPage.objects) if (o.zIndex > maxZ) maxZ = o.zIndex;
             for (var id in state.selectedObjectIds) {
-              final o = currentPage.objects.firstWhere((ob) => ob.id == id);
-              docNotifier.updateObject(currentPage, o.copyWith(zIndex: maxZ + 1));
+              final o = currentPage.objects.where((ob) => ob.id == id).firstOrNull;
+              if (o != null) docNotifier.updateObject(currentPage, o.copyWith(zIndex: maxZ + 1));
             }
-          }, Colors.black87, size: 18),
+          }, Colors.black87, size: 18, tooltip: 'Trazer para Frente'),
           
           if (!isMultiple) ...[
-            _buildContextIconButton(Icons.arrow_upward_rounded, () => docNotifier.moveForward(currentPage, state.selectedObjectIds.first), Colors.black54, size: 16),
-            _buildContextIconButton(Icons.arrow_downward_rounded, () => docNotifier.moveBackward(currentPage, state.selectedObjectIds.first), Colors.black54, size: 16),
+            _buildContextIconButton(Icons.arrow_upward_rounded, () => docNotifier.moveForward(currentPage, state.selectedObjectIds.first), Colors.black54, size: 16, tooltip: 'Avançar Camada'),
+            _buildContextIconButton(Icons.arrow_downward_rounded, () => docNotifier.moveBackward(currentPage, state.selectedObjectIds.first), Colors.black54, size: 16, tooltip: 'Recuar Camada'),
           ],
 
           const VerticalDivider(width: 12, indent: 6, endIndent: 6),
 
-          // 🚀 Eliminação
           _buildContextIconButton(Icons.delete_outline_rounded, () { 
             docNotifier.deleteObjects(currentPage, state.selectedObjectIds.toList()); 
             notifier.clearSelection(); 
-          }, Colors.redAccent, size: 20),
-        ]);
-    }
+          }, Colors.redAccent, size: 20, tooltip: 'Remover Objetos'),
+        ],
+      ),
+    );
   }
 
   Widget _buildBrushContextZone(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier) {
@@ -293,19 +276,6 @@ class CanvasToolbar extends ConsumerWidget {
     );
   }
 
-  Widget _buildLassoContextZone(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildContextIconButton(Icons.deselect_rounded, () => notifier.clearSelection(), Colors.black54),
-          const SizedBox(width: 8),
-          const Text('LAÇO ATIVO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black26)),
-        ],
-      ),
-    );
-  }
 
   Widget _buildTextContextZone(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier, CanvasDocumentNotifier docNotifier) {
     final block = state.activeTextBlock;
@@ -330,7 +300,6 @@ class CanvasToolbar extends ConsumerWidget {
               _buildCategoryTab(TextEditCategory.format, Icons.format_size_rounded, 'Estilo', state.activeTextCategory, (c) => notifier.setTextCategory(c as TextEditCategory)),
               _buildCategoryTab(TextEditCategory.organize, Icons.format_align_center_rounded, 'Layout', state.activeTextCategory, (c) => notifier.setTextCategory(c as TextEditCategory)),
               _buildCategoryTab(TextEditCategory.structure, Icons.format_list_bulleted_rounded, 'Lista', state.activeTextCategory, (c) => notifier.setTextCategory(c as TextEditCategory)),
-              _buildCategoryTab(TextEditCategory.box, Icons.inventory_2_outlined, 'Caixa', state.activeTextCategory, (c) => notifier.setTextCategory(c as TextEditCategory)),
             ],
           ),
         ),
@@ -342,9 +311,10 @@ class CanvasToolbar extends ConsumerWidget {
     switch (state.activeTextCategory) {
       case TextEditCategory.basics:
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          _buildContextIconButton(Icons.undo_rounded, () => docNotifier.undo(currentPage), const Color(0xFF1A1A24)),
-          _buildContextIconButton(Icons.redo_rounded, () => docNotifier.redo(currentPage), const Color(0xFF1A1A24)),
-          _buildContextIconButton(Icons.copy_rounded, () { final clone = block.clone(newId: const Uuid().v4()).copyWith(position: block.position + const Offset(20, 20)); docNotifier.addTextBlock(currentPage, clone as TextBlock); }, Colors.black54),
+          _buildContextIconButton(Icons.copy_rounded, () => notifier.duplicateObjects(currentPage, objectIds: {block.id}), Colors.black54, tooltip: 'Duplicar Bloco'),
+          _buildContextIconButton(Icons.flip_to_front_rounded, () { int maxZ = 0; for (var o in currentPage.objects) if (o.zIndex > maxZ) maxZ = o.zIndex; final nb = block.copyWith(zIndex: maxZ + 1); docNotifier.updateObject(currentPage, nb); notifier.setTextEditing(InlineTarget.block, nb); }, Colors.black87),
+          _buildFormatToggle(block.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, block.isLocked, () { final nb = block.copyWith(isLocked: !block.isLocked); notifier.setTextEditing(InlineTarget.block, nb); docNotifier.updateObject(currentPage, nb); }),
+          _buildContextIconButton(Icons.delete_outline_rounded, () { docNotifier.deleteObjects(currentPage, [block.id]); notifier.exitWritingMode(); }, Colors.redAccent),
         ]);
       case TextEditCategory.format:
         return Row(mainAxisSize: MainAxisSize.min, children: [
@@ -369,18 +339,72 @@ class CanvasToolbar extends ConsumerWidget {
           _buildFormatToggle(Icons.format_list_bulleted_rounded, block.listType == ListType.bullet, () { final nb = block.copyWith(listType: block.listType == ListType.bullet ? ListType.none : ListType.bullet); notifier.setTextEditing(InlineTarget.block, nb); _updateTextBlock(docNotifier, nb, notifier); }),
           _buildFormatToggle(Icons.format_list_numbered_rounded, block.listType == ListType.numbered, () { final nb = block.copyWith(listType: block.listType == ListType.numbered ? ListType.none : ListType.numbered); notifier.setTextEditing(InlineTarget.block, nb); _updateTextBlock(docNotifier, nb, notifier); }),
           _buildFormatToggle(Icons.checklist_rounded, block.listType == ListType.checklist, () { final nb = block.copyWith(listType: block.listType == ListType.checklist ? ListType.none : ListType.checklist); notifier.setTextEditing(InlineTarget.block, nb); _updateTextBlock(docNotifier, nb, notifier); }),
+          const VerticalDivider(width: 8),
+          _buildContextIconButton(Icons.format_indent_decrease_rounded, () {
+            final selection = textController.selection;
+            if (selection.isValid && textController.text.isNotEmpty) {
+              final text = textController.text;
+              int start = selection.baseOffset;
+              while (start > 0 && text[start - 1] != '\n') { start--; }
+              
+              int spacesToRemove = 0;
+              if (start < text.length && text[start] == ' ') {
+                spacesToRemove++;
+                if (start + 1 < text.length && text[start + 1] == ' ') {
+                  spacesToRemove++;
+                }
+              }
+              
+              if (spacesToRemove > 0) {
+                final newText = text.substring(0, start) + text.substring(start + spacesToRemove);
+                textController.text = newText;
+                textController.selection = TextSelection.fromPosition(TextPosition(offset: math.max(start, selection.baseOffset - spacesToRemove)));
+                final nb = block.copyWith(text: newText);
+                notifier.setTextEditing(InlineTarget.block, nb);
+                docNotifier.updateObject(currentPage, nb);
+              }
+            }
+          }, const Color(0xFF0F4C5C)),
+          _buildContextIconButton(Icons.format_indent_increase_rounded, () {
+            final selection = textController.selection;
+            if (selection.isValid && textController.text.isNotEmpty) {
+              final text = textController.text;
+              int start = selection.baseOffset;
+              while (start > 0 && text[start - 1] != '\n') { start--; }
+              final newText = text.substring(0, start) + '  ' + text.substring(start);
+              textController.text = newText;
+              textController.selection = TextSelection.fromPosition(TextPosition(offset: selection.baseOffset + 2));
+              final nb = block.copyWith(text: newText);
+              notifier.setTextEditing(InlineTarget.block, nb);
+              docNotifier.updateObject(currentPage, nb);
+            }
+          }, const Color(0xFF0F4C5C)),
         ]);
-      case TextEditCategory.box:
-        return Row(mainAxisSize: MainAxisSize.min, children: [
-          _buildContextIconButton(Icons.flip_to_front_rounded, () { int maxZ = 0; for (var o in currentPage.objects) if (o.zIndex > maxZ) maxZ = o.zIndex; final nb = block.copyWith(zIndex: maxZ + 1); docNotifier.updateObject(currentPage, nb); notifier.setTextEditing(InlineTarget.block, nb); }, Colors.black87),
-          _buildContextIconButton(Icons.delete_outline_rounded, () { docNotifier.deleteObjects(currentPage, [block.id]); notifier.exitWritingMode(); }, Colors.redAccent),
-        ]);
+      default:
+        return const SizedBox.shrink();
     }
   }
 
   Widget _buildTableContextZone(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier, CanvasDocumentNotifier docNotifier) {
-    final table = currentPage.objects.whereType<TableObject>().where((t) => t.id == state.activeTableId || state.selectedObjectIds.contains(t.id)).firstOrNull;
-    if (table == null) return const SizedBox.shrink();
+    // 🚀 v10.60: Tenta encontrar a tabela pelo ID ativo, pela seleção ou pela primeira tabela da página se a ferramenta estiver ativa
+    final table = currentPage.objects.whereType<TableObject>().where((t) => 
+      t.id == state.activeTableId || 
+      state.selectedObjectIds.contains(t.id)
+    ).firstOrNull ?? (state.activeTool == ToolMode.table ? currentPage.objects.whereType<TableObject>().firstOrNull : null);
+
+    if (table == null) {
+      if (state.activeTool == ToolMode.table) {
+        return const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.table_chart_rounded, size: 16, color: Colors.black26),
+            SizedBox(width: 8),
+            Text('TOQUE NA FOLHA PARA CRIAR TABELA', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black26, letterSpacing: 1.1)),
+          ],
+        );
+      }
+      return const SizedBox.shrink();
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -395,10 +419,10 @@ class CanvasToolbar extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildCategoryTab(TableEditCategory.structure, Icons.grid_view_rounded, 'Estrutura', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
-              _buildCategoryTab(TableEditCategory.cell, Icons.edit_attributes_rounded, 'Célula', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
-              _buildCategoryTab(TableEditCategory.style, Icons.palette_rounded, 'Estilo', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
-              _buildCategoryTab(TableEditCategory.actions, Icons.layers_outlined, 'Ações', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
+              _buildCategoryTab(TableEditCategory.structure, Icons.grid_on_rounded, 'Estrutura', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
+              _buildCategoryTab(TableEditCategory.cell, Icons.border_all_rounded, 'Célula', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
+              _buildCategoryTab(TableEditCategory.style, Icons.color_lens_rounded, 'Estilo', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
+              _buildCategoryTab(TableEditCategory.actions, Icons.auto_awesome_rounded, 'Ações', state.activeTableCategory, (c) => notifier.setTableCategory(c as TableEditCategory)),
             ],
           ),
         ),
@@ -414,29 +438,34 @@ class CanvasToolbar extends ConsumerWidget {
         return Row(mainAxisSize: MainAxisSize.min, children: [
           // 🚀 v10.29: Alternar modo de redimensionamento interno (Hastes)
           _buildFormatToggle(
-            Icons.grid_goldenratio_rounded, 
+            Icons.architecture_rounded, 
             state.isTableStructuralMode, 
-            () => notifier.toggleTableStructuralMode(),
+            () {
+              notifier.toggleTableStructuralMode();
+              if (state.selectedObjectIds.isEmpty) {
+                notifier.selectIds(objectIds: {table.id});
+              }
+            },
           ),
 
-          _buildContextIconButton(Icons.table_rows_rounded, () { int insertAt = table.rows; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.row + 1; docNotifier.updateObject(currentPage, table.insertRowAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
-          _buildContextIconButton(Icons.view_column_rounded, () { int insertAt = table.cols; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.col + 1; docNotifier.updateObject(currentPage, table.insertColumnAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
+          _buildContextIconButton(Icons.playlist_add_rounded, () { int insertAt = table.rows; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.row + 1; docNotifier.updateObject(currentPage, table.insertRowAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
+          _buildContextIconButton(Icons.view_week_rounded, () { int insertAt = table.cols; if (selectedKeys.isNotEmpty) insertAt = selectedKeys.first.coordinate.col + 1; docNotifier.updateObject(currentPage, table.insertColumnAt(insertAt)); }, const Color(0xFF0F4C5C), size: 16),
 
-          _buildContextIconButton(Icons.select_all_outlined, () {
+          _buildContextIconButton(Icons.view_stream_rounded, () {
             if (selectedKeys.isEmpty) return;
             final int row = selectedKeys.first.coordinate.row;
             final Set<TableCellKey> keys = {}; for (int c = 0; c < table.cols; c++) keys.add(TableCellKey(table.id, CellCoordinate(row, c)));
             notifier.selectIds(tableCells: keys);
           }, Colors.blueAccent, size: 16),
-          _buildContextIconButton(Icons.view_week_outlined, () {
+          _buildContextIconButton(Icons.view_column_outlined, () {
             if (selectedKeys.isEmpty) return;
             final int col = selectedKeys.first.coordinate.col;
             final Set<TableCellKey> keys = {}; for (int r = 0; r < table.rows; r++) keys.add(TableCellKey(table.id, CellCoordinate(r, col)));
             notifier.selectIds(tableCells: keys);
           }, Colors.blueAccent, size: 16),
           
-          _buildContextIconButton(Icons.delete_sweep_rounded, () { if (table.rows > 1) { int deleteAt = table.rows - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.row; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteRowAt(deleteAt)); } }, Colors.redAccent, size: 16),
-          _buildContextIconButton(Icons.view_week_rounded, () { if (table.cols > 1) { int deleteAt = table.cols - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.col; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteColumnAt(deleteAt)); } }, Colors.redAccent, size: 16),
+          _buildContextIconButton(Icons.layers_clear_rounded, () { if (table.rows > 1) { int deleteAt = table.rows - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.row; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteRowAt(deleteAt)); } }, Colors.redAccent, size: 16),
+          _buildContextIconButton(Icons.view_array_rounded, () { if (table.cols > 1) { int deleteAt = table.cols - 1; if (selectedKeys.isNotEmpty) deleteAt = selectedKeys.first.coordinate.col; notifier.selectIds(tableCells: {}); docNotifier.updateObject(currentPage, table.deleteColumnAt(deleteAt)); } }, Colors.redAccent, size: 16),
         ]);
       case TableEditCategory.cell:
         if (selectedKeys.isEmpty) return const Text('SELECIONE CÉLULAS', style: TextStyle(fontSize: 9, color: Colors.black26));
@@ -482,7 +511,29 @@ class CanvasToolbar extends ConsumerWidget {
         return Row(mainAxisSize: MainAxisSize.min, children: [
           _buildColorCircle(context, table.borderColor, (hex) { docNotifier.updateObject(currentPage, table.copyWith(borderColor: hex)); }, title: 'Cor da Borda'),
           _buildColorCircle(context, table.tableBackgroundColorHex ?? '#FFFFFF', (hex) { docNotifier.updateObject(currentPage, table.copyWith(tableBackgroundColorHex: hex)); }, title: 'Fundo da Tabela'),
-          const VerticalDivider(width: 12),
+          const VerticalDivider(width: 8, indent: 8, endIndent: 8),
+
+          // 🚀 v10.91: Controle Unificado de Borda (Exterior)
+          _buildBorderSideControl(
+            label: 'BORDA',
+            currentStyle: table.lineStyle,
+            currentThickness: table.borderWidth,
+            onStyleChanged: (s) => docNotifier.updateObject(currentPage, table.copyWith(lineStyle: s)),
+            onThicknessChanged: (v) => docNotifier.updateObject(currentPage, table.copyWith(borderWidth: v)),
+          ),
+
+          const VerticalDivider(width: 8, indent: 8, endIndent: 8),
+
+          // 🚀 v10.91: Controle Unificado de Grade (Interior)
+          _buildBorderSideControl(
+            label: 'GRADE',
+            currentStyle: table.internalLineStyle,
+            currentThickness: table.internalBorderWidth,
+            onStyleChanged: (s) => docNotifier.updateObject(currentPage, table.copyWith(internalLineStyle: s)),
+            onThicknessChanged: (v) => docNotifier.updateObject(currentPage, table.copyWith(internalBorderWidth: v)),
+          ),
+
+          const VerticalDivider(width: 8, indent: 8, endIndent: 8),
           _buildFormatToggle(Icons.view_headline_rounded, table.showHeader, () { docNotifier.updateObject(currentPage, table.copyWith(showHeader: !table.showHeader)); }),
         ]);
       case TableEditCategory.actions:
@@ -490,10 +541,7 @@ class CanvasToolbar extends ConsumerWidget {
           _buildContextIconButton(Icons.merge_type_rounded, selectedKeys.length > 1 ? () => _handleMerge(table, selectedKeys, docNotifier) : null, selectedKeys.length > 1 ? Colors.blueAccent : Colors.black12, size: 18),
           _buildContextIconButton(Icons.call_split_rounded, () => _handleSplit(table, selectedKeys, docNotifier), Colors.orangeAccent, size: 18),
           const VerticalDivider(width: 8),
-          _buildContextIconButton(Icons.copy_rounded, () {
-            final clone = table.clone(newId: const Uuid().v4()).copyWith(position: table.position + const Offset(20, 20));
-            docNotifier.addTable(currentPage, clone);
-          }, Colors.black54, size: 16),
+          _buildContextIconButton(Icons.copy_rounded, () => notifier.duplicateObjects(currentPage, objectIds: {table.id}), Colors.black54, size: 16, tooltip: 'Duplicar Tabela'),
           _buildContextIconButton(Icons.cleaning_services_rounded, () {
             final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
             for (var key in selectedKeys) { final c = table.cells[key.coordinate] ?? TableCellModel(); newCells[key.coordinate] = c.copyWith(value: ''); }
@@ -563,6 +611,8 @@ class CanvasToolbar extends ConsumerWidget {
           strikethrough: block.isStrikethrough, fontSize: block.fontSize,
           fontFamily: block.fontFamily, textColorHex: block.textColorHex,
           backgroundColorHex: block.backgroundColorHex, textAlign: block.textAlign,
+          listType: block.listType, // 🚀 v10.60: Sincronizar tipo de lista
+          checkedLineIndices: block.checkedLineIndices, // 🚀 v10.60: Sincronizar checklist
         ),
       );
       final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
@@ -656,17 +706,128 @@ class CanvasToolbar extends ConsumerWidget {
     );
   }
 
-  Widget _buildContextIconButton(IconData icon, VoidCallback? onPressed, Color color, {double size = 18}) => IconButton(
-    iconSize: size, 
-    constraints: const BoxConstraints(minWidth: 32, minHeight: 32), // 🚀 Menor
-    padding: EdgeInsets.zero, 
-    icon: Icon(icon, color: color), 
-    onPressed: onPressed
-  );
+  Widget _buildContextIconButton(IconData icon, VoidCallback? onPressed, Color color, {double size = 18, String? tooltip}) {
+    final button = IconButton(
+      iconSize: size, 
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      padding: EdgeInsets.zero, 
+      icon: Icon(icon, color: color), 
+      onPressed: onPressed
+    );
+
+    if (tooltip != null) {
+      return Tooltip(
+        message: tooltip,
+        preferBelow: false,
+        verticalOffset: 24,
+        child: button,
+      );
+    }
+    return button;
+  }
 
   Widget _buildColorCircle(BuildContext context, String hex, Function(String) onSelected, {String title = 'Cor'}) => InkWell(onTap: () async { final newHex = await ColorEngine.show(context, initialColor: hex, title: title); if (newHex != null) onSelected(newHex); }, child: Container(padding: const EdgeInsets.all(2), margin: const EdgeInsets.symmetric(horizontal: 2), decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.black12)), child: CircleAvatar(radius: 10, backgroundColor: Color(int.parse(hex.replaceFirst('#', '0xFF'))))));
 
-  Widget _buildFormatToggle(IconData icon, bool active, VoidCallback onTap) => _buildContextIconButton(icon, onTap, active ? Colors.blueAccent : Colors.black54, size: 18);
+  Widget _buildFormatToggle(IconData icon, bool active, VoidCallback onTap, {String? tooltip}) => _buildContextIconButton(icon, onTap, active ? Colors.blueAccent : Colors.black54, size: 18, tooltip: tooltip);
+
+  Widget _buildBorderSideControl({
+    required String label,
+    required LineStyle currentStyle,
+    required double currentThickness,
+    required Function(LineStyle) onStyleChanged,
+    required Function(double) onThicknessChanged,
+  }) {
+    return MenuAnchor(
+      builder: (context, controller, child) {
+        return InkWell(
+          onTap: () => controller.isOpen ? controller.close() : controller.open(),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 6, fontWeight: FontWeight.bold, color: Colors.black38)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_getLineStyleIcon(currentStyle), size: 12, color: const Color(0xFF0F4C5C)),
+                    const SizedBox(width: 4),
+                    Text('${currentThickness.toStringAsFixed(1)}', style: const TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.black54)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      menuChildren: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: StatefulBuilder(
+            builder: (context, setMenuState) {
+              return SizedBox(
+                width: 180,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Estilo de $label', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: LineStyle.values.map((style) {
+                        final bool isSelected = currentStyle == style;
+                        return InkWell(
+                          onTap: () => onStyleChanged(style),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF0F4C5C).withOpacity(0.1) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: isSelected ? const Color(0xFF0F4C5C) : Colors.transparent),
+                            ),
+                            child: Icon(_getLineStyleIcon(style), color: isSelected ? const Color(0xFF0F4C5C) : Colors.black45, size: 16),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Espessura', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold)),
+                        Text('${currentThickness.toStringAsFixed(1)}px', style: const TextStyle(fontSize: 8, color: Color(0xFF0F4C5C), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Slider(
+                      value: currentThickness,
+                      min: 0.0,
+                      max: 10.0,
+                      divisions: 100,
+                      activeColor: const Color(0xFF0F4C5C),
+                      onChanged: (v) {
+                        setMenuState(() {}); // Força build do StatefulBuilder local
+                        onThicknessChanged(v); // Atualiza o Riverpod
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _getLineStyleIcon(LineStyle style) {
+    switch (style) {
+      case LineStyle.dashed: return Icons.more_horiz_rounded;
+      case LineStyle.dotted: return Icons.more_vert_rounded;
+      default: return Icons.maximize_rounded;
+    }
+  }
 
   void _showLayerManager(BuildContext context, LocalPage page) => showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => LayerManagerSheet(page: page));
   void _showBrushSelector(BuildContext context) => showModalBottomSheet(context: context, backgroundColor: Colors.transparent, isScrollControlled: true, builder: (_) => const BrushStyleSheet());

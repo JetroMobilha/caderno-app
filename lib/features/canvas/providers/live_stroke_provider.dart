@@ -26,8 +26,6 @@ class LiveStrokeNotifier extends ChangeNotifier {
   double _opacity = 1.0;
   bool _isHighlighter = false;
 
-  List<Offset>? _lassoPath;
-
   Map<int, List<Offset>> get activeStrokes => _strokes;
   
   // Getter de conveniência para ferramentas legadas (retorna o primeiro ativo)
@@ -41,9 +39,8 @@ class LiveStrokeNotifier extends ChangeNotifier {
   double get thickness => _thickness;
   double get opacity => _opacity;
   bool get isHighlighter => _isHighlighter;
-  List<Offset>? get lassoPath => _lassoPath;
 
-  bool get isEmpty => _strokes.isEmpty && _lassoPath == null;
+  bool get isEmpty => _strokes.isEmpty;
 
   void start({
     required int pointerId,
@@ -60,8 +57,7 @@ class LiveStrokeNotifier extends ChangeNotifier {
     _thickness = thickness;
     _opacity = opacity;
     _isHighlighter = isHighlighter;
-    _lassoPath = null;
-    
+
     _pointerIds[pointerId] = globalId;
     _strokes[pointerId] = [startPos];
     notifyListeners();
@@ -94,22 +90,9 @@ class LiveStrokeNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  void startLasso(Offset startPos) {
-    _lassoPath = [startPos];
-    _strokes.clear();
-    _pointerIds.clear();
-    notifyListeners();
-  }
-
-  void updateLasso(Offset pos) {
-    _lassoPath?.add(pos);
-    notifyListeners();
-  }
-
   void clear() {
     _strokes.clear();
     _pointerIds.clear();
-    _lassoPath = null;
     notifyListeners();
   }
 

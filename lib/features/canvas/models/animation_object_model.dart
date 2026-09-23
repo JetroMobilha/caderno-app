@@ -81,7 +81,7 @@ class AnimationObject implements PageObject {
   @override
   AnimationObject copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -103,7 +103,7 @@ class AnimationObject implements PageObject {
   }) {
     return AnimationObject(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       animationType: animationType,
       position: position ?? this.position,
       size: size ?? this.size,

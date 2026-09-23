@@ -109,7 +109,7 @@ class Stroke implements PageObject {
   @override
   Stroke copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -133,28 +133,37 @@ class Stroke implements PageObject {
     bool? isHighlighter,
   }) {
     List<Offset>? finalPoints = points ?? this.points;
+    final Offset currentPos = this.position;
 
-    if (position != null) {
-      final delta = position - this.position;
-      finalPoints = this.points.map((p) => p + delta).toList();
-    }
-
+    // 🚀 v10.97: Ordem de Transformação Estrita (Escala ➔ Translação)
     if (size != null) {
       final currentSize = this.size;
       if (currentSize.width != 0 && currentSize.height != 0) {
         final scaleX = size.width / currentSize.width;
         final scaleY = size.height / currentSize.height;
-        final pos = this.position;
-        finalPoints = this.points.map((p) => Offset(
+        final pos = currentPos;
+        finalPoints = finalPoints.map((p) => Offset(
           pos.dx + (p.dx - pos.dx) * scaleX,
           pos.dy + (p.dy - pos.dy) * scaleY,
         )).toList();
       }
     }
 
+    if (position != null) {
+      // Calcular a nova bounding box após a escala para determinar o delta correto
+      double minX = finalPoints!.first.dx;
+      double minY = finalPoints.first.dy;
+      for (var p in finalPoints) {
+        if (p.dx < minX) minX = p.dx;
+        if (p.dy < minY) minY = p.dy;
+      }
+      final delta = position - Offset(minX, minY);
+      finalPoints = finalPoints.map((p) => p + delta).toList();
+    }
+
     return Stroke(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       color: color ?? this.color,
       thickness: thickness ?? this.thickness,
       points: finalPoints,

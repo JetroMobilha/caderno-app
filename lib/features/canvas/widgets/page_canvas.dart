@@ -54,6 +54,7 @@ class PageCanvas extends ConsumerWidget {
           movementDelta: item.isSelected ? toolState.totalSelectionDelta : null,
           liveScale: item.isSelected ? toolState.liveScale : null,
           liveRotation: item.isSelected ? toolState.liveRotation : null,
+          livePositionDelta: item.isSelected ? toolState.livePositionDelta : null,
         ));
       }
     }

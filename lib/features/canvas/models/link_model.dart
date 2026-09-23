@@ -82,7 +82,7 @@ class LinkObject implements PageObject {
   @override
   LinkObject copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -103,7 +103,7 @@ class LinkObject implements PageObject {
   }) {
     return LinkObject(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       linkType: linkType,
       targetPageClientId: targetPageClientId,
       url: url,

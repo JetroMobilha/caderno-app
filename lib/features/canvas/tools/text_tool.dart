@@ -17,8 +17,9 @@ class TextTool extends CanvasTool {
   void onTapDown(Offset localPos, dynamic ref, LocalPage page) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
-    if (toolState.isTransformMode) { toolNotifier.selectAt(localPos, page); return; }
     
+    // 🚀 v10.57: Prioritizar a escrita e edição na ferramenta de texto,
+    // garantindo que não fique bloqueada pelo modo de transformação anterior.
     final hitObj = _findHitObject(localPos, toolNotifier, page);
 
     if (hitObj is TextBlock) { 

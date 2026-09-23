@@ -79,7 +79,7 @@ class ShapeObject implements PageObject {
   @override
   ShapeObject copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -102,7 +102,7 @@ class ShapeObject implements PageObject {
   }) {
     return ShapeObject(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       shapeType: shapeType,
       position: position ?? this.position,
       size: size ?? this.size,

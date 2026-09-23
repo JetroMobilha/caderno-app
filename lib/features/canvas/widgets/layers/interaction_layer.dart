@@ -43,6 +43,8 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
   bool _isKingValidated = false; // Se o rei atual é inquestionável (Sénior)
   final Set<int> _allActivePointers = {};
   final Map<int, _PointerValidation> _pendingPointers = {};
+
+  Offset? _lastDoubleTapPosition; // 🚀 v10.60: Para encaminhar posição ao onDoubleTap
   
   static const double kValidationThreshold = 80.0; // Distância para consolidar o trono
   static const double kOverthrowRatio = 1.8; // Quão melhor o desafiante deve ser para roubar o trono
@@ -205,8 +207,7 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
 
     final bool isDrawingTool = toolState.activeTool == ToolMode.draw || 
                                toolState.activeTool == ToolMode.eraser || 
-                               toolState.activeTool == ToolMode.pixelEraser || 
-                               toolState.activeTool == ToolMode.lasso;
+                               toolState.activeTool == ToolMode.pixelEraser;
 
     return Positioned.fill(
       child: Stack(
@@ -228,6 +229,14 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                   onTapDown: !widget.isBlocked ? (details) {
                     toolNotifier.activeToolLogic.onTapDown(details.localPosition, ref, widget.page);
                   } : null,
+                  onDoubleTapDown: !widget.isBlocked ? (details) {
+                    _lastDoubleTapPosition = details.localPosition;
+                  } : null,
+                  onDoubleTap: !widget.isBlocked ? () {
+                    if (_lastDoubleTapPosition != null) {
+                      toolNotifier.activeToolLogic.onDoubleTap(_lastDoubleTapPosition!, ref, widget.page);
+                    }
+                  } : null,
                   onPanStart: !widget.isBlocked && !isDrawingTool ? (d) {
                     ref.read(canvasUiProvider.notifier).setHudMode(true);
                     toolNotifier.activeToolLogic.onPanStart(d.localPosition, ref, widget.page);
@@ -244,52 +253,56 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
             ),
           ),
 
-          IgnorePointer(
-            child: Stack(
-              children: [
-                CanvasSelectionOverlay(page: widget.page),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final liveStroke = ref.watch(liveStrokeProvider);
-                    if (liveStroke.isEmpty) return const SizedBox.shrink();
+          // 🚀 v10.86: Camada de Overlay Visual (Seleção/Traços Live)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CanvasSelectionOverlay(page: widget.page),
+                  
+                  // 2. Traços em tempo real (Pincel)
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final liveStroke = ref.watch(liveStrokeProvider);
+                      if (liveStroke.isEmpty) return const SizedBox.shrink();
 
-                    return RepaintBoundary(
-                      child: CustomPaint(
+                      return RepaintBoundary(
+                        child: CustomPaint(
+                          size: Size.infinite,
+                          painter: ActiveStrokePainter(
+                            activeStrokes: liveStroke.activeStrokes,
+                            visualColor: Color(int.parse(liveStroke.colorHex.replaceFirst('#', '0xFF'))),
+                            currentThickness: liveStroke.thickness,
+                            opacity: liveStroke.opacity,
+                            isHighlighter: liveStroke.isHighlighter,
+                            brushType: liveStroke.brushType,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  // 3. Cursor da Borracha
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final uiState = ref.watch(canvasUiProvider);
+                      final toolState = ref.watch(canvasInteractionProvider);
+                      if (uiState.eraserPosition == null || toolState.activeTool != ToolMode.pixelEraser) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return CustomPaint(
                         size: Size.infinite,
-                        painter: liveStroke.lassoPath != null
-                          ? LiveLassoPainter(liveStroke.lassoPath!)
-                          : ActiveStrokePainter(
-                              activeStrokes: liveStroke.activeStrokes,
-                              visualColor: Color(int.parse(liveStroke.colorHex.replaceFirst('#', '0xFF'))),
-                              currentThickness: liveStroke.thickness,
-                              opacity: liveStroke.opacity,
-                              isHighlighter: liveStroke.isHighlighter,
-                              brushType: liveStroke.brushType,
-                            ),
-                      ),
-                    );
-                  },
-                ),
-
-                // 3. Cursor da Borracha
-                Consumer(
-                  builder: (context, ref, _) {
-                    final uiState = ref.watch(canvasUiProvider);
-                    final toolState = ref.watch(canvasInteractionProvider);
-                    if (uiState.eraserPosition == null || toolState.activeTool != ToolMode.pixelEraser) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return CustomPaint(
-                      size: Size.infinite,
-                      painter: EraserCursorPainter(
-                        position: uiState.eraserPosition!,
-                        radius: toolState.selectedThickness * 1.5,
-                      ),
-                    );
-                  },
-                ),
-              ],
+                        painter: EraserCursorPainter(
+                          position: uiState.eraserPosition!,
+                          radius: toolState.selectedThickness * 1.5,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -297,6 +310,7 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
     );
   }
 }
+
 
 class EraserCursorPainter extends CustomPainter {
   final Offset position;

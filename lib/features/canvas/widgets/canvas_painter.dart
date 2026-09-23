@@ -105,7 +105,6 @@ class StrokesPainter extends CustomPainter {
   final List<Stroke> strokes;
   final Set<String> selectedStrokeIds;
   final Rect? selectionRect;
-  final List<Offset>? lassoPath;
   final int pageVersion;
   final Set<String> remoteMovingStrokeIds;
   final Set<String>? visibleAuthorIds;
@@ -117,7 +116,6 @@ class StrokesPainter extends CustomPainter {
     required this.strokes,
     required this.selectedStrokeIds,
     required this.selectionRect,
-    this.lassoPath,
     required this.pageVersion,
     this.remoteMovingStrokeIds = const {},
     this.visibleAuthorIds,
@@ -163,21 +161,12 @@ class StrokesPainter extends CustomPainter {
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
       canvas.drawRect(selectionRect!, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5);
     }
-
-    if (lassoPath != null && lassoPath!.isNotEmpty) {
-      final Path path = Path()..moveTo(lassoPath!.first.dx, lassoPath!.first.dy);
-      for (var i = 1; i < lassoPath!.length; i++) path.lineTo(lassoPath![i].dx, lassoPath![i].dy);
-      path.close();
-      canvas.drawPath(path, Paint()..color = const Color(0x190F4C5C)..style = PaintingStyle.fill);
-      canvas.drawPath(path, Paint()..color = const Color(0xFF0F4C5C)..style = PaintingStyle.stroke..strokeWidth = 1.5..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
-    }
   }
 
   @override
   bool shouldRepaint(StrokesPainter oldDelegate) {
     return oldDelegate.pageVersion != pageVersion ||
         oldDelegate.selectionRect != selectionRect ||
-        oldDelegate.lassoPath != lassoPath ||
         oldDelegate.selectionDelta != selectionDelta ||
         !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) ||
         !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) ||
@@ -390,29 +379,3 @@ class RemotePointersPainter extends CustomPainter {
   }
 }
 
-/// 🚀 v10.51: Painter ultra-simples para o feedback visual do laço.
-class LiveLassoPainter extends CustomPainter {
-  final List<Offset> path;
-  LiveLassoPainter(this.path);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (path.isEmpty) return;
-    final Path lasso = Path()..moveTo(path.first.dx, path.first.dy);
-    for (int i = 1; i < path.length; i++) {
-      lasso.lineTo(path[i].dx, path[i].dy);
-    }
-    canvas.drawPath(lasso, Paint()
-      ..color = const Color(0x190F4C5C)
-      ..style = PaintingStyle.fill);
-    canvas.drawPath(lasso, Paint()
-      ..color = const Color(0xFF0F4C5C)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round);
-  }
-
-  @override
-  bool shouldRepaint(LiveLassoPainter oldDelegate) => true;
-}

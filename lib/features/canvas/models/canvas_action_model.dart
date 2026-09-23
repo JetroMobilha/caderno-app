@@ -8,6 +8,7 @@ import 'link_model.dart';
 import 'attachment_model.dart';
 import 'audio_block_model.dart';
 import 'animation_object_model.dart';
+import '../../explanations/models/explanation_model.dart';
 import 'local_page_model.dart';
 import 'page_object.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart';
@@ -204,6 +205,7 @@ class UpdateObjectAction extends CanvasAction {
     if (original is AttachmentObject) return AttachmentObject.fromJson(json);
     if (original is AudioBlock) return AudioBlock.fromJson(json);
     if (original is AnimationObject) return AnimationObject.fromJson(json);
+    if (original is ExplanationModel) return ExplanationModel.fromJson(json);
     return original;
   }
   @override
@@ -251,7 +253,7 @@ class GroupAction extends CanvasAction {
   LocalPage execute(LocalPage page) {
     final updatedObjects = page.objects.map((o) {
       if (objectIds.contains(o.id)) {
-        return o.copyWith(parentId: newParentId, updatedAt: timestamp);
+        return o.copyWith(parentId: () => newParentId, updatedAt: timestamp);
       }
       return o;
     }).toList();
@@ -262,7 +264,7 @@ class GroupAction extends CanvasAction {
   LocalPage undo(LocalPage page) {
     final updatedObjects = page.objects.map((o) {
       if (objectIds.contains(o.id)) {
-        return o.copyWith(parentId: oldParentIds[o.id], updatedAt: timestamp);
+        return o.copyWith(parentId: () => oldParentIds[o.id], updatedAt: timestamp);
       }
       return o;
     }).toList();

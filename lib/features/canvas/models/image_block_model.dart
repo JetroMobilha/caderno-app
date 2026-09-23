@@ -85,7 +85,7 @@ class ImageBlock implements PageObject {
   @override
   ImageBlock copyWith({
     String? id,
-    String? parentId,
+    String? Function()? parentId,
     Offset? position,
     Size? size,
     double? rotation,
@@ -106,7 +106,7 @@ class ImageBlock implements PageObject {
   }) {
     return ImageBlock(
       id: id ?? this.id,
-      parentId: parentId ?? this.parentId,
+      parentId: parentId != null ? parentId() : this.parentId,
       imagePath: imagePath ?? this.imagePath,
       cropRect: cropRect ?? this.cropRect, // 🚀 v10.34
       position: position ?? this.position,

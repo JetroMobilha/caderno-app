@@ -68,7 +68,6 @@ class CanvasInteractionState {
     ToolMode.text,      // Texto
     ToolMode.table,     // Tabela
     ToolMode.select,    // Selecionar
-    ToolMode.video,     // Animação
   ];
 
   final Set<String> selectedObjectIds;
@@ -100,6 +99,15 @@ class CanvasInteractionState {
   final Offset initialPosition; 
   final Size initialSize; 
   final double initialRotation;
+  
+  // 🚀 Fase 2: Animações
+  final bool isAnimationContextActive;
+  final bool isRecordingGhostPath;
+  final List<Offset> ghostPathPoints;
+
+  // 🚀 Fase 2: Stroke Replay
+  final double replayProgress;
+  final bool isReplaying;
 
   CanvasInteractionState({
     this.activeTool = ToolMode.draw,
@@ -143,6 +151,11 @@ class CanvasInteractionState {
     this.initialPosition = Offset.zero,
     this.initialSize = Size.zero,
     this.initialRotation = 0.0,
+    this.isAnimationContextActive = false,
+    this.isRecordingGhostPath = false,
+    this.ghostPathPoints = const [],
+    this.replayProgress = 1.0,
+    this.isReplaying = false,
   }) : _brushOpacity = brushOpacity,
        _selectedLineStyle = selectedLineStyle,
        _isTopToolbarVisible = isTopToolbarVisible,
@@ -188,6 +201,11 @@ class CanvasInteractionState {
     Offset? initialPosition,
     Size? initialSize,
     double? initialRotation,
+    bool? isAnimationContextActive,
+    bool? isRecordingGhostPath,
+    List<Offset>? ghostPathPoints,
+    double? replayProgress,
+    bool? isReplaying,
     List<ToolMode>? toolOrder,
     bool? isTopToolbarVisible,
   }) {
@@ -231,6 +249,11 @@ class CanvasInteractionState {
       initialPosition: initialPosition ?? this.initialPosition,
       initialSize: initialSize ?? this.initialSize,
       initialRotation: initialRotation ?? this.initialRotation,
+      isAnimationContextActive: isAnimationContextActive ?? this.isAnimationContextActive,
+      isRecordingGhostPath: isRecordingGhostPath ?? this.isRecordingGhostPath,
+      ghostPathPoints: ghostPathPoints ?? this.ghostPathPoints,
+      replayProgress: replayProgress ?? this.replayProgress,
+      isReplaying: isReplaying ?? this.isReplaying,
       toolOrder: toolOrder ?? this.toolOrder,
       isTopToolbarVisible: isTopToolbarVisible ?? this.isTopToolbarVisible,
     );
@@ -507,6 +530,13 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
   void startHandleTransform(HandleType h, Offset p, Size s, double r) => state = state.copyWith(activeHandle: h, interactionMode: CanvasInteractionStateMode.transforming, initialPosition: p, initialSize: s, initialRotation: r, liveScale: const Size(1, 1), liveRotation: 0, livePositionDelta: Offset.zero);
   void updateLiveTransform({Size? scale, double? rotation, Offset? positionDelta}) => state = state.copyWith(liveScale: scale ?? state.liveScale, liveRotation: rotation ?? state.liveRotation, livePositionDelta: positionDelta ?? state.livePositionDelta);
   void endHandleTransform() => state = state.copyWith(activeHandle: HandleType.none, interactionMode: CanvasInteractionStateMode.idle, liveScale: const Size(1, 1), liveRotation: 0, livePositionDelta: Offset.zero);
+
+  void setAnimationContextActive(bool v) => state = state.copyWith(isAnimationContextActive: v, isRecordingGhostPath: false, ghostPathPoints: []);
+  void setRecordingGhostPath(bool v) => state = state.copyWith(isRecordingGhostPath: v, ghostPathPoints: v ? [] : state.ghostPathPoints);
+  void addGhostPathPoint(Offset p) => state = state.copyWith(ghostPathPoints: [...state.ghostPathPoints, p]);
+
+  void setReplayProgress(double v) => state = state.copyWith(replayProgress: v);
+  void setIsReplaying(bool v) => state = state.copyWith(isReplaying: v);
 
   void setTableCellEditing(TableObject table, CellCoordinate coords) {
     final cellKey = TableCellKey(table.id, coords);

@@ -143,7 +143,7 @@ class StrokesPainter extends CustomPainter {
 
       final path = buildPath(stroke.points);
           
-      _renderArtisticStroke(
+      renderArtisticStroke(
         canvas: canvas, 
         path: path, 
         brushType: stroke.brushType, 
@@ -205,7 +205,7 @@ class ActiveStrokePainter extends CustomPainter {
       if (points.isEmpty) continue;
       final path = buildPath(points);
           
-      _renderArtisticStroke(
+      renderArtisticStroke(
         canvas: canvas, 
         path: path, 
         brushType: brushType, 
@@ -257,7 +257,7 @@ class RemoteLiveStrokesPainter extends CustomPainter {
       
       final path = buildPath(stroke.points);
           
-      _renderArtisticStroke(
+      renderArtisticStroke(
         canvas: canvas, 
         path: path, 
         brushType: stroke.brushType, 
@@ -278,7 +278,7 @@ class RemoteLiveStrokesPainter extends CustomPainter {
   }
 }
 
-void _renderArtisticStroke({
+void renderArtisticStroke({
   required Canvas canvas, 
   required Path path, 
   required BrushType brushType, 
@@ -291,17 +291,17 @@ void _renderArtisticStroke({
   final paintColor = color.withOpacity(opacity * (isHighlighter ? 0.4 : 1.0));
   
   if (brushType == BrushType.neon) {
-    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, paintColor, thickness * 2.5, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0));
-    canvas.drawPath(path, _getPaintForBrush(BrushType.neon, paintColor, thickness, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0));
-    canvas.drawPath(path, _getPaintForBrush(BrushType.gel, Colors.white.withOpacity(opacity), thickness * 0.4, false));
+    canvas.drawPath(path, getPaintForBrush(BrushType.neon, paintColor, thickness * 2.5, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0));
+    canvas.drawPath(path, getPaintForBrush(BrushType.neon, paintColor, thickness, false)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0));
+    canvas.drawPath(path, getPaintForBrush(BrushType.gel, Colors.white.withOpacity(opacity), thickness * 0.4, false));
   } else if (brushType == BrushType.fountain) {
-    _drawFountainPath(canvas, points, paintColor, thickness);
+    drawFountainPath(canvas, points, paintColor, thickness);
   } else {
-    canvas.drawPath(path, _getPaintForBrush(brushType, paintColor, thickness, isHighlighter));
+    canvas.drawPath(path, getPaintForBrush(brushType, paintColor, thickness, isHighlighter));
   }
 }
 
-void _drawFountainPath(Canvas canvas, List<Offset> points, Color color, double baseThickness) {
+void drawFountainPath(Canvas canvas, List<Offset> points, Color color, double baseThickness) {
   if (points.length < 2) return;
   for (int i = 0; i < points.length - 1; i++) {
     final dist = (points[i] - points[i + 1]).distance;
@@ -311,7 +311,7 @@ void _drawFountainPath(Canvas canvas, List<Offset> points, Color color, double b
   }
 }
 
-Paint _getPaintForBrush(BrushType type, Color color, double thickness, bool isHighlighter) {
+Paint getPaintForBrush(BrushType type, Color color, double thickness, bool isHighlighter) {
   final paint = Paint()
     ..color = color
     ..strokeWidth = thickness

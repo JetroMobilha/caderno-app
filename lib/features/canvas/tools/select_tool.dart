@@ -5,6 +5,8 @@ import '../models/table_model.dart';
 import '../models/image_block_model.dart'; 
 import '../models/stroke_model.dart';
 import '../models/page_object.dart';
+import '../models/animation_object_model.dart'; // 🚀 Ghosting
+import 'package:uuid/uuid.dart'; // 🚀 Ghosting
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
@@ -57,6 +59,11 @@ class SelectTool extends CanvasTool {
       return;
     }
 
+    if (toolState.isRecordingGhostPath) {
+      toolNotifier.addGhostPathPoint(localPos);
+      return;
+    }
+
     if (toolNotifier.isPointInSelection(localPos, page)) {
       toolNotifier.setMovingSelection(true, localPos);
       return;
@@ -82,6 +89,11 @@ class SelectTool extends CanvasTool {
       }
     }
 
+    if (toolState.isRecordingGhostPath) {
+      toolNotifier.addGhostPathPoint(localPos);
+      return;
+    }
+
     if (toolState.activeHandle != HandleType.none) { 
       _performHandleTransform(localPos, docDelta, toolState, toolNotifier, page, ref); 
       return; 
@@ -99,6 +111,29 @@ class SelectTool extends CanvasTool {
   void onPanEnd(dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
+    
+    if (toolState.isRecordingGhostPath) {
+      if (toolState.ghostPathPoints.length > 2 && toolState.selectedObjectIds.isNotEmpty) {
+        final targetId = toolState.selectedObjectIds.first;
+        final anim = AnimationObject(
+          id: const Uuid().v4(),
+          animationType: AnimationObjectType.sequence,
+          position: toolState.ghostPathPoints.first,
+          configData: {
+            'type': 'ghosting',
+            'movement_type': 'path',
+            'target_id': targetId,
+            'path': toolState.ghostPathPoints.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
+          },
+        );
+        ref.read(canvasDocumentProvider.notifier).addObject(page, anim);
+      }
+      
+      toolNotifier.setRecordingGhostPath(false);
+      toolNotifier.setAnimationContextActive(true); // volta para a toolbar contextual
+      return;
+    }
+
     if (toolState.activeTableResizeIndex != null) { toolNotifier.endTableResize(); }
     else if (toolState.activeHandle != HandleType.none) { _finalizeTransform(toolState, ref, toolNotifier, page); toolNotifier.endHandleTransform(); }
     else if (toolState.totalSelectionDelta != Offset.zero) { ref.read(canvasDocumentProvider.notifier).moveSelection(page, objectIds: toolState.selectedObjectIds, delta: toolState.totalSelectionDelta); toolNotifier.resetSelectionDelta(); }

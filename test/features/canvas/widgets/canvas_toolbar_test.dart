@@ -7,7 +7,7 @@ import 'package:caderno_digital_app/features/canvas/providers/canvas_tool_provid
 
 import 'package:caderno_digital_app/features/canvas/providers/canvas_document_provider.dart';
 
-class MockDocumentNotifier extends Notifier<CanvasDocumentState> implements CanvasDocumentNotifier {
+class MockDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> implements CanvasDocumentNotifier {
   @override
   CanvasDocumentState build() => CanvasDocumentState(
     currentUserRole: 'owner',
@@ -37,6 +37,7 @@ void main() {
         home: Scaffold(
           body: CanvasToolbar(
             currentPage: mockPage,
+            textController: TextEditingController(),
             onColorTap: () {},
             onThicknessTap: () {},
             onChangePaperTap: () {},

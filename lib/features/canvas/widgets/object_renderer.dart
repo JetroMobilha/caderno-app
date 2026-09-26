@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io' as io;
+import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart'; 
 import '../models/table_cell_model.dart';
@@ -50,8 +52,10 @@ class ObjectRenderer extends ConsumerStatefulWidget {
   ConsumerState<ObjectRenderer> createState() => _ObjectRendererState();
 }
 
-class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTickerProviderStateMixin {
+class _ObjectRendererState extends ConsumerState<ObjectRenderer> with TickerProviderStateMixin {
   AnimationController? _animationController;
+  AnimationController? _ghostController;
+  AnimationObject? _ghostAnim;
 
   @override
   void initState() {
@@ -79,13 +83,68 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
   }
 
   @override
+  void didUpdateWidget(ObjectRenderer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Sincronizar o estado de reprodução para AnimationObjects
+    if (widget.object is AnimationObject && oldWidget.object is AnimationObject) {
+      final newAnim = widget.object as AnimationObject;
+      final oldAnim = oldWidget.object as AnimationObject;
+      if (newAnim.autoPlay != oldAnim.autoPlay && _animationController != null) {
+        if (newAnim.autoPlay) {
+          newAnim.isLooping ? _animationController!.repeat() : _animationController!.forward();
+        } else {
+          _animationController!.stop();
+        }
+      }
+    }
+    
+    // Sincronizar o estado de reprodução para ExplanationModels
+    if (widget.object is ExplanationModel && oldWidget.object is ExplanationModel) {
+      final newExp = widget.object as ExplanationModel;
+      final oldExp = oldWidget.object as ExplanationModel;
+      if (newExp.isPlaying != oldExp.isPlaying && _animationController != null) {
+        if (newExp.isPlaying) {
+          _animationController!.repeat();
+        } else {
+          _animationController!.stop();
+        }
+      }
+    }
+  }
+
+  void _checkGhosting(WidgetRef ref) {
+    final viewport = ref.read(canvasViewportProvider);
+    if (viewport.currentPageClientId == null) return;
+    final page = ref.read(canvasDocumentProvider).pages.firstWhere((p) => p.clientId == viewport.currentPageClientId);
+    final ghost = page.objects.whereType<AnimationObject>().where((a) => a.animationType == AnimationObjectType.sequence && a.configData?['type'] == 'ghosting' && a.configData?['target_id'] == widget.object.id).firstOrNull;
+    
+    if (ghost != _ghostAnim) {
+      _ghostAnim = ghost;
+      if (ghost != null) {
+        _ghostController ??= AnimationController(vsync: this, duration: const Duration(seconds: 3));
+        if (ghost.autoPlay) {
+          _ghostController!.repeat();
+        } else {
+          _ghostController!.stop();
+        }
+      } else {
+        _ghostController?.stop();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _animationController?.dispose();
+    _ghostController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    _checkGhosting(ref);
+
     final toolState = ref.watch(canvasToolProvider);
     final bool isEditingThis = (widget.object is TextBlock && toolState.activeTextBlock?.id == widget.object.id);
     if (!widget.object.isVisible || isEditingThis) return const SizedBox.shrink();
@@ -123,6 +182,49 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
       widget.object.size.width * (widget.liveScale?.width ?? 1.0), 
       widget.object.size.height * (widget.liveScale?.height ?? 1.0)
     );
+
+    if (_ghostController != null && _ghostAnim != null) {
+      return AnimatedBuilder(
+        animation: _ghostController!,
+        builder: (context, child) {
+          Offset ghostDelta = Offset.zero;
+          double ghostRot = 0.0;
+          final String moveType = _ghostAnim!.configData?['movement_type'] ?? 'path';
+          
+          if (moveType == 'rotation') {
+            ghostRot = _ghostController!.value * 2 * math.pi;
+          } else {
+            final List pathData = _ghostAnim!.configData?['path'] ?? [];
+            if (pathData.isNotEmpty) {
+              final int totalPoints = pathData.length;
+              final double progress = _ghostController!.value;
+              final double exactIndex = progress * (totalPoints - 1);
+              final int index1 = exactIndex.floor();
+              final int index2 = math.min(totalPoints - 1, index1 + 1);
+              final double frac = exactIndex - index1;
+
+              final p1 = Offset((pathData[index1]['dx'] as num).toDouble(), (pathData[index1]['dy'] as num).toDouble());
+              final p2 = Offset((pathData[index2]['dx'] as num).toDouble(), (pathData[index2]['dy'] as num).toDouble());
+              
+              final currentPos = Offset.lerp(p1, p2, frac)!;
+              ghostDelta = currentPos - _ghostAnim!.position;
+            }
+          }
+
+          return Positioned(
+            left: position.dx + ghostDelta.dx,
+            top: position.dy + ghostDelta.dy,
+            child: Opacity(
+              opacity: widget.object.opacity,
+              child: Transform.rotate(
+                angle: rotation + ghostRot,
+                child: content,
+              ),
+            ),
+          );
+        }
+      );
+    }
 
     return Positioned(
       left: position.dx, top: position.dy,
@@ -329,13 +431,10 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
   Widget _buildAudio(AudioBlock audio) => Container(width: audio.size.width, height: audio.size.height, decoration: BoxDecoration(color: const Color(0xFF0F4C5C).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF0F4C5C).withValues(alpha: 0.3))), padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [const Icon(Icons.play_circle_fill_rounded, color: Color(0xFF0F4C5C), size: 28), const SizedBox(width: 10), Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(audio.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F4C5C))), Text('${(audio.durationSeconds / 60).floor()}:${(audio.durationSeconds % 60).toString().padLeft(2, '0')}', style: TextStyle(fontSize: 9, color: Colors.black.withValues(alpha: 0.5)))]))]));
 
   Widget _buildAnimation(AnimationObject anim) {
-    if (anim.animationType == AnimationObjectType.physics && anim.configData != null && _animationController != null) {
-      return AnimatedBuilder(
-        animation: _animationController!, 
-        builder: (context, child) => CustomPaint(size: anim.size, painter: _PhysicsAnimationPainter(anim: anim, time: _animationController!.value))
-      );
+    if (anim.animationType == AnimationObjectType.sequence && anim.configData?['type'] == 'ghosting') {
+      return const SizedBox.shrink();
     }
-    return SizedBox(width: anim.size.width, height: anim.size.height, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.animation_rounded, color: Color(0xFFE36414), size: 32), Text(anim.assetPath ?? 'Animação', style: const TextStyle(fontSize: 8))])));
+    return SizedBox(width: anim.size.width, height: anim.size.height, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.animation_rounded, color: Color(0xFFE36414), size: 32), Text(anim.assetPath ?? 'Animação de Vídeo/Lottie', style: const TextStyle(fontSize: 8))])));
   }
 
   Widget _buildTable(TableObject table) {
@@ -634,8 +733,80 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with SingleTick
     );
   }
 
-  Widget _buildLink(LinkObject link) => Container(width: link.size.width, height: link.size.height, decoration: BoxDecoration(color: Color(int.parse(link.backgroundColor.replaceFirst('#', '0xFF'))), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(link.linkType == LinkType.internalPage ? Icons.description_outlined : Icons.link_rounded, color: Color(int.parse(link.textColor.replaceFirst('#', '0xFF'))), size: 16), const SizedBox(width: 8), Flexible(child: Text(link.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(int.parse(link.textColor.replaceFirst('#', '0xFF'))), fontSize: 12, fontWeight: FontWeight.bold)))]));
-  Widget _buildAttachment(AttachmentObject attach) => Container(width: attach.size.width, height: attach.size.height, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.black.withValues(alpha: 0.1)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]), padding: const EdgeInsets.symmetric(horizontal: 10), child: Row(children: [Icon(attach.fileExtension.toLowerCase() == 'pdf' ? Icons.picture_as_pdf_rounded : Icons.insert_drive_file_rounded, color: const Color(0xFF0F4C5C), size: 24), const SizedBox(width: 10), Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(attach.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), Text('${(attach.fileSize / 1024).toStringAsFixed(1)} KB', style: TextStyle(fontSize: 9, color: Colors.black.withValues(alpha: 0.4)))]))]));
+  Widget _buildLink(LinkObject link) {
+    return GestureDetector(
+      onDoubleTap: () => _launchURL(link.url),
+      child: Container(
+        width: link.size.width, 
+        height: link.size.height, 
+        decoration: BoxDecoration(
+          color: Color(int.parse(link.backgroundColor.replaceFirst('#', '0xFF'))), 
+          borderRadius: BorderRadius.circular(8),
+        ), 
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center, 
+          children: [
+            Icon(link.linkType == LinkType.internalPage ? Icons.description_outlined : Icons.link_rounded, color: Color(int.parse(link.textColor.replaceFirst('#', '0xFF'))), size: 16), 
+            const SizedBox(width: 8), 
+            Flexible(
+              child: Text(
+                link.label, 
+                maxLines: 1, 
+                overflow: TextOverflow.ellipsis, 
+                style: TextStyle(color: Color(int.parse(link.textColor.replaceFirst('#', '0xFF'))), fontSize: 12, fontWeight: FontWeight.bold),
+              )
+            )
+          ]
+        )
+      ),
+    );
+  }
+
+  Widget _buildAttachment(AttachmentObject attach) {
+    return GestureDetector(
+      onDoubleTap: () => _openLocalFile(attach.localPath),
+      child: Container(
+        width: attach.size.width, 
+        height: attach.size.height, 
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(10), 
+          border: Border.all(color: Colors.black.withValues(alpha: 0.1)), 
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
+        ), 
+        padding: const EdgeInsets.symmetric(horizontal: 10), 
+        child: Row(
+          children: [
+            Icon(attach.fileExtension.toLowerCase() == 'pdf' ? Icons.picture_as_pdf_rounded : Icons.insert_drive_file_rounded, color: const Color(0xFF0F4C5C), size: 24), 
+            const SizedBox(width: 10), 
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, 
+                crossAxisAlignment: CrossAxisAlignment.start, 
+                children: [
+                  Text(attach.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), 
+                  Text('${(attach.fileSize / 1024).toStringAsFixed(1)} KB', style: TextStyle(fontSize: 9, color: Colors.black.withValues(alpha: 0.4))),
+                ]
+              )
+            )
+          ]
+        )
+      ),
+    );
+  }
+
+  void _launchURL(String? urlStr) async {
+    if (urlStr == null) return;
+    final Uri url = Uri.parse(urlStr);
+    if (!await launchUrl(url)) {
+      debugPrint('Could not launch $url');
+    }
+  }
+
+  void _openLocalFile(String path) async {
+    final result = await OpenFilex.open(path);
+    debugPrint('OpenFile Result: ${result.message}');
+  }
 
   Widget _buildExplanation(ExplanationModel model) {
     if (_animationController == null) {
@@ -715,31 +886,6 @@ class _ShapePainter extends CustomPainter {
     }
   }
   @override bool shouldRepaint(covariant _ShapePainter oldDelegate) => oldDelegate.shape.version != shape.version || oldDelegate.shape.updatedAt != shape.updatedAt;
-}
-
-class _PhysicsAnimationPainter extends CustomPainter {
-  final AnimationObject anim; final double time; static final MathAnimator _mathAnimator = MathAnimator(); static final PhysicsAnimator _physicsAnimator = PhysicsAnimator(); static final EngineeringAnimator _engAnimator = EngineeringAnimator();
-  _PhysicsAnimationPainter({required this.anim, required this.time});
-  @override void paint(Canvas canvas, Size size) {
-    final config = anim.configData; if (config == null) return;
-    final type = config['type'];
-
-    // 🚀 v11.0: Centralizar o canvas para que as animações físicas (que desenham em torno de Offset.zero) 
-    // fiquem perfeitamente alinhadas com o quadro de seleção do objeto.
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-
-    if (type == 'engineeringMechanism') {
-      _engAnimator.paint(canvas, size, EngineeringExplanation(id: anim.id, position: Offset.zero, radius: (config['radius'] as num?)?.toDouble() ?? 40.0, angularVelocity: (config['angular_velocity'] as num?)?.toDouble() ?? 1.0, toothCount: config['tooth_count'] ?? 12, kind: (config['is_gear'] == false) ? EngineeringKind.dcCircuit : EngineeringKind.gears), time);
-    } else if (type == 'physicsBody') {
-      _physicsAnimator.paint(canvas, size, PhysicsExplanation(id: anim.id, position: Offset.zero, mass: (config['mass'] as num?)?.toDouble() ?? 1.0), time);
-    } else if (type == 'mathFunction') {
-      _mathAnimator.paint(canvas, size, MathExplanation(id: anim.id, position: Offset.zero, expression: config['expression'] ?? 'sin(x)'), time);
-    }
-
-    canvas.restore();
-  }
-  @override bool shouldRepaint(covariant _PhysicsAnimationPainter oldDelegate) => true;
 }
 
 /// 🚀 v10.90: Painter especializado para o grid e bordas da tabela.

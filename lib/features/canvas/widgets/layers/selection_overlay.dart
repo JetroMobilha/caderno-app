@@ -83,6 +83,13 @@ class CanvasSelectionOverlay extends ConsumerWidget {
         child: Stack(
           clipBehavior: Clip.none, // 🚀 v10.86: Crucial para ver hastes externas
           children: [
+            // Ghosting Path live feedback
+            if (toolState.isRecordingGhostPath && toolState.ghostPathPoints.isNotEmpty)
+              CustomPaint(
+                size: Size.infinite,
+                painter: _GhostPathPainter(points: toolState.ghostPathPoints, scale: currentScale),
+              ),
+
             // 🚀 v10.99: Sub-contornos para seleção múltipla solta
             if (!isSingle && !isPureGroup)
               ...selectedObjects.map((obj) => _buildIndividualFrame(obj, toolState, currentScale)),
@@ -313,4 +320,34 @@ class CanvasSelectionOverlay extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _GhostPathPainter extends CustomPainter {
+  final List<Offset> points;
+  final double scale;
+
+  _GhostPathPainter({required this.points, required this.scale});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    
+    final paint = Paint()
+      ..color = Colors.lightBlueAccent
+      ..strokeWidth = 3.0 / scale
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+    path.moveTo(points.first.dx, points.first.dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    
+    // To make it dashed, we could use a dash path effect, but standard drawing is fine for preview
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GhostPathPainter oldDelegate) => true;
 }

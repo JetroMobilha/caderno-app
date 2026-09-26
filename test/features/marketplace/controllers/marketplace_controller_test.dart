@@ -17,7 +17,7 @@ class MockMarketplaceRepository extends Mock implements MarketplaceRepository {
   Future<Map<String, dynamic>> getPublishedNotebooks({int page = 1, String? searchQuery = ''}) async {
     return {
       'notebooks': [
-        Notebook(id: 1, title: 'Test Manual', coverType: 'color', lineType: 'ruled', paperSize: 'A4')
+        Notebook(id: 1, title: 'Test Manual', coverType: 'color')
       ], 
       'last_page': 1, 
       'total': 1

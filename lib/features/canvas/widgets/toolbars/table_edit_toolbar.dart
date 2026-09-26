@@ -208,7 +208,7 @@ class _TableEditToolbarState extends ConsumerState<TableEditToolbar> {
         ]);
       case TableEditCategory.style:
         return Row(children: [
-          _buildColorCircle(context, table.borderColor, (hex) { docNotifier.updateObject(page, table.copyWith(borderColor: hex)); }, label: 'Cor da Borda'),
+          _buildColorCircle(context, table.borderColor, (hex) { docNotifier.updateObject(page, table.copyWith(borderColor: hex)); }, title: 'Cor da Borda'),
           const VerticalDivider(width: 12, indent: 8, endIndent: 8),
           
           // 🚀 v10.91: Controle Unificado de Exterior
@@ -317,6 +317,8 @@ class _TableEditToolbarState extends ConsumerState<TableEditToolbar> {
   Widget _buildFormatToggle(IconData icon, bool active, VoidCallback onTap) {
     return _buildCustomIconButton(icon: icon, onTap: onTap, color: active ? Colors.blueAccent : Colors.black54, size: 18);
   }
+
+  Widget _buildColorCircle(BuildContext context, String hex, Function(String) onSelected, {String title = 'Cor'}) => InkWell(onTap: () async { final newHex = await ColorEngine.show(context, initialColor: hex, title: title); if (newHex != null) onSelected(newHex); }, child: Container(padding: const EdgeInsets.all(2), margin: const EdgeInsets.symmetric(horizontal: 2), decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.black12)), child: CircleAvatar(radius: 10, backgroundColor: Color(int.parse(hex.replaceFirst('#', '0xFF'))))));
 
   Widget _buildBorderSideControl({
     required String label,

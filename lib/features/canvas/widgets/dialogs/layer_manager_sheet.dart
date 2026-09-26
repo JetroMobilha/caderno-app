@@ -9,6 +9,7 @@ import '../../models/stroke_model.dart';
 import '../../models/text_block_model.dart';
 import '../../models/image_block_model.dart';
 import '../../models/table_model.dart';
+import '../../models/animation_object_model.dart';
 import '../../../explanations/models/explanation_model.dart';
 
 /// 🚀 v10.1: Gestor de Objetos e Camadas com Suporte a Grupos.
@@ -21,9 +22,12 @@ class LayerManagerSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final interactionState = ref.watch(canvasInteractionProvider);
     final interactionNotifier = ref.read(canvasInteractionProvider.notifier);
+    final docState = ref.watch(canvasDocumentProvider);
     final docNotifier = ref.read(canvasDocumentProvider.notifier);
 
-    final objects = page.objects.where((o) => !o.isDeleted).toList().reversed.toList();
+    // 🚀 v10.60: Obter sempre a página atualizada do estado global para refletir mudanças dinâmicas (ex: Botões Play/Pause)
+    final livePage = docState.pages.firstWhere((p) => p.clientId == page.clientId, orElse: () => page);
+    final objects = livePage.objects.where((o) => !o.isDeleted).toList().reversed.toList();
 
     return Material(
       color: Colors.white,
@@ -63,7 +67,7 @@ class LayerManagerSheet extends ConsumerWidget {
                 itemCount: objects.length,
                 onReorder: (oldIndex, newIndex) {
                    if (newIndex > oldIndex) newIndex--;
-                   docNotifier.reorderObject(page, (objects.length - 1) - oldIndex, (objects.length - 1) - newIndex);
+                   docNotifier.reorderObject(livePage, (objects.length - 1) - oldIndex, (objects.length - 1) - newIndex);
                 },
                 itemBuilder: (context, index) {
                   final obj = objects[index];
@@ -95,15 +99,34 @@ class LayerManagerSheet extends ConsumerWidget {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (obj is AnimationObject)
+                          IconButton(
+                            icon: Icon(obj.autoPlay ? Icons.pause_circle_outline_rounded : Icons.play_circle_outline_rounded,
+                              size: 18, color: obj.autoPlay ? Colors.green : Colors.grey),
+                            onPressed: () => docNotifier.updateObject(livePage, obj.copyWith(autoPlay: !obj.autoPlay)),
+                            tooltip: obj.autoPlay ? 'Pausar Animação' : 'Reproduzir Animação',
+                          ),
+                        if (obj is ExplanationModel)
+                          IconButton(
+                            icon: Icon(obj.isPlaying ? Icons.pause_circle_outline_rounded : Icons.play_circle_outline_rounded,
+                              size: 18, color: obj.isPlaying ? Colors.green : Colors.grey),
+                            onPressed: () {
+                              final updated = obj is MathExplanation ? obj.copyWith(isPlaying: !obj.isPlaying) 
+                                : obj is PhysicsExplanation ? obj.copyWith(isPlaying: !obj.isPlaying) 
+                                : (obj as EngineeringExplanation).copyWith(isPlaying: !obj.isPlaying);
+                              docNotifier.updateObject(livePage, updated);
+                            },
+                            tooltip: obj.isPlaying ? 'Pausar Simulação' : 'Reproduzir Simulação',
+                          ),
                         IconButton(
                           icon: Icon(obj.isVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded, 
                             size: 18, color: obj.isVisible ? const Color(0xFF0F4C5C) : Colors.black12),
-                          onPressed: () => docNotifier.updateObject(page, obj.copyWith(isVisible: !obj.isVisible)),
+                          onPressed: () => docNotifier.updateObject(livePage, obj.copyWith(isVisible: !obj.isVisible)),
                         ),
                         IconButton(
                           icon: Icon(obj.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, 
                             size: 18, color: obj.isLocked ? Colors.orange : Colors.black12),
-                          onPressed: () => docNotifier.updateObject(page, obj.copyWith(isLocked: !obj.isLocked)),
+                          onPressed: () => docNotifier.updateObject(livePage, obj.copyWith(isLocked: !obj.isLocked)),
                         ),
                         const Icon(Icons.drag_indicator_rounded, color: Colors.black12, size: 20),
                       ],
@@ -119,7 +142,7 @@ class LayerManagerSheet extends ConsumerWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => docNotifier.applyNaturalSort(page),
+                  onPressed: () => docNotifier.applyNaturalSort(livePage),
                   icon: const Icon(Icons.auto_awesome_motion_rounded, size: 18),
                   label: const Text('AUTO-ORDENAR'),
                   style: OutlinedButton.styleFrom(
@@ -169,6 +192,12 @@ class LayerManagerSheet extends ConsumerWidget {
     if (obj is MathExplanation) return 'Ilustração (Matemática)';
     if (obj is PhysicsExplanation) return 'Ilustração (Física)';
     if (obj is EngineeringExplanation) return 'Ilustração (Engenharia)';
+    if (obj is AnimationObject) {
+      if (obj.configData?['type'] == 'ghosting') {
+        return obj.configData?['movement_type'] == 'rotation' ? 'Animação: Rotação' : 'Animação: Translação';
+      }
+      return 'Animação / Mídia';
+    }
     return obj.type.toUpperCase();
   }
 }

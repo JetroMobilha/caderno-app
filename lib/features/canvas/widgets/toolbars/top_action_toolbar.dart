@@ -12,7 +12,13 @@ import '../../models/link_model.dart';
 import '../../models/attachment_model.dart';
 import 'package:caderno_digital_app/features/canvas/widgets/dialogs/table_creation_dialog.dart';
 import 'package:caderno_digital_app/features/explanations/widgets/simulation_studio_sheet.dart';
+import 'package:flutter/foundation.dart';
 import '../dialogs/brush_style_sheet.dart';
+import '../dialogs/link_creation_dialog.dart'; // 🚀 Links
+import 'package:file_picker/file_picker.dart'; // 🚀 Attachments
+import 'package:path_provider/path_provider.dart';
+import 'dart:io' as io;
+import 'dart:convert';
 
 /// 🚀 v10.14: Barra de ferramentas superior ultra-fina e inteligente.
 class TopActionToolbar extends ConsumerWidget {
@@ -201,7 +207,7 @@ class TopActionToolbar extends ConsumerWidget {
         } else if (val == 'table') {
           _handleInsertTable(context, ref);
         } else if (val == 'link') {
-          _handleInsertLink(ref);
+          _handleInsertLink(context, ref);
         } else if (val == 'attach') {
           _handleInsertAttachment(ref);
         }
@@ -264,14 +270,69 @@ class TopActionToolbar extends ConsumerWidget {
     }
   }
 
-  void _handleInsertLink(WidgetRef ref) {
-    final link = LinkObject(id: const Uuid().v4(), linkType: LinkType.externalUrl, url: 'https://google.com', label: 'Link', position: const Offset(200, 200), zIndex: currentPage.objects.length);
-    ref.read(canvasDocumentProvider.notifier).addLink(currentPage, link);
+  void _handleInsertLink(BuildContext context, WidgetRef ref) async {
+    final result = await LinkCreationDialog.show(context);
+    if (result != null) {
+      final link = LinkObject(
+        id: const Uuid().v4(), 
+        linkType: LinkType.externalUrl, 
+        url: result['url']!, 
+        label: result['label']!, 
+        position: const Offset(200, 200), 
+        zIndex: currentPage.objects.length
+      );
+      ref.read(canvasDocumentProvider.notifier).addLink(currentPage, link);
+    }
   }
 
-  void _handleInsertAttachment(WidgetRef ref) {
-    final attach = AttachmentObject(id: const Uuid().v4(), fileName: 'anexo.pdf', fileExtension: 'pdf', localPath: '', position: const Offset(100, 300), zIndex: currentPage.objects.length);
-    ref.read(canvasDocumentProvider.notifier).addAttachment(currentPage, attach);
+  void _handleInsertAttachment(WidgetRef ref) async {
+    // ignore: undefined_getter, avoid_dynamic_calls
+    final result = await (FilePicker as dynamic).platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'jpg', 'png'],
+      withData: kIsWeb, // 🚀 Web: Carregar os bytes diretamente para a RAM
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      final String extension = result.files.single.extension ?? '';
+      String newPath = '';
+      String? base64Data;
+      int sizeBytes = result.files.single.size;
+
+      if (!kIsWeb && result.files.single.path != null) {
+        final file = io.File(result.files.single.path!);
+        final appDir = await getApplicationDocumentsDirectory();
+        
+        // Criar diretório para anexos se não existir
+        final attachDir = io.Directory('${appDir.path}/attachments');
+        if (!await attachDir.exists()) await attachDir.create();
+        
+        newPath = '${attachDir.path}/attach_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        await file.copy(newPath);
+      } else if (kIsWeb) {
+        // Na web não há sistema de ficheiros local suportado pelo dart:io.
+        // O ficheiro vive em memória através de result.files.single.bytes
+        newPath = 'web_attachment_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        
+        if (result.files.single.bytes != null) {
+          // Converter ficheiro para Base64 para sincronizar na BD unificada e depois ser guardado no Servidor Laravel
+          // Nota: Pode causar problemas de performance se os ficheiros forem maiores que 10MB!
+          base64Data = base64Encode(result.files.single.bytes!);
+        }
+      }
+
+      final attach = AttachmentObject(
+        id: const Uuid().v4(), 
+        fileName: result.files.single.name, 
+        fileExtension: extension,
+        fileSize: sizeBytes,
+        localPath: newPath, 
+        remoteUrl: base64Data, // 🚀 Web Hack: Armazenamos temporariamente o Base64 na coluna remote_url para enviar
+        position: const Offset(100, 300), 
+        zIndex: currentPage.objects.length
+      );
+      ref.read(canvasDocumentProvider.notifier).addAttachment(currentPage, attach);
+    }
   }
 
   void _showBrushSelector(BuildContext context) => showModalBottomSheet(context: context, backgroundColor: Colors.transparent, isScrollControlled: true, builder: (_) => const BrushStyleSheet());

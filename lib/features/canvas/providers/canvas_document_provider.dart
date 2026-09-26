@@ -11,6 +11,7 @@ import '../../notebooks/models/notebook_configuration.dart';
 import '../models/animation_object_model.dart';
 import '../models/attachment_model.dart';
 import '../models/audio_block_model.dart';
+import 'package:caderno_digital_app/features/explanations/models/explanation_model.dart';
 import '../models/canvas_enums.dart';
 import '../models/link_model.dart';
 import '../models/local_page_model.dart';
@@ -178,6 +179,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
   Future<void> addShape(LocalPage page, ShapeObject shape) async { await _executeAction(AddShapeAction(pageClientId: page.clientId, pageNumber: page.pageNumber, shape: shape.copyWith(layerId: 'drawings')), targetPage: page); }
   Future<void> addAudioBlock(LocalPage page, AudioBlock audio) async { await _executeAction(AddAudioAction(pageClientId: page.clientId, pageNumber: page.pageNumber, audio: audio.copyWith(layerId: 'default')), targetPage: page); }
   Future<void> addAnimation(LocalPage page, AnimationObject anim) async { await _executeAction(AddAnimationAction(pageClientId: page.clientId, pageNumber: page.pageNumber, animation: anim.copyWith(layerId: 'drawings')), targetPage: page); }
+  Future<void> addExplanation(LocalPage page, ExplanationModel exp) async { await _executeAction(AddExplanationAction(pageClientId: page.clientId, pageNumber: page.pageNumber, explanation: exp.copyWith(layerId: 'drawings')), targetPage: page); }
   Future<void> addTable(LocalPage page, TableObject table) async { await _executeAction(AddTableAction(pageClientId: page.clientId, pageNumber: page.pageNumber, table: table.copyWith(layerId: 'default')), targetPage: page); }
   Future<void> addLink(LocalPage page, LinkObject link) async { await _executeAction(AddLinkAction(pageClientId: page.clientId, pageNumber: page.pageNumber, link: link.copyWith(layerId: 'default')), targetPage: page); }
   Future<void> addAttachment(LocalPage page, AttachmentObject attach) async { await _executeAction(AddAttachmentAction(pageClientId: page.clientId, pageNumber: page.pageNumber, attach: attach.copyWith(layerId: 'default')), targetPage: page); }
@@ -190,6 +192,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
     else if (obj is ShapeObject) await addShape(page, obj);
     else if (obj is AudioBlock) await addAudioBlock(page, obj);
     else if (obj is AnimationObject) await addAnimation(page, obj);
+    else if (obj is ExplanationModel) await addExplanation(page, obj);
     else if (obj is TableObject) await addTable(page, obj);
     else if (obj is LinkObject) await addLink(page, obj);
     else if (obj is AttachmentObject) await addAttachment(page, obj);
@@ -298,6 +301,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
           else if (obj is AttachmentObject) await _repository.saveSingleAttachment(cid, obj, pageId: pid, updatedAt: updatedAt);
           else if (obj is AudioBlock) await _repository.saveSingleAudioBlock(cid, obj, pageId: pid, updatedAt: updatedAt);
           else if (obj is AnimationObject) await _repository.saveSingleAnimationObject(cid, obj, pageId: pid, updatedAt: updatedAt);
+          else if (obj is ExplanationModel) await _repository.saveSingleExplanationObject(cid, obj, pageId: pid, updatedAt: updatedAt);
         }
       } else if (action is AddStrokeAction) await _repository.saveSingleStroke(cid, action.stroke, pageId: pid, updatedAt: updatedAt);
       else if (action is AddTextAction) await _repository.saveSingleTextBlock(cid, action.block, pageId: pid, updatedAt: updatedAt);
@@ -305,6 +309,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       else if (action is AddShapeAction) await _repository.saveSingleShape(cid, action.shape, pageId: pid, updatedAt: updatedAt); 
       else if (action is AddAudioAction) await _repository.saveSingleAudioBlock(cid, action.audio, pageId: pid, updatedAt: updatedAt);
       else if (action is AddAnimationAction) await _repository.saveSingleAnimationObject(cid, action.animation, pageId: pid, updatedAt: updatedAt);
+      else if (action is AddExplanationAction) await _repository.saveSingleExplanationObject(cid, action.explanation, pageId: pid, updatedAt: updatedAt);
       else if (action is AddTableAction) await _repository.saveSingleTable(cid, action.table, pageId: pid, updatedAt: updatedAt); 
       else if (action is AddLinkAction) await _repository.saveSingleLink(cid, action.link, pageId: pid, updatedAt: updatedAt); 
       else if (action is AddAttachmentAction) await _repository.saveSingleAttachment(cid, action.attach, pageId: pid, updatedAt: updatedAt); 
@@ -321,6 +326,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
           else if (obj is AttachmentObject) await _repository.saveSingleAttachment(cid, obj, pageId: pid, updatedAt: updatedAt);
           else if (obj is AudioBlock) await _repository.saveSingleAudioBlock(cid, obj, pageId: pid, updatedAt: updatedAt);
           else if (obj is AnimationObject) await _repository.saveSingleAnimationObject(cid, obj, pageId: pid, updatedAt: updatedAt);
+          else if (obj is ExplanationModel) await _repository.saveSingleExplanationObject(cid, obj, pageId: pid, updatedAt: updatedAt);
         }
       }
       else if (action is DeleteAction) { 
@@ -374,6 +380,7 @@ class CanvasDocumentNotifier extends AutoDisposeNotifier<CanvasDocumentState> {
       else if (obj is AttachmentObject) await _repository.saveSingleAttachment(clonedPage.clientId, obj); 
       else if (obj is AudioBlock) await _repository.saveSingleAudioBlock(clonedPage.clientId, obj); 
       else if (obj is AnimationObject) await _repository.saveSingleAnimationObject(clonedPage.clientId, obj); 
+      else if (obj is ExplanationModel) await _repository.saveSingleExplanationObject(clonedPage.clientId, obj); 
     } 
     await _repository.reindexPages(state.currentNotebookId); 
   }

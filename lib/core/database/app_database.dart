@@ -260,6 +260,22 @@ class CanvasAttachments extends Table {
   Set<Column> get primaryKey => {clientAttachmentId};
 }
 
+class CanvasExplanations extends Table {
+  TextColumn get clientExplanationId => text()();
+  IntColumn get pageId => integer().references(Pages, #id, onDelete: KeyAction.cascade)();
+  TextColumn get explanationData => text()();
+  IntColumn get isDeleted => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
+  TextColumn get layerId => text().nullable()();
+  IntColumn get syncedWithCloud => integer().withDefault(const Constant(0))();
+  TextColumn get parentId => text().nullable()(); 
+  IntColumn get isVisible => integer().withDefault(const Constant(1))(); 
+  IntColumn get isLocked => integer().withDefault(const Constant(0))(); 
+  RealColumn get opacity => real().withDefault(const Constant(1.0))(); 
+  @override
+  Set<Column> get primaryKey => {clientExplanationId};
+}
+
 class NotebookUser extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get serverId => integer().nullable().unique()();
@@ -331,7 +347,7 @@ class NotebookTemplateVersions extends Table {
 @DriftDatabase(tables: [
   Users, Subjects, Notebooks, Pages, CanvasStrokes,
   CanvasTextBlocks, CanvasImageBlocks, CanvasShapes, CanvasAudioBlocks, 
-  CanvasAnimations, CanvasTables, CanvasLinks, CanvasAttachments,
+  CanvasAnimations, CanvasTables, CanvasLinks, CanvasAttachments, CanvasExplanations,
   NotebookUser, Payments, LessonRecordings,
   NotebookTemplates, NotebookTemplateVersions
 ])
@@ -491,15 +507,22 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(canvasImageBlocks, canvasImageBlocks.cropData);
           } catch (_) {}
         }
+        if (from < 33) {
+          // 🚀 v33: Tabela para Simulações e Explicações
+          try {
+            await m.createTable(canvasExplanations);
+          } catch (_) {}
+        }
       },
     );
   }
 
   @override
-  int get schemaVersion => 32;
+  int get schemaVersion => 33;
 
   Future<void> clearAllData() async {
     await transaction(() async {
+      await delete(canvasExplanations).go();
       await delete(canvasImageBlocks).go();
       await delete(canvasTextBlocks).go();
       await delete(canvasStrokes).go();

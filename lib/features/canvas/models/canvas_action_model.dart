@@ -34,6 +34,14 @@ abstract class CanvasAction {
     switch (type) {
       case 'add_stroke': return AddStrokeAction.fromMap(data);
       case 'add_text': return AddTextAction.fromMap(data);
+      case 'add_image': return AddImageAction.fromMap(data);
+      case 'add_shape': return AddShapeAction.fromMap(data);
+      case 'add_audio': return AddAudioAction.fromMap(data);
+      case 'add_animation': return AddAnimationAction.fromMap(data);
+      case 'add_explanation': return AddExplanationAction.fromMap(data);
+      case 'add_table': return AddTableAction.fromMap(data);
+      case 'add_link': return AddLinkAction.fromMap(data);
+      case 'add_attachment': return AddAttachmentAction.fromMap(data);
       case 'delete': return DeleteAction.fromMap(data);
       case 'move': return MoveAction.fromMap(data);
       case 'update_object': return UpdateObjectAction.fromMap(data);
@@ -123,6 +131,18 @@ class AddAnimationAction extends CanvasAction {
   @override
   Map<String, dynamic> toMap() => {'type': 'add_animation', 'page_client_id': pageClientId, 'page_number': pageNumber, 'animation': animation.toJson()};
   factory AddAnimationAction.fromMap(Map<String, dynamic> map) => AddAnimationAction(pageClientId: map['page_client_id'], pageNumber: map['page_number'], animation: AnimationObject.fromJson(map['animation']));
+}
+
+class AddExplanationAction extends CanvasAction {
+  final ExplanationModel explanation;
+  AddExplanationAction({required super.pageClientId, required super.pageNumber, required this.explanation});
+  @override
+  LocalPage execute(LocalPage page) => page.copyWith(objects: List<PageObject>.from(page.objects)..add(explanation), updatedAt: timestamp);
+  @override
+  LocalPage undo(LocalPage page) => page.copyWith(objects: page.objects.where((o) => o.id != explanation.id).toList(), updatedAt: timestamp);
+  @override
+  Map<String, dynamic> toMap() => {'type': 'add_explanation', 'page_client_id': pageClientId, 'page_number': pageNumber, 'explanation': explanation.toJson()};
+  factory AddExplanationAction.fromMap(Map<String, dynamic> map) => AddExplanationAction(pageClientId: map['page_client_id'], pageNumber: map['page_number'], explanation: ExplanationModel.fromJson(map['explanation']));
 }
 
 class AddTableAction extends CanvasAction {

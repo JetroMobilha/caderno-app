@@ -36,8 +36,6 @@ void main() {
         title: 'Draft',
         coverType: 'basic',
         color: '#00FF00',
-        lineType: 'grid',
-        paperSize: 'A5',
         isPublished: 0,
         version: 2,
       );
@@ -47,8 +45,6 @@ void main() {
       expect(json['server_id'], 202);
       expect(json['title'], 'Draft');
       expect(json['color'], '#00FF00');
-      expect(json['line_type'], 'grid');
-      expect(json['paper_size'], 'A5');
       expect(json['is_published'], 0);
       expect(json['version'], 2);
     });
@@ -58,8 +54,6 @@ void main() {
         title: 'Original',
         coverType: 'color',
         color: '#111111',
-        lineType: 'ruled',
-        paperSize: 'A4',
         version: 1,
       );
 

@@ -10,30 +10,40 @@ import 'animators/engineering_animator.dart';
 
 class SimulationStudioSheet extends ConsumerStatefulWidget {
   final Size canvasSize;
+  final Rect? targetBounds;
+  final Function(ExplanationModel)? onConversion;
 
   const SimulationStudioSheet({
     super.key,
     this.canvasSize = const Size(800, 1000),
+    this.targetBounds,
+    this.onConversion,
   });
 
-  static Future<void> show(BuildContext context, {Size? canvasSize}) {
+  static Future<void> show(BuildContext context, {Size? canvasSize, Rect? targetBounds, Function(ExplanationModel)? onConversion}) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => SimulationStudioSheet(canvasSize: canvasSize ?? const Size(800, 1000)),
+      builder: (_) => SimulationStudioSheet(
+        canvasSize: canvasSize ?? const Size(800, 1000),
+        targetBounds: targetBounds,
+        onConversion: onConversion,
+      ),
     );
   }
 
   @override
-  ConsumerState<SimulationStudioSheet> createState() => _SimulationStudioSheetState();
+  ConsumerState<SimulationStudioSheet> createState() =>
+      _SimulationStudioSheetState();
 }
 
-class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> with SingleTickerProviderStateMixin {
+class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animController;
-  
+
   ExplanationType _selectedCategory = ExplanationType.mathFunction;
-  
+
   // Opções Matemática
   MathKind _selectedMathKind = MathKind.sineWave;
   double _mathFrequency = 1.0;
@@ -69,12 +79,18 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
   }
 
   ExplanationModel _buildCurrentModel() {
-    final Offset centerPos = Offset(widget.canvasSize.width / 2, widget.canvasSize.height / 3);
+    final Offset pos = widget.targetBounds?.topLeft ?? Offset(
+      widget.canvasSize.width / 2,
+      widget.canvasSize.height / 3,
+    );
+    
+    final Size finalSize = widget.targetBounds?.size ?? const Size(280, 200);
 
     switch (_selectedCategory) {
       case ExplanationType.mathFunction:
         return MathExplanation(
-          position: centerPos,
+          position: pos,
+          size: finalSize,
           kind: _selectedMathKind,
           frequency: _mathFrequency,
           amplitude: _mathAmplitude,
@@ -82,7 +98,8 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
         );
       case ExplanationType.physicsBody:
         return PhysicsExplanation(
-          position: centerPos,
+          position: pos,
+          size: finalSize,
           kind: _selectedPhysicsKind,
           angleDegrees: _physicsAngle,
           mass: _physicsMass,
@@ -90,7 +107,8 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
         );
       case ExplanationType.engineeringMechanism:
         return EngineeringExplanation(
-          position: centerPos,
+          position: pos,
+          size: finalSize,
           kind: _selectedEngKind,
           angularVelocity: _engSpeed,
           voltage: _engVoltage,
@@ -102,22 +120,33 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
 
   void _handleInsert() {
     final model = _buildCurrentModel();
+
+    if (widget.onConversion != null) {
+      widget.onConversion!(model);
+      Navigator.of(context).pop();
+      return;
+    }
+
     final viewportState = ref.read(canvasViewportProvider);
     final String? pageClientId = viewportState.currentPageClientId;
 
     if (pageClientId != null) {
       final docState = ref.read(canvasDocumentProvider);
-      final page = docState.pages.where((p) => p.clientId == pageClientId).firstOrNull;
+      final page = docState.pages
+          .where((p) => p.clientId == pageClientId)
+          .firstOrNull;
       if (page != null) {
         final modelWithZIndex = model.copyWith(zIndex: page.objects.length);
-        ref.read(canvasDocumentProvider.notifier).addObject(page, modelWithZIndex);
+        ref
+            .read(canvasDocumentProvider.notifier)
+            .addObject(page, modelWithZIndex);
       }
     } else {
       ref.read(explanationProvider.notifier).addExplanation(model);
     }
 
     Navigator.of(context).pop();
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Ilustração animada inserida na página!'),
@@ -131,117 +160,148 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
   Widget build(BuildContext context) {
     final currentModel = _buildCurrentModel();
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        children: [
-          // Cabeçalho
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.black.withOpacity(0.08))),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.auto_awesome_motion, color: Color(0xFF0F4C5C)),
-                const SizedBox(width: 12),
-                const Text(
-                  'Estúdio de Ilustrações Animadas',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C5C)),
+    return Material(
+      color: Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            // Cabeçalho
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.black.withOpacity(0.08)),
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-
-          // Abas Principais (Matemática, Física, Engenharia)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                _buildCategoryTab(ExplanationType.mathFunction, Icons.functions_rounded, 'Matemática'),
-                _buildCategoryTab(ExplanationType.physicsBody, Icons.speed_rounded, 'Física'),
-                _buildCategoryTab(ExplanationType.engineeringMechanism, Icons.settings_suggest_rounded, 'Engenharia'),
-              ],
-            ),
-          ),
-
-          // Área Principal: Pré-visualização Animada e Painel de Parâmetros
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 1. Pré-visualização Ao Vivo
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    margin: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.black12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome_motion,
+                    color: Color(0xFF0F4C5C),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Estúdio de Ilustrações Animadas',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F4C5C),
                     ),
-                    child: Center(
-                      child: AnimatedBuilder(
-                        animation: _animController,
-                        builder: (context, _) {
-                          return CustomPaint(
-                            size: const Size(300, 240),
-                            painter: _PreviewPainter(
-                              model: currentModel,
-                              time: _animController.value,
-                            ),
-                          );
-                        },
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Abas Principais (Matemática, Física, Engenharia)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  _buildCategoryTab(
+                    ExplanationType.mathFunction,
+                    Icons.functions_rounded,
+                    'Matemática',
+                  ),
+                  _buildCategoryTab(
+                    ExplanationType.physicsBody,
+                    Icons.speed_rounded,
+                    'Física',
+                  ),
+                  _buildCategoryTab(
+                    ExplanationType.engineeringMechanism,
+                    Icons.settings_suggest_rounded,
+                    'Engenharia',
+                  ),
+                ],
+              ),
+            ),
+
+            // Área Principal: Pré-visualização Animada e Painel de Parâmetros
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. Pré-visualização Ao Vivo
+                  Expanded(
+                    flex: 3,
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: Center(
+                        child: AnimatedBuilder(
+                          animation: _animController,
+                          builder: (context, _) {
+                            return CustomPaint(
+                              size: const Size(300, 240),
+                              painter: _PreviewPainter(
+                                model: currentModel,
+                                time: _animController.value,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
-                ),
 
-                // 2. Controlos de Parâmetros
-                Expanded(
-                  flex: 2,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildControlsForCategory(),
+                  // 2. Controlos de Parâmetros
+                  Expanded(
+                    flex: 2,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildControlsForCategory(),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          // Rodapé com Botão de Inserção
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.black.withOpacity(0.08))),
-            ),
-            child: Row(
-              children: [
-                const Spacer(),
-                ElevatedButton.icon(
-                  onPressed: _handleInsert,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F4C5C),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  icon: const Icon(Icons.add_to_photos_rounded),
-                  label: const Text('Inserir na Página', style: TextStyle(fontWeight: FontWeight.bold)),
+            // Rodapé com Botão de Inserção
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.black.withOpacity(0.08)),
                 ),
-              ],
+              ),
+              child: Row(
+                children: [
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    onPressed: _handleInsert,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F4C5C),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    icon: Icon(widget.onConversion != null ? Icons.auto_awesome : Icons.add_to_photos_rounded),
+                    label: Text(
+                      widget.onConversion != null ? 'Converter Seleção' : 'Inserir na Página',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -261,7 +321,11 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: isSelected ? Colors.white : Colors.black54),
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected ? Colors.white : Colors.black54,
+              ),
               const SizedBox(width: 8),
               Text(
                 label,
@@ -284,26 +348,57 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Tipo de Ilustração', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const Text(
+              'Tipo de Ilustração',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<MathKind>(
+              isExpanded: true,
               value: _selectedMathKind,
               decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               items: const [
-                DropdownMenuItem(value: MathKind.sineWave, child: Text('Onda Senoidal / Função Sin')),
-                DropdownMenuItem(value: MathKind.polynomial, child: Text('Função Polinomial / Parábola')),
-                DropdownMenuItem(value: MathKind.trigCircle, child: Text('Círculo Trigonométrico')),
+                DropdownMenuItem(
+                  value: MathKind.sineWave,
+                  child: Text(
+                    'Onda Senoidal / Função Sin',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: MathKind.polynomial,
+                  child: Text(
+                    'Função Polinomial / Parábola',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: MathKind.trigCircle,
+                  child: Text(
+                    'Círculo Trigonométrico',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
               onChanged: (v) => setState(() => _selectedMathKind = v!),
             ),
             const SizedBox(height: 16),
-            Text('Frequência / Velocidade: ${_mathFrequency.toStringAsFixed(1)}x'),
+            Text(
+              'Frequência / Velocidade: ${_mathFrequency.toStringAsFixed(1)}x',
+            ),
             Slider(
               value: _mathFrequency,
-              min: 0.5, max: 3.0, divisions: 10,
+              min: 0.5,
+              max: 3.0,
+              divisions: 10,
               activeColor: const Color(0xFF0F4C5C),
               onChanged: (v) => setState(() => _mathFrequency = v),
             ),
@@ -312,7 +407,9 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
               Text('Amplitude: ${_mathAmplitude.toInt()} px'),
               Slider(
                 value: _mathAmplitude,
-                min: 20.0, max: 80.0, divisions: 12,
+                min: 20.0,
+                max: 80.0,
+                divisions: 12,
                 activeColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _mathAmplitude = v),
               ),
@@ -320,7 +417,7 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Exibir Eixos Cartesianos'),
                 value: _mathShowAxes,
-                activeColor: const Color(0xFF0F4C5C),
+                activeTrackColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _mathShowAxes = v),
               ),
             ],
@@ -331,18 +428,45 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Tipo de Fenómeno Físico', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const Text(
+              'Tipo de Fenómeno Físico',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<PhysicsKind>(
+              isExpanded: true,
               value: _selectedPhysicsKind,
               decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               items: const [
-                DropdownMenuItem(value: PhysicsKind.inclinedPlane, child: Text('Plano Inclinado & Forças')),
-                DropdownMenuItem(value: PhysicsKind.simplePendulum, child: Text('Pêndulo Simples (MHS)')),
-                DropdownMenuItem(value: PhysicsKind.massSpring, child: Text('Sistema Massa-Mola')),
+                DropdownMenuItem(
+                  value: PhysicsKind.inclinedPlane,
+                  child: Text(
+                    'Plano Inclinado & Forças',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: PhysicsKind.simplePendulum,
+                  child: Text(
+                    'Pêndulo Simples (MHS)',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: PhysicsKind.massSpring,
+                  child: Text(
+                    'Sistema Massa-Mola',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
               onChanged: (v) => setState(() => _selectedPhysicsKind = v!),
             ),
@@ -351,7 +475,9 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
               Text('Ângulo de Inclinação: ${_physicsAngle.toInt()}°'),
               Slider(
                 value: _physicsAngle,
-                min: 10.0, max: 60.0, divisions: 10,
+                min: 10.0,
+                max: 60.0,
+                divisions: 10,
                 activeColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _physicsAngle = v),
               ),
@@ -360,7 +486,9 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
               Text('Comprimento da Corda: ${_physicsLength.toInt()} px'),
               Slider(
                 value: _physicsLength,
-                min: 80.0, max: 160.0, divisions: 8,
+                min: 80.0,
+                max: 160.0,
+                divisions: 8,
                 activeColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _physicsLength = v),
               ),
@@ -368,7 +496,9 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
             Text('Massa do Corpo: ${_physicsMass.toStringAsFixed(1)} kg'),
             Slider(
               value: _physicsMass,
-              min: 0.5, max: 10.0, divisions: 19,
+              min: 0.5,
+              max: 10.0,
+              divisions: 19,
               activeColor: const Color(0xFF0F4C5C),
               onChanged: (v) => setState(() => _physicsMass = v),
             ),
@@ -379,34 +509,67 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Mecanismo de Engenharia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const Text(
+              'Mecanismo de Engenharia',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<EngineeringKind>(
+              isExpanded: true,
               value: _selectedEngKind,
               decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               items: const [
-                DropdownMenuItem(value: EngineeringKind.gears, child: Text('Par de Engrenagens Acopladas')),
-                DropdownMenuItem(value: EngineeringKind.dcCircuit, child: Text('Circuito Elétrico DC (Fluxo de Elétrons)')),
-                DropdownMenuItem(value: EngineeringKind.trussBeam, child: Text('Viga com Cargas e Apoios')),
+                DropdownMenuItem(
+                  value: EngineeringKind.gears,
+                  child: Text(
+                    'Par de Engrenagens Acopladas',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: EngineeringKind.dcCircuit,
+                  child: Text(
+                    'Circuito Elétrico DC (Fluxo de Elétrons)',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: EngineeringKind.trussBeam,
+                  child: Text(
+                    'Viga com Cargas e Apoios',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
               onChanged: (v) => setState(() => _selectedEngKind = v!),
             ),
             const SizedBox(height: 16),
             if (_selectedEngKind == EngineeringKind.gears) ...[
-              Text('Rácio de Transmissão (Ratio): ${_engGearRatio.toStringAsFixed(1)}:1'),
+              Text(
+                'Rácio de Transmissão (Ratio): ${_engGearRatio.toStringAsFixed(1)}:1',
+              ),
               Slider(
                 value: _engGearRatio,
-                min: 1.0, max: 3.0, divisions: 4,
+                min: 1.0,
+                max: 3.0,
+                divisions: 4,
                 activeColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _engGearRatio = v),
               ),
               Text('Velocidade Angular: ${_engSpeed.toStringAsFixed(1)} rad/s'),
               Slider(
                 value: _engSpeed,
-                min: 0.5, max: 3.0, divisions: 10,
+                min: 0.5,
+                max: 3.0,
+                divisions: 10,
                 activeColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _engSpeed = v),
               ),
@@ -415,14 +578,18 @@ class _SimulationStudioSheetState extends ConsumerState<SimulationStudioSheet> w
               Text('Tensão da Fonte: ${_engVoltage.toInt()} V'),
               Slider(
                 value: _engVoltage,
-                min: 3.0, max: 24.0, divisions: 7,
+                min: 3.0,
+                max: 24.0,
+                divisions: 7,
                 activeColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _engVoltage = v),
               ),
               Text('Resistência: ${_engResistance.toInt()} Ω'),
               Slider(
                 value: _engResistance,
-                min: 2.0, max: 50.0, divisions: 12,
+                min: 2.0,
+                max: 50.0,
+                divisions: 12,
                 activeColor: const Color(0xFF0F4C5C),
                 onChanged: (v) => setState(() => _engResistance = v),
               ),

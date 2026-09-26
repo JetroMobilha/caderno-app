@@ -889,6 +889,7 @@ class SyncService {
       List<CanvasTablesCompanion> tables = [];
       List<CanvasLinksCompanion> links = [];
       List<CanvasAttachmentsCompanion> attachments = [];
+      List<CanvasExplanationsCompanion> explanations = [];
 
       if (kIsWeb) {
         // ... (Mapeamento web simplificado omitido para brevidade, segue lógica similar ao Isolate)
@@ -903,6 +904,7 @@ class SyncService {
         tables = results[6];
         links = results[7];
         attachments = results[8];
+        explanations = results[9];
       }
 
       // 🚀 VERIFICAÇÃO DE EXISTÊNCIA
@@ -922,6 +924,7 @@ class SyncService {
         batch.deleteWhere(_db.canvasTables, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
         batch.deleteWhere(_db.canvasLinks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
         batch.deleteWhere(_db.canvasAttachments, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
+        batch.deleteWhere(_db.canvasExplanations, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
         
         for (var s in strokes) { if (confirmedIds.contains(s.pageId.value)) batch.insert(_db.canvasStrokes, s, mode: InsertMode.insertOrReplace); }
         for (var t in texts) { if (confirmedIds.contains(t.pageId.value)) batch.insert(_db.canvasTextBlocks, t, mode: InsertMode.insertOrReplace); }
@@ -932,6 +935,7 @@ class SyncService {
         for (var t in tables) { if (confirmedIds.contains(t.pageId.value)) batch.insert(_db.canvasTables, t, mode: InsertMode.insertOrReplace); }
         for (var l in links) { if (confirmedIds.contains(l.pageId.value)) batch.insert(_db.canvasLinks, l, mode: InsertMode.insertOrReplace); }
         for (var a in attachments) { if (confirmedIds.contains(a.pageId.value)) batch.insert(_db.canvasAttachments, a, mode: InsertMode.insertOrReplace); }
+        for (var e in explanations) { if (confirmedIds.contains(e.pageId.value)) batch.insert(_db.canvasExplanations, e, mode: InsertMode.insertOrReplace); }
 
         for (var id in finalPageIds) {
            batch.update(_db.pages, PagesCompanion(updatedAt: Value(TimeService().nowMs()), syncedWithCloud: const Value(1)), where: (t) => t.id.equals(id));

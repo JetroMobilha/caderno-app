@@ -11426,6 +11426,679 @@ class CanvasAttachmentsCompanion extends UpdateCompanion<CanvasAttachment> {
   }
 }
 
+class $CanvasExplanationsTable extends CanvasExplanations
+    with TableInfo<$CanvasExplanationsTable, CanvasExplanation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CanvasExplanationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientExplanationIdMeta =
+      const VerificationMeta('clientExplanationId');
+  @override
+  late final GeneratedColumn<String> clientExplanationId =
+      GeneratedColumn<String>(
+        'client_explanation_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _pageIdMeta = const VerificationMeta('pageId');
+  @override
+  late final GeneratedColumn<int> pageId = GeneratedColumn<int>(
+    'page_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES pages (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _explanationDataMeta = const VerificationMeta(
+    'explanationData',
+  );
+  @override
+  late final GeneratedColumn<String> explanationData = GeneratedColumn<String>(
+    'explanation_data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<int> isDeleted = GeneratedColumn<int>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _layerIdMeta = const VerificationMeta(
+    'layerId',
+  );
+  @override
+  late final GeneratedColumn<String> layerId = GeneratedColumn<String>(
+    'layer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncedWithCloudMeta = const VerificationMeta(
+    'syncedWithCloud',
+  );
+  @override
+  late final GeneratedColumn<int> syncedWithCloud = GeneratedColumn<int>(
+    'synced_with_cloud',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isVisibleMeta = const VerificationMeta(
+    'isVisible',
+  );
+  @override
+  late final GeneratedColumn<int> isVisible = GeneratedColumn<int>(
+    'is_visible',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isLockedMeta = const VerificationMeta(
+    'isLocked',
+  );
+  @override
+  late final GeneratedColumn<int> isLocked = GeneratedColumn<int>(
+    'is_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _opacityMeta = const VerificationMeta(
+    'opacity',
+  );
+  @override
+  late final GeneratedColumn<double> opacity = GeneratedColumn<double>(
+    'opacity',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    clientExplanationId,
+    pageId,
+    explanationData,
+    isDeleted,
+    updatedAt,
+    layerId,
+    syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'canvas_explanations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CanvasExplanation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_explanation_id')) {
+      context.handle(
+        _clientExplanationIdMeta,
+        clientExplanationId.isAcceptableOrUnknown(
+          data['client_explanation_id']!,
+          _clientExplanationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientExplanationIdMeta);
+    }
+    if (data.containsKey('page_id')) {
+      context.handle(
+        _pageIdMeta,
+        pageId.isAcceptableOrUnknown(data['page_id']!, _pageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageIdMeta);
+    }
+    if (data.containsKey('explanation_data')) {
+      context.handle(
+        _explanationDataMeta,
+        explanationData.isAcceptableOrUnknown(
+          data['explanation_data']!,
+          _explanationDataMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_explanationDataMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('layer_id')) {
+      context.handle(
+        _layerIdMeta,
+        layerId.isAcceptableOrUnknown(data['layer_id']!, _layerIdMeta),
+      );
+    }
+    if (data.containsKey('synced_with_cloud')) {
+      context.handle(
+        _syncedWithCloudMeta,
+        syncedWithCloud.isAcceptableOrUnknown(
+          data['synced_with_cloud']!,
+          _syncedWithCloudMeta,
+        ),
+      );
+    }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('is_visible')) {
+      context.handle(
+        _isVisibleMeta,
+        isVisible.isAcceptableOrUnknown(data['is_visible']!, _isVisibleMeta),
+      );
+    }
+    if (data.containsKey('is_locked')) {
+      context.handle(
+        _isLockedMeta,
+        isLocked.isAcceptableOrUnknown(data['is_locked']!, _isLockedMeta),
+      );
+    }
+    if (data.containsKey('opacity')) {
+      context.handle(
+        _opacityMeta,
+        opacity.isAcceptableOrUnknown(data['opacity']!, _opacityMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientExplanationId};
+  @override
+  CanvasExplanation map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CanvasExplanation(
+      clientExplanationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_explanation_id'],
+      )!,
+      pageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_id'],
+      )!,
+      explanationData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}explanation_data'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      layerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layer_id'],
+      ),
+      syncedWithCloud: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synced_with_cloud'],
+      )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      isVisible: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_visible'],
+      )!,
+      isLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_locked'],
+      )!,
+      opacity: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}opacity'],
+      )!,
+    );
+  }
+
+  @override
+  $CanvasExplanationsTable createAlias(String alias) {
+    return $CanvasExplanationsTable(attachedDatabase, alias);
+  }
+}
+
+class CanvasExplanation extends DataClass
+    implements Insertable<CanvasExplanation> {
+  final String clientExplanationId;
+  final int pageId;
+  final String explanationData;
+  final int isDeleted;
+  final int updatedAt;
+  final String? layerId;
+  final int syncedWithCloud;
+  final String? parentId;
+  final int isVisible;
+  final int isLocked;
+  final double opacity;
+  const CanvasExplanation({
+    required this.clientExplanationId,
+    required this.pageId,
+    required this.explanationData,
+    required this.isDeleted,
+    required this.updatedAt,
+    this.layerId,
+    required this.syncedWithCloud,
+    this.parentId,
+    required this.isVisible,
+    required this.isLocked,
+    required this.opacity,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_explanation_id'] = Variable<String>(clientExplanationId);
+    map['page_id'] = Variable<int>(pageId);
+    map['explanation_data'] = Variable<String>(explanationData);
+    map['is_deleted'] = Variable<int>(isDeleted);
+    map['updated_at'] = Variable<int>(updatedAt);
+    if (!nullToAbsent || layerId != null) {
+      map['layer_id'] = Variable<String>(layerId);
+    }
+    map['synced_with_cloud'] = Variable<int>(syncedWithCloud);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['is_visible'] = Variable<int>(isVisible);
+    map['is_locked'] = Variable<int>(isLocked);
+    map['opacity'] = Variable<double>(opacity);
+    return map;
+  }
+
+  CanvasExplanationsCompanion toCompanion(bool nullToAbsent) {
+    return CanvasExplanationsCompanion(
+      clientExplanationId: Value(clientExplanationId),
+      pageId: Value(pageId),
+      explanationData: Value(explanationData),
+      isDeleted: Value(isDeleted),
+      updatedAt: Value(updatedAt),
+      layerId: layerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layerId),
+      syncedWithCloud: Value(syncedWithCloud),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      isVisible: Value(isVisible),
+      isLocked: Value(isLocked),
+      opacity: Value(opacity),
+    );
+  }
+
+  factory CanvasExplanation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CanvasExplanation(
+      clientExplanationId: serializer.fromJson<String>(
+        json['clientExplanationId'],
+      ),
+      pageId: serializer.fromJson<int>(json['pageId']),
+      explanationData: serializer.fromJson<String>(json['explanationData']),
+      isDeleted: serializer.fromJson<int>(json['isDeleted']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      layerId: serializer.fromJson<String?>(json['layerId']),
+      syncedWithCloud: serializer.fromJson<int>(json['syncedWithCloud']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      isVisible: serializer.fromJson<int>(json['isVisible']),
+      isLocked: serializer.fromJson<int>(json['isLocked']),
+      opacity: serializer.fromJson<double>(json['opacity']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientExplanationId': serializer.toJson<String>(clientExplanationId),
+      'pageId': serializer.toJson<int>(pageId),
+      'explanationData': serializer.toJson<String>(explanationData),
+      'isDeleted': serializer.toJson<int>(isDeleted),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'layerId': serializer.toJson<String?>(layerId),
+      'syncedWithCloud': serializer.toJson<int>(syncedWithCloud),
+      'parentId': serializer.toJson<String?>(parentId),
+      'isVisible': serializer.toJson<int>(isVisible),
+      'isLocked': serializer.toJson<int>(isLocked),
+      'opacity': serializer.toJson<double>(opacity),
+    };
+  }
+
+  CanvasExplanation copyWith({
+    String? clientExplanationId,
+    int? pageId,
+    String? explanationData,
+    int? isDeleted,
+    int? updatedAt,
+    Value<String?> layerId = const Value.absent(),
+    int? syncedWithCloud,
+    Value<String?> parentId = const Value.absent(),
+    int? isVisible,
+    int? isLocked,
+    double? opacity,
+  }) => CanvasExplanation(
+    clientExplanationId: clientExplanationId ?? this.clientExplanationId,
+    pageId: pageId ?? this.pageId,
+    explanationData: explanationData ?? this.explanationData,
+    isDeleted: isDeleted ?? this.isDeleted,
+    updatedAt: updatedAt ?? this.updatedAt,
+    layerId: layerId.present ? layerId.value : this.layerId,
+    syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    isVisible: isVisible ?? this.isVisible,
+    isLocked: isLocked ?? this.isLocked,
+    opacity: opacity ?? this.opacity,
+  );
+  CanvasExplanation copyWithCompanion(CanvasExplanationsCompanion data) {
+    return CanvasExplanation(
+      clientExplanationId: data.clientExplanationId.present
+          ? data.clientExplanationId.value
+          : this.clientExplanationId,
+      pageId: data.pageId.present ? data.pageId.value : this.pageId,
+      explanationData: data.explanationData.present
+          ? data.explanationData.value
+          : this.explanationData,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      layerId: data.layerId.present ? data.layerId.value : this.layerId,
+      syncedWithCloud: data.syncedWithCloud.present
+          ? data.syncedWithCloud.value
+          : this.syncedWithCloud,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      isVisible: data.isVisible.present ? data.isVisible.value : this.isVisible,
+      isLocked: data.isLocked.present ? data.isLocked.value : this.isLocked,
+      opacity: data.opacity.present ? data.opacity.value : this.opacity,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasExplanation(')
+          ..write('clientExplanationId: $clientExplanationId, ')
+          ..write('pageId: $pageId, ')
+          ..write('explanationData: $explanationData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    clientExplanationId,
+    pageId,
+    explanationData,
+    isDeleted,
+    updatedAt,
+    layerId,
+    syncedWithCloud,
+    parentId,
+    isVisible,
+    isLocked,
+    opacity,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CanvasExplanation &&
+          other.clientExplanationId == this.clientExplanationId &&
+          other.pageId == this.pageId &&
+          other.explanationData == this.explanationData &&
+          other.isDeleted == this.isDeleted &&
+          other.updatedAt == this.updatedAt &&
+          other.layerId == this.layerId &&
+          other.syncedWithCloud == this.syncedWithCloud &&
+          other.parentId == this.parentId &&
+          other.isVisible == this.isVisible &&
+          other.isLocked == this.isLocked &&
+          other.opacity == this.opacity);
+}
+
+class CanvasExplanationsCompanion extends UpdateCompanion<CanvasExplanation> {
+  final Value<String> clientExplanationId;
+  final Value<int> pageId;
+  final Value<String> explanationData;
+  final Value<int> isDeleted;
+  final Value<int> updatedAt;
+  final Value<String?> layerId;
+  final Value<int> syncedWithCloud;
+  final Value<String?> parentId;
+  final Value<int> isVisible;
+  final Value<int> isLocked;
+  final Value<double> opacity;
+  final Value<int> rowid;
+  const CanvasExplanationsCompanion({
+    this.clientExplanationId = const Value.absent(),
+    this.pageId = const Value.absent(),
+    this.explanationData = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CanvasExplanationsCompanion.insert({
+    required String clientExplanationId,
+    required int pageId,
+    required String explanationData,
+    this.isDeleted = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.layerId = const Value.absent(),
+    this.syncedWithCloud = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.isVisible = const Value.absent(),
+    this.isLocked = const Value.absent(),
+    this.opacity = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : clientExplanationId = Value(clientExplanationId),
+       pageId = Value(pageId),
+       explanationData = Value(explanationData);
+  static Insertable<CanvasExplanation> custom({
+    Expression<String>? clientExplanationId,
+    Expression<int>? pageId,
+    Expression<String>? explanationData,
+    Expression<int>? isDeleted,
+    Expression<int>? updatedAt,
+    Expression<String>? layerId,
+    Expression<int>? syncedWithCloud,
+    Expression<String>? parentId,
+    Expression<int>? isVisible,
+    Expression<int>? isLocked,
+    Expression<double>? opacity,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientExplanationId != null)
+        'client_explanation_id': clientExplanationId,
+      if (pageId != null) 'page_id': pageId,
+      if (explanationData != null) 'explanation_data': explanationData,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (layerId != null) 'layer_id': layerId,
+      if (syncedWithCloud != null) 'synced_with_cloud': syncedWithCloud,
+      if (parentId != null) 'parent_id': parentId,
+      if (isVisible != null) 'is_visible': isVisible,
+      if (isLocked != null) 'is_locked': isLocked,
+      if (opacity != null) 'opacity': opacity,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CanvasExplanationsCompanion copyWith({
+    Value<String>? clientExplanationId,
+    Value<int>? pageId,
+    Value<String>? explanationData,
+    Value<int>? isDeleted,
+    Value<int>? updatedAt,
+    Value<String?>? layerId,
+    Value<int>? syncedWithCloud,
+    Value<String?>? parentId,
+    Value<int>? isVisible,
+    Value<int>? isLocked,
+    Value<double>? opacity,
+    Value<int>? rowid,
+  }) {
+    return CanvasExplanationsCompanion(
+      clientExplanationId: clientExplanationId ?? this.clientExplanationId,
+      pageId: pageId ?? this.pageId,
+      explanationData: explanationData ?? this.explanationData,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? this.updatedAt,
+      layerId: layerId ?? this.layerId,
+      syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
+      parentId: parentId ?? this.parentId,
+      isVisible: isVisible ?? this.isVisible,
+      isLocked: isLocked ?? this.isLocked,
+      opacity: opacity ?? this.opacity,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientExplanationId.present) {
+      map['client_explanation_id'] = Variable<String>(
+        clientExplanationId.value,
+      );
+    }
+    if (pageId.present) {
+      map['page_id'] = Variable<int>(pageId.value);
+    }
+    if (explanationData.present) {
+      map['explanation_data'] = Variable<String>(explanationData.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<int>(isDeleted.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (layerId.present) {
+      map['layer_id'] = Variable<String>(layerId.value);
+    }
+    if (syncedWithCloud.present) {
+      map['synced_with_cloud'] = Variable<int>(syncedWithCloud.value);
+    }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (isVisible.present) {
+      map['is_visible'] = Variable<int>(isVisible.value);
+    }
+    if (isLocked.present) {
+      map['is_locked'] = Variable<int>(isLocked.value);
+    }
+    if (opacity.present) {
+      map['opacity'] = Variable<double>(opacity.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CanvasExplanationsCompanion(')
+          ..write('clientExplanationId: $clientExplanationId, ')
+          ..write('pageId: $pageId, ')
+          ..write('explanationData: $explanationData, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('layerId: $layerId, ')
+          ..write('syncedWithCloud: $syncedWithCloud, ')
+          ..write('parentId: $parentId, ')
+          ..write('isVisible: $isVisible, ')
+          ..write('isLocked: $isLocked, ')
+          ..write('opacity: $opacity, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $NotebookUserTable extends NotebookUser
     with TableInfo<$NotebookUserTable, NotebookUserData> {
   @override
@@ -14600,6 +15273,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CanvasLinksTable canvasLinks = $CanvasLinksTable(this);
   late final $CanvasAttachmentsTable canvasAttachments =
       $CanvasAttachmentsTable(this);
+  late final $CanvasExplanationsTable canvasExplanations =
+      $CanvasExplanationsTable(this);
   late final $NotebookUserTable notebookUser = $NotebookUserTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
   late final $LessonRecordingsTable lessonRecordings = $LessonRecordingsTable(
@@ -14627,6 +15302,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     canvasTables,
     canvasLinks,
     canvasAttachments,
+    canvasExplanations,
     notebookUser,
     payments,
     lessonRecordings,
@@ -14718,6 +15394,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('canvas_attachments', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'pages',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('canvas_explanations', kind: UpdateKind.delete)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -17355,6 +18038,27 @@ final class $$PagesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$CanvasExplanationsTable, List<CanvasExplanation>>
+  _canvasExplanationsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.canvasExplanations,
+        aliasName: 'pages__id__canvas_explanations__page_id',
+      );
+
+  $$CanvasExplanationsTableProcessedTableManager get canvasExplanationsRefs {
+    final manager = $$CanvasExplanationsTableTableManager(
+      $_db,
+      $_db.canvasExplanations,
+    ).filter((f) => f.pageId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _canvasExplanationsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
@@ -17709,6 +18413,31 @@ class $$PagesTableFilterComposer extends Composer<_$AppDatabase, $PagesTable> {
           }) => $$CanvasAttachmentsTableFilterComposer(
             $db: $db,
             $table: $db.canvasAttachments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> canvasExplanationsRefs(
+    Expression<bool> Function($$CanvasExplanationsTableFilterComposer f) f,
+  ) {
+    final $$CanvasExplanationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.canvasExplanations,
+      getReferencedColumn: (t) => t.pageId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CanvasExplanationsTableFilterComposer(
+            $db: $db,
+            $table: $db.canvasExplanations,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -18201,6 +18930,32 @@ class $$PagesTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> canvasExplanationsRefs<T extends Object>(
+    Expression<T> Function($$CanvasExplanationsTableAnnotationComposer a) f,
+  ) {
+    final $$CanvasExplanationsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.canvasExplanations,
+          getReferencedColumn: (t) => t.pageId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$CanvasExplanationsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.canvasExplanations,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$PagesTableTableManager
@@ -18227,6 +18982,7 @@ class $$PagesTableTableManager
             bool canvasTablesRefs,
             bool canvasLinksRefs,
             bool canvasAttachmentsRefs,
+            bool canvasExplanationsRefs,
           })
         > {
   $$PagesTableTableManager(_$AppDatabase db, $PagesTable table)
@@ -18354,6 +19110,7 @@ class $$PagesTableTableManager
                 canvasTablesRefs = false,
                 canvasLinksRefs = false,
                 canvasAttachmentsRefs = false,
+                canvasExplanationsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -18367,6 +19124,7 @@ class $$PagesTableTableManager
                     if (canvasTablesRefs) db.canvasTables,
                     if (canvasLinksRefs) db.canvasLinks,
                     if (canvasAttachmentsRefs) db.canvasAttachments,
+                    if (canvasExplanationsRefs) db.canvasExplanations,
                   ],
                   addJoins:
                       <
@@ -18591,6 +19349,27 @@ class $$PagesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (canvasExplanationsRefs)
+                        await $_getPrefetchedData<
+                          Page,
+                          $PagesTable,
+                          CanvasExplanation
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PagesTableReferences
+                              ._canvasExplanationsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PagesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).canvasExplanationsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pageId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -18622,6 +19401,7 @@ typedef $$PagesTableProcessedTableManager =
         bool canvasTablesRefs,
         bool canvasLinksRefs,
         bool canvasAttachmentsRefs,
+        bool canvasExplanationsRefs,
       })
     >;
 typedef $$CanvasStrokesTableCreateCompanionBuilder =
@@ -23020,6 +23800,459 @@ typedef $$CanvasAttachmentsTableProcessedTableManager =
       CanvasAttachment,
       PrefetchHooks Function({bool pageId})
     >;
+typedef $$CanvasExplanationsTableCreateCompanionBuilder =
+    CanvasExplanationsCompanion Function({
+      required String clientExplanationId,
+      required int pageId,
+      required String explanationData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
+      Value<int> rowid,
+    });
+typedef $$CanvasExplanationsTableUpdateCompanionBuilder =
+    CanvasExplanationsCompanion Function({
+      Value<String> clientExplanationId,
+      Value<int> pageId,
+      Value<String> explanationData,
+      Value<int> isDeleted,
+      Value<int> updatedAt,
+      Value<String?> layerId,
+      Value<int> syncedWithCloud,
+      Value<String?> parentId,
+      Value<int> isVisible,
+      Value<int> isLocked,
+      Value<double> opacity,
+      Value<int> rowid,
+    });
+
+final class $$CanvasExplanationsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $CanvasExplanationsTable,
+          CanvasExplanation
+        > {
+  $$CanvasExplanationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PagesTable _pageIdTable(_$AppDatabase db) =>
+      db.pages.createAlias('canvas_explanations__page_id__pages__id');
+
+  $$PagesTableProcessedTableManager get pageId {
+    final $_column = $_itemColumn<int>('page_id')!;
+
+    final manager = $$PagesTableTableManager(
+      $_db,
+      $_db.pages,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pageIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CanvasExplanationsTableFilterComposer
+    extends Composer<_$AppDatabase, $CanvasExplanationsTable> {
+  $$CanvasExplanationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientExplanationId => $composableBuilder(
+    column: $table.clientExplanationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get explanationData => $composableBuilder(
+    column: $table.explanationData,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PagesTableFilterComposer get pageId {
+    final $$PagesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableFilterComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasExplanationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CanvasExplanationsTable> {
+  $$CanvasExplanationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientExplanationId => $composableBuilder(
+    column: $table.clientExplanationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get explanationData => $composableBuilder(
+    column: $table.explanationData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layerId => $composableBuilder(
+    column: $table.layerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isVisible => $composableBuilder(
+    column: $table.isVisible,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isLocked => $composableBuilder(
+    column: $table.isLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get opacity => $composableBuilder(
+    column: $table.opacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PagesTableOrderingComposer get pageId {
+    final $$PagesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableOrderingComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasExplanationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CanvasExplanationsTable> {
+  $$CanvasExplanationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientExplanationId => $composableBuilder(
+    column: $table.clientExplanationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get explanationData => $composableBuilder(
+    column: $table.explanationData,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get layerId =>
+      $composableBuilder(column: $table.layerId, builder: (column) => column);
+
+  GeneratedColumn<int> get syncedWithCloud => $composableBuilder(
+    column: $table.syncedWithCloud,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get isVisible =>
+      $composableBuilder(column: $table.isVisible, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocked =>
+      $composableBuilder(column: $table.isLocked, builder: (column) => column);
+
+  GeneratedColumn<double> get opacity =>
+      $composableBuilder(column: $table.opacity, builder: (column) => column);
+
+  $$PagesTableAnnotationComposer get pageId {
+    final $$PagesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pageId,
+      referencedTable: $db.pages,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PagesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.pages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CanvasExplanationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CanvasExplanationsTable,
+          CanvasExplanation,
+          $$CanvasExplanationsTableFilterComposer,
+          $$CanvasExplanationsTableOrderingComposer,
+          $$CanvasExplanationsTableAnnotationComposer,
+          $$CanvasExplanationsTableCreateCompanionBuilder,
+          $$CanvasExplanationsTableUpdateCompanionBuilder,
+          (CanvasExplanation, $$CanvasExplanationsTableReferences),
+          CanvasExplanation,
+          PrefetchHooks Function({bool pageId})
+        > {
+  $$CanvasExplanationsTableTableManager(
+    _$AppDatabase db,
+    $CanvasExplanationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CanvasExplanationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CanvasExplanationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CanvasExplanationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> clientExplanationId = const Value.absent(),
+                Value<int> pageId = const Value.absent(),
+                Value<String> explanationData = const Value.absent(),
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasExplanationsCompanion(
+                clientExplanationId: clientExplanationId,
+                pageId: pageId,
+                explanationData: explanationData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientExplanationId,
+                required int pageId,
+                required String explanationData,
+                Value<int> isDeleted = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<String?> layerId = const Value.absent(),
+                Value<int> syncedWithCloud = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> isVisible = const Value.absent(),
+                Value<int> isLocked = const Value.absent(),
+                Value<double> opacity = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CanvasExplanationsCompanion.insert(
+                clientExplanationId: clientExplanationId,
+                pageId: pageId,
+                explanationData: explanationData,
+                isDeleted: isDeleted,
+                updatedAt: updatedAt,
+                layerId: layerId,
+                syncedWithCloud: syncedWithCloud,
+                parentId: parentId,
+                isVisible: isVisible,
+                isLocked: isLocked,
+                opacity: opacity,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CanvasExplanationsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({pageId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (pageId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.pageId,
+                                referencedTable:
+                                    $$CanvasExplanationsTableReferences
+                                        ._pageIdTable(db),
+                                referencedColumn:
+                                    $$CanvasExplanationsTableReferences
+                                        ._pageIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CanvasExplanationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CanvasExplanationsTable,
+      CanvasExplanation,
+      $$CanvasExplanationsTableFilterComposer,
+      $$CanvasExplanationsTableOrderingComposer,
+      $$CanvasExplanationsTableAnnotationComposer,
+      $$CanvasExplanationsTableCreateCompanionBuilder,
+      $$CanvasExplanationsTableUpdateCompanionBuilder,
+      (CanvasExplanation, $$CanvasExplanationsTableReferences),
+      CanvasExplanation,
+      PrefetchHooks Function({bool pageId})
+    >;
 typedef $$NotebookUserTableCreateCompanionBuilder =
     NotebookUserCompanion Function({
       Value<int> id,
@@ -25296,6 +26529,8 @@ class $AppDatabaseManager {
       $$CanvasLinksTableTableManager(_db, _db.canvasLinks);
   $$CanvasAttachmentsTableTableManager get canvasAttachments =>
       $$CanvasAttachmentsTableTableManager(_db, _db.canvasAttachments);
+  $$CanvasExplanationsTableTableManager get canvasExplanations =>
+      $$CanvasExplanationsTableTableManager(_db, _db.canvasExplanations);
   $$NotebookUserTableTableManager get notebookUser =>
       $$NotebookUserTableTableManager(_db, _db.notebookUser);
   $$PaymentsTableTableManager get payments =>

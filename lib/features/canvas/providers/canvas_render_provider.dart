@@ -31,12 +31,25 @@ final canvasRenderProvider = Provider.family.autoDispose<List<RenderItem>, Strin
     for (var l in page.layers) l.id: l.isVisible
   };
 
-  final sortedObjects = page.objects.where((o) {
+  List<dynamic> sortedObjects = page.objects.where((o) {
     if (o.isDeleted) return false;
     final bool layerVisible = layerVisibility[o.layerId ?? 'default'] ?? true;
     return layerVisible && o.isVisible;
   }).toList()
     ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+  // 🚀 Fase 2: Stroke Replay Filtering
+  if (toolState.isReplaying && sortedObjects.isNotEmpty) {
+    int minTs = sortedObjects.first.updatedAt;
+    int maxTs = sortedObjects.first.updatedAt;
+    for (var o in sortedObjects) {
+      if (o.updatedAt < minTs) minTs = o.updatedAt;
+      if (o.updatedAt > maxTs) maxTs = o.updatedAt;
+    }
+    
+    final int currentTs = minTs + ((maxTs - minTs) * toolState.replayProgress).round();
+    sortedObjects = sortedObjects.where((o) => o.updatedAt <= currentTs).toList();
+  }
 
   final List<RenderItem> renderList = [];
   List<Stroke> currentStrokeGroup = [];

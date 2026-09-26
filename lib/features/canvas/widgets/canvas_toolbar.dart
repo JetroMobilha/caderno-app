@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/link_model.dart';
+import '../models/attachment_model.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_document_provider.dart';
 import '../models/local_page_model.dart';
@@ -19,6 +23,8 @@ import '../models/table_cell_model.dart';
 import '../models/shape_model.dart';
 import '../models/image_block_model.dart';
 import '../models/table_types.dart';
+import 'toolbars/animation_context_toolbar.dart';
+import 'toolbars/replay_toolbar.dart';
 import 'dialogs/thickness_studio_dialog.dart';
 import 'dialogs/brush_style_sheet.dart'; 
 import 'brush_preview.dart'; 
@@ -98,20 +104,32 @@ class CanvasToolbar extends ConsumerWidget {
               spacing: 4,
               runSpacing: 1, // 🚀 Minimizado
               children: [
-                // Zona Contextual
-                isTextMode 
-                  ? _buildTextContextZone(context, interactionState, interactionNotifier, docNotifier)
-                  : isTableMode
-                    ? _buildTableContextZone(context, interactionState, interactionNotifier, docNotifier)
-                    : isBrushMode
-                      ? _buildBrushContextZone(context, interactionState, interactionNotifier)
-                      : isEraserMode
-                        ? _buildEraserContextZone(context, interactionState, interactionNotifier, docNotifier)
-                        : _buildGeneralContextZone(context, interactionState, interactionNotifier, docNotifier),
+                if (interactionState.isReplaying)
+                  const ReplayToolbar()
+                else ...[
+                  // Zona Contextual
+                  if (interactionState.isAnimationContextActive)
+                    AnimationContextToolbar(currentPage: currentPage)
+                  else if (isTextMode)
+                    _buildTextContextZone(context, interactionState, interactionNotifier, docNotifier)
+                  else if (isTableMode)
+                    _buildTableContextZone(context, interactionState, interactionNotifier, docNotifier)
+                  else if (isBrushMode)
+                    _buildBrushContextZone(context, interactionState, interactionNotifier)
+                  else if (isEraserMode)
+                    _buildEraserContextZone(context, interactionState, interactionNotifier, docNotifier)
+                  else if (interactionState.selectedObjectIds.length == 1 && currentPage.objects.any((o) => o.id == interactionState.selectedObjectIds.first && o is LinkObject))
+                    _buildLinkContextZone(context, interactionState, interactionNotifier, docNotifier)
+                  else if (interactionState.selectedObjectIds.length == 1 && currentPage.objects.any((o) => o.id == interactionState.selectedObjectIds.first && o is AttachmentObject))
+                    _buildAttachmentContextZone(context, interactionState, interactionNotifier, docNotifier)
+                  else
+                    _buildGeneralContextZone(context, interactionState, interactionNotifier, docNotifier),
 
-                if (!isSmallScreen) Container(width: 0.5, height: 16, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                  if (!isSmallScreen && !interactionState.isAnimationContextActive) Container(width: 0.5, height: 16, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
 
-                _buildSystemZone(context, ref, docState, docNotifier, isSmallScreen),
+                  if (!interactionState.isAnimationContextActive)
+                    _buildSystemZone(context, ref, docState, docNotifier, isSmallScreen),
+                ],
               ],
             ),
           ),
@@ -165,9 +183,11 @@ class CanvasToolbar extends ConsumerWidget {
             const VerticalDivider(width: 12, indent: 6, endIndent: 6),
           ],
 
-          // 4. Estrutura e Camadas
+          // 4. Estrutura, Camadas e Animação
           if (canGroup) _buildContextIconButton(Icons.group_work_rounded, () => notifier.groupSelectedObjects(currentPage), const Color(0xFF1976D2), size: 20, tooltip: 'Agrupar Objetos'),
           if (hasGrouped) _buildContextIconButton(Icons.group_work_outlined, () => notifier.ungroupSelectedObjects(currentPage), Colors.indigo, size: 20, tooltip: 'Desagrupar / Desfazer Grupo'),
+          const VerticalDivider(width: 12, indent: 6, endIndent: 6),
+          _buildContextIconButton(Icons.auto_awesome_motion_rounded, () => notifier.setAnimationContextActive(true), Colors.orangeAccent, size: 20, tooltip: 'Animar Objeto / Substituir'),
           
           if (canGroup || hasGrouped) const VerticalDivider(width: 12, indent: 6, endIndent: 6),
 
@@ -303,6 +323,45 @@ class CanvasToolbar extends ConsumerWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildLinkContextZone(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier, CanvasDocumentNotifier docNotifier) {
+    final link = currentPage.objects.whereType<LinkObject>().firstWhere((o) => o.id == state.selectedObjectIds.first);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildContextIconButton(Icons.open_in_new_rounded, () async {
+          final Uri url = Uri.parse(link.url ?? 'https://google.com');
+          await launchUrl(url);
+        }, const Color(0xFF0F4C5C), tooltip: 'Abrir no Browser', size: 20),
+        const VerticalDivider(width: 12),
+        _buildColorCircle(context, link.backgroundColor, (hex) {
+          docNotifier.updateObject(currentPage, link.copyWith(backgroundColor: hex));
+        }, title: 'Cor de Fundo'),
+        const VerticalDivider(width: 12),
+        _buildContextIconButton(Icons.delete_outline_rounded, () {
+          docNotifier.deleteObjects(currentPage, [link.id]);
+          notifier.clearSelection();
+        }, Colors.redAccent, tooltip: 'Eliminar Link'),
+      ],
+    );
+  }
+
+  Widget _buildAttachmentContextZone(BuildContext context, CanvasInteractionState state, CanvasInteractionNotifier notifier, CanvasDocumentNotifier docNotifier) {
+    final attach = currentPage.objects.whereType<AttachmentObject>().firstWhere((o) => o.id == state.selectedObjectIds.first);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildContextIconButton(Icons.file_open_rounded, () async {
+          await OpenFilex.open(attach.localPath);
+        }, const Color(0xFF0F4C5C), tooltip: 'Abrir Anexo', size: 20),
+        const VerticalDivider(width: 12),
+        _buildContextIconButton(Icons.delete_outline_rounded, () {
+          docNotifier.deleteObjects(currentPage, [attach.id]);
+          notifier.clearSelection();
+        }, Colors.redAccent, tooltip: 'Eliminar Anexo'),
       ],
     );
   }

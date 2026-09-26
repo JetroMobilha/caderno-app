@@ -19,6 +19,7 @@ class SyncIsolates {
     final List<CanvasTablesCompanion> tables = [];
     final List<CanvasLinksCompanion> links = [];
     final List<CanvasAttachmentsCompanion> attachments = [];
+    final List<CanvasExplanationsCompanion> explanations = [];
 
     for (var sPage in serverPages) {
       final int localPageId = sPage['_localPageId'];
@@ -115,11 +116,21 @@ class SyncIsolates {
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
+          case 'explanation_math':
+          case 'explanation_physics':
+          case 'explanation_engineering':
+            explanations.add(CanvasExplanationsCompanion.insert(
+              clientExplanationId: id, pageId: localPageId, explanationData: jsonEncode(obj),
+              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              syncedWithCloud: const Value(1),
+              updatedAt: Value(ts), layerId: Value(layerId)
+            ));
+            break;
         }
       }
     }
 
-    return [strokes, texts, images, shapes, audios, animations, tables, links, attachments];
+    return [strokes, texts, images, shapes, audios, animations, tables, links, attachments, explanations];
   }
 
   // Mapeadores legados mantidos para suporte a pedaços de rede (Chunks) se necessário

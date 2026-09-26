@@ -20,6 +20,7 @@ import '../models/table_model.dart';
 import '../models/link_model.dart'; 
 import '../models/attachment_model.dart';
 import '../models/page_object.dart';
+import '../../explanations/models/explanation_model.dart';
 import '../../notebooks/models/notebook_configuration.dart';
 
 /// 🚀 v10.1: Repositório com suporte a Grupos e Metadados.
@@ -229,6 +230,30 @@ class CanvasRepository {
       });
     }).toList();
 
+    // Explanations / Animations
+    List<ExplanationModel> explanations = [];
+    try {
+      final explanationRows = await (_db.select(_db.canvasExplanations)..where((t) => t.pageId.equals(pageId))).get();
+      explanations = explanationRows.map((e) {
+        final Map<String, dynamic> data = jsonDecode(e.explanationData);
+        final dynamic row = e;
+        return ExplanationModel.fromJson({
+          ...data,
+          'id': e.clientExplanationId,
+          'updated_at': e.updatedAt,
+          'is_deleted': e.isDeleted == 1,
+          'synced_with_cloud': e.syncedWithCloud == 1,
+          'parent_id': row.parentId,
+          'is_visible': row.isVisible == null || row.isVisible == 1,
+          'is_locked': row.isLocked == 1,
+          'opacity': (row.opacity as num?)?.toDouble() ?? 1.0,
+          'layer_id': row.layerId,
+        });
+      }).toList();
+    } catch (e) {
+      debugPrint('🚨 [CanvasRepository] Erro ao carregar explanations (tabela pode não existir): $e');
+    }
+
     return LocalPage(
       id: pRow.id,
       serverId: pRow.serverId,
@@ -255,7 +280,7 @@ class CanvasRepository {
       updatedAt: pRow.updatedAt,
       objects: [
         ...strokes, ...textBlocks, ...imageBlocks, ...shapes, ...audios, ...animations,
-        ...tables, ...links, ...attachments
+        ...tables, ...links, ...attachments, ...explanations
       ],
     );
   }
@@ -510,6 +535,27 @@ class CanvasRepository {
     await _db.into(_db.canvasAnimations).insertOnConflictUpdate(companion);
   }
 
+  Future<void> saveSingleExplanationObject(String pageClientId, ExplanationModel exp, {int? pageId, int? updatedAt}) async {
+    try {
+      final page = await (_db.select(_db.pages)..where((t) => t.clientId.equals(pageClientId))).getSingle();
+      final companion = CanvasExplanationsCompanion(
+        clientExplanationId: Value(exp.id), 
+        pageId: Value(page.id), 
+        explanationData: Value(jsonEncode(exp.toJson())),
+        isDeleted: Value(exp.isDeleted ? 1 : 0), 
+        updatedAt: Value(updatedAt ?? exp.updatedAt),
+        parentId: Value(exp.parentId), 
+        isVisible: Value(exp.isVisible ? 1 : 0), 
+        isLocked: Value(exp.isLocked ? 1 : 0), 
+        opacity: Value(exp.opacity),
+        layerId: Value(exp.layerId),
+      );
+      await _db.into(_db.canvasExplanations).insertOnConflictUpdate(companion);
+    } catch (e) {
+      debugPrint('🚨 [CanvasRepository] Erro ao salvar explanation (tabela pode não existir): $e');
+    }
+  }
+
   Future<void> deleteSingleStroke(String strokeId) async {
     await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(strokeId))).write(const CanvasStrokesCompanion(isDeleted: Value(1)));
   }
@@ -524,6 +570,7 @@ class CanvasRepository {
     await (_db.update(_db.canvasAttachments)..where((t) => t.clientAttachmentId.equals(objectId))).write(const CanvasAttachmentsCompanion(isDeleted: Value(1)));
     await (_db.update(_db.canvasAudioBlocks)..where((t) => t.clientAudioId.equals(objectId))).write(const CanvasAudioBlocksCompanion(isDeleted: Value(1)));
     await (_db.update(_db.canvasAnimations)..where((t) => t.clientAnimationId.equals(objectId))).write(const CanvasAnimationsCompanion(isDeleted: Value(1)));
+    try { await (_db.update(_db.canvasExplanations)..where((t) => t.clientExplanationId.equals(objectId))).write(const CanvasExplanationsCompanion(isDeleted: Value(1))); } catch (_) {}
   }
 
   Future<void> markPageAsUnsynced(String pageClientId, {int? updatedAt}) async {

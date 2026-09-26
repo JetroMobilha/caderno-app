@@ -269,6 +269,7 @@ class CanvasRepository {
       sectionColor: LocalPage.parseSectionColor(pRow.headerData),
       footer: LocalPage.parseMeta(pRow.footerData),
       extractedText: pRow.extractedText,
+      backgroundPdfPath: pRow.backgroundPdfPath,
       isFrozen: pRow.isFrozen == 1,
       isFavorite: pRow.isFavorite == 1,
       backgroundConfig: pRow.backgroundConfig != null ? BackgroundConfig.fromJson(jsonDecode(pRow.backgroundConfig!)) : null,
@@ -301,6 +302,7 @@ class CanvasRepository {
           id: r.id, serverId: r.serverId, notebookId: r.notebookId, pageNumber: r.pageNumber,
           isLandscape: r.isLandscape == 1, paperSize: r.paperSize, clientId: r.clientId ?? '',
           lineType: r.lineType, lineSpacing: r.lineSpacing, updatedAt: r.updatedAt, syncedWithCloud: r.syncedWithCloud,
+          backgroundPdfPath: r.backgroundPdfPath,
           isDeleted: r.isDeleted == 1, isFrozen: r.isFrozen == 1, isFavorite: r.isFavorite == 1,
           objects: [], 
        )).toList();
@@ -350,6 +352,7 @@ class CanvasRepository {
       isDeleted: Value(page.isDeleted ? 1 : 0),
       updatedAt: Value(page.updatedAt),
       syncedWithCloud: Value(page.syncedWithCloud),
+      backgroundPdfPath: Value(page.backgroundPdfPath),
       backgroundConfig: Value(page.backgroundConfig != null ? jsonEncode(page.backgroundConfig!.toJson()) : null),
       viewportMatrix: Value(page.viewportMatrix != null ? jsonEncode(page.viewportMatrix!.storage.toList()) : null),
       layers: Value(page.layers.isNotEmpty ? jsonEncode(page.layers.map((l) => l.toJson()).toList()) : null),

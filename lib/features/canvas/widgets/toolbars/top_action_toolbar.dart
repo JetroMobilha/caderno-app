@@ -286,21 +286,23 @@ class TopActionToolbar extends ConsumerWidget {
   }
 
   void _handleInsertAttachment(WidgetRef ref) async {
-    // ignore: undefined_getter, avoid_dynamic_calls
-    final result = await (FilePicker as dynamic).platform.pickFiles(
+    final result = await FilePickerPlatform.instance.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'jpg', 'png'],
-      withData: kIsWeb, // 🚀 Web: Carregar os bytes diretamente para a RAM
     );
 
-    if (result != null && result.files.isNotEmpty) {
-      final String extension = result.files.single.extension ?? '';
+    if (result.isNotEmpty) {
+      final file = result.first;
+      final String fileName = file.name;
+      final String extension = fileName.contains('.') ? fileName.split('.').last : '';
       String newPath = '';
       String? base64Data;
-      int sizeBytes = result.files.single.size;
+      final int sizeBytes = await file.xFile.length();
 
-      if (!kIsWeb && result.files.single.path != null) {
-        final file = io.File(result.files.single.path!);
+      final filePath = file.xFile.path;
+
+      if (!kIsWeb && filePath.isNotEmpty && io.File(filePath).existsSync()) {
+        final ioFile = io.File(filePath);
         final appDir = await getApplicationDocumentsDirectory();
         
         // Criar diretório para anexos se não existir
@@ -308,22 +310,26 @@ class TopActionToolbar extends ConsumerWidget {
         if (!await attachDir.exists()) await attachDir.create();
         
         newPath = '${attachDir.path}/attach_${DateTime.now().millisecondsSinceEpoch}.$extension';
-        await file.copy(newPath);
-      } else if (kIsWeb) {
-        // Na web não há sistema de ficheiros local suportado pelo dart:io.
-        // O ficheiro vive em memória através de result.files.single.bytes
-        newPath = 'web_attachment_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        await ioFile.copy(newPath);
+      } else if (!kIsWeb) {
+        final bytes = await file.xFile.readAsBytes();
+        final appDir = await getApplicationDocumentsDirectory();
+        final attachDir = io.Directory('${appDir.path}/attachments');
+        if (!await attachDir.exists()) await attachDir.create();
         
-        if (result.files.single.bytes != null) {
-          // Converter ficheiro para Base64 para sincronizar na BD unificada e depois ser guardado no Servidor Laravel
-          // Nota: Pode causar problemas de performance se os ficheiros forem maiores que 10MB!
-          base64Data = base64Encode(result.files.single.bytes!);
+        newPath = '${attachDir.path}/attach_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        await io.File(newPath).writeAsBytes(bytes);
+      } else if (kIsWeb) {
+        newPath = 'web_attachment_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        final bytes = await file.xFile.readAsBytes();
+        if (bytes.isNotEmpty) {
+          base64Data = base64Encode(bytes);
         }
       }
 
       final attach = AttachmentObject(
         id: const Uuid().v4(), 
-        fileName: result.files.single.name, 
+        fileName: fileName, 
         fileExtension: extension,
         fileSize: sizeBytes,
         localPath: newPath, 

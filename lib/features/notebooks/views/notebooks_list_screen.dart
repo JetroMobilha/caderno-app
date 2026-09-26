@@ -7,6 +7,10 @@ import 'package:caderno_digital_app/features/shared/widgets/app_drawer.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 import 'package:caderno_digital_app/features/trash/views/trash_screen.dart';
+import 'package:caderno_digital_app/features/canvas/views/canvas_screen.dart';
+import 'package:caderno_digital_app/features/canvas/services/pdf_import_service.dart';
+import 'package:caderno_digital_app/features/notebooks/repositories/notebook_repository.dart';
+import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
 import 'notebook_creation_screen.dart';
 import '../widgets/notebook_grid_item.dart';
 import '../widgets/notebook_dialogs.dart';
@@ -48,6 +52,12 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
           style: GoogleFonts.lora(fontWeight: FontWeight.bold),
         ),
         actions: [
+          if (activeSubject != null && !showArchived)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_rounded),
+              onPressed: () => _handleImportPdf(context, activeSubject),
+              tooltip: 'Importar PDF',
+            ),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => TrashScreen(initialTabIndex: 1))),
@@ -86,14 +96,92 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                     ),
       floatingActionButton: activeSubject == null || showArchived
           ? null
-          : FloatingActionButton(
-              onPressed: () => Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (context) => NotebookCreationScreen(activeSubject: activeSubject))
-              ),
-              child: const Icon(Icons.add),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'import_pdf_fab',
+                  backgroundColor: const Color(0xFF0F4C5C),
+                  foregroundColor: Colors.white,
+                  onPressed: () => _handleImportPdf(context, activeSubject),
+                  tooltip: 'Importar PDF',
+                  child: const Icon(Icons.picture_as_pdf_rounded),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'add_notebook_fab',
+                  onPressed: () => Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => NotebookCreationScreen(activeSubject: activeSubject))
+                  ),
+                  tooltip: 'Novo Caderno',
+                  child: const Icon(Icons.add),
+                ),
+              ],
             ),
     );
+  }
+
+  void _handleImportPdf(BuildContext context, dynamic activeSubject) async {
+    if (activeSubject == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 16),
+            Text('A importar e processar PDF...'),
+          ],
+        ),
+        duration: Duration(seconds: 15),
+      ),
+    );
+
+    final notebookRepo = ref.read(notebookRepositoryProvider);
+    final canvasRepo = ref.read(canvasRepositoryProvider);
+    final service = PdfImportService(notebookRepo, canvasRepo);
+
+    final result = await service.importPdf(
+      subjectId: activeSubject.id ?? 0,
+      subjectServerId: activeSubject.serverId,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    }
+
+    if (result.isSuccess && result.notebook != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF "${result.notebook!.title}" importado (${result.pageCount} págs.)! 📄'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CanvasScreen(notebook: result.notebook!),
+          ),
+        );
+      }
+    } else if (result.error != null && !result.error!.contains('Nenhum arquivo selecionado')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SelectableText(result.error!),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 12),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildSectionTitle(String title, IconData icon, Color color) {

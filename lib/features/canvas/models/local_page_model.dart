@@ -79,6 +79,7 @@ class LocalPage {
   final String? sectionColor; 
   final String footer;
   final String? extractedText;
+  final String? backgroundPdfPath;
   final BackgroundConfig? backgroundConfig; 
   final Matrix4? viewportMatrix; 
   final List<LayerDefinition> layers;
@@ -124,6 +125,7 @@ class LocalPage {
     this.sectionColor, 
     this.footer = '',
     this.extractedText,
+    this.backgroundPdfPath,
     List<PageObject>? objects,
     this.backgroundConfig,
     this.viewportMatrix,
@@ -177,6 +179,16 @@ class LocalPage {
   }
 
   static Map<String, double> _getPaperDimsRaw(String size) {
+    if (size.startsWith('CUSTOM:')) {
+      final parts = size.substring(7).split(':');
+      if (parts.length == 2) {
+        final double? w = double.tryParse(parts[0]);
+        final double? h = double.tryParse(parts[1]);
+        if (w != null && h != null && w > 0 && h > 0) {
+          return {'w': w, 'h': h};
+        }
+      }
+    }
     switch (size) {
       case 'A0': return {'w': 841, 'h': 1189};
       case 'A1': return {'w': 594, 'h': 841};
@@ -214,6 +226,7 @@ class LocalPage {
     bool clearSection = false, 
     String? footer,
     String? extractedText,
+    String? backgroundPdfPath,
     List<PageObject>? objects,
     List<LayerDefinition>? layers,
     List<Stroke>? redoHistory,
@@ -244,6 +257,7 @@ class LocalPage {
       sectionColor: clearSection ? null : (sectionColor ?? this.sectionColor),
       footer: footer ?? this.footer,
       extractedText: extractedText ?? this.extractedText,
+      backgroundPdfPath: backgroundPdfPath ?? this.backgroundPdfPath,
       objects: objects ?? this.objects,
       layers: layers ?? this.layers,
       redoHistory: redoHistory ?? this.redoHistory,
@@ -301,6 +315,8 @@ class LocalPage {
       'header_data': {'title': title, 'section': sectionTitle, 'section_color': sectionColor},
       'footer_data': {'title': footer},
       'extracted_text': extractedText,
+      'background_pdf_path': backgroundPdfPath,
+      'background_image_path': backgroundPdfPath,
       'objects_data': objects.map((o) => o.toJson()).toList(),
       'layers': layers.map((l) => l.toJson()).toList(),
       'background_config': backgroundConfig?.toJson(),
@@ -379,6 +395,9 @@ class LocalPage {
       sectionColor: LocalPage.parseSectionColor(json['header_data']),
       footer: LocalPage.parseMeta(json['footer_data']),
       extractedText: json['extracted_text']?.toString(),
+      backgroundPdfPath: json['background_pdf_path']?.toString() ??
+          json['background_image_path']?.toString() ??
+          json['backgroundPdfPath']?.toString(),
       objects: objs,
       layers: layers,
       backgroundConfig: json['background_config'] != null ? BackgroundConfig.fromJson(json['background_config']) : null,

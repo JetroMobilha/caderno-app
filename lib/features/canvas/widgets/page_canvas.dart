@@ -1,10 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/local_page_model.dart';
-import '../models/page_object.dart';
-import '../models/stroke_model.dart';
-import '../models/text_block_model.dart';
-import '../models/image_block_model.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_render_provider.dart'; // 🚀 NOVO
 import 'canvas_painter.dart';
@@ -66,6 +64,29 @@ class PageCanvas extends ConsumerWidget {
       child: Stack(
         fit: StackFit.expand, 
         children: [
+          // 📄 Fundo Imagem de PDF Importado se existir (Local ou Remoto)
+          if (page.backgroundPdfPath != null && page.backgroundPdfPath!.isNotEmpty)
+            Positioned.fill(
+              child: page.backgroundPdfPath!.startsWith('http')
+                  ? CachedNetworkImage(
+                      imageUrl: page.backgroundPdfPath!,
+                      fit: BoxFit.fill,
+                      placeholder: (context, url) => const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => const SizedBox.shrink(),
+                    )
+                  : (File(page.backgroundPdfPath!).existsSync()
+                      ? Image.file(
+                          File(page.backgroundPdfPath!),
+                          fit: BoxFit.fill,
+                        )
+                      : const SizedBox.shrink()),
+            ),
           CustomPaint(
             size: pageSize,
             painter: BackgroundPainter(

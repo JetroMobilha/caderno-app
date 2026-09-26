@@ -598,6 +598,31 @@ class SyncService {
           pageMap['is_deleted'] = row.isDeleted == 1 ? 1 : 0;
           if (row.serverId != null) pageMap['server_id'] = row.serverId;
 
+          // 🚀 UPLOAD DE IMAGEM DE FUNDO DA PÁGINA (PDF Importado em disco local)
+          String? bgPath = fullPage.backgroundPdfPath;
+          if (bgPath != null && bgPath.isNotEmpty && !bgPath.startsWith('http')) {
+            final localFile = io.File(bgPath);
+            if (localFile.existsSync()) {
+              try {
+                final bytes = await localFile.readAsBytes();
+                final String fileName = bgPath.split('/').last.split('\\').last;
+                final String? remoteUrl = await _canvasRepository.uploadImage(notebook.serverId!, fileName, bytes);
+                if (remoteUrl != null && remoteUrl.isNotEmpty) {
+                  pageMap['background_pdf_path'] = remoteUrl;
+                  pageMap['background_image_path'] = remoteUrl;
+                  
+                  // Atualizar a linha local no SQLite com a URL remota gerada
+                  await (_db.update(_db.pages)..where((t) => t.clientId.equals(cId))).write(
+                    PagesCompanion(backgroundPdfPath: Value(remoteUrl))
+                  );
+                  debugPrint('☁️ [Sync-Push] Upload do fundo da página ${row.pageNumber} concluído: $remoteUrl');
+                }
+              } catch (e) {
+                debugPrint('⚠️ [Sync-Push] Falha ao fazer upload do fundo local da página ${row.pageNumber}: $e');
+              }
+            }
+          }
+
           pagesPayload.add(pageMap);
           
           if (row.isDeleted == 1) {

@@ -47,7 +47,7 @@ class CanvasViewportState {
   }
 }
 
-class CanvasViewportNotifier extends AutoDisposeNotifier<CanvasViewportState> {
+class CanvasViewportNotifier extends Notifier<CanvasViewportState> {
   // 🚀 GESTÃO DE CONTROLLERS POR PÁGINA (Isolamento total)
   final Map<String, TransformationController> _controllers = {};
   final Set<String> _initializedPages = {}; 
@@ -73,7 +73,18 @@ class CanvasViewportNotifier extends AutoDisposeNotifier<CanvasViewportState> {
   bool isPageInitialized(String clientId) => _initializedPages.contains(clientId);
 
   TransformationController getControllerFor(String clientId) {
-    return _controllers.putIfAbsent(clientId, () => TransformationController());
+    final existing = _controllers[clientId];
+    if (existing != null) {
+      try {
+        existing.value;
+        return existing;
+      } catch (_) {
+        _controllers.remove(clientId);
+      }
+    }
+    final controller = TransformationController();
+    _controllers[clientId] = controller;
+    return controller;
   }
 
   void setPageIndex(int index, {String? clientId, Matrix4? initialMatrix}) {
@@ -216,6 +227,6 @@ class CanvasViewportNotifier extends AutoDisposeNotifier<CanvasViewportState> {
   }
 }
 
-final canvasViewportProvider = NotifierProvider.autoDispose<CanvasViewportNotifier, CanvasViewportState>(() {
+final canvasViewportProvider = NotifierProvider<CanvasViewportNotifier, CanvasViewportState>(() {
   return CanvasViewportNotifier();
 });

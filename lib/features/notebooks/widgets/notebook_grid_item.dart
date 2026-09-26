@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/core/theme/app_colors.dart';
 import 'package:caderno_digital_app/features/canvas/views/canvas_screen.dart';
 import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet.dart';
+import 'package:caderno_digital_app/features/canvas/services/pdf_export_service.dart';
+import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
+import 'package:caderno_digital_app/features/canvas/widgets/dialogs/export_pdf_dialog.dart';
 import 'package:caderno_digital_app/features/marketplace/widgets/publish_notebook_sheet.dart';
 import 'package:caderno_digital_app/features/subjects/controllers/subjects_controller.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
@@ -21,6 +24,70 @@ class NotebookGridItem extends ConsumerWidget {
     required this.notebook,
     required this.dynamicColor,
   });
+
+  void _handleExportPdf(BuildContext context, WidgetRef ref, Notebook notebook) async {
+    final canvasRepo = ref.read(canvasRepositoryProvider);
+    final pages = await canvasRepo.getPagesByNotebook(notebook.id ?? 0, notebook.serverId);
+
+    if (pages.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Este caderno não contém páginas para exportar.')),
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    final selectedPages = await ExportPdfDialog.show(
+      context,
+      notebookTitle: notebook.title,
+      allPages: pages,
+    );
+
+    if (selectedPages == null || selectedPages.isEmpty) return;
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 16),
+            Text('A exportar PDF...'),
+          ],
+        ),
+        duration: Duration(seconds: 15),
+      ),
+    );
+
+    final result = await PdfExportService.exportNotebookToPdf(
+      notebook: notebook,
+      pages: selectedPages,
+      canvasRepository: canvasRepo,
+      openAfterExport: true,
+    );
+
+    if (context.mounted) {
+      if (result.isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PDF exportado com sucesso! 📄'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Erro ao exportar PDF.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -117,6 +184,8 @@ class NotebookGridItem extends ConsumerWidget {
                     NotebookDialogs.showMoveNotebookDialog(context, ref, notebook);
                   } else if (value == 'archive') {
                     ref.read(notebooksProvider.notifier).updateNotebook(notebook.copyWith(isArchived: !notebook.isArchived));
+                  } else if (value == 'export_pdf') {
+                    _handleExportPdf(context, ref, notebook);
                   } else if (value == 'favorite') {
                     ref.read(notebooksProvider.notifier).updateNotebook(notebook.copyWith(isFavorite: !notebook.isFavorite));
                   } else if (value == 'leave') {
@@ -152,6 +221,16 @@ class NotebookGridItem extends ConsumerWidget {
                           Text(notebook.isArchived ? 'Desarquivar' : 'Enviar para o arquivo', style: GoogleFonts.inter(fontSize: 13))
                         ])
                       ),
+                    PopupMenuItem(
+                      value: 'export_pdf',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.picture_as_pdf_rounded, size: 18, color: Color(0xFF0F4C5C)),
+                          const SizedBox(width: 8),
+                          Text('Exportar como PDF', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF0F4C5C))),
+                        ],
+                      ),
+                    ),
                     if (isOwner || isEditor)
                       PopupMenuItem(value: 'share', child: Row(children: [const Icon(Icons.share_rounded, size: 18, color: Colors.blueAccent), const SizedBox(width: 8), Text('Partilhar', style: GoogleFonts.inter(fontSize: 13, color: Colors.blueAccent))])),
                     PopupMenuItem(

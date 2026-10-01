@@ -286,13 +286,14 @@ class TopActionToolbar extends ConsumerWidget {
   }
 
   void _handleInsertAttachment(WidgetRef ref) async {
-    final result = await FilePickerPlatform.instance.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'jpg', 'png'],
+      withData: true,
     );
 
-    if (result.isNotEmpty) {
-      final file = result.first;
+    if (result != null && result.files.isNotEmpty) {
+      final file = result.files.first;
       final String fileName = file.name;
       final String extension = fileName.contains('.') ? fileName.split('.').last : '';
       String newPath = '';

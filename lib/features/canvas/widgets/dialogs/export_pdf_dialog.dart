@@ -152,12 +152,13 @@ class _ExportPdfDialogState extends State<ExportPdfDialog> {
               ),
               const SizedBox(height: 4),
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                child: Material(
+                  color: Colors.grey.shade50,
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade200),
+                    side: BorderSide(color: Colors.grey.shade200),
                   ),
+                  clipBehavior: Clip.antiAlias,
                   child: ListView.separated(
                     itemCount: widget.allPages.length,
                     separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey.shade200),

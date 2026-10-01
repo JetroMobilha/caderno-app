@@ -62,9 +62,9 @@ class CanvasInteractionState {
   bool get isTopToolbarVisible => _isTopToolbarVisible ?? true;
   
   List<ToolMode> get toolOrder => _toolOrder ?? const [
+    ToolMode.pan,       // Mão (Mover folha)
     ToolMode.draw,      // Pincel
     ToolMode.eraser,    // Borracha
-    ToolMode.pan,       // Mão (Mover folha)
     ToolMode.text,      // Texto
     ToolMode.table,     // Tabela
     ToolMode.select,    // Selecionar
@@ -110,11 +110,11 @@ class CanvasInteractionState {
   final bool isReplaying;
 
   CanvasInteractionState({
-    this.activeTool = ToolMode.draw,
+    this.activeTool = ToolMode.pan,
     this.previousTool,
     this.interactionMode = CanvasInteractionStateMode.idle,
     this.selectedColorHex = '#2C3E50',
-    this.selectedThickness = 1.0,
+    this.selectedThickness = 3.0,
     this.selectedBrushType = BrushType.gel,
     this.isHighlighter = false,
     this.palmRejectionMode = PalmRejectionMode.auto,

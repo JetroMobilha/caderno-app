@@ -48,6 +48,19 @@ class SyncService {
     return null;
   }
 
+  /// 🚀 Retorna o timestamp ISO do lastSynced recuado com uma janela de segurança (Safety Buffer)
+  /// para tolerar pequenas diferenças de relógio entre dispositivos e atrasos de rede.
+  String? _getBufferedLastSynced(String? rawLastSynced, {Duration buffer = const Duration(minutes: 2)}) {
+    if (rawLastSynced == null || rawLastSynced.isEmpty) return null;
+    try {
+      final dt = DateTime.parse(rawLastSynced);
+      final bufferedDt = dt.subtract(buffer);
+      return bufferedDt.toUtc().toIso8601String();
+    } catch (e) {
+      return rawLastSynced;
+    }
+  }
+
   // =========================================================================
   // 1. SINCRONIZAÇÃO TOTAL
   // =========================================================================
@@ -67,7 +80,7 @@ class SyncService {
       final bool hasMoreSubjects = await pushOfflineSubjects(pushOnly: pushOnly);
       final bool hasMoreNotebooks = await pushNotebooks(pushOnly: pushOnly);
 
-      // 2. Recuperação de Lotes (Apenas se PUSH indicou que há muito mais dados)
+      // 2. Recuperação de Lotes (Apenas se PUSH indicou que há muito mais dados em lote ou forced)
       if (!pushOnly) {
         if (hasMoreSubjects || forced) await pullSubjects();
         if (hasMoreNotebooks || forced) await pullNotebooks();
@@ -76,7 +89,7 @@ class SyncService {
       if (!metadataOnly) {
         final bool hasMorePages = await pushPages(pushOnly: pushOnly);
         if (!pushOnly && (hasMorePages || forced)) {
-          await pullPages(); // 🚀 Só ativa o pull pesado se detectado grande volume
+          await pullPages();
         }
         final bool hasMoreRecs = await pushRecordings(pushOnly: pushOnly);
         if (!pushOnly && (hasMoreRecs || forced)) {
@@ -97,7 +110,7 @@ class SyncService {
   // =========================================================================
   Future<bool> pushOfflineSubjects({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = prefs.getString('last_subjects_sync');
+    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_subjects_sync'));
 
     try {
       final unsynced = await (_db.select(_db.subjects)..where((t) => t.syncedWithCloud.equals(0))).get();
@@ -208,7 +221,7 @@ class SyncService {
   Future<bool> pullSubjects() async {
     final prefs = await SharedPreferences.getInstance();
     final localCount = await _db.subjects.count().getSingle();
-    final String? lastSynced = localCount > 0 ? prefs.getString('last_subjects_sync') : null;
+    final String? lastSynced = localCount > 0 ? _getBufferedLastSynced(prefs.getString('last_subjects_sync')) : null;
     try {
       String? nextUrl = lastSynced != null ? '/sync/pull?last_synced_at=$lastSynced' : '/sync/pull';
       bool anyChanges = false;
@@ -273,7 +286,7 @@ class SyncService {
   // =========================================================================
   Future<bool> pushNotebooks({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = prefs.getString('last_notebooks_sync');
+    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_notebooks_sync'));
 
     try {
       final unsynced = await (_db.select(_db.notebooks)..where((t) => t.syncedWithCloud.equals(0))).get();
@@ -421,7 +434,7 @@ class SyncService {
   Future<bool> pullNotebooks() async {
     final prefs = await SharedPreferences.getInstance();
     final localCount = await _db.notebooks.count().getSingle();
-    final String? lastSynced = localCount > 0 ? prefs.getString('last_notebooks_sync') : null;
+    final String? lastSynced = localCount > 0 ? _getBufferedLastSynced(prefs.getString('last_notebooks_sync')) : null;
     try {
       String? nextUrl = lastSynced != null ? '/sync/notebooks/pull?last_synced_at=$lastSynced' : '/sync/notebooks/pull';
       bool anyChanges = false;
@@ -554,18 +567,79 @@ class SyncService {
   // =========================================================================
   // 4. PÁGINAS E CANVAS
   // =========================================================================
-  Future<bool> pushPages({int? onlyNotebookId, bool pushOnly = false}) async {
+  Future<bool> pushPages({int? onlyNotebookId, int? onlyNotebookServerId, bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = prefs.getString('last_pages_sync');
+    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_pages_sync'));
+
+    // 🚀 Resolver ID local e ID do servidor do caderno
+    int? targetLocalNbId = onlyNotebookId;
+    int? targetServerNbId = onlyNotebookServerId;
+
+    if (targetLocalNbId != null && targetServerNbId == null) {
+      final localId = targetLocalNbId;
+      final nb = await (_db.select(_db.notebooks)..where((t) => t.id.equals(localId))).getSingleOrNull();
+      targetServerNbId = nb?.serverId;
+      if (targetServerNbId == null) {
+        final nbByServer = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(localId))).getSingleOrNull();
+        if (nbByServer != null) {
+          targetLocalNbId = nbByServer.id;
+          targetServerNbId = nbByServer.serverId;
+        }
+      }
+    } else if (targetServerNbId != null && targetLocalNbId == null) {
+      final serverId = targetServerNbId;
+      final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+      targetLocalNbId = nb?.id;
+    }
 
     try {
       final query = _db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(0));
-      if (onlyNotebookId != null) query.where((t) => t.notebookId.equals(onlyNotebookId));
+      if (targetLocalNbId != null) {
+        final localId = targetLocalNbId;
+        query.where((t) => t.notebookId.equals(localId));
+      }
       final unsyncedPages = await query.get();
       
       if (unsyncedPages.isEmpty) {
-        // debugPrint('ℹ️ [Sync-Push] Nenhuma página pendente de sincronização.');
-        return true;
+        if (pushOnly) return false;
+
+        // PUSH leve com payload de páginas vazio para receber os deltas remotos no mesmo pedido
+        final response = await _apiService.post('/sync/pages/push', {
+          'pages': [],
+          'last_synced_at': lastSynced,
+          if (targetServerNbId != null) 'notebook_id': targetServerNbId,
+        });
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final data = jsonDecode(response.body);
+          final List updates = data['server_updates'] ?? [];
+          final List<int> localIdsToPull = [];
+          final Map<int, Map<String, dynamic>> serverDataForPull = {};
+
+          for (var updData in updates) {
+            try {
+              final Map<String, dynamic> updMap = updData is Map ? Map<String, dynamic>.from(updData) : {};
+              if (updMap.isEmpty) continue;
+              final int sNbId = updMap['notebook_id'] is int ? updMap['notebook_id'] : int.parse(updMap['notebook_id'].toString());
+              final localId = await _canvasRepository.savePageFromMap(updMap, sNbId);
+              localIdsToPull.add(localId);
+              serverDataForPull[localId] = updMap;
+            } catch (e) {
+              debugPrint('🚨 [Sync-Push-Empty] Erro ao processar update do servidor: $e');
+            }
+          }
+
+          if (localIdsToPull.isNotEmpty) {
+            await _pullCanvasDataBatch(localIdsToPull, serverDataForPull);
+          }
+
+          final String? serverTime = _parseMetaTime(data['meta']);
+          if (serverTime != null) {
+            await prefs.setString('last_pages_sync', serverTime);
+          }
+          return data['has_more'] == true;
+        }
+        return false;
       }
 
       debugPrint('🛫 [Sync-Push] Detectadas ${unsyncedPages.length} páginas pendentes: ${unsyncedPages.map((p) => 'p${p.pageNumber}(id:${p.id})').join(', ')}');
@@ -575,69 +649,20 @@ class SyncService {
 
       // 🚀 OTIMIZAÇÃO: Enviar em lotes (Chunks) para reduzir overhead de rede sem travar
       // 🚀 OTIMIZAÇÃO: Lote maior para reordenações e cadernos grandes
-      const int batchSize = 10;
-      for (int i = 0; i < unsyncedPages.length; i += batchSize) {
-        final currentBatch = unsyncedPages.sublist(i, (i + batchSize > unsyncedPages.length) ? unsyncedPages.length : i + batchSize);
-        final List<Map<String, dynamic>> pagesPayload = [];
+      // 🚀 OTIMIZAÇÃO: Loteamento Adaptativo por Tamanho de Payload (Adaptive Payload Chunking)
+      // Limite seguro: máximo de ~2.5 MB (2.5 * 1024 * 1024 bytes) ou no máximo 10 páginas por requisição HTTP.
+      const int maxBatchBytes = 2500000;
+      const int maxBatchPages = 10;
 
-        for (var row in currentBatch) {
-          final notebook = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
-          if (notebook == null || notebook.serverId == null) continue;
-          
-          final String? cId = row.clientId;
-          if (cId == null) continue;
-          
-          // 🚀 CARREGAMENTO COMPLETO: Precisamos de enviar o conteúdo (strokes, etc)
-          // mesmo que a folha esteja apagada, para o servidor guardar o snapshot final.
-          final fullPage = await _canvasRepository.getPageByClientId(cId, onlyUnsynced: true);
-          if (fullPage == null) continue;
+      int currentBatchBytes = 0;
+      List<Map<String, dynamic>> currentBatchPayload = [];
 
-          final pageMap = await fullPage.toJsonAsync();
-          pageMap['notebook_id'] = notebook.serverId;
-          // Garantir que o estado de deleção está correto no mapa
-          pageMap['is_deleted'] = row.isDeleted == 1 ? 1 : 0;
-          if (row.serverId != null) pageMap['server_id'] = row.serverId;
-
-          // 🚀 UPLOAD DE IMAGEM DE FUNDO DA PÁGINA (PDF Importado em disco local)
-          String? bgPath = fullPage.backgroundPdfPath;
-          if (bgPath != null && bgPath.isNotEmpty && !bgPath.startsWith('http')) {
-            final localFile = io.File(bgPath);
-            if (localFile.existsSync()) {
-              try {
-                final bytes = await localFile.readAsBytes();
-                final String fileName = bgPath.split('/').last.split('\\').last;
-                final String? remoteUrl = await _canvasRepository.uploadImage(notebook.serverId!, fileName, bytes);
-                if (remoteUrl != null && remoteUrl.isNotEmpty) {
-                  pageMap['background_pdf_path'] = remoteUrl;
-                  pageMap['background_image_path'] = remoteUrl;
-                  
-                  // Atualizar a linha local no SQLite com a URL remota gerada
-                  await (_db.update(_db.pages)..where((t) => t.clientId.equals(cId))).write(
-                    PagesCompanion(backgroundPdfPath: Value(remoteUrl))
-                  );
-                  debugPrint('☁️ [Sync-Push] Upload do fundo da página ${row.pageNumber} concluído: $remoteUrl');
-                }
-              } catch (e) {
-                debugPrint('⚠️ [Sync-Push] Falha ao fazer upload do fundo local da página ${row.pageNumber}: $e');
-              }
-            }
-          }
-
-          pagesPayload.add(pageMap);
-          
-          if (row.isDeleted == 1) {
-            debugPrint('🛫 [Sync-Push-Delete] Enviando folha apagada ${row.pageNumber} com conteúdos pendentes.');
-          } else {
-            debugPrint('🛫 [Sync-Push-Delta] Enviando novidades da página ${row.pageNumber}: ${fullPage.strokes.length} traços.');
-          }
-        }
-
-        if (pagesPayload.isEmpty) continue;
-
+      Future<void> sendBatch(List<Map<String, dynamic>> batchPayload) async {
+        if (batchPayload.isEmpty) return;
         try {
-          debugPrint('🛫 [Sync-Push-Batch] Enviando lote de ${pagesPayload.length} páginas...');
+          debugPrint('🛫 [Sync-Push-Batch] Enviando lote adaptativo de ${batchPayload.length} páginas (${(jsonEncode(batchPayload).length / 1024).toStringAsFixed(1)} KB)...');
           var response = await _apiService.post('/sync/pages/push', {
-            'pages': pagesPayload,
+            'pages': batchPayload,
             'last_synced_at': lastSynced, // 🚀 Delta bidirecional
           });
           
@@ -691,7 +716,12 @@ class SyncService {
                 }
 
                 if (status == 'ignored_old' && sNbId != null) {
+                  debugPrint('ℹ️ [Sync] Página $cId ignorada pelo servidor (ignored_old). Puxando versão atual do servidor...');
                   await pullSpecificPage(sNbId, syncedPageMap['page_number'] ?? 0, clientId: cId);
+                  final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                  if (localPage != null) {
+                    await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                  }
                   continue;
                 }
                 
@@ -759,13 +789,76 @@ class SyncService {
         }
       }
 
+      for (var row in unsyncedPages) {
+        final notebook = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
+        if (notebook == null || notebook.serverId == null) continue;
+        
+        final String? cId = row.clientId;
+        if (cId == null) continue;
+        
+        final fullPage = await _canvasRepository.getPageByClientId(cId, onlyUnsynced: true);
+        if (fullPage == null) continue;
+
+        final pageMap = await fullPage.toJsonAsync();
+        pageMap['notebook_id'] = notebook.serverId;
+        pageMap['is_deleted'] = row.isDeleted == 1 ? 1 : 0;
+        if (row.serverId != null) pageMap['server_id'] = row.serverId;
+
+        // 🚀 UPLOAD DE IMAGEM DE FUNDO DA PÁGINA (PDF Importado em disco local)
+        String? bgPath = fullPage.backgroundPdfPath;
+        if (bgPath != null && bgPath.isNotEmpty && !bgPath.startsWith('http')) {
+          final localFile = io.File(bgPath);
+          if (localFile.existsSync()) {
+            try {
+              final bytes = await localFile.readAsBytes();
+              final String fileName = bgPath.split('/').last.split('\\').last;
+              final String? remoteUrl = await _canvasRepository.uploadImage(notebook.serverId!, fileName, bytes);
+              if (remoteUrl != null && remoteUrl.isNotEmpty) {
+                pageMap['background_pdf_path'] = remoteUrl;
+                pageMap['background_image_path'] = remoteUrl;
+                
+                await (_db.update(_db.pages)..where((t) => t.clientId.equals(cId))).write(
+                  PagesCompanion(backgroundPdfPath: Value(remoteUrl))
+                );
+                debugPrint('☁️ [Sync-Push] Upload do fundo da página ${row.pageNumber} concluído: $remoteUrl');
+              }
+            } catch (e) {
+              debugPrint('⚠️ [Sync-Push] Falha ao fazer upload do fundo local da página ${row.pageNumber}: $e');
+            }
+          }
+        }
+
+        final int pageEstimatedBytes = jsonEncode(pageMap).length;
+
+        // Se adicionar esta página ultrapassar o limite de bytes (~2.5MB) ou número máximo de páginas (10), envia o lote atual
+        if (currentBatchPayload.isNotEmpty && 
+            (currentBatchBytes + pageEstimatedBytes > maxBatchBytes || currentBatchPayload.length >= maxBatchPages)) {
+          await sendBatch(currentBatchPayload);
+          currentBatchPayload = [];
+          currentBatchBytes = 0;
+        }
+
+        currentBatchPayload.add(pageMap);
+        currentBatchBytes += pageEstimatedBytes;
+
+        if (row.isDeleted == 1) {
+          debugPrint('🛫 [Sync-Push-Delete] Enviando folha apagada ${row.pageNumber} com conteúdos pendentes.');
+        } else {
+          debugPrint('🛫 [Sync-Push-Delta] Preparando página ${row.pageNumber} (${(pageEstimatedBytes / 1024).toStringAsFixed(1)} KB, ${fullPage.strokes.length} traços).');
+        }
+      }
+
+      // Enviar o último lote restante
+      if (currentBatchPayload.isNotEmpty) {
+        await sendBatch(currentBatchPayload);
+      }
+
       return serverHasMore;
     } catch (e) { return false; }
   }
 
   Future<void> _markPageItemsAsSynced(int localPageId) async {
-    // 🚀 OTIMIZAÇÃO: Apenas atualizamos a coluna de sincronismo. 
-    // O repository já ignora o valor interno do JSON ao carregar, priorizando a coluna.
+    // 🚀 OTIMIZAÇÃO: Atualizar a coluna de sincronismo em TODAS as tabelas de objetos do Canvas
     await _db.batch((batch) {
       batch.update(_db.canvasStrokes, const CanvasStrokesCompanion(syncedWithCloud: Value(1)), 
         where: (t) => t.pageId.equals(localPageId));
@@ -773,20 +866,43 @@ class SyncService {
         where: (t) => t.pageId.equals(localPageId));
       batch.update(_db.canvasImageBlocks, const CanvasImageBlocksCompanion(syncedWithCloud: Value(1)), 
         where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasShapes, const CanvasShapesCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasAudioBlocks, const CanvasAudioBlocksCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasAnimations, const CanvasAnimationsCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasTables, const CanvasTablesCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasLinks, const CanvasLinksCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasAttachments, const CanvasAttachmentsCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
+      batch.update(_db.canvasExplanations, const CanvasExplanationsCompanion(syncedWithCloud: Value(1)), 
+        where: (t) => t.pageId.equals(localPageId));
     });
   }
 
-  Future<bool> pullPages({bool forceFull = false, int? onlyNotebookId}) async {
+  Future<bool> pullPages({bool forceFull = false, int? onlyNotebookId, int? onlyNotebookServerId}) async {
     final prefs = await SharedPreferences.getInstance();
     
+    int? targetServerNbId = onlyNotebookServerId ?? onlyNotebookId;
+    if (targetServerNbId != null && onlyNotebookServerId == null) {
+      final sId = targetServerNbId;
+      final nbByLocal = await (_db.select(_db.notebooks)..where((t) => t.id.equals(sId))).getSingleOrNull();
+      if (nbByLocal?.serverId != null) {
+        targetServerNbId = nbByLocal!.serverId;
+      }
+    }
+
     // 🚀 OTIMIZAÇÃO: Se for pull de um caderno específico, não usamos o timestamp global
     // para garantir que trazemos tudo o que falta para esse caderno.
-    final String? lastSynced = (onlyNotebookId == null && !forceFull) ? prefs.getString('last_pages_sync') : null;
+    final String? lastSynced = (targetServerNbId == null && !forceFull) ? _getBufferedLastSynced(prefs.getString('last_pages_sync')) : null;
     
     try {
       String? baseUrl = '/sync/pages/pull';
       if (lastSynced != null) baseUrl += '?last_synced_at=$lastSynced';
-      if (onlyNotebookId != null) baseUrl += (lastSynced != null ? '&' : '?') + 'notebook_id=$onlyNotebookId';
+      if (targetServerNbId != null) baseUrl += (lastSynced != null ? '&' : '?') + 'notebook_id=$targetServerNbId';
       
       String? nextUrl = baseUrl;
       bool anyChanges = false;
@@ -804,7 +920,7 @@ class SyncService {
           final String? serverTime = _parseMetaTime(responseData['meta']);
           
           // 🚀 SÓ ATUALIZAMOS O MARCADOR GLOBAL se for um pull completo (sem filtro de caderno)
-          if (onlyNotebookId == null && serverTime != null) {
+          if (targetServerNbId == null && serverTime != null) {
             await prefs.setString('last_pages_sync', serverTime);
           }
           if (serverPages.isNotEmpty) {
@@ -825,7 +941,7 @@ class SyncService {
                 final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
                 if (notebook == null) continue;
                 final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
-                final int serverTs = sPage['updated_at_ms'] ?? sPage['updated_at'] ?? 0;
+                final int serverTs = _parseSafeInt(sPage['updated_at_ms']) ?? _parseSafeInt(sPage['updated_at']) ?? 0;
                 
                 if (existingPage != null && existingPage.syncedWithCloud == 0 && existingPage.updatedAt > serverTs) {
                   localPageIdsForBatch.add(existingPage.id);
@@ -848,8 +964,9 @@ class SyncService {
       }
       if (forceFull) {
         final query = _db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(1));
-        if (onlyNotebookId != null) {
-          final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(onlyNotebookId))).getSingleOrNull();
+        if (targetServerNbId != null) {
+          final sId = targetServerNbId;
+          final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
           if (nb != null) query.where((t) => t.notebookId.equals(nb.id));
         }
         final localSyncedPages = await query.get();
@@ -989,7 +1106,7 @@ class SyncService {
 
   Future<bool> pushRecordings({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = prefs.getString('last_recordings_sync');
+    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_recordings_sync'));
 
     try {
       final unsynced = await (_db.select(_db.lessonRecordings)..where((t) => t.syncedWithCloud.equals(0))).get();
@@ -1079,7 +1196,7 @@ class SyncService {
   Future<void> pullRecordings() async {
     // PULL explícito mantido para gravações pois são ficheiros grandes e fluxo diferente
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = prefs.getString('last_recordings_sync');
+    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_recordings_sync'));
     try {
       final url = lastSynced != null ? '/sync/recordings/pull?last_synced_at=$lastSynced' : '/sync/recordings/pull';
       final response = await _apiService.get(url);

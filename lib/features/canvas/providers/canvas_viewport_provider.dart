@@ -58,12 +58,21 @@ class CanvasViewportNotifier extends Notifier<CanvasViewportState> {
     return _pageController!;
   }
 
+  void reset() {
+    // 🚀 ATENÇÃO: NÃO chamamos .dispose() nos controllers porque widgets de páginas anteriores
+    // podem ainda estar no meio de animações de transição de rota.
+    // Como TransformationController é apenas um ValueNotifier, o Garbage Collector
+    // cuida da memória assim que o InteractiveViewer fizer o unmount.
+    _controllers.clear();
+    _initializedPages.clear();
+    _pageController = null;
+    state = CanvasViewportState();
+  }
+
   @override
   CanvasViewportState build() {
     ref.onDispose(() {
-      for (var c in _controllers.values) {
-        c.dispose();
-      }
+      _controllers.clear();
       _pageController?.dispose();
     });
 
@@ -114,19 +123,22 @@ class CanvasViewportNotifier extends Notifier<CanvasViewportState> {
   void syncIndexWithId(List<String> allClientIds) {
     if (state.currentPageClientId == null) {
        if (allClientIds.isNotEmpty && state.currentPageIndex < allClientIds.length) {
-         state = state.copyWith(currentPageClientId: allClientIds[state.currentPageIndex]);
+         final targetClientId = allClientIds[state.currentPageIndex];
+         Future.microtask(() {
+           state = state.copyWith(currentPageClientId: targetClientId);
+         });
        }
        return;
     }
 
     final int newIndex = allClientIds.indexOf(state.currentPageClientId!);
     if (newIndex != -1 && newIndex != state.currentPageIndex) {
-      state = state.copyWith(currentPageIndex: newIndex);
-      if (pageController.hasClients) {
-        Future.microtask(() {
+      Future.microtask(() {
+        state = state.copyWith(currentPageIndex: newIndex);
+        if (pageController.hasClients) {
           pageController.jumpToPage(newIndex);
-        });
-      }
+        }
+      });
     }
   }
 

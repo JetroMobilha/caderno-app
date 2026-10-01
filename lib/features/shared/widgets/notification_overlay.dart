@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/realtime_service.dart';
+import '../../../main.dart';
 import '../../canvas/views/canvas_screen.dart';
 import '../../notebooks/controllers/notebooks_controller.dart';
 import '../../notebooks/models/notebook_model.dart';
@@ -112,7 +113,7 @@ class _NotificationOverlayState extends ConsumerState<NotificationOverlay> {
 
     if (target != null) {
       if (!mounted) return;
-      Navigator.of(context).push(
+      navigatorKey.currentState?.push(
         MaterialPageRoute(
           builder: (context) => CanvasScreen(notebook: target!),
         ),

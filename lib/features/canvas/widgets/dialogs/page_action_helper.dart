@@ -167,16 +167,25 @@ class PageActionHelper {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Apagar Folha?'),
-        content: const Text('Esta ação enviará a folha para a lixeira.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Rasgar Folha?'),
+        content: Text('Tens a certeza que queres rasgar a folha "${page.title}"? Esta ação moverá a folha para a lixeira.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCELAR')),
           TextButton(
+            onPressed: () => Navigator.pop(ctx), 
+            child: const Text('CANCELAR', style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () {
               ref.read(canvasDocumentProvider.notifier).deletePage(page);
               Navigator.pop(ctx);
             },
-            child: const Text('APAGAR', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('RASGAR FOLHA'),
           ),
         ],
       ),

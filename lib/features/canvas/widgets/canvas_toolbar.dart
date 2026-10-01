@@ -16,6 +16,7 @@ import '../models/canvas_enums.dart'; // 🚀 v10.60: Removido o 'hide' para per
 import '../providers/canvas_ui_provider.dart';
 import '../widgets/canvas_zoom_control.dart';
 import '../widgets/dialogs/layer_manager_sheet.dart'; 
+import '../widgets/dialogs/page_action_helper.dart'; 
 import '../models/stroke_model.dart';
 import '../models/text_block_model.dart';
 import '../models/table_model.dart';
@@ -907,9 +908,57 @@ class CanvasToolbar extends ConsumerWidget {
 
   Widget _buildCompactToolbar(BuildContext context, CanvasDocumentState docState) => Container(margin: const EdgeInsets.symmetric(horizontal: 16), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 8))]), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(docState.currentUserRole == 'viewer' ? Icons.visibility_outlined : Icons.lock_person_rounded, color: Colors.blueGrey, size: 20), const SizedBox(width: 12), Text(docState.currentUserRole == 'viewer' ? 'Modo Leitura' : 'Sessão Bloqueada', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87))]));
 
-  Widget _buildPagePopupMenu(BuildContext context, WidgetRef ref, LocalPage page) => PopupMenuButton<String>(icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF5F6368)), offset: const Offset(0, -280), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), onSelected: (val) => _handlePageAction(context, ref, page, val), itemBuilder: (context) => [_buildPopupItem('rename', Icons.edit_outlined, 'Renomear Folha'), _buildPopupItem('settings', Icons.settings_outlined, 'Configurações'), _buildPopupItem('paper', Icons.grid_on_rounded, 'Mudar Pauta'), const PopupMenuDivider(), _buildPopupItem('favorite', page.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, 'Favorito'), _buildPopupItem('duplicate', Icons.copy_rounded, 'Duplicar Página'), _buildPopupItem('delete', Icons.delete_outline_rounded, 'Rasgar Folha')]);
+  Widget _buildPagePopupMenu(BuildContext context, WidgetRef ref, LocalPage page) => PopupMenuButton<String>(
+    icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF5F6368)),
+    offset: const Offset(0, -280),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    onSelected: (val) => _handlePageAction(context, ref, page, val),
+    itemBuilder: (context) => [
+      _buildPopupItem('rename', Icons.edit_outlined, 'Renomear Folha'),
+      _buildPopupItem('settings', Icons.settings_outlined, 'Configurações'),
+      _buildPopupItem('paper', Icons.grid_on_rounded, 'Mudar Pauta / Fundo'),
+      _buildPopupItem('section', Icons.category_outlined, 'Mover para Secção'),
+      const PopupMenuDivider(),
+      _buildPopupItem('favorite', page.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, page.isFavorite ? 'Remover dos Favoritos' : 'Marcar Favorito'),
+      _buildPopupItem('duplicate', Icons.copy_rounded, 'Duplicar Página'),
+      _buildPopupItem('move_to', Icons.drive_file_move_outlined, 'Mover Folha'),
+      _buildPopupItem('copy_to', Icons.file_copy_outlined, 'Copiar Folha'),
+      const PopupMenuDivider(),
+      _buildPopupItem('delete', Icons.delete_outline_rounded, 'Rasgar Folha'),
+    ],
+  );
 
   PopupMenuItem<String> _buildPopupItem(String value, IconData icon, String label) => PopupMenuItem<String>(value: value, height: 38, child: Row(children: [Icon(icon, size: 18, color: Colors.black54), const SizedBox(width: 12), Text(label, style: const TextStyle(fontSize: 12))]));
 
-  void _handlePageAction(BuildContext context, WidgetRef ref, LocalPage page, String action) { switch (action) { case 'rename': break; case 'settings': break; case 'paper': onChangePaperTap(); break; case 'favorite': ref.read(canvasDocumentProvider.notifier).toggleFavorite(page); break; case 'duplicate': ref.read(canvasDocumentProvider.notifier).duplicatePage(page); break; case 'delete': ref.read(canvasDocumentProvider.notifier).deletePage(page); break; } }
+  void _handlePageAction(BuildContext context, WidgetRef ref, LocalPage page, String action) {
+    switch (action) {
+      case 'rename':
+        PageActionHelper.showRenameDialog(context, ref, page);
+        break;
+      case 'settings':
+        PageActionHelper.showSettingsDialog(context, ref, page);
+        break;
+      case 'paper':
+        onChangePaperTap();
+        break;
+      case 'section':
+        PageActionHelper.showSectionDialog(context, ref, page);
+        break;
+      case 'favorite':
+        ref.read(canvasDocumentProvider.notifier).toggleFavorite(page);
+        break;
+      case 'duplicate':
+        ref.read(canvasDocumentProvider.notifier).duplicatePage(page);
+        break;
+      case 'move_to':
+        PageActionHelper.handleMovePage(context, ref, page);
+        break;
+      case 'copy_to':
+        PageActionHelper.handleCopyPage(context, ref, page);
+        break;
+      case 'delete':
+        PageActionHelper.showConfirmDelete(context, ref, page);
+        break;
+    }
+  }
 }

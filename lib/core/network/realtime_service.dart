@@ -200,14 +200,19 @@ class RealtimeService {
       return;
     }
 
+    final channelName = 'presence-notebook.$notebookId';
+
     if (_notebookChannel != null) {
+      if (_notebookChannel!.name == channelName) {
+        debugPrint('ℹ️ [Realtime] Já inscrito no canal $channelName. Ignorando re-subscrição redundante.');
+        return;
+      }
       debugPrint('🧹 [Realtime] Saindo do canal anterior: ${_notebookChannel!.name}');
       _notebookChannel!.unsubscribe();
     }
 
     final prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('sanctum_token');
-    final channelName = 'presence-notebook.$notebookId';
     
     _boundEvents.clear();
 

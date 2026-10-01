@@ -298,14 +298,32 @@ class CanvasRepository {
 
   Stream<List<LocalPage>> watchPagesByNotebook(int notebookId) {
     return (_db.select(_db.pages)..where((t) => t.notebookId.equals(notebookId) & t.isDeleted.equals(0))).watch().map((rows) {
-       return rows.map((r) => LocalPage(
-          id: r.id, serverId: r.serverId, notebookId: r.notebookId, pageNumber: r.pageNumber,
-          isLandscape: r.isLandscape == 1, paperSize: r.paperSize, clientId: r.clientId ?? '',
-          lineType: r.lineType, lineSpacing: r.lineSpacing, updatedAt: r.updatedAt, syncedWithCloud: r.syncedWithCloud,
-          backgroundPdfPath: r.backgroundPdfPath,
-          isDeleted: r.isDeleted == 1, isFrozen: r.isFrozen == 1, isFavorite: r.isFavorite == 1,
-          objects: [], 
-       )).toList();
+       return rows.map((r) {
+         Map<String, dynamic>? headerMap;
+         if (r.headerData != null && r.headerData!.isNotEmpty) {
+           try {
+             headerMap = jsonDecode(r.headerData!) as Map<String, dynamic>;
+           } catch (_) {}
+         }
+         Map<String, dynamic>? footerMap;
+         if (r.footerData != null && r.footerData!.isNotEmpty) {
+           try {
+             footerMap = jsonDecode(r.footerData!) as Map<String, dynamic>;
+           } catch (_) {}
+         }
+         return LocalPage(
+            id: r.id, serverId: r.serverId, notebookId: r.notebookId, pageNumber: r.pageNumber,
+            isLandscape: r.isLandscape == 1, paperSize: r.paperSize, clientId: r.clientId ?? '',
+            lineType: r.lineType, lineSpacing: r.lineSpacing, updatedAt: r.updatedAt, syncedWithCloud: r.syncedWithCloud,
+            backgroundPdfPath: r.backgroundPdfPath,
+            isDeleted: r.isDeleted == 1, isFrozen: r.isFrozen == 1, isFavorite: r.isFavorite == 1,
+            title: LocalPage.parseMeta(headerMap),
+            sectionTitle: LocalPage.parseSection(headerMap),
+            sectionColor: LocalPage.parseSectionColor(headerMap),
+            footer: LocalPage.parseMeta(footerMap),
+            objects: [], 
+         );
+       }).toList();
     });
   }
 
@@ -330,12 +348,21 @@ class CanvasRepository {
     // 🚀 v10.57: Prevenir conflitos de UNIQUE constraint em client_id
     // Procuramos se já existe uma página local com este clientId para reaproveitar o ID primário.
     int? localId = page.id;
-    if (localId == null) {
+    if (localId == null && page.clientId.isNotEmpty) {
       final existing = await (_db.select(_db.pages)..where((t) => t.clientId.equals(page.clientId))).getSingleOrNull();
       if (existing != null) {
         localId = existing.id;
       }
     }
+
+    final headerDataMap = {
+      'title': page.title,
+      'section': page.sectionTitle,
+      'section_color': page.sectionColor,
+    };
+    final footerDataMap = {
+      'title': page.footer,
+    };
 
     final companion = PagesCompanion.insert(
       id: localId != null ? Value(localId) : const Value.absent(),
@@ -356,22 +383,43 @@ class CanvasRepository {
       backgroundConfig: Value(page.backgroundConfig != null ? jsonEncode(page.backgroundConfig!.toJson()) : null),
       viewportMatrix: Value(page.viewportMatrix != null ? jsonEncode(page.viewportMatrix!.storage.toList()) : null),
       layers: Value(page.layers.isNotEmpty ? jsonEncode(page.layers.map((l) => l.toJson()).toList()) : null),
+      headerData: Value(jsonEncode(headerDataMap)),
+      footerData: Value(jsonEncode(footerDataMap)),
     );
-    return await _db.into(_db.pages).insertOnConflictUpdate(companion);
+
+    final resultId = await _db.into(_db.pages).insertOnConflictUpdate(companion);
+    if (localId != null && localId > 0) {
+      return localId;
+    }
+    if (resultId > 0) {
+      return resultId;
+    }
+
+    // Se insertOnConflictUpdate retornou 0 (devido ao DO UPDATE no SQLite), buscar a linha recém-atualizada pelo client_id
+    if (page.clientId.isNotEmpty) {
+      final row = await (_db.select(_db.pages)..where((t) => t.clientId.equals(page.clientId))).getSingleOrNull();
+      if (row != null) {
+        return row.id;
+      }
+    }
+    return resultId;
   }
 
   Future<int> savePageFromMap(Map<String, dynamic> data, int? notebookSid) async {
      LocalPage page = LocalPage.fromJson(data);
      
-     // 🚀 v10.58: Tradução de server_id do caderno para ID local (Fix FOREIGN KEY error)
-     if (notebookSid != null) {
-       final nbRow = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookSid))).getSingleOrNull();
+     // 🚀 Tradução universal de server_id do caderno para ID local no SQLite (Fix FOREIGN KEY / Caderno errado)
+     final int? effectiveNotebookSid = notebookSid ?? 
+         (data['notebook_id'] is int ? data['notebook_id'] : int.tryParse(data['notebook_id']?.toString() ?? ''));
+         
+     if (effectiveNotebookSid != null && effectiveNotebookSid > 0) {
+       final nbRow = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(effectiveNotebookSid))).getSingleOrNull();
        if (nbRow != null) {
          page = page.copyWith(notebookId: nbRow.id);
        }
      }
      
-     return await savePage(page, notebookSid);
+     return await savePage(page, effectiveNotebookSid);
   }
 
   Future<void> saveSingleStroke(String pageClientId, Stroke s, {int? pageId, int? updatedAt}) async {
@@ -444,6 +492,7 @@ class CanvasRepository {
       shapeData: Value(jsonEncode(s.toJson())),
       isDeleted: Value(s.isDeleted ? 1 : 0), 
       updatedAt: Value(updatedAt ?? s.updatedAt),
+      syncedWithCloud: Value(s.syncedWithCloud ? 1 : 0),
       parentId: Value(s.parentId), 
       isVisible: Value(s.isVisible ? 1 : 0), 
       isLocked: Value(s.isLocked ? 1 : 0), 
@@ -461,6 +510,7 @@ class CanvasRepository {
       tableData: Value(jsonEncode(t.toJson())),
       isDeleted: Value(t.isDeleted ? 1 : 0), 
       updatedAt: Value(updatedAt ?? t.updatedAt),
+      syncedWithCloud: Value(t.syncedWithCloud ? 1 : 0),
       parentId: Value(t.parentId), 
       isVisible: Value(t.isVisible ? 1 : 0), 
       isLocked: Value(t.isLocked ? 1 : 0), 
@@ -478,6 +528,7 @@ class CanvasRepository {
       linkData: Value(jsonEncode(l.toJson())),
       isDeleted: Value(l.isDeleted ? 1 : 0), 
       updatedAt: Value(updatedAt ?? l.updatedAt),
+      syncedWithCloud: Value(l.syncedWithCloud ? 1 : 0),
       parentId: Value(l.parentId), 
       isVisible: Value(l.isVisible ? 1 : 0), 
       isLocked: Value(l.isLocked ? 1 : 0), 
@@ -495,6 +546,7 @@ class CanvasRepository {
       attachmentData: Value(jsonEncode(a.toJson())),
       isDeleted: Value(a.isDeleted ? 1 : 0), 
       updatedAt: Value(updatedAt ?? a.updatedAt),
+      syncedWithCloud: Value(a.syncedWithCloud ? 1 : 0),
       parentId: Value(a.parentId), 
       isVisible: Value(a.isVisible ? 1 : 0), 
       isLocked: Value(a.isLocked ? 1 : 0), 
@@ -512,6 +564,7 @@ class CanvasRepository {
       audioData: Value(jsonEncode(a.toJson())),
       isDeleted: Value(a.isDeleted ? 1 : 0), 
       updatedAt: Value(updatedAt ?? a.updatedAt),
+      syncedWithCloud: Value(a.syncedWithCloud ? 1 : 0),
       parentId: Value(a.parentId), 
       isVisible: Value(a.isVisible ? 1 : 0), 
       isLocked: Value(a.isLocked ? 1 : 0), 
@@ -529,6 +582,7 @@ class CanvasRepository {
       animationData: Value(jsonEncode(a.toJson())),
       isDeleted: Value(a.isDeleted ? 1 : 0), 
       updatedAt: Value(updatedAt ?? a.updatedAt),
+      syncedWithCloud: Value(a.syncedWithCloud ? 1 : 0),
       parentId: Value(a.parentId), 
       isVisible: Value(a.isVisible ? 1 : 0), 
       isLocked: Value(a.isLocked ? 1 : 0), 
@@ -547,6 +601,7 @@ class CanvasRepository {
         explanationData: Value(jsonEncode(exp.toJson())),
         isDeleted: Value(exp.isDeleted ? 1 : 0), 
         updatedAt: Value(updatedAt ?? exp.updatedAt),
+        syncedWithCloud: Value(exp.syncedWithCloud ? 1 : 0),
         parentId: Value(exp.parentId), 
         isVisible: Value(exp.isVisible ? 1 : 0), 
         isLocked: Value(exp.isLocked ? 1 : 0), 
@@ -581,14 +636,9 @@ class CanvasRepository {
     if (page == null) return;
     final now = updatedAt ?? TimeService().nowMs();
     
-    await _db.transaction(() async {
-      await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId))).write(
-        PagesCompanion(syncedWithCloud: const Value(0), updatedAt: Value(now))
-      );
-      await (_db.update(_db.notebooks)..where((t) => t.id.equals(page.notebookId))).write(
-        NotebooksCompanion(updatedAt: Value(now), syncedWithCloud: const Value(0))
-      );
-    });
+    await (_db.update(_db.pages)..where((t) => t.clientId.equals(pageClientId))).write(
+      PagesCompanion(syncedWithCloud: const Value(0), updatedAt: Value(now))
+    );
   }
 
   Future<void> deletePagesBatch(List<int> pageIds) async { await (_db.update(_db.pages)..where((t) => t.id.isIn(pageIds))).write(PagesCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(TimeService().nowMs()))); }

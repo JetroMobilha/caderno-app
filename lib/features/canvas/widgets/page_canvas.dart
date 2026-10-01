@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/local_page_model.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_render_provider.dart'; // 🚀 NOVO
+import '../providers/canvas_document_provider.dart';
 import 'canvas_painter.dart';
 import 'object_renderer.dart';
 
@@ -24,6 +25,17 @@ class PageCanvas extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!page.isContentLoaded && page.id != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final docNotifier = ref.read(canvasDocumentProvider.notifier);
+        final docState = ref.read(canvasDocumentProvider);
+        final idx = docState.pages.indexWhere((p) => p.clientId == page.clientId);
+        if (idx != -1) {
+          docNotifier.ensurePageLoaded(idx);
+        }
+      });
+    }
+
     final toolState = ref.watch(canvasToolProvider);
     final renderList = ref.watch(canvasRenderProvider(page.clientId)); // 🚀 v9.0
 

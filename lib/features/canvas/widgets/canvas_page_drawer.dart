@@ -1,5 +1,7 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -9,19 +11,23 @@ import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
 import '../providers/canvas_ui_provider.dart'; // 🚀 NOVO
 import '../views/page_overview_screen.dart';
-import 'dialogs/add_page_dialog.dart';
-import 'dialogs/select_notebook_dialog.dart';
-import 'dialogs/page_settings_dialog.dart'; 
-import 'dialogs/page_action_helper.dart'; // 🚀 NOVO
+import 'dialogs/page_action_helper.dart';
+import 'package:caderno_digital_app/features/canvas/services/pdf_export_service.dart';
+import 'package:caderno_digital_app/features/canvas/services/pdf_import_service.dart';
+import 'package:caderno_digital_app/features/canvas/repositories/canvas_repository.dart';
+import 'package:caderno_digital_app/features/notebooks/repositories/notebook_repository.dart';
+import 'dialogs/export_pdf_dialog.dart';
 
 class CanvasPageDrawer extends ConsumerWidget {
   final Notebook notebook;
   final VoidCallback onAddPage;
+  final VoidCallback? onCollaborationTap;
 
   const CanvasPageDrawer({
     super.key,
     required this.notebook,
     required this.onAddPage,
+    this.onCollaborationTap,
   });
 
   void _toggleSection(WidgetRef ref, String section) {
@@ -41,7 +47,7 @@ class CanvasPageDrawer extends ConsumerWidget {
     for (int i = 0; i < key.length; i++) {
       hash = ((hash << 5) + hash) + key.codeUnitAt(i);
     }
-    
+
     final List<Color> palette = [
       const Color(0xFF0F4C5C), // Azul petróleo
       const Color(0xFFE36414), // Laranja
@@ -71,7 +77,9 @@ class CanvasPageDrawer extends ConsumerWidget {
     final uiState = ref.watch(canvasUiProvider); // 🚀 ESTADO PERSISTENTE
 
     // 🚀 Lógica de Agrupamento
-    final List<LocalPage> favoritePages = docState.pages.where((p) => p.isFavorite).toList();
+    final List<LocalPage> favoritePages = docState.pages
+        .where((p) => p.isFavorite)
+        .toList();
     final Map<String, List<LocalPage>> sectionedPages = {};
     final List<LocalPage> unsectionedPages = [];
 
@@ -88,7 +96,7 @@ class CanvasPageDrawer extends ConsumerWidget {
       width: 320.0,
       child: Column(
         children: [
-          _buildHeader(context, docState, themeColor),
+          _buildHeader(context, ref, docState, themeColor),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -97,50 +105,84 @@ class CanvasPageDrawer extends ConsumerWidget {
                 const SizedBox(height: 12),
                 if (favoritePages.isNotEmpty) ...[
                   _buildSectionHeader(
-                    'FAVORITOS', 
-                    Icons.star_rounded, 
+                    'FAVORITOS',
+                    Icons.star_rounded,
                     Colors.orange,
-                    isCollapsed: uiState.collapsedSections.contains('FAVORITOS'),
+                    isCollapsed: uiState.collapsedSections.contains(
+                      'FAVORITOS',
+                    ),
                     onTap: () => _toggleSection(ref, 'FAVORITOS'),
                   ),
                   if (!uiState.collapsedSections.contains('FAVORITOS'))
-                    _buildPageGroup(context, ref, favoritePages, docState, viewportState, viewportNotifier, themeColor, prefix: 'fav_'),
+                    _buildPageGroup(
+                      context,
+                      ref,
+                      favoritePages,
+                      docState,
+                      viewportState,
+                      viewportNotifier,
+                      themeColor,
+                      prefix: 'fav_',
+                    ),
                   const Divider(indent: 20, endIndent: 20, height: 32),
                 ],
 
                 // Secções Dinâmicas
                 ...sectionedPages.entries.map((entry) {
-                  final sectionColor = _getSectionColor(entry.key, customColor: entry.value.first.sectionColor);
-                  final isCollapsed = uiState.collapsedSections.contains(entry.key);
-                  
+                  final sectionColor = _getSectionColor(
+                    entry.key,
+                    customColor: entry.value.first.sectionColor,
+                  );
+                  final isCollapsed = uiState.collapsedSections.contains(
+                    entry.key,
+                  );
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildSectionHeader(
-                        entry.key.toUpperCase(), 
-                        Icons.folder_open_rounded, 
+                        entry.key.toUpperCase(),
+                        Icons.folder_open_rounded,
                         sectionColor,
                         isCollapsed: isCollapsed,
                         onTap: () => _toggleSection(ref, entry.key),
                       ),
                       if (!isCollapsed)
-                        _buildPageGroup(context, ref, entry.value, docState, viewportState, viewportNotifier, sectionColor),
+                        _buildPageGroup(
+                          context,
+                          ref,
+                          entry.value,
+                          docState,
+                          viewportState,
+                          viewportNotifier,
+                          sectionColor,
+                        ),
                       const SizedBox(height: 16),
                     ],
                   );
                 }),
 
                 if (unsectionedPages.isNotEmpty) ...[
-                  if (sectionedPages.isNotEmpty) 
+                  if (sectionedPages.isNotEmpty)
                     _buildSectionHeader(
-                      'OUTRAS PÁGINAS', 
-                      Icons.insert_drive_file_outlined, 
+                      'OUTRAS PÁGINAS',
+                      Icons.insert_drive_file_outlined,
                       Colors.black38,
-                      isCollapsed: uiState.collapsedSections.contains('OUTRAS PÁGINAS'),
+                      isCollapsed: uiState.collapsedSections.contains(
+                        'OUTRAS PÁGINAS',
+                      ),
                       onTap: () => _toggleSection(ref, 'OUTRAS PÁGINAS'),
                     ),
                   if (!uiState.collapsedSections.contains('OUTRAS PÁGINAS'))
-                    _buildPageGroup(context, ref, unsectionedPages, docState, viewportState, viewportNotifier, themeColor),
+                    _buildPageGroup(
+                      context,
+                      ref,
+                      unsectionedPages,
+                      docState,
+                      viewportState,
+                      viewportNotifier,
+                      themeColor,
+                    ),
                 ],
               ],
             ),
@@ -152,7 +194,11 @@ class CanvasPageDrawer extends ConsumerWidget {
     );
   }
 
-  Widget _buildIntegratedToolbar(BuildContext context, WidgetRef ref, Color themeColor) {
+  Widget _buildIntegratedToolbar(
+    BuildContext context,
+    WidgetRef ref,
+    Color themeColor,
+  ) {
     final uiState = ref.watch(canvasUiProvider);
 
     return Container(
@@ -168,7 +214,10 @@ class CanvasPageDrawer extends ConsumerWidget {
             child: InkWell(
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const PageOverviewScreen()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PageOverviewScreen()),
+                );
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(
@@ -176,16 +225,31 @@ class CanvasPageDrawer extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: themeColor,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: themeColor.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: themeColor.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.grid_view_rounded, size: 16, color: Colors.white),
+                    const Icon(
+                      Icons.grid_view_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'VISTA GERAL',
-                      style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ],
                 ),
@@ -193,10 +257,21 @@ class CanvasPageDrawer extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 4),
-          _buildIntegratedActionButton(Icons.delete_sweep_outlined, () => _showDeletedPagesDialog(context, ref)),
+          _buildIntegratedActionButton(
+            Icons.delete_sweep_outlined,
+            () => _showDeletedPagesDialog(context, ref),
+          ),
           const SizedBox(width: 4),
-          _buildViewToggleButton(Icons.view_list_rounded, !uiState.isGridView, () => ref.read(canvasUiProvider.notifier).toggleGridView(false)),
-          _buildViewToggleButton(Icons.grid_view_rounded, uiState.isGridView, () => ref.read(canvasUiProvider.notifier).toggleGridView(true)),
+          _buildViewToggleButton(
+            Icons.view_list_rounded,
+            !uiState.isGridView,
+            () => ref.read(canvasUiProvider.notifier).toggleGridView(false),
+          ),
+          _buildViewToggleButton(
+            Icons.grid_view_rounded,
+            uiState.isGridView,
+            () => ref.read(canvasUiProvider.notifier).toggleGridView(true),
+          ),
         ],
       ),
     );
@@ -219,7 +294,11 @@ class CanvasPageDrawer extends ConsumerWidget {
     );
   }
 
-  Widget _buildViewToggleButton(IconData icon, bool isActive, VoidCallback onTap) {
+  Widget _buildViewToggleButton(
+    IconData icon,
+    bool isActive,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -230,9 +309,21 @@ class CanvasPageDrawer extends ConsumerWidget {
         decoration: BoxDecoration(
           color: isActive ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))] : null,
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
-        child: Icon(icon, size: 18, color: isActive ? const Color(0xFF0F4C5C) : Colors.black26),
+        child: Icon(
+          icon,
+          size: 18,
+          color: isActive ? const Color(0xFF0F4C5C) : Colors.black26,
+        ),
       ),
     );
   }
@@ -240,13 +331,13 @@ class CanvasPageDrawer extends ConsumerWidget {
   Widget _buildPageGroup(
     BuildContext context,
     WidgetRef ref,
-    List<LocalPage> pages, 
-    CanvasDocumentState docState, 
+    List<LocalPage> pages,
+    CanvasDocumentState docState,
     CanvasViewportState viewportState,
     CanvasViewportNotifier viewportNotifier,
-    Color themeColor,
-    {String prefix = ''}
-  ) {
+    Color themeColor, {
+    String prefix = '',
+  }) {
     final uiState = ref.watch(canvasUiProvider);
 
     if (uiState.isGridView) {
@@ -257,7 +348,8 @@ class CanvasPageDrawer extends ConsumerWidget {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.75, // 🚀 Ajustado para acomodar thumbnails retangulares
+            childAspectRatio:
+                0.75, // 🚀 Ajustado para acomodar thumbnails retangulares
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
           ),
@@ -268,10 +360,14 @@ class CanvasPageDrawer extends ConsumerWidget {
               key: ValueKey('${prefix}grid_${p.clientId}'),
               page: p,
               index: docState.pages.indexOf(p),
-              isCurrent: viewportState.currentPageIndex == docState.pages.indexOf(p),
+              isCurrent:
+                  viewportState.currentPageIndex == docState.pages.indexOf(p),
               themeColor: themeColor,
               onTap: () {
-                viewportNotifier.jumpToPage(docState.pages.indexOf(p), clientId: p.clientId);
+                viewportNotifier.jumpToPage(
+                  docState.pages.indexOf(p),
+                  clientId: p.clientId,
+                );
                 Navigator.pop(context);
               },
               onAction: (val) => _handleAction(context, ref, p, val),
@@ -282,22 +378,181 @@ class CanvasPageDrawer extends ConsumerWidget {
     }
 
     return Column(
-      children: pages.map((p) => _PageListTile(
-        key: ValueKey('${prefix}${p.clientId}'),
-        page: p,
-        index: docState.pages.indexOf(p),
-        isCurrent: viewportState.currentPageIndex == docState.pages.indexOf(p),
-        themeColor: themeColor,
-        onTap: () {
-          viewportNotifier.jumpToPage(docState.pages.indexOf(p));
-          Navigator.pop(context);
-        },
-        onAction: (val) => _handleAction(context, ref, p, val),
-      )).toList(),
+      children: pages
+          .map(
+            (p) => _PageListTile(
+              key: ValueKey('${prefix}${p.clientId}'),
+              page: p,
+              index: docState.pages.indexOf(p),
+              isCurrent:
+                  viewportState.currentPageIndex == docState.pages.indexOf(p),
+              themeColor: themeColor,
+              onTap: () {
+                viewportNotifier.jumpToPage(docState.pages.indexOf(p));
+                Navigator.pop(context);
+              },
+              onAction: (val) => _handleAction(context, ref, p, val),
+            ),
+          )
+          .toList(),
     );
   }
 
-  Widget _buildHeader(BuildContext context, CanvasDocumentState state, Color themeColor) {
+  void _handleExportPdf(BuildContext context, WidgetRef ref) async {
+    final docState = ref.read(canvasDocumentProvider);
+    if (docState.pages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhuma página para exportar.')),
+      );
+      return;
+    }
+
+    final selectedPages = await ExportPdfDialog.show(
+      context,
+      notebookTitle: notebook.title,
+      allPages: docState.pages,
+    );
+
+    if (selectedPages == null || selectedPages.isEmpty) return;
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 16),
+            Text('A exportar PDF...'),
+          ],
+        ),
+        duration: Duration(seconds: 15),
+      ),
+    );
+
+    final canvasRepo = ref.read(canvasRepositoryProvider);
+    final result = await PdfExportService.exportNotebookToPdf(
+      notebook: notebook,
+      pages: selectedPages,
+      canvasRepository: canvasRepo,
+      openAfterExport: false,
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (result.isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('PDF exportado com sucesso! 📄'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(
+              label: 'Abrir',
+              textColor: Colors.white,
+              onPressed: () {
+                if (result.filePath != null) {
+                  OpenFilex.open(result.filePath!);
+                }
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Erro ao exportar PDF.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleImportPdfIntoNotebook(BuildContext context, WidgetRef ref) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 16),
+            Text('A importar páginas do PDF...'),
+          ],
+        ),
+        duration: Duration(seconds: 15),
+      ),
+    );
+
+    final notebookRepo = ref.read(notebookRepositoryProvider);
+    final canvasRepo = ref.read(canvasRepositoryProvider);
+    final service = PdfImportService(notebookRepo, canvasRepo);
+
+    final result = await service.importPdf(
+      subjectId: notebook.subjectId ?? 0,
+      targetNotebookId: notebook.id,
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (result.isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${result.pageCount} páginas de PDF adicionadas com sucesso! 📄',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        if (notebook.id != null) {
+          final docState = ref.read(canvasDocumentProvider);
+          ref
+              .read(canvasDocumentProvider.notifier)
+              .initNotebook(
+                notebook.id!,
+                notebook.serverId,
+                docState.currentUserRole,
+                docState.myUserId,
+              );
+        }
+      } else if (result.error != null &&
+          !result.error!.contains('Nenhum arquivo selecionado')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SelectableText(result.error!),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 12),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    WidgetRef ref,
+    CanvasDocumentState state,
+    Color themeColor,
+  ) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -319,19 +574,76 @@ class CanvasPageDrawer extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 24),
+                      const Icon(
+                        Icons.auto_stories_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '${state.pages.length} Folhas',
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      if (!kIsWeb) ...[
+                        IconButton(
+                          icon: const Icon(
+                            Icons.picture_as_pdf_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          tooltip: 'Exportar PDF',
+                          onPressed: () => _handleExportPdf(context, ref),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.post_add_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          tooltip: 'Inserir PDF nesta folha',
+                          onPressed: () =>
+                              _handleImportPdfIntoNotebook(context, ref),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      if (onCollaborationTap != null)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.people_alt_outlined,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          tooltip: 'Colaboração',
+                          onPressed: () {
+                            Navigator.pop(context);
+                            onCollaborationTap!();
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                     ],
                   ),
                 ],
@@ -341,12 +653,19 @@ class CanvasPageDrawer extends ConsumerWidget {
                 notebook.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.lora(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.lora(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Última edição: ${DateFormat('dd/MM HH:mm').format(DateTime.fromMillisecondsSinceEpoch(notebook.updatedAt))}',
-                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 10,
+                ),
               ),
             ],
           ),
@@ -355,8 +674,13 @@ class CanvasPageDrawer extends ConsumerWidget {
     );
   }
 
-
-  Widget _buildSectionHeader(String title, IconData icon, Color color, {required bool isCollapsed, required VoidCallback onTap}) {
+  Widget _buildSectionHeader(
+    String title,
+    IconData icon,
+    Color color, {
+    required bool isCollapsed,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -377,7 +701,9 @@ class CanvasPageDrawer extends ConsumerWidget {
               ),
             ),
             Icon(
-              isCollapsed ? Icons.keyboard_arrow_right_rounded : Icons.keyboard_arrow_down_rounded,
+              isCollapsed
+                  ? Icons.keyboard_arrow_right_rounded
+                  : Icons.keyboard_arrow_down_rounded,
               size: 18,
               color: color.withOpacity(0.5),
             ),
@@ -387,7 +713,11 @@ class CanvasPageDrawer extends ConsumerWidget {
     );
   }
 
-  Widget _buildBottomButtons(BuildContext context, WidgetRef ref, Color themeColor) {
+  Widget _buildBottomButtons(
+    BuildContext context,
+    WidgetRef ref,
+    Color themeColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ElevatedButton.icon(
@@ -404,32 +734,67 @@ class CanvasPageDrawer extends ConsumerWidget {
           foregroundColor: Colors.white,
           elevation: 0,
           minimumSize: const Size(double.infinity, 54),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       ),
     );
   }
 
-  void _handleAction(BuildContext context, WidgetRef ref, LocalPage page, String action) {
+  void _handleAction(
+    BuildContext context,
+    WidgetRef ref,
+    LocalPage page,
+    String action,
+  ) {
     final int index = ref.read(canvasDocumentProvider).pages.indexOf(page);
-    
+
     switch (action) {
-      case 'rename': PageActionHelper.showRenameDialog(context, ref, page); break;
-      case 'settings': PageActionHelper.showSettingsDialog(context, ref, page); break; 
-      case 'section': PageActionHelper.showSectionDialog(context, ref, page); break;
-      case 'remove_section': ref.read(canvasDocumentProvider.notifier).updatePageSection(page, null); break;
-      case 'add_before': PageActionHelper.showAddPageDialog(context, ref, insertIndex: index); break;
-      case 'add_after': PageActionHelper.showAddPageDialog(context, ref, insertIndex: index + 1); break;
-      case 'duplicate': ref.read(canvasDocumentProvider.notifier).duplicatePage(page); break;
-      case 'move_to': PageActionHelper.handleMovePage(context, ref, page); break;
-      case 'copy_to': PageActionHelper.handleCopyPage(context, ref, page); break;
-      case 'favorite': ref.read(canvasDocumentProvider.notifier).toggleFavorite(page); break;
-      case 'delete': PageActionHelper.showConfirmDelete(context, ref, page); break;
+      case 'rename':
+        PageActionHelper.showRenameDialog(context, ref, page);
+        break;
+      case 'settings':
+        PageActionHelper.showSettingsDialog(context, ref, page);
+        break;
+      case 'section':
+        PageActionHelper.showSectionDialog(context, ref, page);
+        break;
+      case 'remove_section':
+        ref.read(canvasDocumentProvider.notifier).updatePageSection(page, null);
+        break;
+      case 'add_before':
+        PageActionHelper.showAddPageDialog(context, ref, insertIndex: index);
+        break;
+      case 'add_after':
+        PageActionHelper.showAddPageDialog(
+          context,
+          ref,
+          insertIndex: index + 1,
+        );
+        break;
+      case 'duplicate':
+        ref.read(canvasDocumentProvider.notifier).duplicatePage(page);
+        break;
+      case 'move_to':
+        PageActionHelper.handleMovePage(context, ref, page);
+        break;
+      case 'copy_to':
+        PageActionHelper.handleCopyPage(context, ref, page);
+        break;
+      case 'favorite':
+        ref.read(canvasDocumentProvider.notifier).toggleFavorite(page);
+        break;
+      case 'delete':
+        PageActionHelper.showConfirmDelete(context, ref, page);
+        break;
     }
   }
 
   void _showDeletedPagesDialog(BuildContext context, WidgetRef ref) async {
-    final deletedPages = await ref.read(canvasDocumentProvider.notifier).getDeletedPages();
+    final deletedPages = await ref
+        .read(canvasDocumentProvider.notifier)
+        .getDeletedPages();
 
     if (!context.mounted) return;
 
@@ -444,7 +809,11 @@ class CanvasPageDrawer extends ConsumerWidget {
             const SizedBox(height: 4),
             Text(
               'Os itens na lixeira são eliminados permanentemente após 30 dias.',
-              style: GoogleFonts.inter(fontSize: 10, color: Colors.redAccent.withOpacity(0.7), fontWeight: FontWeight.w500),
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                color: Colors.redAccent.withOpacity(0.7),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -458,12 +827,23 @@ class CanvasPageDrawer extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final page = deletedPages[index];
                     return ListTile(
-                      title: Text(page.title.isEmpty ? 'Página ${page.pageNumber}' : page.title),
-                      subtitle: Text('Eliminada em ${DateFormat('dd/MM HH:mm').format(DateTime.fromMillisecondsSinceEpoch(page.updatedAt))}'),
+                      title: Text(
+                        page.title.isEmpty
+                            ? 'Página ${page.pageNumber}'
+                            : page.title,
+                      ),
+                      subtitle: Text(
+                        'Eliminada em ${DateFormat('dd/MM HH:mm').format(DateTime.fromMillisecondsSinceEpoch(page.updatedAt))}',
+                      ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.restore_page_rounded, color: Color(0xFF0F4C5C)),
+                        icon: const Icon(
+                          Icons.restore_page_rounded,
+                          color: Color(0xFF0F4C5C),
+                        ),
                         onPressed: () {
-                          ref.read(canvasDocumentProvider.notifier).restorePage(page);
+                          ref
+                              .read(canvasDocumentProvider.notifier)
+                              .restorePage(page);
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Folha restaurada!')),
@@ -475,14 +855,15 @@ class CanvasPageDrawer extends ConsumerWidget {
                 ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('FECHAR')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('FECHAR'),
+          ),
         ],
       ),
     );
   }
-
 }
-
 
 class _PageGridTile extends StatelessWidget {
   final LocalPage page;
@@ -511,8 +892,12 @@ class _PageGridTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isCurrent ? themeColor.withOpacity(0.05) : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isCurrent ? themeColor : Colors.black.withOpacity(0.05)),
-          boxShadow: isCurrent ? [BoxShadow(color: themeColor.withOpacity(0.1), blurRadius: 4)] : null,
+          border: Border.all(
+            color: isCurrent ? themeColor : Colors.black.withOpacity(0.05),
+          ),
+          boxShadow: isCurrent
+              ? [BoxShadow(color: themeColor.withOpacity(0.1), blurRadius: 4)]
+              : null,
         ),
         child: Stack(
           children: [
@@ -535,10 +920,17 @@ class _PageGridTile extends StatelessWidget {
                 ),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: isCurrent ? themeColor.withOpacity(0.1) : Colors.black.withOpacity(0.02),
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                    color: isCurrent
+                        ? themeColor.withOpacity(0.1)
+                        : Colors.black.withOpacity(0.02),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(12),
+                    ),
                   ),
                   child: Text(
                     page.title.isEmpty ? 'Pág. ${index + 1}' : page.title,
@@ -555,28 +947,68 @@ class _PageGridTile extends StatelessWidget {
               ],
             ),
             Positioned(
-              top: 0, right: 0,
+              top: 0,
+              right: 0,
               child: PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, size: 16, color: Colors.black26),
+                icon: const Icon(
+                  Icons.more_vert_rounded,
+                  size: 16,
+                  color: Colors.black26,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onSelected: onAction,
                 itemBuilder: (context) => [
                   _menuItem('rename', Icons.edit_outlined, 'Renomear'),
-                  _menuItem('settings', Icons.settings_outlined, 'Configurar'), // 🚀 NOVO
+                  _menuItem(
+                    'settings',
+                    Icons.settings_outlined,
+                    'Configurar',
+                  ), // 🚀 NOVO
                   _menuItem('section', Icons.folder_outlined, 'Mudar Secção'),
                   if (page.sectionTitle != null)
-                    _menuItem('remove_section', Icons.folder_off_outlined, 'Remover da Secção'),
+                    _menuItem(
+                      'remove_section',
+                      Icons.folder_off_outlined,
+                      'Remover da Secção',
+                    ),
                   const PopupMenuDivider(),
-                  _menuItem('add_before', Icons.vertical_align_top_rounded, 'Inserir antes'),
-                  _menuItem('add_after', Icons.vertical_align_bottom_rounded, 'Inserir depois'),
+                  _menuItem(
+                    'add_before',
+                    Icons.vertical_align_top_rounded,
+                    'Inserir antes',
+                  ),
+                  _menuItem(
+                    'add_after',
+                    Icons.vertical_align_bottom_rounded,
+                    'Inserir depois',
+                  ),
                   const PopupMenuDivider(),
-                  _menuItem('favorite', page.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, page.isFavorite ? 'Remover Favorito' : 'Marcar Favorito'),
+                  _menuItem(
+                    'favorite',
+                    page.isFavorite
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    page.isFavorite ? 'Remover Favorito' : 'Marcar Favorito',
+                  ),
                   _menuItem('duplicate', Icons.copy_rounded, 'Duplicar'),
-                  _menuItem('move_to', Icons.drive_file_move_outlined, 'Mover para caderno'),
-                  _menuItem('copy_to', Icons.content_copy_rounded, 'Copiar para caderno'),
+                  _menuItem(
+                    'move_to',
+                    Icons.drive_file_move_outlined,
+                    'Mover para caderno',
+                  ),
+                  _menuItem(
+                    'copy_to',
+                    Icons.content_copy_rounded,
+                    'Copiar para caderno',
+                  ),
                   const PopupMenuDivider(),
-                  _menuItem('delete', Icons.delete_outline_rounded, 'Apagar', isDestructive: true),
+                  _menuItem(
+                    'delete',
+                    Icons.delete_outline_rounded,
+                    'Apagar',
+                    isDestructive: true,
+                  ),
                 ],
               ),
             ),
@@ -586,15 +1018,30 @@ class _PageGridTile extends StatelessWidget {
     );
   }
 
-  PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {bool isDestructive = false}) {
+  PopupMenuItem<String> _menuItem(
+    String value,
+    IconData icon,
+    String label, {
+    bool isDestructive = false,
+  }) {
     return PopupMenuItem(
       value: value,
       height: 36,
       child: Row(
         children: [
-          Icon(icon, size: 16, color: isDestructive ? Colors.redAccent : Colors.black54),
+          Icon(
+            icon,
+            size: 16,
+            color: isDestructive ? Colors.redAccent : Colors.black54,
+          ),
           const SizedBox(width: 8),
-          Text(label, style: TextStyle(fontSize: 12, color: isDestructive ? Colors.redAccent : Colors.black87)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDestructive ? Colors.redAccent : Colors.black87,
+            ),
+          ),
         ],
       ),
     );
@@ -629,14 +1076,18 @@ class _PageListTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: isCurrent 
-                ? themeColor.withOpacity(0.05) 
-                : (page.isFavorite ? Colors.orange.withOpacity(0.03) : Colors.transparent),
+            color: isCurrent
+                ? themeColor.withOpacity(0.05)
+                : (page.isFavorite
+                      ? Colors.orange.withOpacity(0.03)
+                      : Colors.transparent),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isCurrent 
-                  ? themeColor.withOpacity(0.1) 
-                  : (page.isFavorite ? Colors.orange.withOpacity(0.1) : Colors.transparent)
+              color: isCurrent
+                  ? themeColor.withOpacity(0.1)
+                  : (page.isFavorite
+                        ? Colors.orange.withOpacity(0.1)
+                        : Colors.transparent),
             ),
           ),
           child: Row(
@@ -659,19 +1110,29 @@ class _PageListTile extends StatelessWidget {
                         if (page.isFavorite)
                           const Padding(
                             padding: EdgeInsets.only(right: 6),
-                            child: Icon(Icons.star_rounded, color: Colors.orange, size: 18),
+                            child: Icon(
+                              Icons.star_rounded,
+                              color: Colors.orange,
+                              size: 18,
+                            ),
                           ),
                         Expanded(
                           child: Text(
-                            page.title.isEmpty ? 'Página ${index + 1}' : page.title,
+                            page.title.isEmpty
+                                ? 'Página ${index + 1}'
+                                : page.title,
                             style: TextStyle(
-                              fontWeight: (isCurrent || page.isFavorite) ? FontWeight.bold : FontWeight.w500,
+                              fontWeight: (isCurrent || page.isFavorite)
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
                               fontSize: 13,
-                              color: isCurrent 
-                                  ? themeColor 
-                                  : (page.isFavorite 
-                                      ? Colors.orange.shade800 
-                                      : (page.sectionTitle != null ? themeColor.withOpacity(0.8) : Colors.black87)),
+                              color: isCurrent
+                                  ? themeColor
+                                  : (page.isFavorite
+                                        ? Colors.orange.shade800
+                                        : (page.sectionTitle != null
+                                              ? themeColor.withOpacity(0.8)
+                                              : Colors.black87)),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -682,31 +1143,75 @@ class _PageListTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       _getPageSubtitle(page), // 🚀 MUDANÇA
-                      style: const TextStyle(fontSize: 10, color: Colors.black38),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.black38,
+                      ),
                     ),
                   ],
                 ),
               ),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, size: 18, color: Colors.black26),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                icon: const Icon(
+                  Icons.more_vert_rounded,
+                  size: 18,
+                  color: Colors.black26,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 onSelected: onAction,
                 itemBuilder: (context) => [
                   _menuItem('rename', Icons.edit_outlined, 'Renomear'),
-                  _menuItem('settings', Icons.settings_outlined, 'Configurar'), // 🚀 NOVO
+                  _menuItem(
+                    'settings',
+                    Icons.settings_outlined,
+                    'Configurar',
+                  ), // 🚀 NOVO
                   _menuItem('section', Icons.folder_outlined, 'Mudar Secção'),
                   if (page.sectionTitle != null)
-                    _menuItem('remove_section', Icons.folder_off_outlined, 'Remover da Secção'),
+                    _menuItem(
+                      'remove_section',
+                      Icons.folder_off_outlined,
+                      'Remover da Secção',
+                    ),
                   const PopupMenuDivider(),
-                  _menuItem('add_before', Icons.vertical_align_top_rounded, 'Inserir antes'),
-                  _menuItem('add_after', Icons.vertical_align_bottom_rounded, 'Inserir depois'),
+                  _menuItem(
+                    'add_before',
+                    Icons.vertical_align_top_rounded,
+                    'Inserir antes',
+                  ),
+                  _menuItem(
+                    'add_after',
+                    Icons.vertical_align_bottom_rounded,
+                    'Inserir depois',
+                  ),
                   const PopupMenuDivider(),
-                  _menuItem('favorite', page.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded, page.isFavorite ? 'Remover Favorito' : 'Marcar Favorito'),
+                  _menuItem(
+                    'favorite',
+                    page.isFavorite
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    page.isFavorite ? 'Remover Favorito' : 'Marcar Favorito',
+                  ),
                   _menuItem('duplicate', Icons.copy_rounded, 'Duplicar'),
-                  _menuItem('move_to', Icons.drive_file_move_outlined, 'Mover para caderno'),
-                  _menuItem('copy_to', Icons.content_copy_rounded, 'Copiar para caderno'),
+                  _menuItem(
+                    'move_to',
+                    Icons.drive_file_move_outlined,
+                    'Mover para caderno',
+                  ),
+                  _menuItem(
+                    'copy_to',
+                    Icons.content_copy_rounded,
+                    'Copiar para caderno',
+                  ),
                   const PopupMenuDivider(),
-                  _menuItem('delete', Icons.delete_outline_rounded, 'Apagar', isDestructive: true),
+                  _menuItem(
+                    'delete',
+                    Icons.delete_outline_rounded,
+                    'Apagar',
+                    isDestructive: true,
+                  ),
                 ],
               ),
             ],
@@ -716,14 +1221,29 @@ class _PageListTile extends StatelessWidget {
     );
   }
 
-  PopupMenuItem<String> _menuItem(String value, IconData icon, String label, {bool isDestructive = false}) {
+  PopupMenuItem<String> _menuItem(
+    String value,
+    IconData icon,
+    String label, {
+    bool isDestructive = false,
+  }) {
     return PopupMenuItem(
       value: value,
       child: Row(
         children: [
-          Icon(icon, size: 18, color: isDestructive ? Colors.redAccent : Colors.black54),
+          Icon(
+            icon,
+            size: 18,
+            color: isDestructive ? Colors.redAccent : Colors.black54,
+          ),
           const SizedBox(width: 12),
-          Text(label, style: TextStyle(fontSize: 13, color: isDestructive ? Colors.redAccent : Colors.black87)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDestructive ? Colors.redAccent : Colors.black87,
+            ),
+          ),
         ],
       ),
     );
@@ -731,24 +1251,35 @@ class _PageListTile extends StatelessWidget {
 
   String _getPageSubtitle(LocalPage page) {
     if (page.isInfinite) return 'Página Infinita';
-    
+
     final String size = page.paperSize;
     final String orientation = page.isLandscape ? 'Horizontal' : 'Vertical';
     String typeLabel = 'Folha Normal';
-    
+
     switch (page.lineType) {
-      case 'ruled': typeLabel = 'Pautado'; break;
-      case 'grid': typeLabel = 'Quadriculado'; break;
-      case 'blank': typeLabel = 'Liso'; break;
-      case 'cornell': typeLabel = 'Cornell'; break;
-      case 'engineering': typeLabel = 'Engenharia'; break;
-      case 'dots': typeLabel = 'Pontilhado'; break;
+      case 'ruled':
+        typeLabel = 'Pautado';
+        break;
+      case 'grid':
+        typeLabel = 'Quadriculado';
+        break;
+      case 'blank':
+        typeLabel = 'Liso';
+        break;
+      case 'cornell':
+        typeLabel = 'Cornell';
+        break;
+      case 'engineering':
+        typeLabel = 'Engenharia';
+        break;
+      case 'dots':
+        typeLabel = 'Pontilhado';
+        break;
     }
-    
+
     return '$size $orientation • $typeLabel';
   }
 }
-
 
 class _PageThumbnail extends StatelessWidget {
   final String lineType;
@@ -772,9 +1303,11 @@ class _PageThumbnail extends StatelessWidget {
     // 🚀 AJUSTE DE PROPORÇÃO DINÂMICO
     double width = 38, height = 50;
     if (isInfinite) {
-      width = 45; height = 45; // Mais quadrado
+      width = 45;
+      height = 45; // Mais quadrado
     } else if (isLandscape) {
-      width = 50; height = 38; // Inverter
+      width = 50;
+      height = 38; // Inverter
     }
 
     return Container(
@@ -787,9 +1320,15 @@ class _PageThumbnail extends StatelessWidget {
           color: isSelected ? themeColor : Colors.black12,
           width: isSelected ? 1.5 : 0.8,
         ),
-        boxShadow: isSelected ? [
-          BoxShadow(color: themeColor.withOpacity(0.15), blurRadius: 4, spreadRadius: 1)
-        ] : null,
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: themeColor.withOpacity(0.15),
+                  blurRadius: 4,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
       child: Stack(
         children: [

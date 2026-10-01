@@ -63,6 +63,8 @@ class CollaborationRoomService extends ChangeNotifier {
   bool isCollaborationEnabled = false;
   bool isGlobalSyncing = false;
   String currentTemplateType = 'study';
+  String currentSyncStepMessage = '';
+  int currentSyncStepInt = 0; // 0=offline, 1=cloud_sync, 2=reverb_connect, 3=room_join, 4=ready
 
   bool isSessionLocked = false;
   bool isAuthorColorEnabled = false;
@@ -139,17 +141,29 @@ class CollaborationRoomService extends ChangeNotifier {
   // -------------------------------------------------------------------------
   // 🚀 [STREAMS] ALERTAS E EVENTOS
   // -------------------------------------------------------------------------
-  final StreamController<Map<String, dynamic>> _newMessageAlertController = StreamController.broadcast();
-  Stream<Map<String, dynamic>> get onNewMessageAlert => _newMessageAlertController.stream;
+  StreamController<Map<String, dynamic>> _newMessageAlertController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get onNewMessageAlert {
+    if (_newMessageAlertController.isClosed) _newMessageAlertController = StreamController.broadcast();
+    return _newMessageAlertController.stream;
+  }
 
-  final StreamController<String> _permissionAlertController = StreamController.broadcast();
-  Stream<String> get onPermissionAlert => _permissionAlertController.stream;
+  StreamController<String> _permissionAlertController = StreamController.broadcast();
+  Stream<String> get onPermissionAlert {
+    if (_permissionAlertController.isClosed) _permissionAlertController = StreamController.broadcast();
+    return _permissionAlertController.stream;
+  }
 
-  final StreamController<void> _notebookDeletedByOwnerController = StreamController.broadcast();
-  Stream<void> get onNotebookDeletedByOwner => _notebookDeletedByOwnerController.stream;
+  StreamController<void> _notebookDeletedByOwnerController = StreamController.broadcast();
+  Stream<void> get onNotebookDeletedByOwner {
+    if (_notebookDeletedByOwnerController.isClosed) _notebookDeletedByOwnerController = StreamController.broadcast();
+    return _notebookDeletedByOwnerController.stream;
+  }
 
-  final StreamController<Map<String, dynamic>> _sessionMetaStreamController = StreamController.broadcast();
-  Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream;
+  StreamController<Map<String, dynamic>> _sessionMetaStreamController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get onSessionMetaReceived {
+    if (_sessionMetaStreamController.isClosed) _sessionMetaStreamController = StreamController.broadcast();
+    return _sessionMetaStreamController.stream;
+  }
 
   // -------------------------------------------------------------------------
   // 🕒 [INTERNOS] TIMERS & SUBSCRIPTIONS
@@ -214,43 +228,102 @@ class CollaborationRoomService extends ChangeNotifier {
     String? alternativeTitle,
     String? sharingType,
   }) async {
+    _isDisposed = false;
     _liveNotebookSid = liveNotebookSid;
     _myUserId = myUserId;
     _currentUserRole = currentUserRole;
 
-    await _realtimeService.initConnection();
-
-    if (_statusListener != null) {
-      _realtimeService.statusNotifier.removeListener(_statusListener!);
-    }
-
-    _statusListener = () {
-      if (!_isDisposed && _realtimeService.isConnected) {
-        fetchSessionStatus(pageIds: pageIds, alternativeTitle: alternativeTitle, sharingType: sharingType);
-        _debounceRoomSync();
-        _startHeartbeat();
-        _startCleanupTimer();
-        _startBackgroundSync();
-
-        if (_currentUserRole == 'owner') {
-          _realtimeService.broadcastSessionMeta(
-            notebookId: _liveNotebookSid!,
-            metaData: {
-              'is_locked': isSessionLocked,
-              'is_colors_enabled': isAuthorColorEnabled,
-            },
-          );
-        }
-      }
-    };
-
-    _realtimeService.statusNotifier.addListener(_statusListener!);
-
-    if (_realtimeService.isConnected) {
-      _statusListener!();
-    }
-
     _setupSubscriptions();
+
+    // 🚀 Só entra na sala e conecta se a colaboração estiver HABILITADA
+    if (isCollaborationEnabled && _liveNotebookSid != null && _liveNotebookSid! > 0) {
+      await _connectAndJoinRoom(
+        pageIds: pageIds,
+        alternativeTitle: alternativeTitle,
+        sharingType: sharingType,
+      );
+    }
+  }
+
+  Future<void> _connectAndJoinRoom({
+    List<int>? pageIds,
+    String? alternativeTitle,
+    String? sharingType,
+  }) async {
+    if (_isDisposed || _liveNotebookSid == null || _liveNotebookSid == 0) return;
+
+    try {
+      currentSyncStepInt = 1;
+      currentSyncStepMessage = '1/3 Conectando ao servidor...';
+      _safeNotify();
+
+      await _realtimeService.initConnection();
+      await Future.delayed(const Duration(milliseconds: 350));
+
+      if (_statusListener != null) {
+        _realtimeService.statusNotifier.removeListener(_statusListener!);
+      }
+
+      _statusListener = () async {
+        if (!_isDisposed && isCollaborationEnabled && _liveNotebookSid != null && _liveNotebookSid! > 0) {
+          try {
+            currentSyncStepInt = 2;
+            currentSyncStepMessage = '2/3 Entrando na sala em tempo real...';
+            _safeNotify();
+
+            await _realtimeService.joinNotebookChannel(notebookId: _liveNotebookSid!);
+            await Future.delayed(const Duration(milliseconds: 350));
+
+            currentSyncStepInt = 3;
+            currentSyncStepMessage = '3/3 Sincronizando participantes...';
+            _safeNotify();
+
+            await fetchSessionStatus(
+              pageIds: pageIds,
+              alternativeTitle: alternativeTitle,
+              sharingType: sharingType,
+            );
+            await Future.delayed(const Duration(milliseconds: 350));
+
+            _debounceRoomSync();
+            _startHeartbeat();
+            _startCleanupTimer();
+            _startBackgroundSync();
+
+            if (_currentUserRole == 'owner') {
+              _realtimeService.broadcastSessionMeta(
+                notebookId: _liveNotebookSid!,
+                metaData: {
+                  'is_locked': isSessionLocked,
+                  'is_colors_enabled': isAuthorColorEnabled,
+                },
+              );
+            }
+          } catch (e) {
+            debugPrint('⚠️ [Collaboration] Erro em _statusListener: $e');
+          } finally {
+            if (isCollaborationEnabled) {
+              currentSyncStepInt = 4;
+              currentSyncStepMessage = '✨ Modo Online Ativo';
+              _safeNotify();
+            }
+          }
+        }
+      };
+
+      _realtimeService.statusNotifier.addListener(_statusListener!);
+
+      if (_realtimeService.isConnected) {
+        _statusListener!();
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Collaboration] Erro em _connectAndJoinRoom: $e');
+      if (isCollaborationEnabled) {
+        currentSyncStepInt = 4;
+        currentSyncStepMessage = '✨ Modo Online Ativo';
+        _safeNotify();
+      }
+    }
   }
 
   Future<void> toggleCollaboration(bool enable, {
@@ -266,49 +339,116 @@ class CollaborationRoomService extends ChangeNotifier {
     if (isCollaborationEnabled == enable) return;
 
     if (enable) {
-      isGlobalSyncing = true;
-      _safeNotify();
-      try {
-        await _syncService.pushNotebooks();
-        // Se tivermos os IDs, fazemos o push das páginas do caderno atual
-        final targetLocalId = localId ?? _localNotebookId;
-        final targetRemoteId = remoteId ?? _liveNotebookSid;
-        if (targetRemoteId != null && targetRemoteId != 0 && targetLocalId != null) {
-          await _syncService.pushPages(onlyNotebookId: targetLocalId);
-        }
-      } finally {
-        isGlobalSyncing = false;
-        _safeNotify();
-      }
-
+      _isDisposed = false;
       isCollaborationEnabled = true;
       SyncService.isCollaborationActive = true;
 
-      final targetRemoteId = remoteId ?? _liveNotebookSid;
+      int? effectiveRemoteId = remoteId ?? _liveNotebookSid;
+      final targetLocalId = localId ?? _localNotebookId;
+
+      // 1. Resolver rapidamente o ID remoto no banco se não informado
+      if ((effectiveRemoteId == null || effectiveRemoteId == 0) && targetLocalId != null) {
+        currentSyncStepMessage = 'A registrar caderno na nuvem...';
+        _safeNotify();
+        final nbRow = await (_repository.db.select(_repository.db.notebooks)..where((t) => t.id.equals(targetLocalId))).getSingleOrNull();
+        effectiveRemoteId = nbRow?.serverId;
+      }
+
+      final targetRemoteId = effectiveRemoteId ?? _liveNotebookSid;
       final targetUserId = userId ?? _myUserId;
       final targetRole = role ?? _currentUserRole ?? 'viewer';
 
-      if (targetRemoteId != null && targetRemoteId != 0 && targetUserId != null) {
-        _localNotebookId = localId ?? _localNotebookId;
-        await init(targetRemoteId, targetUserId, targetRole,
-            pageIds: pageIds, alternativeTitle: alternativeTitle, sharingType: sharingType);
-        
-        if (!suppressBroadcast) {
-          _realtimeService.broadcastLiveInvite(
-            notebookId: targetRemoteId,
-            myUserId: targetUserId,
-            senderName: "Um colega",
-            targetUserIds: [],
+      if (targetRemoteId != null && targetRemoteId != 0 && targetUserId != null && targetUserId.isNotEmpty) {
+        try {
+          _localNotebookId = targetLocalId;
+          _liveNotebookSid = targetRemoteId;
+          _myUserId = targetUserId;
+          _currentUserRole = targetRole;
+
+          _setupSubscriptions();
+
+          await _connectAndJoinRoom(
+            pageIds: pageIds,
+            alternativeTitle: alternativeTitle,
+            sharingType: sharingType,
           );
+
+          if (!suppressBroadcast) {
+            _realtimeService.broadcastLiveInvite(
+              notebookId: targetRemoteId,
+              myUserId: targetUserId,
+              senderName: "Um colega",
+              targetUserIds: [],
+            );
+          }
+
+          unawaited(Future(() async {
+            try {
+              isGlobalSyncing = true;
+              _safeNotify();
+              await _syncService.pushNotebooks().timeout(const Duration(seconds: 5), onTimeout: () => false);
+              if (targetLocalId != null) {
+                await _syncService.pushPages(
+                  onlyNotebookId: targetLocalId,
+                  onlyNotebookServerId: targetRemoteId,
+                ).timeout(const Duration(seconds: 5), onTimeout: () => false);
+              }
+            } catch (e) {
+              debugPrint('⚠️ [Collaboration] Sincronização em segundo plano: $e');
+            } finally {
+              isGlobalSyncing = false;
+              _safeNotify();
+            }
+          }));
+
+        } catch (e) {
+          debugPrint('🚨 [Collaboration] Falha ao ligar ao Reverb: $e');
+          currentSyncStepInt = -1;
+          currentSyncStepMessage = 'Erro de ligação ao servidor de tempo real.';
+          isCollaborationEnabled = false;
+          SyncService.isCollaborationActive = false;
+          _safeNotify();
         }
+      } else {
+        try {
+          await _syncService.pushNotebooks().timeout(const Duration(seconds: 4), onTimeout: () => false);
+          if (targetLocalId != null) {
+            final nbRow = await (_repository.db.select(_repository.db.notebooks)..where((t) => t.id.equals(targetLocalId))).getSingleOrNull();
+            effectiveRemoteId = nbRow?.serverId;
+          }
+        } catch (_) {}
+
+        if (effectiveRemoteId != null && effectiveRemoteId != 0) {
+          return toggleCollaboration(true,
+              localId: localId,
+              remoteId: effectiveRemoteId,
+              userId: userId,
+              role: role,
+              suppressBroadcast: suppressBroadcast,
+              pageIds: pageIds,
+              alternativeTitle: alternativeTitle,
+              sharingType: sharingType);
+        }
+
+        debugPrint('🚨 [Collaboration] ID remota do caderno indisponível ($targetRemoteId).');
+        currentSyncStepInt = -1;
+        currentSyncStepMessage = 'Não foi possível obter a ID remota do caderno na nuvem.';
+        isCollaborationEnabled = false;
+        SyncService.isCollaborationActive = false;
+        _safeNotify();
       }
     } else {
+      currentSyncStepInt = 0;
+      currentSyncStepMessage = 'Modo Offline';
       isCollaborationEnabled = false;
       SyncService.isCollaborationActive = false;
       isLiveSessionActive = false;
-      _realtimeService.disconnect();
+      onlineUsers.clear();
+      if (_liveNotebookSid != null) {
+        _realtimeService.leaveNotebookChannel(_liveNotebookSid!);
+      }
+      _safeNotify();
     }
-    _safeNotify();
   }
 
   void _setupSubscriptions() {
@@ -802,6 +942,9 @@ class CollaborationRoomService extends ChangeNotifier {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['active'] == true) {
+          if (data['user_role'] != null && data['user_role'].toString().isNotEmpty) {
+            _currentUserRole = data['user_role'].toString();
+          }
           authorityId = data['authority_id']?.toString();
           sessionTitle = data['alternative_title']?.toString();
           sessionVoiceMode = data['voice_mode'] ?? 'open';
@@ -1044,7 +1187,7 @@ class CollaborationRoomService extends ChangeNotifier {
   Future<void> fetchEnrolledMembers() async {
     if (_isDisposed || _liveNotebookSid == null) return;
     try {
-      final response = await _apiService.get('/notebooks/$_liveNotebookSid/members');
+      final response = await _apiService.get('/notebooks/$_liveNotebookSid/collaborators');
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
         enrolledMembers = data.map((m) => Map<String, dynamic>.from(m)).toList();
@@ -1155,7 +1298,7 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void _startHeartbeat() {
-    if (_currentUserRole != 'owner') return;
+    if (_currentUserRole != 'owner' && _currentUserRole != 'editor') return;
     _fingerprintTimer?.cancel();
     _fingerprintTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
@@ -1219,23 +1362,34 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   void leaveSession() {
-    _realtimeService.statusNotifier.removeListener(_statusListener!);
-    dispose();
+    if (_statusListener != null) {
+      _realtimeService.statusNotifier.removeListener(_statusListener!);
+    }
+    _cleanupSession();
+    _isDisposed = false;
+    _safeNotify();
   }
 
-  @override
-  void dispose() {
-    _isDisposed = true;
+  void _cleanupSession() {
     _viewportBroadcastTimer?.cancel();
     _fingerprintTimer?.cancel();
     _cleanupTimer?.cancel();
     _backgroundSyncTimer?.cancel();
     _roomSyncDebouncer?.cancel();
-    
-    for (var t in _reactionTimers.values) t.cancel();
-    for (var t in _broadcasterTimers.values) t.cancel();
-    for (var t in _editingTimers.values) t.cancel();
-    
+
+    for (var t in _reactionTimers.values) {
+      t.cancel();
+    }
+    _reactionTimers.clear();
+    for (var t in _broadcasterTimers.values) {
+      t.cancel();
+    }
+    _broadcasterTimers.clear();
+    for (var t in _editingTimers.values) {
+      t.cancel();
+    }
+    _editingTimers.clear();
+
     _usersSubscription?.cancel();
     _strokesSubscription?.cancel();
     _textSubscription?.cancel();
@@ -1267,21 +1421,32 @@ class CollaborationRoomService extends ChangeNotifier {
     _notebookStructureSubscription?.cancel();
     _voicePolicySubscription?.cancel();
     _cloudSyncSignalSubscription?.cancel();
-    
+
+    if (_liveNotebookSid != null) {
+      _realtimeService.leaveNotebookChannel(_liveNotebookSid!);
+      _liveNotebookSid = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _cleanupSession();
+
     _newMessageAlertController.close();
     _permissionAlertController.close();
     _notebookDeletedByOwnerController.close();
     _sessionMetaStreamController.close();
-    
+
     if (_statusListener != null) {
       _realtimeService.statusNotifier.removeListener(_statusListener!);
     }
-    
+
     super.dispose();
   }
 }
 
-final collaborationRoomServiceProvider = ChangeNotifierProvider.autoDispose<CollaborationRoomService>((ref) {
+final collaborationRoomServiceProvider = ChangeNotifierProvider<CollaborationRoomService>((ref) {
   final realtime = ref.read(realtimeServiceProvider);
   final api = ref.read(apiServiceProvider); // Assuming apiServiceProvider exists
   final sync = ref.read(appSyncServiceProvider);

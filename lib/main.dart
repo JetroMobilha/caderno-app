@@ -30,6 +30,8 @@ void main() async { // 🚀 Adicionado async
   );
 }
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
@@ -40,6 +42,7 @@ class MyApp extends ConsumerWidget {
     final dynamicTheme = ref.watch(appThemeProvider);
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Caderno Digital',
       debugShowCheckedModeBanner: false,
       theme: dynamicTheme, // Injeta o motor dinâmico

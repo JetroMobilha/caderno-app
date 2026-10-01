@@ -22,7 +22,7 @@ class LiveStrokeNotifier extends ChangeNotifier {
   
   BrushType _brushType = BrushType.gel;
   String _colorHex = '#000000';
-  double _thickness = 1.0;
+  double _thickness = 2.0;
   double _opacity = 1.0;
   bool _isHighlighter = false;
 

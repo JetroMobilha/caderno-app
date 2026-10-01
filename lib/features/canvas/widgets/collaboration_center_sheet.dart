@@ -7,7 +7,6 @@ import 'package:caderno_digital_app/features/auth/controllers/auth_controller.da
 import 'package:caderno_digital_app/features/canvas/providers/collaboration_provider.dart';
 import 'package:caderno_digital_app/features/canvas/services/collaboration_room_service.dart';
 import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet.dart';
-import 'package:caderno_digital_app/features/canvas/widgets/start_collaboration_sheet.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 
@@ -173,65 +172,19 @@ class CollaborationCenterSheet extends ConsumerWidget {
   }
 
   Widget _buildOnlineToggle(CollaborationRoomService collaboration, WidgetRef ref) {
-    return ValueListenableBuilder<RealtimeStatus>(
-      valueListenable: collaboration.statusNotifier,
-      builder: (context, status, _) {
-        final bool isSyncing = collaboration.isGlobalSyncing;
-        final bool isConnecting = status == RealtimeStatus.connecting;
-        final bool isLoading = isSyncing || (collaboration.isCollaborationEnabled && isConnecting);
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: collaboration.isCollaborationEnabled ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  if (isLoading)
-                    const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F4C5C)))
-                  else
-                    Icon(
-                      collaboration.isCollaborationEnabled ? Icons.wifi_tethering : Icons.wifi_tethering_off,
-                      color: collaboration.isCollaborationEnabled ? Colors.green : Colors.grey,
-                    ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isLoading ? (isSyncing ? 'A preparar dados...' : 'A ligar ao servidor...') : (collaboration.isCollaborationEnabled ? 'Modo Online Ativo' : 'Modo Offline'),
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87),
-                      ),
-                      Text(
-                        isLoading ? 'Por favor aguarda um momento' : (collaboration.isCollaborationEnabled ? 'Outros podem ver o teu progresso' : 'Privacidade total garantida'),
-                        style: GoogleFonts.inter(fontSize: 11, color: Colors.black45),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              if (!isLoading)
-                Switch(
-                  value: collaboration.isCollaborationEnabled,
-                  activeThumbColor: Colors.green,
-                  activeTrackColor: Colors.green.withOpacity(0.5),
-                  onChanged: (val) {
-                    final currentUser = ref.read(authProvider).currentUser;
-                    final String myUserId = currentUser?.id.toString() ?? '';
-                    
-                    collaboration.toggleCollaboration(val, 
-                      localId: notebook.id, 
-                      remoteId: notebook.serverId,
-                      userId: myUserId,
-                      role: notebook.role,
-                    );
-                  },
-                ),
-            ],
-          ),
+    return ListenableBuilder(
+      listenable: collaboration,
+      builder: (context, _) {
+        return ValueListenableBuilder<RealtimeStatus>(
+          valueListenable: collaboration.statusNotifier,
+          builder: (context, status, _) {
+            return _AnimatedOnlineToggleCard(
+              collaboration: collaboration,
+              status: status,
+              notebook: notebook,
+              ref: ref,
+            );
+          },
         );
       },
     );
@@ -670,6 +623,195 @@ class CollaborationCenterSheet extends ConsumerWidget {
               ),
             ],
           )
+        ],
+      ),
+    );
+  }
+}
+
+class _AnimatedOnlineToggleCard extends StatefulWidget {
+  final CollaborationRoomService collaboration;
+  final RealtimeStatus status;
+  final Notebook notebook;
+  final WidgetRef ref;
+
+  const _AnimatedOnlineToggleCard({
+    required this.collaboration,
+    required this.status,
+    required this.notebook,
+    required this.ref,
+  });
+
+  @override
+  State<_AnimatedOnlineToggleCard> createState() => _AnimatedOnlineToggleCardState();
+}
+
+class _AnimatedOnlineToggleCardState extends State<_AnimatedOnlineToggleCard> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final collaboration = widget.collaboration;
+    final isSyncing = collaboration.isGlobalSyncing;
+    final isConnecting = widget.status == RealtimeStatus.connecting;
+    final bool isOnline = collaboration.isCollaborationEnabled;
+    final bool isConnectingStep = isOnline &&
+        (collaboration.currentSyncStepInt > 0 && collaboration.currentSyncStepInt < 4);
+    final bool isLoading = isSyncing || isConnecting || isConnectingStep;
+
+    final Color cardBgColor = isOnline
+        ? const Color(0xFFE8F5E9)
+        : (isLoading ? const Color(0xFFFFF8E1) : const Color(0xFFF5F5F5));
+
+    final Color borderColor = isOnline
+        ? const Color(0xFF81C784)
+        : (isLoading ? const Color(0xFFFFB74D) : Colors.transparent);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOutCubic,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: cardBgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1.5),
+        boxShadow: isOnline
+            ? [
+                BoxShadow(
+                  color: Colors.green.withOpacity(0.12),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 3),
+                )
+              ]
+            : [],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                  child: isConnectingStep
+                      ? const SizedBox(
+                          key: ValueKey('loading_spinner'),
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF2E7D32)),
+                        )
+                      : Container(
+                          key: ValueKey(isOnline ? 'online_icon' : 'offline_icon'),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isOnline ? const Color(0xFFC8E6C9) : Colors.black.withOpacity(0.05),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isOnline ? Icons.wifi_tethering_rounded : Icons.wifi_tethering_off_rounded,
+                            color: isOnline ? const Color(0xFF2E7D32) : Colors.grey.shade600,
+                            size: 22,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 250),
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: isOnline ? const Color(0xFF1B5E20) : Colors.black87,
+                            ),
+                            child: Text(
+                              isConnectingStep
+                                  ? 'A Conectar (${collaboration.currentSyncStepInt}/3)...'
+                                  : (isOnline ? 'Modo Online Ativo ✨' : 'Modo Offline'),
+                            ),
+                          ),
+                          if (isOnline) ...[
+                            const SizedBox(width: 6),
+                            FadeTransition(
+                              opacity: Tween<double>(begin: 0.3, end: 1.0).animate(_pulseController),
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF2E7D32),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: Text(
+                          isConnectingStep
+                              ? (collaboration.currentSyncStepMessage.isNotEmpty
+                                  ? collaboration.currentSyncStepMessage
+                                  : 'Conectando ao servidor Reverb...')
+                              : (isOnline
+                                  ? 'Edição e colaboração em tempo real ativa'
+                                  : 'Privacidade total garantida'),
+                          key: ValueKey(isConnectingStep
+                              ? 'step_${collaboration.currentSyncStepInt}_${collaboration.currentSyncStepMessage}'
+                              : (isOnline ? 'online_sub' : 'offline_sub')),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: isOnline ? const Color(0xFF2E7D32) : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          // 🚀 SWITCH ANIMADO
+          Switch(
+            value: collaboration.isCollaborationEnabled,
+            activeThumbColor: const Color(0xFF2E7D32),
+            activeTrackColor: const Color(0xFFA5D6A7),
+            onChanged: (val) async {
+              final currentUser = widget.ref.read(authProvider).currentUser;
+              final String myUserId = (currentUser?.serverId ?? currentUser?.id)?.toString() ?? '';
+
+              await collaboration.toggleCollaboration(
+                val,
+                localId: widget.notebook.id,
+                remoteId: widget.notebook.serverId,
+                userId: myUserId,
+                role: widget.notebook.role,
+              );
+            },
+          ),
         ],
       ),
     );

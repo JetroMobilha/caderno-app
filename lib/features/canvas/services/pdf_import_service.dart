@@ -42,16 +42,17 @@ class PdfImportService {
     String? customTitle,
   }) async {
     try {
-      final pickerResult = await FilePickerPlatform.instance.pickFiles(
+      final pickerResult = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
+        withData: true,
       );
 
-      if (pickerResult.isEmpty) {
+      if (pickerResult == null || pickerResult.files.isEmpty) {
         return PdfImportResult(error: 'Nenhum arquivo selecionado.');
       }
 
-      final PlatformFile pickedFile = pickerResult.first;
+      final PlatformFile pickedFile = pickerResult.files.first;
       String? pdfPath = pickedFile.path;
       if (pdfPath == null || pdfPath.isEmpty) {
         try {

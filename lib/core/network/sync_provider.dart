@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/controllers/auth_controller.dart';
 import '../../features/auth/controllers/auth_state.dart';
@@ -9,7 +10,7 @@ import 'api_provider.dart';
 import 'realtime_service.dart';
 import 'sync_service.dart';
 
-class SyncNotifier extends StateNotifier<SyncState> {
+class SyncNotifier extends StateNotifier<SyncState> with WidgetsBindingObserver {
   final Ref ref;
   Timer? _syncTimer;
   Timer? _connectivityDebouncer; // 🚀 Debouncer de rede
@@ -17,6 +18,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
   final SyncService _syncService;
 
   SyncNotifier(this.ref, this._syncService) : super(SyncState.idle) {
+    WidgetsBinding.instance.addObserver(this);
+
     // 1. Iniciar o loop de sincronização periódica (Failsafe)
     _startAutoSync();
     
@@ -108,7 +111,19 @@ class SyncNotifier extends StateNotifier<SyncState> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed) {
+      final auth = ref.read(authProvider);
+      if (auth.isAuthenticated) {
+        debugPrint('📱 [Sync] App retoma primeiro plano (resumed). Disparando sincronização...');
+        performSync();
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _syncTimer?.cancel();
     _connectivitySubscription?.cancel();
     super.dispose();

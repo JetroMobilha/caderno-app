@@ -412,7 +412,12 @@ class LocalPage {
     if (val == null) return null;
     if (val is int) return val;
     if (val is num) return val.toInt();
-    if (val is String) return int.tryParse(val);
+    if (val is String) {
+      final parsedInt = int.tryParse(val);
+      if (parsedInt != null) return parsedInt;
+      final dt = DateTime.tryParse(val);
+      if (dt != null) return dt.millisecondsSinceEpoch;
+    }
     return null;
   }
 

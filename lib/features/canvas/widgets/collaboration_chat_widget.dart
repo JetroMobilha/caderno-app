@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../providers/collaboration_provider.dart';
+import '../services/collaboration_room_service.dart';
 import '../providers/audio_session_provider.dart';
 import '../../canvas/services/audio_session_service.dart';
 import '../../canvas/services/collaboration_room_service.dart';
@@ -38,7 +38,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
 
   @override
   Widget build(BuildContext context) {
-    final collabService = ref.watch(collaborationProvider);
+    final collabService = ref.watch(collaborationRoomServiceProvider);
     final audioService = ref.watch(audioSessionProvider);
     
     if (!collabService.isCollaborationEnabled) return const SizedBox.shrink();

@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
-import '../providers/collaboration_provider.dart';
+import '../services/collaboration_room_service.dart';
 import 'collaboration_center_sheet.dart';
 
 class CanvasAppBar extends ConsumerWidget implements PreferredSizeWidget {
@@ -16,7 +16,7 @@ class CanvasAppBar extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final docState = ref.watch(canvasDocumentProvider);
     final viewportState = ref.watch(canvasViewportProvider);
-    final collab = ref.watch(collaborationProvider);
+    final collab = ref.watch(collaborationRoomServiceProvider);
     final bool hasPages = docState.pages.isNotEmpty;
     final int onlineCount = collab.onlineUsers.length;
     final bool isCollabActive = collab.isCollaborationEnabled;

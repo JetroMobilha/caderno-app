@@ -62,7 +62,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
         templateType: widget.notebook.templateType,
       );
 
-      _collabService = _container?.read(collaborationProvider);
+      _collabService = _container?.read(collaborationRoomServiceProvider);
 
       _collabService?.getPages = () {
         if (_container == null) return [];
@@ -99,18 +99,23 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
 
   @override
   void dispose() {
-    if (_collabService != null) {
-      _collabService!.getPages = null;
-      _collabService!.getCurrentPageIndex = null;
-      _collabService!.getCurrentScale = null;
-      _collabService!.leaveSession();
+    final collabService = _collabService;
+    final container = _container;
+
+    if (collabService != null) {
+      collabService.getPages = null;
+      collabService.getCurrentPageIndex = null;
+      collabService.getCurrentScale = null;
     }
 
-    if (_container != null) {
-      _container!.read(canvasDocumentProvider.notifier).flushUnsyncedPages();
-      _container!.read(canvasDocumentProvider.notifier).reset();
-      _container!.read(canvasViewportProvider.notifier).reset();
-    }
+    Future.microtask(() {
+      collabService?.leaveSession();
+      if (container != null) {
+        container.read(canvasDocumentProvider.notifier).flushUnsyncedPages();
+        container.read(canvasDocumentProvider.notifier).reset();
+        container.read(canvasViewportProvider.notifier).reset();
+      }
+    });
 
     _textController.dispose();
     _textFocusNode.dispose();

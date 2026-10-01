@@ -6,6 +6,7 @@ import '../../notebooks/controllers/notebooks_controller.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../canvas/models/local_page_model.dart';
 import '../../canvas/repositories/canvas_repository.dart';
+import '../services/collaboration_room_service.dart';
 import 'start_collaboration_sheet.dart';
 
 class ShareNotebookBottomSheet extends ConsumerStatefulWidget {
@@ -44,7 +45,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
       _collaborators.add({
         'name': '${currentUser.name} (Tu)',
         'email': currentUser.email,
-        'role': 'owner'
+        'role': widget.notebook.role
       });
     }
 
@@ -65,6 +66,9 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
       }
 
       final serverList = await notifier.loadCollaborators(widget.notebook.serverId!);
+      if (currentUser != null) {
+        serverList.removeWhere((u) => u['email'] == currentUser.email);
+      }
       final repo = ref.read(canvasRepositoryProvider);
       final pages = await repo.getPagesByNotebook(widget.notebook.id!, widget.notebook.serverId);
 
@@ -103,6 +107,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
         _emailController.clear();
       });
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Convidado $email com sucesso! 🎓'), backgroundColor: const Color(0xFF0F4C5C)));
+      ref.read(collaborationRoomServiceProvider).fetchEnrolledMembers();
     } else {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao convidar. E-mail registado? ⚠️'), backgroundColor: Colors.redAccent));
     }
@@ -125,6 +130,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
     if (success) {
       setState(() => _collaborators.removeAt(index));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Acesso revogado com sucesso! 🗑️'), backgroundColor: Colors.green));
+      ref.read(collaborationRoomServiceProvider).fetchEnrolledMembers();
     }
   }
 
@@ -147,6 +153,8 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
         if (mounted) setState(() => _isLoading = false);
         if (success) {
           setState(() => _collaborators[index]['role'] = newRole);
+          ref.read(collaborationRoomServiceProvider).updateUserRoleLocally(targetId.toString(), newRole);
+          ref.read(collaborationRoomServiceProvider).fetchEnrolledMembers();
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Papel alterado para $newRole! 🎭')));
         }
       },
@@ -174,6 +182,8 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
   @override
   Widget build(BuildContext context) {
     final bool isUserOwner = widget.notebook.role == 'owner';
+    final bool isUserEditor = widget.notebook.role == 'editor';
+    final bool canManageUsers = isUserOwner || isUserEditor;
     final themeColor = const Color(0xFF0F4C5C);
 
     return Container(
@@ -251,7 +261,7 @@ class _ShareNotebookBottomSheetState extends ConsumerState<ShareNotebookBottomSh
                     leading: CircleAvatar(backgroundColor: isEntryOwner ? const Color(0xFFE67E22) : const Color(0xFF2C3E50), child: Text(user['name']![0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))), 
                     title: Text(user['name']!, style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)), 
                     subtitle: Text(email, style: GoogleFonts.inter(fontSize: 12, color: Colors.black54)), 
-                    trailing: (isUserOwner && !isEntryOwner) 
+                    trailing: (canManageUsers && !isEntryOwner) 
                       ? Row(
                           mainAxisSize: MainAxisSize.min, 
                           children: [ 

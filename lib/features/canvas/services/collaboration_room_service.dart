@@ -443,10 +443,44 @@ class CollaborationRoomService extends ChangeNotifier {
       isCollaborationEnabled = false;
       SyncService.isCollaborationActive = false;
       isLiveSessionActive = false;
+      
+      _cleanupSession();
+
       onlineUsers.clear();
-      if (_liveNotebookSid != null) {
-        _realtimeService.leaveNotebookChannel(_liveNotebookSid!);
-      }
+      remotePointers.value = {};
+      remoteLiveStrokes.value = {};
+      usersInLiveSession.clear();
+      userAudioLevels.clear();
+      userReactions.clear();
+      whoIsWatchingMe.clear();
+      remoteUploadingUsers.clear();
+      tearingPageClientIds.clear();
+      remoteMovingStrokeIds.clear();
+      userColorsMap.clear();
+      followingUserId = null;
+      isBroadcastingViewport = false;
+      incomingVoiceCall = null;
+      isConnectingVoice = false;
+      isMyHandRaised = false;
+      unreadChatCount = 0;
+      chatMessages.clear();
+
+      enrolledMembers.clear();
+      authorityId = null;
+      sessionTitle = null;
+      authorizedPageIds = null;
+      _lastRemoteStrokeUpdate.clear();
+      currentViewportCenter = null;
+      currentVisibleWidth = null;
+      lastScreenSize = null;
+      _lastSentViewportCenter = null;
+      remoteEditingTitles.clear();
+      _deniedActionKeys.clear();
+      isSessionLocked = false;
+      isAuthorColorEnabled = false;
+      sessionVoiceMode = 'open';
+      _isVoiceAuthorized = true;
+
       _safeNotify();
     }
   }
@@ -523,6 +557,11 @@ class CollaborationRoomService extends ChangeNotifier {
       final idx = onlineUsers.indexWhere((u) => u['id'].toString() == targetId);
       if (idx != -1) {
         onlineUsers[idx]['role'] = newRole;
+      }
+
+      final enrolledIdx = enrolledMembers.indexWhere((m) => m['id'].toString() == targetId);
+      if (enrolledIdx != -1) {
+        enrolledMembers[enrolledIdx]['role'] = newRole;
       }
       _safeNotify();
     });

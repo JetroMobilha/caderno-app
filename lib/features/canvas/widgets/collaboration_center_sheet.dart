@@ -10,7 +10,7 @@ import 'package:caderno_digital_app/features/canvas/widgets/share_notebook_sheet
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import 'package:caderno_digital_app/features/notebooks/controllers/notebooks_controller.dart';
 
-class CollaborationCenterSheet extends ConsumerWidget {
+class CollaborationCenterSheet extends ConsumerStatefulWidget {
   final Notebook notebook;
   final VoidCallback? onInviteTap;
 
@@ -21,17 +21,26 @@ class CollaborationCenterSheet extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final collaboration = ref.watch(collaborationProvider);
-    final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
-    final themeColor = const Color(0xFF0F4C5C);
+  ConsumerState<CollaborationCenterSheet> createState() => _CollaborationCenterSheetState();
+}
 
-    // 🚀 Carregar membros inscritos ao abrir
+class _CollaborationCenterSheetState extends ConsumerState<CollaborationCenterSheet> {
+  @override
+  void initState() {
+    super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (collaboration.enrolledMembers.isEmpty && collaboration.liveNotebookSid != null) {
+      final collaboration = ref.read(collaborationRoomServiceProvider);
+      if (collaboration.liveNotebookSid != null) {
         collaboration.fetchEnrolledMembers();
       }
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final collaboration = ref.watch(collaborationRoomServiceProvider);
+    final realtimeStatus = ref.watch(realtimeServiceProvider).statusNotifier;
+    final themeColor = const Color(0xFF0F4C5C);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7, minChildSize: 0.4, maxChildSize: 0.95, expand: false,
@@ -46,8 +55,8 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    if (onInviteTap != null)
-                      IconButton(onPressed: onInviteTap, icon: const Icon(Icons.settings_outlined, color: Colors.black45))
+                    if (widget.onInviteTap != null)
+                      IconButton(onPressed: widget.onInviteTap, icon: const Icon(Icons.settings_outlined, color: Colors.black45))
                     else
                       const SizedBox(width: 48),
                     Expanded(
@@ -72,7 +81,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
               _buildInternalVoiceInvite(collaboration),
               const SizedBox(height: 16),
             ],
-            _buildOnlineToggle(collaboration, ref),
+            _buildOnlineToggle(collaboration),
             const SizedBox(height: 16),
             // 🚀 Dinâmica de Sessão (Apenas para o Dono)
             if (collaboration.currentUserRole == 'owner' && collaboration.currentTemplateType == 'study' && collaboration.isCollaborationEnabled) ...[
@@ -102,7 +111,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _buildEnrolledMembersList(collaboration, context, ref),
+            _buildEnrolledMembersList(collaboration, context),
             
             const SizedBox(height: 32),
             ValueListenableBuilder<RealtimeStatus>(
@@ -140,8 +149,8 @@ class CollaborationCenterSheet extends ConsumerWidget {
                 );
               },
             ),
-            // 🚀 Gestão de Acessos (Apenas para o Dono)
-            if (collaboration.currentUserRole == 'owner') ...[
+            // 🚀 Gestão de Acessos (Apenas para o Dono e Editores)
+            if (collaboration.currentUserRole == 'owner' || collaboration.currentUserRole == 'editor') ...[
               const Divider(height: 32),
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -157,7 +166,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (context) => ShareNotebookBottomSheet(notebook: notebook),
+                        builder: (context) => ShareNotebookBottomSheet(notebook: widget.notebook),
                       );
                     },
                   ),
@@ -171,7 +180,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildOnlineToggle(CollaborationRoomService collaboration, WidgetRef ref) {
+  Widget _buildOnlineToggle(CollaborationRoomService collaboration) {
     return ListenableBuilder(
       listenable: collaboration,
       builder: (context, _) {
@@ -181,7 +190,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
             return _AnimatedOnlineToggleCard(
               collaboration: collaboration,
               status: status,
-              notebook: notebook,
+              notebook: widget.notebook,
               ref: ref,
             );
           },
@@ -213,7 +222,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildEnrolledMembersList(CollaborationRoomService collaboration, BuildContext context, WidgetRef ref) {
+  Widget _buildEnrolledMembersList(CollaborationRoomService collaboration, BuildContext context) {
     if (collaboration.enrolledMembers.isEmpty) return _buildEmptyState('Nenhum membro inscrito.');
     
     return ListView.separated(
@@ -292,8 +301,8 @@ class CollaborationCenterSheet extends ConsumerWidget {
                             Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
                         ],
                       ),
-                      if (collaboration.currentUserRole == 'owner')
-                        _buildRolePicker(context, ref, m, notebook.serverId!)
+                      if ((collaboration.currentUserRole == 'owner' || collaboration.currentUserRole == 'editor') && m['role'] != 'owner')
+                        _buildRolePicker(context, m, widget.notebook.serverId!)
                       else
                         _buildRoleBadge(m['role'] ?? 'student', isSmall: true),
                     ],
@@ -388,7 +397,7 @@ class CollaborationCenterSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildRolePicker(BuildContext context, WidgetRef ref, Map<String, dynamic> user, int notebookSid) {
+  Widget _buildRolePicker(BuildContext context, Map<String, dynamic> user, int notebookSid) {
     final String currentRole = user['role'] ?? 'student';
     final String email = user['email'] ?? '';
     return PopupMenuButton<String>(

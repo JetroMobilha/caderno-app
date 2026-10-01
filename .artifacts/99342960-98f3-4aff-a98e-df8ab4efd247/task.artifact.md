@@ -1,0 +1,7 @@
+- [x] Atualizar Centro de Colaboração (`collaboration_center_sheet.dart`) para recarregar membros reativamente.
+- [x] Atualizar Tela de Partilha (`share_notebook_sheet.dart`) para disparar atualizações e refletir imediatamente.
+- [x] Atualizar `collaboration_room_service.dart` para reset completo do estado ao desligar e atualização de membros via socket.
+- [x] Envolver a limpeza de providers no `dispose` de `canvas_screen.dart` dentro de um `Future.microtask`.
+- [x] Eliminar eventuais "leaks" de memória e dados não limpos, limpando os `StreamSubscriptions` persistentes do websocket.
+- [x] Reparar indicador da app bar substituindo o `collaborationProvider` pelo `collaborationRoomServiceProvider` verdadeiro.
+- [x] Permitir que os 'Editores' consigam alterar os papéis dos outros (excepto dos 'Donos') e convidar pessoas.

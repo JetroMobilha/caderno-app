@@ -16,6 +16,7 @@ class RealtimeService {
   PusherChannelsClient? _pusher;
   PresenceChannel? _notebookChannel;
   final Set<String> _boundEvents = {}; 
+  final Map<String, StreamSubscription> _eventSubscriptions = {};
   
   // 🛡️ Subscrições e Estado de Membros
   StreamSubscription? _subSucceededSub;
@@ -167,7 +168,7 @@ class RealtimeService {
     if (_notebookChannel == null) return;
     if (_boundEvents.contains(eventName)) return;
     _boundEvents.add(eventName);
-    _notebookChannel!.bind(eventName).listen(onEvent);
+    _eventSubscriptions[eventName] = _notebookChannel!.bind(eventName).listen(onEvent);
   }
 
   Map<String, dynamic> _safeParse(dynamic data) {
@@ -612,6 +613,12 @@ class RealtimeService {
 
   void leaveNotebookChannel(int notebookId) {
     debugPrint('🚪 [Realtime] A sair da sala do caderno $notebookId');
+    
+    for (var sub in _eventSubscriptions.values) {
+      sub.cancel();
+    }
+    _eventSubscriptions.clear();
+
     _subSucceededSub?.cancel();
     _memberAddedSub?.cancel();
     _memberRemovedSub?.cancel();

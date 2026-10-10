@@ -115,8 +115,10 @@ class SyncNotifier extends StateNotifier<SyncState> with WidgetsBindingObserver 
     if (lifecycleState == AppLifecycleState.resumed) {
       final auth = ref.read(authProvider);
       if (auth.isAuthenticated) {
-        debugPrint('📱 [Sync] App retoma primeiro plano (resumed). Disparando sincronização...');
-        performSync();
+        debugPrint('📱 [Sync] App retoma primeiro plano (resumed). Agendando sincronização não-bloqueante...');
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) performSync();
+        });
       }
     }
   }

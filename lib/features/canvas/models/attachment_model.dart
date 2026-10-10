@@ -78,6 +78,11 @@ class AttachmentObject implements PageObject {
   AttachmentObject copyWith({
     String? id,
     String? Function()? parentId,
+    String? fileName,
+    String? fileExtension,
+    int? fileSize,
+    String? localPath,
+    String? remoteUrl,
     Offset? position,
     Size? size,
     double? rotation,
@@ -96,11 +101,11 @@ class AttachmentObject implements PageObject {
     return AttachmentObject(
       id: id ?? this.id,
       parentId: parentId != null ? parentId() : this.parentId,
-      fileName: fileName,
-      fileExtension: fileExtension,
-      fileSize: fileSize,
-      localPath: localPath,
-      remoteUrl: remoteUrl,
+      fileName: fileName ?? this.fileName,
+      fileExtension: fileExtension ?? this.fileExtension,
+      fileSize: fileSize ?? this.fileSize,
+      localPath: localPath ?? this.localPath,
+      remoteUrl: remoteUrl ?? this.remoteUrl,
       position: position ?? this.position,
       size: size ?? this.size,
       rotation: rotation ?? this.rotation,
@@ -163,7 +168,7 @@ class AttachmentObject implements PageObject {
 
   factory AttachmentObject.fromJson(Map<String, dynamic> json) {
     return AttachmentObject(
-      id: json['id'],
+      id: json['id'] ?? const Uuid().v4(),
       parentId: json['parent_id'],
       fileName: json['file_name'] ?? 'ficheiro',
       fileExtension: json['file_ext'] ?? '',

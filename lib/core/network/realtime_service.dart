@@ -45,6 +45,7 @@ class RealtimeService {
   final _sessionMetaStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
   final _roleUpdateStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
   final _pointerStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _objectTransformStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _chatStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _audioMessageStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _chatSyncRequestController = StreamController<Map<String, dynamic>>.broadcast();
@@ -81,6 +82,7 @@ class RealtimeService {
   Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream; 
   Stream<Map<String, dynamic>> get onRoleUpdateReceived => _roleUpdateStreamController.stream; // 🚀 Novo
   Stream<Map<String, dynamic>> get onPointerMoveReceived => _pointerStreamController.stream;
+  Stream<Map<String, dynamic>> get onObjectTransformReceived => _objectTransformStreamController.stream;
   Stream<Map<String, dynamic>> get onChatMessageReceived => _chatStreamController.stream;
   Stream<Map<String, dynamic>> get onAudioMessageReceived => _audioMessageStreamController.stream;
   Stream<Map<String, dynamic>> get onChatSyncRequestReceived => _chatSyncRequestController.stream;
@@ -315,6 +317,7 @@ class RealtimeService {
     _bindEvent('client-role-updated', (event) => _roleUpdateStreamController.add(_safeParse(event.data))); // 🚀 Novo
     _bindEvent('client-user-activity', (event) => _activityStreamController.add(_safeParse(event.data)));
     _bindEvent('client-pointer-move', (event) => _pointerStreamController.add(_safeParse(event.data)));
+    _bindEvent('client-object-transform', (event) => _objectTransformStreamController.add(_safeParse(event.data)));
     _bindEvent('client-chat-message', (event) => _chatStreamController.add(_safeParse(event.data)));
     _bindEvent('client-audio-message', (event) => _audioMessageStreamController.add(_safeParse(event.data)));
     _bindEvent('client-chat-sync-request', (event) => _chatSyncRequestController.add(_safeParse(event.data)));
@@ -486,6 +489,33 @@ class RealtimeService {
     return true;
   }
 
+  Future<bool> broadcastObjectTransform({
+    required int notebookId, 
+    required String myUserId, 
+    required String pageClientId,
+    required String objectId, 
+    Offset? delta,
+    double? scale,
+    double? rotation,
+    Map<String, dynamic>? overrideState,
+    bool? isMoving,
+  }) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'sender_id': myUserId,
+      'page_client_id': pageClientId,
+      'object_id': objectId,
+      if (delta != null) 'dx': double.parse(delta.dx.toStringAsFixed(2)),
+      if (delta != null) 'dy': double.parse(delta.dy.toStringAsFixed(2)),
+      if (scale != null) 'scale': scale,
+      if (rotation != null) 'rotation': rotation,
+      if (overrideState != null) 'state': overrideState,
+      if (isMoving != null) 'is_moving': isMoving,
+    };
+    _notebookChannel!.trigger(eventName: 'client-object-transform', data: jsonEncode(data));
+    return true;
+  }
+
   Future<bool> broadcastChatMessage({required int notebookId, required String myUserId, required String message}) async {
     if (_notebookChannel == null) return false;
     final data = {
@@ -632,6 +662,18 @@ class RealtimeService {
   void disconnect() {
     _pusher?.disconnect();
     statusNotifier.value = RealtimeStatus.disconnected;
+  }
+
+  Future<void> reconnectIfNeeded() async {
+    debugPrint('🔄 [Realtime] A verificar saúde da ligação no regresso de hibernação...');
+    if (statusNotifier.value != RealtimeStatus.connected || _pusher == null) {
+      debugPrint('⚡ [Realtime] Reverb desligado ou instável pós-hibernação. A forçar reconexão limpa...');
+      try {
+        _pusher?.disconnect();
+      } catch (_) {}
+      statusNotifier.value = RealtimeStatus.disconnected;
+      await initConnection();
+    }
   }
 
   Future<void> listenToUserAccount(int userId, Function onGlobalSyncNeeded) async {

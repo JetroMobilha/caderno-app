@@ -8,6 +8,7 @@ import '../../models/local_page_model.dart';
 import '../../providers/canvas_ui_provider.dart';
 import '../../widgets/canvas_painter.dart';
 import '../../models/canvas_enums.dart';
+import '../../services/collaboration_room_service.dart';
 import 'selection_overlay.dart';
 
 /// 🚀 v10.80: Camada de Interação de Alta Fidelidade com Duelo de Intenções.
@@ -107,6 +108,9 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
     }
 
     if (event is PointerMoveEvent && (isTouch || isMouse || isStylus)) {
+      // 🚀 Enviar posição do cursor remotamente para modo imersivo
+      ref.read(collaborationRoomServiceProvider).broadcastPointer(event.localPosition, widget.page.pageNumber, toolState.activeTool.name);
+
       final validation = _pendingPointers[event.pointer];
       if (validation != null) {
         validation.currentPosition = event.localPosition;

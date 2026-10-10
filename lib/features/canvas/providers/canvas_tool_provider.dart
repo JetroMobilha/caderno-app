@@ -109,6 +109,9 @@ class CanvasInteractionState {
   final double replayProgress;
   final bool isReplaying;
 
+  // 🚀 Estado Mutável Temporário para Performance Live Crop/Table
+  final Map<String, PageObject> liveObjectOverrides;
+
   CanvasInteractionState({
     this.activeTool = ToolMode.pan,
     this.previousTool,
@@ -156,6 +159,7 @@ class CanvasInteractionState {
     this.ghostPathPoints = const [],
     this.replayProgress = 1.0,
     this.isReplaying = false,
+    this.liveObjectOverrides = const {},
   }) : _brushOpacity = brushOpacity,
        _selectedLineStyle = selectedLineStyle,
        _isTopToolbarVisible = isTopToolbarVisible,
@@ -206,6 +210,7 @@ class CanvasInteractionState {
     List<Offset>? ghostPathPoints,
     double? replayProgress,
     bool? isReplaying,
+    Map<String, PageObject>? liveObjectOverrides,
     List<ToolMode>? toolOrder,
     bool? isTopToolbarVisible,
   }) {
@@ -254,6 +259,7 @@ class CanvasInteractionState {
       ghostPathPoints: ghostPathPoints ?? this.ghostPathPoints,
       replayProgress: replayProgress ?? this.replayProgress,
       isReplaying: isReplaying ?? this.isReplaying,
+      liveObjectOverrides: liveObjectOverrides ?? this.liveObjectOverrides,
       toolOrder: toolOrder ?? this.toolOrder,
       isTopToolbarVisible: isTopToolbarVisible ?? this.isTopToolbarVisible,
     );
@@ -537,6 +543,18 @@ class CanvasInteractionNotifier extends AutoDisposeNotifier<CanvasInteractionSta
 
   void setReplayProgress(double v) => state = state.copyWith(replayProgress: v);
   void setIsReplaying(bool v) => state = state.copyWith(isReplaying: v);
+
+  void setLiveObjectOverride(PageObject obj) {
+    final newMap = Map<String, PageObject>.from(state.liveObjectOverrides);
+    newMap[obj.id] = obj;
+    state = state.copyWith(liveObjectOverrides: newMap);
+  }
+
+  void clearLiveObjectOverrides() {
+    if (state.liveObjectOverrides.isNotEmpty) {
+      state = state.copyWith(liveObjectOverrides: {});
+    }
+  }
 
   void setTableCellEditing(TableObject table, CellCoordinate coords) {
     final cellKey = TableCellKey(table.id, coords);

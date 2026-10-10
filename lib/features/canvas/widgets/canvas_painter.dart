@@ -274,7 +274,9 @@ class RemoteLiveStrokesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(RemoteLiveStrokesPainter oldDelegate) {
-    return oldDelegate.targetPageNumber != targetPageNumber || !mapEquals(oldDelegate.liveStrokes, liveStrokes);
+    // 🚀 v10.51: Retorna SEMPRE true para desenhar o traço ao vivo. O ValueNotifier já garante 
+    // que esta classe só seja re-instanciada quando existem modificações. Ignora o mapEquals.
+    return true;
   }
 }
 
@@ -322,7 +324,7 @@ Paint getPaintForBrush(BrushType type, Color color, double thickness, bool isHig
   switch (type) {
     case BrushType.gel: 
       return isHighlighter 
-          ? (paint..strokeCap = StrokeCap.square..blendMode = BlendMode.multiply) 
+          ? (paint..strokeCap = StrokeCap.square) 
           : paint;
     case BrushType.fountain: return paint;
     case BrushType.pencil: 

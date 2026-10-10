@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
 import '../services/collaboration_room_service.dart';
-import '../providers/collaboration_provider.dart';
 import '../providers/audio_session_provider.dart';
 import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
@@ -28,6 +27,8 @@ import '../../shared/widgets/color_engine_widget.dart'; // 🚀
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../models/local_page_model.dart';
+import '../providers/live_stroke_provider.dart';
+import '../../../core/network/realtime_service.dart';
 
 class CanvasScreen extends ConsumerStatefulWidget {
   final Notebook notebook;
@@ -38,7 +39,7 @@ class CanvasScreen extends ConsumerStatefulWidget {
   ConsumerState<CanvasScreen> createState() => _CanvasScreenState();
 }
 
-class _CanvasScreenState extends ConsumerState<CanvasScreen> {
+class _CanvasScreenState extends ConsumerState<CanvasScreen> with WidgetsBindingObserver {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
 
@@ -48,6 +49,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _container = ProviderScope.containerOf(context, listen: false);
@@ -98,7 +100,33 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      debugPrint('📱 [CanvasScreen] App entrou em segundo plano. Limpando toques e gestos...');
+      if (_container != null) {
+        try {
+          _container!.read(liveStrokeProvider).clear();
+          _container!.read(canvasViewportProvider.notifier).updatePointerCount(0);
+        } catch (e) {
+          debugPrint('⚠️ [CanvasScreen] Erro ao limpar estado na pausa: $e');
+        }
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      debugPrint('📱 [CanvasScreen] App retomou da hibernação. A verificar ligação WebSocket...');
+      if (_container != null) {
+        try {
+          final realtime = _container!.read(realtimeServiceProvider);
+          realtime.reconnectIfNeeded();
+        } catch (e) {
+          debugPrint('⚠️ [CanvasScreen] Erro ao reconectar no resume: $e');
+        }
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     final collabService = _collabService;
     final container = _container;
 

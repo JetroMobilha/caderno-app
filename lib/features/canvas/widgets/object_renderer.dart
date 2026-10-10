@@ -366,10 +366,29 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with TickerProv
     final toolState = ref.watch(canvasToolProvider);
     final bool isCropping = toolState.isImageCropping && toolState.selectedObjectIds.contains(img.id);
     final bool hasCrop = img.cropRect != null;
-    
+
     Widget baseImage(BoxFit fit, [Alignment alignment = Alignment.center]) {
-      final ImageProvider provider = img.imagePath.startsWith('http') 
-          ? NetworkImage(img.imagePath) 
+      final bool isHttp = img.imagePath.startsWith('http');
+      final bool localFileExists = !isHttp && io.File(img.imagePath).existsSync();
+
+      if (!isHttp && !localFileExists) {
+        return Container(
+          color: Colors.grey.withValues(alpha: 0.1),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(height: 6),
+                Text('A carregar imagem...', style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+          ),
+        );
+      }
+
+      final ImageProvider provider = isHttp
+          ? NetworkImage(img.imagePath)
           : FileImage(io.File(img.imagePath)) as ImageProvider;
 
       return Image(
@@ -764,33 +783,76 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with TickerProv
 
   Widget _buildAttachment(AttachmentObject attach) {
     return GestureDetector(
-      onDoubleTap: () => _openLocalFile(attach.localPath),
+      onDoubleTap: () => _openLocalFile(attach.localPath, attach.remoteUrl),
       child: Container(
-        width: attach.size.width, 
-        height: attach.size.height, 
+        width: attach.size.width,
+        height: attach.size.height,
         decoration: BoxDecoration(
-          color: Colors.white, 
-          borderRadius: BorderRadius.circular(10), 
-          border: Border.all(color: Colors.black.withValues(alpha: 0.1)), 
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
-        ), 
-        padding: const EdgeInsets.symmetric(horizontal: 10), 
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF5722), Color(0xFFFF9800)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF5722).withValues(alpha: 0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            )
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: [
-            Icon(attach.fileExtension.toLowerCase() == 'pdf' ? Icons.picture_as_pdf_rounded : Icons.insert_drive_file_rounded, color: const Color(0xFF0F4C5C), size: 24), 
-            const SizedBox(width: 10), 
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.25),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.push_pin_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center, 
-                crossAxisAlignment: CrossAxisAlignment.start, 
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(attach.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), 
-                  Text('${(attach.fileSize / 1024).toStringAsFixed(1)} KB', style: TextStyle(fontSize: 9, color: Colors.black.withValues(alpha: 0.4))),
-                ]
-              )
-            )
-          ]
-        )
+                  Text(
+                    attach.fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    attach.fileSize > 0
+                        ? '${(attach.fileSize / 1024).toStringAsFixed(1)} KB'
+                        : 'Anexo / Âncora',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.open_in_new_rounded,
+              color: Colors.white,
+              size: 14,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -803,9 +865,18 @@ class _ObjectRendererState extends ConsumerState<ObjectRenderer> with TickerProv
     }
   }
 
-  void _openLocalFile(String path) async {
-    final result = await OpenFilex.open(path);
-    debugPrint('OpenFile Result: ${result.message}');
+  void _openLocalFile(String path, [String? remoteUrl]) async {
+    if (path.isNotEmpty && io.File(path).existsSync()) {
+      final result = await OpenFilex.open(path);
+      debugPrint('OpenFile Result: ${result.message}');
+    } else if (remoteUrl != null && remoteUrl.isNotEmpty && remoteUrl.startsWith('http')) {
+      final Uri uri = Uri.parse(remoteUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } else {
+      debugPrint('⚠️ [ObjectRenderer] Ficheiro não encontrado no caminho local nem URL remoto.');
+    }
   }
 
   Widget _buildExplanation(ExplanationModel model) {

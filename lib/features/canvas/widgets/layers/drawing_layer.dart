@@ -78,6 +78,21 @@ class DrawingLayer extends ConsumerWidget {
               ),
             ),
           ),
+          
+          // 4. Camada de Ponteiros Remotos (Live - Cursos Flutuantes)
+          RepaintBoundary(
+            child: ValueListenableBuilder<Map<String, dynamic>>(
+              valueListenable: collabService.remotePointers,
+              builder: (context, pointersMap, _) => CustomPaint(
+                size: pageSize,
+                painter: RemotePointersPainter(
+                  pointers: pointersMap,
+                  onlineUsers: collabService.onlineUsers,
+                  targetPageNumber: page.pageNumber,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

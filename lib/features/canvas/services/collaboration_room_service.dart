@@ -16,6 +16,8 @@ import 'package:caderno_digital_app/features/canvas/models/stroke_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import 'package:caderno_digital_app/features/canvas/models/image_block_model.dart';
 
+import '../models/canvas_enums.dart';
+
 /// Service responsible for managing collaboration, presence, and real-time interaction
 /// in a notebook room. It extracts logic from CanvasController to keep it clean.
 class CollaborationRoomService extends ChangeNotifier {
@@ -42,6 +44,7 @@ class CollaborationRoomService extends ChangeNotifier {
   // -------------------------------------------------------------------------
   final ValueNotifier<Map<String, dynamic>> remotePointers = ValueNotifier({});
   final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier({});
+  final ValueNotifier<Map<String, Map<String, dynamic>>> remoteObjectTransforms = ValueNotifier({}); // 🚀 Novo
   final Set<String> usersInLiveSession = {};
   Map<String, double> userAudioLevels = {};
   List<Map<String, dynamic>> onlineUsers = [];
@@ -50,6 +53,7 @@ class CollaborationRoomService extends ChangeNotifier {
   final Set<String> remoteUploadingUsers = {};
   final Set<String> tearingPageClientIds = {};
   final Set<String> remoteMovingStrokeIds = {};
+  final Set<String> remoteMovingObjectIds = {}; // 🚀 Lock de Intenção para Objetos (Imagens, Textos, Tabelas, etc.)
   final Map<String, DateTime> _lastRemoteStrokeUpdate = {};
   final Map<String, Color> userColorsMap = {};
   final List<Color> avatarColorsPool = [
@@ -176,6 +180,7 @@ class CollaborationRoomService extends ChangeNotifier {
   StreamSubscription? _viewportSubscription;
   StreamSubscription? _activitySubscription;
   StreamSubscription? _pointerSubscription;
+  StreamSubscription? _objectTransformSubscription; // 🚀 Novo
   StreamSubscription? _chatSubscription;
   StreamSubscription? _audioMessageSubscription;
   StreamSubscription? _reactionSubscription;
@@ -288,7 +293,9 @@ class CollaborationRoomService extends ChangeNotifier {
             _debounceRoomSync();
             _startHeartbeat();
             _startCleanupTimer();
-            _startBackgroundSync();
+            // 🚀 v10.99: Removido o sincronismo periódico em background a pedido do utilizador,
+            // confiando inteiramente nos pushes a pedido (quando há alteração local) e no Reverb.
+            // _startBackgroundSync();
 
             if (_currentUserRole == 'owner') {
               _realtimeService.broadcastSessionMeta(
@@ -449,6 +456,7 @@ class CollaborationRoomService extends ChangeNotifier {
       onlineUsers.clear();
       remotePointers.value = {};
       remoteLiveStrokes.value = {};
+      remoteObjectTransforms.value = {}; // 🚀 Limpar
       usersInLiveSession.clear();
       userAudioLevels.clear();
       userReactions.clear();
@@ -456,6 +464,7 @@ class CollaborationRoomService extends ChangeNotifier {
       remoteUploadingUsers.clear();
       tearingPageClientIds.clear();
       remoteMovingStrokeIds.clear();
+      remoteMovingObjectIds.clear();
       userColorsMap.clear();
       followingUserId = null;
       isBroadcastingViewport = false;
@@ -599,10 +608,17 @@ class CollaborationRoomService extends ChangeNotifier {
 
     _strokesSubscription?.cancel();
     _strokesSubscription = rt.onStrokeReceived.listen((d) async {
-      if (_isDisposed || d['sender_id']?.toString() == _myUserId) return;
+      debugPrint('🟢 [Realtime] onStrokeReceived disparado! d: $d');
+      if (_isDisposed || d['sender_id']?.toString() == _myUserId) {
+        debugPrint('🟡 [Realtime] onStrokeReceived ignorado. isDisposed: $_isDisposed, sender: ${d['sender_id']}, myUser: $_myUserId');
+        return;
+      }
       
       final pages = getPages?.call() ?? [];
-      if (pages.isEmpty) return;
+      if (pages.isEmpty) {
+        debugPrint('🔴 [Realtime] onStrokeReceived abortado: pages está vazio!');
+        return;
+      }
 
       final String? pcid = d['page_client_id']?.toString();
       final int ipn = d['page_number'] ?? 0;
@@ -610,7 +626,12 @@ class CollaborationRoomService extends ChangeNotifier {
       int idx = -1;
       if (pcid != null) idx = pages.indexWhere((p) => p.clientId == pcid);
       if (idx == -1 && ipn > 0) idx = pages.indexWhere((p) => p.pageNumber == ipn);
-      if (idx == -1) return;
+      if (idx == -1) {
+        debugPrint('🔴 [Realtime] onStrokeReceived abortado: página não encontrada! pcid: $pcid, ipn: $ipn');
+        return;
+      }
+
+      debugPrint('✅ [Realtime] onStrokeReceived processando tinta na página $ipn');
 
       final tp = pages[idx];
       final List<PageObject> currentObjects = List<PageObject>.from(tp.objects);
@@ -619,6 +640,31 @@ class CollaborationRoomService extends ChangeNotifier {
 
       final curM = Map<String, Stroke>.from(remoteLiveStrokes.value);
       final bool isMove = d['is_move'] == true;
+
+      List<Offset> decodePoints(List rawPts, String? enc) {
+        final pts = <Offset>[];
+        if (rawPts.isEmpty) return pts;
+        
+        if (enc == 'd1') {
+          int currentX = (rawPts[0] as num).toInt();
+          int currentY = (rawPts[1] as num).toInt();
+          pts.add(Offset(currentX / 10.0, currentY / 10.0));
+          for (int i = 2; i < rawPts.length - 1; i += 2) {
+            currentX += (rawPts[i] as num).toInt();
+            currentY += (rawPts[i+1] as num).toInt();
+            pts.add(Offset(currentX / 10.0, currentY / 10.0));
+          }
+        } else if (rawPts.first is num) {
+          for (int i = 0; i < rawPts.length - 1; i += 2) {
+            pts.add(Offset((rawPts[i] as num).toDouble(), (rawPts[i+1] as num).toDouble()));
+          }
+        } else {
+          for (var p in rawPts) {
+            pts.add(Offset(((p['dx'] ?? p['x']) as num).toDouble(), ((p['dy'] ?? p['y']) as num).toDouble()));
+          }
+        }
+        return pts;
+      }
 
       for (var sm in d['strokes']) {
         final sid = sm['id'];
@@ -631,7 +677,7 @@ class CollaborationRoomService extends ChangeNotifier {
             hasPermanentChanges = true;
             if (remoteTs > maxRemoteTs) maxRemoteTs = remoteTs;
           }
-          _repository.deleteSingleStroke(sid);
+          _repository.deleteObjectById(sid);
           continue;
         }
 
@@ -647,24 +693,54 @@ class CollaborationRoomService extends ChangeNotifier {
             final baseS = tp.strokes.firstWhere((s) => s.id == sid, orElse: () => Stroke(color: '#000000', thickness: 1, points: []));
             curM[sid] = baseS.copyWith(liveOffset: off);
           } else {
-            final pts = (sm['points'] as List).map((p) => Offset(
-              ((p['dx'] ?? p['x']) as num).toDouble(),
-              ((p['dy'] ?? p['y']) as num).toDouble(),
-            )).toList();
+            final rawPts = sm['points'] as List;
+            final pts = decodePoints(rawPts, sm['pts_enc']);
+            debugPrint('🔥 [Live Stroke] raw: ${rawPts.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}');
             final exS = curM[sid];
             if (exS != null && !isMove) {
-              curM[sid] = Stroke(id: sid, color: exS.color, thickness: exS.thickness, points: List<Offset>.from(exS.points)..addAll(pts), pageNumber: ipn);
+              curM[sid] = Stroke(
+                id: sid, 
+                color: sm['color'] ?? exS.color, 
+                thickness: (sm['thickness'] as num?)?.toDouble() ?? exS.thickness, 
+                points: pts, // 🚀 Apenas substitui pela última coleção enviada, em vez de acumular duplicados!
+                pageNumber: ipn,
+                creatorId: d['sender_id']?.toString() ?? exS.creatorId,
+                brushType: sm['brush_type'] != null ? BrushType.values.firstWhere((e) => e.name == sm['brush_type'], orElse: () => BrushType.gel) : exS.brushType,
+                isHighlighter: sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
+                opacity: (sm['opacity'] as num?)?.toDouble() ?? exS.opacity,
+              );
             } else {
-              curM[sid] = Stroke(id: sid, color: sm['color'], thickness: (sm['thickness'] as num).toDouble(), points: pts, pageNumber: ipn);
+              curM[sid] = Stroke(
+                id: sid, 
+                color: sm['color'] ?? '#000000', 
+                thickness: (sm['thickness'] as num?)?.toDouble() ?? 1.0, 
+                points: pts, 
+                pageNumber: ipn,
+                creatorId: d['sender_id']?.toString(),
+                brushType: sm['brush_type'] != null ? BrushType.values.firstWhere((e) => e.name == sm['brush_type'], orElse: () => BrushType.gel) : BrushType.gel,
+                isHighlighter: sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
+                opacity: (sm['opacity'] as num?)?.toDouble() ?? 1.0,
+              );
             }
           }
         } else {
           final int remoteTs = sm['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
-          final pts = (sm['points'] as List).map((p) => Offset(
-            ((p['dx'] ?? p['x']) as num).toDouble(),
-            ((p['dy'] ?? p['y']) as num).toDouble(),
-          )).toList();
-          final ns = Stroke(id: sid, color: sm['color'], thickness: (sm['thickness'] as num).toDouble(), points: pts, pageNumber: ipn, updatedAt: remoteTs);
+          final rawPts2 = sm['points'] as List;
+          final pts = decodePoints(rawPts2, sm['pts_enc']);
+          debugPrint('🔥 [Final Stroke] raw: ${rawPts2.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}');
+          
+          final ns = Stroke(
+            id: sid, 
+            color: sm['color'] ?? '#000000', 
+            thickness: (sm['thickness'] as num?)?.toDouble() ?? 1.0, 
+            points: pts, 
+            pageNumber: ipn, 
+            updatedAt: remoteTs,
+            creatorId: d['sender_id']?.toString(),
+            brushType: sm['brush_type'] != null ? BrushType.values.firstWhere((e) => e.name == sm['brush_type'], orElse: () => BrushType.gel) : BrushType.gel,
+            isHighlighter: sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
+            opacity: (sm['opacity'] as num?)?.toDouble() ?? 1.0,
+          );
 
           final objIdx = currentObjects.indexWhere((o) => o.id == sid);
           if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) {
@@ -687,7 +763,7 @@ class CollaborationRoomService extends ChangeNotifier {
       if (hasPermanentChanges && onApplyRemoteChange != null) {
         await onApplyRemoteChange!(tp.clientId, currentObjects, maxRemoteTs);
       }
-      _safeNotify();
+      // REMOVIDO: _safeNotify(); para não reconstruir toda a UI a cada chunk de tinta, o que causava perda de fluidez.
       if (onStrokeReceived != null) await onStrokeReceived!(d);
     });
 
@@ -712,12 +788,14 @@ class CollaborationRoomService extends ChangeNotifier {
       
       if (d['is_deleted'] == true) {
         currentObjects.removeWhere((t) => t.id == bid);
+        _repository.deleteObjectById(bid);
       } else {
         final objIdx = currentObjects.indexWhere((t) => t.id == bid);
         if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) return;
 
         final nb = TextBlock.fromJson(bd);
         if (objIdx != -1) currentObjects[objIdx] = nb; else currentObjects.add(nb);
+        _repository.saveSingleTextBlock(tp.clientId, nb, pageId: tp.id, updatedAt: remoteTs);
       }
       
       if (onApplyRemoteChange != null) {
@@ -748,12 +826,14 @@ class CollaborationRoomService extends ChangeNotifier {
       
       if (d['is_deleted'] == true) {
         currentObjects.removeWhere((i) => i.id == bid);
+        _repository.deleteObjectById(bid);
       } else {
         final objIdx = currentObjects.indexWhere((i) => i.id == bid);
         if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) return;
 
         final nib = ImageBlock.fromJson(bd);
         if (objIdx != -1) currentObjects[objIdx] = nib; else currentObjects.add(nib);
+        _repository.saveSingleImageBlock(tp.clientId, nib, pageId: tp.id, updatedAt: remoteTs);
       }
       
       if (onApplyRemoteChange != null) {
@@ -849,6 +929,33 @@ class CollaborationRoomService extends ChangeNotifier {
         'role': onlineUsers.firstWhere((u) => u['id'].toString() == uid, orElse: () => {})['role'] ?? 'student'
       };
       remotePointers.value = cur;
+    });
+
+    _objectTransformSubscription?.cancel();
+    _objectTransformSubscription = rt.onObjectTransformReceived.listen((d) {
+      if (_isDisposed) return;
+      final uid = d['sender_id'].toString();
+      if (uid == _myUserId) return;
+
+      final objId = d['object_id']?.toString();
+      if (objId == null) return;
+
+      final bool? isMoving = d['is_moving'] as bool?;
+      if (isMoving == true) {
+        remoteMovingObjectIds.add(objId);
+      } else if (isMoving == false) {
+        remoteMovingObjectIds.remove(objId);
+      }
+
+      final cur = Map<String, Map<String, dynamic>>.from(remoteObjectTransforms.value);
+      cur[objId] = {
+        if (d['dx'] != null) 'dx': (d['dx'] as num).toDouble(),
+        if (d['dy'] != null) 'dy': (d['dy'] as num).toDouble(),
+        if (d['scale'] != null) 'scale': (d['scale'] as num).toDouble(),
+        if (d['rotation'] != null) 'rotation': (d['rotation'] as num).toDouble(),
+        if (d['state'] != null) 'state': d['state'],
+      };
+      remoteObjectTransforms.value = cur;
     });
 
     _chatSubscription?.cancel();
@@ -1099,8 +1206,19 @@ class CollaborationRoomService extends ChangeNotifier {
     _realtimeService.broadcastChatMessage(notebookId: _liveNotebookSid!, myUserId: _myUserId!, message: m);
   }
 
+  Offset? _lastPointerPos;
+  DateTime _lastPointerBroadcastTime = DateTime.now();
+
   void broadcastPointer(Offset pos, int pageNumber, String tool) {
     if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+    
+    final now = DateTime.now();
+    if (_lastPointerPos != null && (pos - _lastPointerPos!).distance < 1.0) return;
+    if (now.difference(_lastPointerBroadcastTime).inMilliseconds < 16) return; // 🚀 60 fps para cursores ultra fluidos
+    
+    _lastPointerPos = pos;
+    _lastPointerBroadcastTime = now;
+
     _realtimeService.broadcastPointerMove(
       notebookId: _liveNotebookSid!,
       myUserId: _myUserId!,
@@ -1384,12 +1502,12 @@ class CollaborationRoomService extends ChangeNotifier {
         }
         if (changed) {
           remoteLiveStrokes.value = curM;
-          _safeNotify();
         }
       }
     });
   }
 
+  // 🚀 Desativado a pedido do utilizador para evitar pushes vazios
   void _startBackgroundSync() {
     _backgroundSyncTimer?.cancel();
     _backgroundSyncTimer = Timer.periodic(const Duration(minutes: 2), (timer) async {
@@ -1399,6 +1517,7 @@ class CollaborationRoomService extends ChangeNotifier {
       _safeNotify();
     });
   }
+
 
   void leaveSession() {
     if (_statusListener != null) {
@@ -1436,6 +1555,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _viewportSubscription?.cancel();
     _activitySubscription?.cancel();
     _pointerSubscription?.cancel();
+    _objectTransformSubscription?.cancel();
     _chatSubscription?.cancel();
     _audioMessageSubscription?.cancel();
     _reactionSubscription?.cancel();

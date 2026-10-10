@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async'; // 🚀 Import do Timer para Debounce
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,7 +13,7 @@ import '../../models/local_page_model.dart';
 import '../../models/canvas_enums.dart';
 
 /// 🚀 v9.7: Camada de edição imutável e fortemente tipada.
-class LiveTextEditLayer extends ConsumerWidget {
+class LiveTextEditLayer extends ConsumerStatefulWidget {
   final LocalPage page;
   final TextEditingController textController;
   final FocusNode textFocusNode;
@@ -27,7 +28,20 @@ class LiveTextEditLayer extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LiveTextEditLayer> createState() => _LiveTextEditLayerState();
+}
+
+class _LiveTextEditLayerState extends ConsumerState<LiveTextEditLayer> {
+  Timer? _debounce; // 🚀 Timer para Debounce do texto
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // 🚀 v10.85: Seletores otimizados para evitar re-renderizações por movimentos de outros objetos
     final activeBlock = ref.watch(canvasToolProvider.select((s) => s.activeTextBlock));
     final activeTableId = ref.watch(canvasToolProvider.select((s) => s.activeTableId));
@@ -52,11 +66,11 @@ class LiveTextEditLayer extends ConsumerWidget {
                     width: 400,
                     child: TextField(
                       textAlign: TextAlign.center, autofocus: true,
-                      controller: textController, focusNode: textFocusNode,
+                      controller: widget.textController, focusNode: widget.textFocusNode,
                       style: _getSafeTextStyle('Lora', fontSize: 28, fontWeight: FontWeight.bold),
                       decoration: const InputDecoration(border: InputBorder.none, hintText: 'Título'),
                       onSubmitted: (v) {
-                        final updatedPage = page.copyWith(title: v);
+                        final updatedPage = widget.page.copyWith(title: v);
                         ref.read(canvasDocumentProvider.notifier).renamePage(updatedPage, v);
                         ref.read(canvasToolProvider.notifier).clearTextEditing();
                       },
@@ -82,7 +96,7 @@ class LiveTextEditLayer extends ConsumerWidget {
     Offset position = block.position; // 🚀 v10.60: Posição dinâmica reativa
     
     if (isProxy && activeTableId != null && toolState.activeTableCell != null) {
-       final table = page.objects.whereType<TableObject>().where((t) => t.id == activeTableId).firstOrNull;
+       final table = widget.page.objects.whereType<TableObject>().where((t) => t.id == activeTableId).firstOrNull;
        if (table != null) {
           final CellCoordinate coords = toolState.activeTableCell!.coordinate;
           
@@ -175,7 +189,7 @@ class LiveTextEditLayer extends ConsumerWidget {
                   ),
                 ),
               TextField(
-                controller: textController, focusNode: textFocusNode, maxLines: null, autofocus: true, textAlign: block.textAlign,
+                controller: widget.textController, focusNode: widget.textFocusNode, maxLines: null, autofocus: true, textAlign: block.textAlign,
                 style: _getSafeTextStyle(
                   block.fontFamily,
                   fontSize: block.fontSize,
@@ -191,7 +205,7 @@ class LiveTextEditLayer extends ConsumerWidget {
                 decoration: InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.only(left: (block.listType != ListType.none) ? 28 : 4, right: 4, top: 4, bottom: isProxy ? 4 : 60), isDense: true, hintText: isProxy ? '' : 'Escreva aqui...'),
                 onChanged: (v) {
                   String finalValue = v;
-                  final selection = textController.selection;
+                  final selection = widget.textController.selection;
 
                   if (v.length > block.text.length && selection.baseOffset > 0) {
                     final lastChar = v[selection.baseOffset - 1];
@@ -210,8 +224,8 @@ class LiveTextEditLayer extends ConsumerWidget {
                           final newValue = v.substring(0, selection.baseOffset) + spacesStr + v.substring(selection.baseOffset);
                           finalValue = newValue;
 
-                          textController.text = newValue;
-                          textController.selection = TextSelection.fromPosition(
+                          widget.textController.text = newValue;
+                          widget.textController.selection = TextSelection.fromPosition(
                             TextPosition(offset: selection.baseOffset + spacesCount),
                           );
                         }
@@ -225,7 +239,7 @@ class LiveTextEditLayer extends ConsumerWidget {
                     _syncProxyToTable(ref, updatedBlock);
                     _autoAdjustRowHeight(finalValue, updatedBlock, editorWidth, ref);
                   } else {
-                    ref.read(canvasDocumentProvider.notifier).updateObject(page, updatedBlock);
+                    ref.read(canvasDocumentProvider.notifier).updateObject(widget.page, updatedBlock);
                   }
                 },
                 onSubmitted: (_) => ref.read(canvasToolProvider.notifier).stopEditing(),
@@ -240,7 +254,7 @@ class LiveTextEditLayer extends ConsumerWidget {
   void _syncProxyToTable(WidgetRef ref, TextBlock proxy) {
     final toolState = ref.read(canvasToolProvider);
     if (toolState.activeTableId == null || toolState.activeTableCell == null) return;
-    final table = page.objects.whereType<TableObject>().where((t) => t.id == toolState.activeTableId).firstOrNull;
+    final table = widget.page.objects.whereType<TableObject>().where((t) => t.id == toolState.activeTableId).firstOrNull;
     if (table == null) return;
     final CellCoordinate coords = toolState.activeTableCell!.coordinate;
     final currentCell = table.cells[coords] ?? TableCellModel();
@@ -258,7 +272,7 @@ class LiveTextEditLayer extends ConsumerWidget {
 
     final Map<CellCoordinate, TableCellModel> newCells = Map.from(table.cells);
     newCells[coords] = updatedCell;
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(cells: newCells));
+    ref.read(canvasDocumentProvider.notifier).updateObject(widget.page, table.copyWith(cells: newCells));
   }
 
   double _calculateHeight(String text, String? fontFamily, double fontSize, double lineHeight, double width, bool hasList) {
@@ -276,7 +290,7 @@ class LiveTextEditLayer extends ConsumerWidget {
     final toolState = ref.read(canvasToolProvider);
     if (toolState.activeTableId == null || toolState.activeTableCell == null) return;
     
-    final table = page.objects.whereType<TableObject>().where((t) => t.id == toolState.activeTableId).firstOrNull;
+    final table = widget.page.objects.whereType<TableObject>().where((t) => t.id == toolState.activeTableId).firstOrNull;
     if (table == null) return;
     
     final int rowIndex = toolState.activeTableCell!.coordinate.row;
@@ -298,7 +312,7 @@ class LiveTextEditLayer extends ConsumerWidget {
       
       // 🚀 v10.85: Adiamento de mutação de estado para evitar colisão no ciclo de build
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights));
+        ref.read(canvasDocumentProvider.notifier).updateObject(widget.page, table.copyWith(rowHeights: newHeights));
       });
     }
   }

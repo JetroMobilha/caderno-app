@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/local_page_model.dart';
+import '../models/stroke_model.dart';
+import '../models/page_object.dart';
+import '../models/image_block_model.dart';
+import '../models/table_model.dart';
 import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_render_provider.dart'; // 🚀 NOVO
 import '../providers/canvas_document_provider.dart';
+import '../services/collaboration_room_service.dart';
 import 'canvas_painter.dart';
 import 'object_renderer.dart';
 
@@ -37,6 +42,7 @@ class PageCanvas extends ConsumerWidget {
     }
 
     final toolState = ref.watch(canvasToolProvider);
+    final collabService = ref.watch(collaborationRoomServiceProvider);
     final renderList = ref.watch(canvasRenderProvider(page.clientId)); // 🚀 v9.0
 
     final List<Widget> widgets = [];
@@ -52,19 +58,50 @@ class PageCanvas extends ConsumerWidget {
                 selectedStrokeIds: toolState.selectedStrokeIds, 
                 selectionRect: null,
                 pageVersion: page.version,
+                remoteMovingStrokeIds: collabService.remoteMovingStrokeIds,
+                userColors: collabService.userColorsMap,
+                isAuthorColorEnabled: collabService.isAuthorColorEnabled,
                 selectionDelta: toolState.totalSelectionDelta,
               ),
             ),
           ),
         );
       } else if (item is ObjectRenderItem) {
-        widgets.add(ObjectRenderer(
-          object: item.object, 
-          isReadOnly: isReadOnly,
-          movementDelta: item.isSelected ? toolState.totalSelectionDelta : null,
-          liveScale: item.isSelected ? toolState.liveScale : null,
-          liveRotation: item.isSelected ? toolState.liveRotation : null,
-          livePositionDelta: item.isSelected ? toolState.livePositionDelta : null,
+        final localOverride = toolState.liveObjectOverrides[item.object.id];
+        final effectiveObject = localOverride ?? item.object;
+
+        widgets.add(ValueListenableBuilder<Map<String, Map<String, dynamic>>>(
+          valueListenable: collabService.remoteObjectTransforms,
+          builder: (context, transforms, child) {
+            final remoteTx = transforms[item.object.id];
+            
+            Offset? finalDelta = item.isSelected ? toolState.totalSelectionDelta : null;
+            Size? finalScale = item.isSelected ? toolState.liveScale : null;
+            double? finalRotation = item.isSelected ? toolState.liveRotation : null;
+            PageObject renderObj = effectiveObject;
+
+            if (!item.isSelected && remoteTx != null) {
+              finalDelta = Offset(remoteTx['dx'] ?? 0.0, remoteTx['dy'] ?? 0.0);
+              if (remoteTx['scale'] != null) finalScale = Size(remoteTx['scale'], remoteTx['scale']);
+              if (remoteTx['rotation'] != null) finalRotation = remoteTx['rotation'];
+              
+              if (remoteTx['state'] != null) {
+                final stateMap = Map<String, dynamic>.from(remoteTx['state']);
+                if (renderObj is ImageBlock) renderObj = ImageBlock.fromJson(stateMap);
+                else if (renderObj is TableObject) renderObj = TableObject.fromJson(stateMap);
+                else if (renderObj is Stroke) renderObj = Stroke.fromJson(stateMap);
+              }
+            }
+
+            return ObjectRenderer(
+              object: renderObj,
+              isReadOnly: isReadOnly,
+              movementDelta: finalDelta,
+              liveScale: finalScale,
+              liveRotation: finalRotation,
+              livePositionDelta: item.isSelected ? toolState.livePositionDelta : null,
+            );
+          },
         ));
       }
     }
@@ -109,6 +146,35 @@ class PageCanvas extends ConsumerWidget {
             ),
           ),
           ...widgets,
+          // 🚀 Camada de Traços Remotos (Live - Alta Frequência)
+          RepaintBoundary(
+            child: ValueListenableBuilder<Map<String, Stroke>>(
+              valueListenable: collabService.remoteLiveStrokes,
+              builder: (context, remoteMap, _) => CustomPaint(
+                size: pageSize,
+                painter: RemoteLiveStrokesPainter(
+                  liveStrokes: remoteMap,
+                  targetPageNumber: page.pageNumber,
+                  userColors: collabService.userColorsMap,
+                  isAuthorColorEnabled: collabService.isAuthorColorEnabled,
+                )
+              ),
+            ),
+          ),
+          // 🚀 Camada de Ponteiros Remotos (Live - Cursos Flutuantes)
+          RepaintBoundary(
+            child: ValueListenableBuilder<Map<String, dynamic>>(
+              valueListenable: collabService.remotePointers,
+              builder: (context, pointersMap, _) => CustomPaint(
+                size: pageSize,
+                painter: RemotePointersPainter(
+                  pointers: pointersMap,
+                  onlineUsers: collabService.onlineUsers,
+                  targetPageNumber: page.pageNumber,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

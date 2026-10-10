@@ -1,68 +1,66 @@
-# Plano de Implementação: Correção de Erro de Modificação de Provider Durante o Descarte da Widget Tree
+# Plano de Implementação: Bloqueio de Movimento Simultâneo e Upload Server de Anexos/Âncoras
 
-Foi identificado um erro nos logs após sair do ecrã de um caderno:
-```
-The following assertion was thrown while dispatching notifications for CollaborationRoomService:
-Tried to modify a provider while the widget tree was building.
-...
-#7      CollaborationRoomService.leaveSession
-#8      _CanvasScreenState.dispose
-```
-E também para o reset do documento:
-```
-#5      CanvasDocumentNotifier.reset
-#6      _CanvasScreenState.dispose
-```
+Este plano especifica a solução técnica para:
+1. Eliminar o conflito de coordenadas quando dois utilizadores tentam mover o mesmo objeto ao mesmo tempo.
+2. Garantir o upload dos ficheiros das âncoras/anexos para o servidor Laravel (`caderno-backend`), permitindo que qualquer colaborador descarregue e abra o anexo.
 
-## Análise do Problema
-O erro `Tried to modify a provider while the widget tree was building` ocorre quando é invocado `notifyListeners()` (ou alterado o `state` num `StateNotifier`) dentro de métodos relacionados com o ciclo de vida da árvore de widgets, nomeadamente o `dispose()`.
+---
 
-Na classe `_CanvasScreenState` no ficheiro `canvas_screen.dart`, o método `dispose()` chama:
-1. `_collabService!.leaveSession()` -> Que invoca internamente `_safeNotify()`.
-2. `_container!.read(canvasDocumentProvider.notifier).reset()` -> Que altera o `state`.
-3. `_container!.read(canvasViewportProvider.notifier).reset()` -> Que altera o `state`.
+## 1. Bloqueio de Movimento Simultâneo (Duelo de Intenções)
 
-Quando a navegação ocorre (ex: fechar o ecrã com o botão de voltar), a árvore de widgets está a ser destruída e repintada noutro lugar, e o Riverpod proíbe que se altere o estado (que dispara reconstruções) nesses exatos momentos sem um "delay" (`Future.microtask`).
+> [!IMPORTANT]
+> **Causa do Conflito**: Quando o Utilizador A e o Utilizador B arrastam o mesmo objeto em simultâneo, ambos alteram o deslocamento (`delta`) localmente e enviam comandos de movimento via WebSocket. Os dois motores visuais entram em conflito ("coordenada doida").
 
-## Mudanças Propostas
+### Solução Proposta
+- **Lock Temporário no Servidor de Estado (`collaboration_room_service.dart`)**:
+  - Criar um conjunto reativo `final Set<String> remoteMovingObjectIds = {};`.
+  - Ao receber um evento `client-object-transform` com a flag `is_moving: true`, adicionar o `objectId` a este conjunto. Quando `is_moving: false` for recebido (ao soltar o objeto), remover o ID.
+- **Proteção do Seletor (`select_tool.dart`)**:
+  - No método `onPanStart` / `onTapDown` do `SelectTool`, verificar se o objeto clicado pertence ao `remoteMovingObjectIds`.
+  - Se outro colaborador já estiver a arrastar o objeto nesse momento, impedir a seleção e o movimento local, ignorando o toque naquele objeto até o colega o soltar.
+- **Emissão da Intenção de Movimento**:
+  - Em `SelectTool.onPanUpdate`, enviar `is_moving: true` na chamada do `_throttleTransformBroadcast`.
+  - Em `SelectTool.onPanEnd`, enviar um pacote final com `is_moving: false` para libertar o lock para os restantes membros da sala.
 
-### 1. `_CanvasScreenState.dispose()` em `canvas_screen.dart`
-Para garantir que as ações de limpeza (que modificam Providers) ocorram em segurança após a finalização da árvore de widgets, vamos envolver estas limpezas num `Future.microtask`.
+---
 
-#### [MODIFY] [canvas_screen.dart](file:///C:/Users/HP/StudioProjects/caderno-app/lib/features/canvas/views/canvas_screen.dart)
-```dart
-  @override
-  void dispose() {
-    final collabService = _collabService;
-    final container = _container;
+## 2. Upload de Ficheiros de Âncoras / Anexos para o Servidor Laravel
 
-    if (collabService != null) {
-      collabService.getPages = null;
-      collabService.getCurrentPageIndex = null;
-      collabService.getCurrentScale = null;
-    }
+> [!IMPORTANT]
+> **Causa**: Ao anexar um PDF/documento numa âncora, o ficheiro fica guardado apenas no caminho local do ecrã de quem o criou (`localPath: /data/user/0/.../attach_123.pdf`). Os outros colaboradores recebem o objeto, mas não conseguem abrir o ficheiro por este não existir nos seus telemóveis nem no servidor.
 
-    // 🚀 Atrasar a limpeza de estado que dispara notificações para evitar colisões no unmount da widget tree
-    Future.microtask(() {
-      collabService?.leaveSession();
-      if (container != null) {
-        container.read(canvasDocumentProvider.notifier).flushUnsyncedPages();
-        container.read(canvasDocumentProvider.notifier).reset();
-        container.read(canvasViewportProvider.notifier).reset();
-      }
-    });
+### Solução Proposta
+- **Upload para o Backend Laravel**:
+  - Em `canvas_document_provider.dart` (`addAttachment`), se a colaboração estiver ativa, efetuar o upload do ficheiro do anexo para o servidor (`_repository.uploadImage` ou `uploadAttachment`) e obter o URL remoto `remoteUrl` (`https://...:9000/storage/attachments/...`).
+  - Preencher a propriedade `remoteUrl` do `AttachmentObject` antes de transmitir o `AddAttachmentAction` para a sala.
+- **Abertura Inteligente no Recetor (`object_renderer.dart`)**:
+  - Na função `_openLocalFile` do `_buildAttachment`:
+    - Verificar se o ficheiro existe no caminho local (`localPath`). Se sim, abrir via `OpenFilex`.
+    - Se o ficheiro local não existir no dispositivo do utilizador atual, mas existir um `remoteUrl` válido, abrir o ficheiro do servidor através do navegador/visualizador do sistema (`launchUrl(Uri.parse(attach.remoteUrl!))`).
 
-    _textController.dispose();
-    _textFocusNode.dispose();
-    super.dispose();
-  }
-```
+---
 
-Deste modo as referências são limpas de imediato na classe mas a chamada das funções que disparam `notifyListeners()` é delegada para o final do loop de eventos.
+## Ficheiros a Modificar
+
+1. `lib/features/canvas/services/collaboration_room_service.dart`
+2. `lib/core/network/realtime_service.dart`
+3. `lib/features/canvas/tools/select_tool.dart`
+4. `lib/features/canvas/providers/canvas_document_provider.dart`
+5. `lib/features/canvas/widgets/object_renderer.dart`
+
+---
 
 ## Plano de Verificação
-Após efetuar a alteração, pedir ao utilizador que:
-1. Abra um caderno.
-2. Ative a colaboração se desejado.
-3. Volte para o ecrã anterior.
-4. Confirme que não aparecem mais blocos vermelhos de erro (`Exception caught by foundation library`) nos logs.
+
+1. **Teste de Movimento Simultâneo**:
+   - Abrir o mesmo caderno em dois dispositivos em colaboração.
+   - O Utilizador A clica e começa a arrastar uma imagem.
+   - O Utilizador B tenta arrastar a mesma imagem ao mesmo tempo.
+   - **Resultado Esperado**: O Utilizador B não consegue mover o objeto enquanto A o segura. As coordenadas mantêm-se estáveis sem qualquer salto imprevisível. Assim que A solta o objeto, B pode arrastá-lo.
+
+2. **Teste de Abertura de Anexos/Âncoras**:
+   - O Utilizador A anexa um ficheiro PDF/imagem no caderno.
+   - O Utilizador B (noutro dispositivo) duplica o toque na Âncora Néon/Laranja.
+   - **Resultado Esperado**: O ficheiro abre perfeitamente através do `remoteUrl` descarregado do servidor Laravel!
+
+Aguardamos a tua confirmação (**"avança"**) para iniciar a implementação!

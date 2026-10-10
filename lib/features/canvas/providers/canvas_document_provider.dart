@@ -160,6 +160,24 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       canRedo: false,
     );
     _audioService.loadLessonRecordings(notebookId);
+    
+    // 🚀 RESTAURANDO BINDINGS FALTANTES DA REESTRUTURAÇÃO
+    _collabService.getPages = () => state.pages.cast<LocalPage>().toList();
+    _collabService.getCurrentPageIndex = () {
+      try {
+        return ref.read(canvasViewportProvider).currentPageIndex;
+      } catch (_) {
+        return 0;
+      }
+    };
+    _collabService.getCurrentScale = () {
+      try {
+        return ref.read(canvasViewportProvider.notifier).currentScale;
+      } catch (_) {
+        return 1.0;
+      }
+    };
+    
     _collabService.onSyncRequested = () => _performCollectiveSync();
     _collabService.onExecuteAction = (d) => _handleRemoteAction(d);
     _collabService.onPageEvent = (d) => _handlePageEvent(d);
@@ -501,11 +519,30 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
 
   Future<void> addAttachment(LocalPage page, AttachmentObject attach) async {
     final int z = calculateNextZIndex(page, attach);
+    AttachmentObject finalAttach = attach;
+
+    final bool isCollab = _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+    final int? targetSid = _collabService.liveNotebookSid ?? state.liveNotebookSid;
+
+    if (isCollab && targetSid != null && targetSid != 0) {
+      try {
+        if (attach.localPath.isNotEmpty && io.File(attach.localPath).existsSync()) {
+          final bytes = await io.File(attach.localPath).readAsBytes();
+          final String? remoteUrl = await _repository.uploadImage(targetSid, 'attach_${attach.id}.${attach.fileExtension}', bytes);
+          if (remoteUrl != null && remoteUrl.isNotEmpty) {
+            finalAttach = attach.copyWith(remoteUrl: remoteUrl);
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ [CanvasDocument] Erro ao carregar anexo para servidor de colaboração: $e');
+      }
+    }
+
     await _executeAction(
       AddAttachmentAction(
         pageClientId: page.clientId,
         pageNumber: page.pageNumber,
-        attach: attach.copyWith(layerId: 'default', zIndex: z),
+        attach: finalAttach.copyWith(layerId: 'default', zIndex: z),
       ),
       targetPage: page,
     );
@@ -558,7 +595,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     );
   }
 
-  Future<void> updateObject(LocalPage page, PageObject obj) async {
+  Future<void> updateObject(LocalPage page, PageObject obj, {bool isRemote = false}) async {
     final oldObj = page.objects.firstWhere((o) => o.id == obj.id);
     await _executeAction(
       UpdateObjectAction(
@@ -569,6 +606,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         newState: obj.toJson(),
       ),
       targetPage: page,
+      isRemote: isRemote,
     );
   }
 
@@ -803,15 +841,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       deletedStrokeIds: deletedIds.toSet().toList(),
       addedStrokes: addedStrokes,
     );
-    _undoRedoManager.addAction(action);
-    state = state.copyWith(
-      canUndo: _undoRedoManager.canUndo,
-      canRedo: _undoRedoManager.canRedo,
-    );
-    for (var id in deletedIds) await _repository.deleteObjectById(id);
-    for (var s in addedStrokes)
-      await _repository.saveSingleStroke(page.clientId, s, pageId: page.id);
-    await _repository.markPageAsUnsynced(page.clientId);
+    await _executeAction(action, targetPage: page);
   }
 
   Future<void> _executeAction(
@@ -840,12 +870,13 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         updatedTarget,
         action,
         updatedAt: isRemote ? null : updatedTarget.updatedAt,
+        isRemote: isRemote,
       ),
     );
     if (!isRemote) _broadcastAction(action);
   }
 
-  void undo(LocalPage page) {
+  Future<void> undo(LocalPage page) async {
     final updatedTarget = _undoRedoManager.undo(page);
     if (updatedTarget != null) {
       state = state.copyWith(
@@ -855,11 +886,25 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         canUndo: _undoRedoManager.canUndo,
         canRedo: _undoRedoManager.canRedo,
       );
-      _repository.markPageAsUnsynced(page.clientId);
+      await _repository.savePage(updatedTarget, state.liveNotebookSid);
+      await _repository.markPageAsUnsynced(page.clientId);
+
+      final bool isCollab = _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+      final int? targetSid = _collabService.liveNotebookSid ?? state.liveNotebookSid;
+      if (isCollab && targetSid != null) {
+        _realtimeService.broadcastGlobalAction(
+          notebookId: targetSid,
+          actionData: {
+            'sender_id': state.myUserId.isNotEmpty ? state.myUserId : _collabService.myUserId,
+            'action_type': 'sync_undo',
+            'data': {'page_client_id': page.clientId, 'page_number': page.pageNumber},
+          },
+        );
+      }
     }
   }
 
-  void redo(LocalPage page) {
+  Future<void> redo(LocalPage page) async {
     final updatedTarget = _undoRedoManager.redo(page);
     if (updatedTarget != null) {
       state = state.copyWith(
@@ -869,7 +914,21 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         canUndo: _undoRedoManager.canUndo,
         canRedo: _undoRedoManager.canRedo,
       );
-      _repository.markPageAsUnsynced(page.clientId);
+      await _repository.savePage(updatedTarget, state.liveNotebookSid);
+      await _repository.markPageAsUnsynced(page.clientId);
+
+      final bool isCollab = _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+      final int? targetSid = _collabService.liveNotebookSid ?? state.liveNotebookSid;
+      if (isCollab && targetSid != null) {
+        _realtimeService.broadcastGlobalAction(
+          notebookId: targetSid,
+          actionData: {
+            'sender_id': state.myUserId.isNotEmpty ? state.myUserId : _collabService.myUserId,
+            'action_type': 'sync_redo',
+            'data': {'page_client_id': page.clientId, 'page_number': page.pageNumber},
+          },
+        );
+      }
     }
   }
 
@@ -877,6 +936,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     LocalPage target,
     CanvasAction action, {
     int? updatedAt,
+    bool isRemote = false,
   }) async {
     final String cid = target.clientId;
     final int? pid = target.id;
@@ -1115,45 +1175,69 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           await _repository.deleteObjectById(oid);
       }
 
-      // 🚀 v10.55: Garantir que a página é marcada como "suja" para o SyncService
-      await _repository.markPageAsUnsynced(cid, updatedAt: updatedAt);
-      scheduleAutoPush();
+      if (!isRemote) {
+        // 🚀 v10.55: Garantir que a página é marcada como "suja" para o SyncService
+        await _repository.markPageAsUnsynced(cid, updatedAt: updatedAt);
+        scheduleAutoPush();
+      }
     } catch (e) {
       debugPrint('🚨 [CanvasDocument] Erro ao persistir ação incremental: $e');
     }
   }
+
+  // 🚀 v10.90: Map para Debounce de envios de texto em colaboração
+  static final Map<String, Timer> _textBroadcastDebouncers = {};
 
   void _broadcastAction(CanvasAction action) {
     final bool isCollab =
         _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
     final int? targetSid =
         _collabService.liveNotebookSid ?? state.liveNotebookSid;
+        
+    debugPrint('📣 [CanvasDocument] _broadcastAction isCollab: $isCollab, targetSid: $targetSid');
+        
     if (!isCollab || targetSid == null) return;
 
     final String effectiveUserId = state.myUserId.isNotEmpty
         ? state.myUserId
         : _collabService.myUserId;
 
-    if (action is DeleteAction) {
+    if (action is AddStrokeAction) {
+      final strokeJson = action.stroke.toJson(includePoints: false); // Não inclui pontos originais formatados
+      strokeJson['is_final'] = true; // 🚀 Garantir que o receptor sabe que o traço está concluído
+      
+      // Flatten and Delta Encode points to save space. Since the server limit is now 256KB,
+      // we can safely send high-fidelity strokes (e.g., up to 4000 points).
+      final ptsList = action.stroke.points;
+      final maxPts = 4000;
+      final int step = ptsList.length > maxPts ? (ptsList.length / maxPts).ceil() : 1;
+      final encodedPts = <int>[];
+      
+      if (ptsList.isNotEmpty) {
+        int lastX = (ptsList[0].dx * 10).round();
+        int lastY = (ptsList[0].dy * 10).round();
+        encodedPts.add(lastX);
+        encodedPts.add(lastY);
+        
+        for (int i = step; i < ptsList.length; i += step) {
+          int curX = (ptsList[i].dx * 10).round();
+          int curY = (ptsList[i].dy * 10).round();
+          encodedPts.add(curX - lastX);
+          encodedPts.add(curY - lastY);
+          lastX = curX;
+          lastY = curY;
+        }
+      }
+      strokeJson['pts_enc'] = 'd1'; // Indicate Delta Encoding
+      strokeJson['points'] = encodedPts;
+
       _realtimeService.broadcastStroke(
         notebookId: targetSid,
         myUserId: effectiveUserId,
         strokeData: {
           'page_client_id': action.pageClientId,
           'page_number': action.pageNumber,
-          'strokes': action.objectIds
-              .map((id) => {'id': id, 'is_deleted': true})
-              .toList(),
-        },
-      );
-    } else if (action is AddStrokeAction) {
-      _realtimeService.broadcastStroke(
-        notebookId: targetSid,
-        myUserId: effectiveUserId,
-        strokeData: {
-          'page_client_id': action.pageClientId,
-          'page_number': action.pageNumber,
-          'strokes': [action.stroke.toJson()],
+          'strokes': [strokeJson],
         },
       );
     } else if (action is AddTextAction) {
@@ -1166,26 +1250,28 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           'is_editing': false,
         },
       );
-    } else if (action is MoveAction) {
-      _realtimeService.broadcastStroke(
+    } else if (action is UpdateObjectAction && action.newState['text'] != null) {
+      // 🚀 Debounce muito agressivo para texto em tempo real parecer live writing
+      final String blockId = action.objectId;
+      _textBroadcastDebouncers[blockId]?.cancel();
+      _textBroadcastDebouncers[blockId] = Timer(const Duration(milliseconds: 80), () {
+        _realtimeService.broadcastTextBlock(
+          notebookId: targetSid,
+          textData: {
+            'sender_id': effectiveUserId,
+            'page_number': action.pageNumber,
+            'block': action.newState,
+            'is_editing': true,
+          },
+        );
+      });
+    } else {
+      _realtimeService.broadcastGlobalAction(
         notebookId: targetSid,
-        myUserId: effectiveUserId,
-        strokeData: {
-          'page_client_id': action.pageClientId,
-          'page_number': action.pageNumber,
-          'is_move': true,
-          'strokes': action.objectIds.map((id) {
-            final obj = state.pages
-                .firstWhere((p) => p.clientId == action.pageClientId)
-                .objects
-                .firstWhere((o) => o.id == id);
-            return {
-              'id': id,
-              'type': obj.type,
-              'offset': {'x': obj.position.dx, 'y': obj.position.dy},
-              'updated_at': obj.updatedAt,
-            };
-          }).toList(),
+        actionData: {
+          'sender_id': effectiveUserId,
+          'action_type': action.toMap()['type'],
+          'data': action.toMap(),
         },
       );
     }
@@ -1293,6 +1379,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
   Future<void> updatePageSettings(
     LocalPage page,
     NotebookConfiguration newConfig,
+    {bool isRemote = false}
   ) async {
     if (page.id == null) return;
     final updated = page.copyWith(
@@ -1321,6 +1408,39 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           .map((p) => p.clientId == page.clientId ? updated : p)
           .toList(),
     );
+
+    if (!isRemote) {
+      final bool isCollab = _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+      final int? targetSid = _collabService.liveNotebookSid ?? state.liveNotebookSid;
+      if (isCollab && targetSid != null) {
+        _realtimeService.broadcastGlobalAction(
+          notebookId: targetSid,
+          actionData: {
+            'sender_id': state.myUserId.isNotEmpty ? state.myUserId : _collabService.myUserId,
+            'action_type': 'update_page_settings',
+            'data': {
+              'page_client_id': page.clientId,
+              'config': newConfig.toJson(),
+            },
+          },
+        );
+      }
+    }
+    final bool isCollab = _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+    final int? targetSid = _collabService.liveNotebookSid ?? state.liveNotebookSid;
+    if (isCollab && targetSid != null) {
+      _realtimeService.broadcastGlobalAction(
+        notebookId: targetSid,
+        actionData: {
+          'sender_id': state.myUserId.isNotEmpty ? state.myUserId : _collabService.myUserId,
+          'action_type': 'update_page_settings',
+          'data': {
+            'page_client_id': page.clientId,
+            'config': newConfig.toJson(),
+          },
+        },
+      );
+    }
   }
 
   Future<void> renamePage(LocalPage page, String newTitle) async {
@@ -1529,11 +1649,30 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     );
     if (pf != null) {
       final appDir = await getApplicationDocumentsDirectory();
-      final String newPath = '${appDir.path}/img_${TimeService().nowMs()}';
-      await io.File(pf.path).copy(newPath);
+      final String newPath = '${appDir.path}/img_${TimeService().nowMs()}.jpg';
+      final imageBytes = await io.File(pf.path).readAsBytes();
+      await io.File(newPath).writeAsBytes(imageBytes);
+
+      String finalPath = newPath;
+
+      final bool isCollab = _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+      final int? targetSid = _collabService.liveNotebookSid ?? state.liveNotebookSid;
+
+      if (isCollab && targetSid != null && targetSid != 0) {
+        try {
+          final String fileName = 'img_${TimeService().nowMs()}.jpg';
+          final String? remoteUrl = await _repository.uploadImage(targetSid, fileName, imageBytes);
+          if (remoteUrl != null && remoteUrl.isNotEmpty) {
+            finalPath = remoteUrl;
+          }
+        } catch (e) {
+          debugPrint('⚠️ [CanvasDocument] Erro no upload da imagem para colaboração: $e');
+        }
+      }
+
       final nib = ImageBlock(
         id: const Uuid().v4(),
-        imagePath: newPath,
+        imagePath: finalPath,
         position: const Offset(100, 150),
         width: 300.0,
         height: 200.0,
@@ -1574,17 +1713,43 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     required double thickness,
     required bool isHighlighter,
     BrushType brushType = BrushType.gel,
+    double opacity = 1.0,
     bool isFinal = false,
   }) {
     final bool isCollab =
         _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
     final int? targetSid =
         _collabService.liveNotebookSid ?? state.liveNotebookSid;
+        
+    debugPrint('📣 [CanvasDocument] broadcastLiveStroke isCollab: $isCollab, targetSid: $targetSid');
+        
     if (!isCollab || targetSid == null) return;
 
     final String effectiveUserId = state.myUserId.isNotEmpty
         ? state.myUserId
         : _collabService.myUserId;
+
+    // Flatten and Delta Encode points to save space. Since the server limit is now 256KB,
+    // we can safely send high-fidelity strokes (e.g., up to 4000 points).
+    final maxPts = 4000;
+    final int step = points.length > maxPts ? (points.length / maxPts).ceil() : 1;
+    final encodedPts = <int>[];
+    
+    if (points.isNotEmpty) {
+      int lastX = (points[0].dx * 10).round();
+      int lastY = (points[0].dy * 10).round();
+      encodedPts.add(lastX);
+      encodedPts.add(lastY);
+      
+      for (int i = step; i < points.length; i += step) {
+        int curX = (points[i].dx * 10).round();
+        int curY = (points[i].dy * 10).round();
+        encodedPts.add(curX - lastX);
+        encodedPts.add(curY - lastY);
+        lastX = curX;
+        lastY = curY;
+      }
+    }
 
     final data = {
       'page_client_id': pageClientId,
@@ -1597,7 +1762,9 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           'is_final': isFinal,
           'is_highlighter': isHighlighter ? 1 : 0,
           'brush_type': brushType.name,
-          'points': points.map((pt) => {'x': pt.dx, 'y': pt.dy}).toList(),
+          'opacity': opacity,
+          'pts_enc': 'd1', // Indicate Delta Encoding (x10)
+          'points': encodedPts,
         },
       ],
     };
@@ -1619,6 +1786,15 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
 
   Future<void> flushUnsyncedPages() async {
     _autoPushDebouncer?.cancel();
+    
+    // 🚀 v10.90: Bloquear HTTP Pushes Automáticos durante a Colaboração.
+    // A Colaboração usa exclusivamente o Laravel Reverb (WebSockets) para
+    // manter os clientes sincronizados em tempo real com alta performance.
+    if (_collabService.isCollaborationEnabled || state.isCollaborationEnabled) {
+      debugPrint('🛡️ [CanvasDocument] HTTP Push ignorado. Sala de colaboração ativa (Reverb gere o tráfego).');
+      return; 
+    }
+
     final nbId = state.currentNotebookId;
     if (nbId != 0 && nbId != null) {
       try {
@@ -1651,25 +1827,68 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
   }
 
   Future<void> _handleRemoteAction(Map<String, dynamic> d) async {
-    final action = CanvasAction.fromMap(
-      d['action_type'] ?? d['type'],
-      d['data'],
-    );
-    if (action != null) {
-      final target = state.pages.cast<LocalPage?>().firstWhere(
-        (p) => p?.clientId == action.pageClientId,
-        orElse: () => null,
-      );
-      if (target != null) {
-        final updatedTarget = (d['type'] == 'sync_undo')
-            ? action.undo(target)
-            : action.execute(target);
-        state = state.copyWith(
-          pages: state.pages
-              .map((p) => p.clientId == target.clientId ? updatedTarget : p)
-              .toList(),
-        );
+    try {
+      final String type = d['action_type'] ?? d['type'] ?? '';
+      
+      // 🚀 v11: Intercetar configuração da página em tempo real
+      if (type == 'update_page_settings') {
+        final String? clientId = d['data']?['page_client_id'];
+        if (clientId != null && d['data']?['config'] != null) {
+          final config = NotebookConfiguration.fromJson(d['data']['config']);
+          final target = state.pages.cast<LocalPage?>().firstWhere((p) => p?.clientId == clientId, orElse: () => null);
+          if (target != null) {
+            await updatePageSettings(target, config, isRemote: true);
+          }
+        }
+        return;
       }
+
+      // 🚀 v11: Intercetar Undo / Redo remoto
+      if (type == 'sync_undo' || type == 'sync_redo') {
+        final String? clientId = d['data']?['page_client_id'];
+        if (clientId != null) {
+          final target = state.pages.cast<LocalPage?>().firstWhere((p) => p?.clientId == clientId, orElse: () => null);
+          if (target != null) {
+            if (type == 'sync_undo') {
+              await undo(target);
+            } else {
+              await redo(target);
+            }
+          }
+        }
+        return;
+      }
+
+      final action = CanvasAction.fromMap(
+        type,
+        d['data'],
+      );
+      if (action != null) {
+        final target = state.pages.cast<LocalPage?>().firstWhere(
+          (p) => p?.clientId == action.pageClientId,
+          orElse: () => null,
+        );
+        if (target != null) {
+          final updatedTarget = (d['type'] == 'sync_undo')
+              ? action.undo(target)
+              : action.execute(target);
+          state = state.copyWith(
+            pages: state.pages
+                .map((p) => p.clientId == target.clientId ? updatedTarget : p)
+                .toList(),
+          );
+
+          // 🚀 Persist action in local DB to prevent data loss
+          await _persistIncrementalAction(
+            updatedTarget,
+            action,
+            updatedAt: action.timestamp,
+            isRemote: true,
+          );
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('⚠️ [CanvasDocument] Erro ao executar ação remota: $e\n$stack');
     }
   }
 

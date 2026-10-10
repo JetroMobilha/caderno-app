@@ -16,14 +16,16 @@ import 'canvas_tool.dart';
  [canvasDocumentProvider] para a persistência final do traço.
 */
 class BrushTool extends CanvasTool {
-  static Timer? _broadcastThrottle;
-  
+  static int _lastEmitTime = 0;
+  static Timer? _trailingTimer;
+  static void Function()? _trailingEmit;
+
   /// Flag de segurança para interromper traços que sofram saltos impossíveis de hardware.
   static bool _isCorrupted = false;
-  
+
   /// Distância máxima (em pixels) permitida entre dois frames consecutivos.
   /// Se ultrapassada, o traço é considerado um "Ghost Touch" e interrompido.
-  static const double _maxAllowedJump = 1200.0; 
+  static const double _maxAllowedJump = 1200.0;
 
   const BrushTool() : super(ToolMode.draw);
 
@@ -42,7 +44,9 @@ class BrushTool extends CanvasTool {
     final toolState = ref.read(canvasInteractionProvider);
     
     toolNotifier.clearSelection();
-    _isCorrupted = false; 
+    _isCorrupted = false;
+    _lastEmitTime = 0; // Garantir envio imediato no novo traço
+    _trailingTimer?.cancel();
     
     final String id = const Uuid().v4();
     
@@ -70,11 +74,11 @@ class BrushTool extends CanvasTool {
     final int pid = pointerId ?? 0;
     final String? strokeId = liveNotifier.getStrokeId(pid);
     if (strokeId == null || _isCorrupted) return;
-    
+
     final points = liveNotifier.getPoints(pid);
     if (points.isNotEmpty) {
       final double dist = (localPos - points.last).distance;
-      
+
       if (dist > _maxAllowedJump) {
         debugPrint('⚠️ [BrushTool] Salto anómalo detetado ($dist px). Traço corrompido.');
         _isCorrupted = true;
@@ -97,6 +101,12 @@ class BrushTool extends CanvasTool {
     final points = liveNotifier.getPoints(pid);
     final String? strokeId = liveNotifier.getStrokeId(pid);
     
+    // 🚀 FIX CRÍTICO: Cancelar qualquer pacote Live pendente!
+    // Se não fizermos isto, um pacote `is_final: false` é enviado DEPOIS 
+    // da caneta levantar, corrompendo o estado no recetor.
+    _trailingTimer?.cancel();
+    _trailingEmit = null;
+    
     if (strokeId != null && points.isNotEmpty && !_isCorrupted) {
       ref.read(canvasDocumentProvider.notifier).addStroke(
         page, 
@@ -115,13 +125,42 @@ class BrushTool extends CanvasTool {
   }
 
   void _throttledBroadcast(dynamic ref, LocalPage page, String id, List<Offset> points, CanvasToolState toolState) {
-    if (_broadcastThrottle?.isActive ?? false) return;
-    _broadcastThrottle = Timer(const Duration(milliseconds: 50), () {
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    
+    // Cópia profunda para evitar referências mutáveis dentro do Timer
+    final currentPoints = List<Offset>.from(points);
+
+
+    
+    void emit(List<Offset> pts) {
+      _lastEmitTime = DateTime.now().millisecondsSinceEpoch;
+      debugPrint('📡 [Rede - Live Stroke] A enviar ${pts.length} pontos para o Reverb...');
       ref.read(canvasDocumentProvider.notifier).broadcastLiveStroke(
         pageClientId: page.clientId, pageNumber: page.pageNumber, strokeId: id,
-        points: points, color: toolState.selectedColorHex, thickness: toolState.selectedThickness,
+        points: pts, color: toolState.selectedColorHex, thickness: toolState.selectedThickness,
         isHighlighter: toolState.isHighlighter, brushType: toolState.selectedBrushType,
+        opacity: toolState.brushOpacity,
       );
-    });
+    }
+
+    if (now - _lastEmitTime >= 16) {
+      // Já passou o tempo limite, podemos enviar imediatamente (16ms ~ 60 FPS para máxima fluidez e igualar os Pointers)
+      _trailingTimer?.cancel();
+      emit(currentPoints);
+    } else {
+      // Ainda não passou o tempo. Guardamos a intenção de enviar os dados mais recentes (Trailing Edge).
+      _trailingEmit = () => emit(currentPoints);
+      
+      // Se não houver um timer a correr para esta "janela", criamos um.
+      if (!(_trailingTimer?.isActive ?? false)) {
+        final timeLeft = 16 - (now - _lastEmitTime);
+        _trailingTimer = Timer(Duration(milliseconds: timeLeft > 0 ? timeLeft : 16), () {
+          if (_trailingEmit != null) {
+            _trailingEmit!();
+            _trailingEmit = null;
+          }
+        });
+      }
+    }
   }
 }

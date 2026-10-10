@@ -1,18 +1,30 @@
-# 🚀 Funcionalidades de Colaboração Melhoradas
+# 🛡️ Lock de Intenção e Upload Server de Anexos/Âncoras Concluído com Sucesso!
 
-Foi concluída a implementação de melhorias cruciais na experiência de colaboração em tempo real do Caderno Digital, garantindo um comportamento reativo e sem bugs na UI.
+Implementámos o bloqueio de movimento simultâneo de objetos para evitar conflitos de coordenadas entre utilizadores e ativámos o upload automático de anexos/âncoras para o servidor Laravel (`caderno-backend`).
 
-### 📝 Atualização Reativa da Lista de Membros
-A lista de membros inscritos no *Centro de Colaboração* foi otimizada para refletir instantaneamente as alterações.
-- Agora, a lista efetua um recarregamento automático sempre que o utilizador a abre.
-- Ao adicionar um amigo através da barra de pesquisa de convites, ou alterar as suas permissões (Editor, Leitor, etc.), a lista do `CollaborationCenterSheet` será logo atualizada de forma reativa por detrás do modal de partilha, poupando a necessidade de o fechar e reabrir.
-- O mesmo acontece na revogação de acessos.
+---
 
-### 🔌 Desligamento Limpo e Imediato
-Ao desativar o "Modo Online", todo o sistema entra num modo de limpeza agressiva (Cleanup total):
-- O canal em tempo real (*Reverb*) é perfeitamente desconectado, poupando recursos de rede e de bateria.
-- Todas as listagens, incluindo o contador de utilizadores ativos (`onlineUsers`), cursos de outros utilizadores (`remotePointers`) e traços ao vivo no quadro, desaparecem instantaneamente.
-- Funcionalidades como o Voice Call, e o número visível na pílula superior "X online", são removidos visualmente, certificando de que o aluno entrou de facto no modo "Privacidade total garantida".
+## 🛠️ Detalhes da Implementação
 
-### 🐛 Resolução de Erros no Fecho do Ecrã
-- Corrigido o erro do Flutter (`Tried to modify a provider while the widget tree was building`) durante o ato de fechar um caderno que tinha partilha ativa, adiando a limpeza (Reset do Provider) em um `Future.microtask`. Desta forma o Flutter e o Riverpod desanexam a árvore de visualização tranquilamente antes da destruição total das sessões.
+### 1. Modelo de Anexo Atualizado (`attachment_model.dart`)
+- Corrigido o método `AttachmentObject.copyWith` para aceitar `remoteUrl`, `localPath`, `fileName`, `fileExtension` e `fileSize`, resolvendo o erro de compilação.
+
+### 2. Lock de Intenção e Prevenção de Conflito de Coordenadas (`select_tool.dart` & `collaboration_room_service.dart`)
+- **Problema**: Quando dois utilizadores tentavam mover o mesmo objeto ao mesmo tempo, ambos os telemóveis alteravam as coordenadas locais e enviavam pacotes em direto, fazendo o objeto saltar de forma imprevisível.
+- **Solução**:
+  - Adicionado o conjunto reativo `remoteMovingObjectIds` ao `CollaborationRoomService`.
+  - Quando um colaborador inicia o movimento de um objeto, o `SelectTool` transmite a flag `is_moving: true`. Os restantes membros adicionam esse objeto ao conjunto de bloqueio remoto.
+  - No `SelectTool` (`onPanStart`), se um utilizador tentar agarrar num objeto bloqueado remotamente, o toque é ignorado (`debugPrint('🛡️ Objeto bloqueado em movimento remoto')`).
+  - Ao soltar o ecrã (`onPanEnd`), é enviado `is_moving: false`, libertando o objeto para os restantes utilizadores.
+
+### 3. Upload de Ficheiros de Âncoras / Anexos para o Servidor Laravel (`canvas_document_provider.dart` & `object_renderer.dart`)
+- **Problema**: Ficheiros anexados ficassem apenas na pasta de ficheiros locais do telemóvel do criador (`/data/user/0/.../attach_123.pdf`). Os outros colaboradores recebiam o objeto, mas não conseguiam abrir o ficheiro por este não existir nos seus telemóveis nem no servidor.
+- **Solução**:
+  - Em `addAttachment` (`canvas_document_provider.dart`), se a colaboração estiver ativa, o ficheiro é automaticamente enviado para o servidor Laravel via `_repository.uploadImage`, obtendo um `remoteUrl` público (`https://...:9000/storage/...`).
+  - A propriedade `remoteUrl` é atribuída ao `AttachmentObject` e transmitida pela rede.
+  - No recetor (`ObjectRenderer._openLocalFile`), se o ficheiro local não existir no telemóvel do colega, a app abre automaticamente o ficheiro a partir do `remoteUrl` através do navegador ou leitor de PDF/ficheiros do sistema.
+
+---
+
+> [!NOTE]
+> Todos os componentes foram compilados e verificados sem erros. Os movimentos em direto não têm conflitos de posição e as âncoras/anexos podem agora ser descarregadas e lidas por qualquer membro da sala!

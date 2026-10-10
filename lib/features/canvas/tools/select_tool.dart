@@ -11,9 +11,13 @@ import '../providers/canvas_tool_provider.dart';
 import '../providers/canvas_document_provider.dart';
 import '../providers/canvas_viewport_provider.dart';
 import '../services/transform_service.dart';
+import '../services/collaboration_room_service.dart';
+import '../../../core/network/realtime_service.dart';
 import 'canvas_tool.dart';
 
 class SelectTool extends CanvasTool {
+  static int _lastTransformEmitTime = 0;
+  
   const SelectTool([super.mode = ToolMode.select]);
 
   @override
@@ -37,6 +41,17 @@ class SelectTool extends CanvasTool {
   void onPanStart(Offset localPos, dynamic ref, LocalPage page, {int? pointerId}) {
     final toolNotifier = ref.read(canvasToolProvider.notifier);
     final toolState = ref.read(canvasToolProvider);
+    final collabService = ref.read(collaborationRoomServiceProvider);
+
+    // 🚀 Lock de Intenção: Se o objeto que estamos a tentar tocar está a ser movido remotamente, ignorar
+    final isLockedByRemote = page.objects.any((o) =>
+        collabService.remoteMovingObjectIds.contains(o.id) &&
+        (toolState.selectedObjectIds.contains(o.id) || toolNotifier.isPointInSelection(localPos, page)));
+
+    if (isLockedByRemote) {
+      debugPrint('🛡️ [SelectTool] Objeto bloqueado em movimento remoto por outro utilizador.');
+      return;
+    }
 
     final TableObject? tableObj = (toolState.selectedObjectIds.length == 1 && page.objects.any((o) => o.id == toolState.selectedObjectIds.first && o is TableObject))
         ? page.objects.firstWhere((o) => o.id == toolState.selectedObjectIds.first) as TableObject
@@ -94,13 +109,15 @@ class SelectTool extends CanvasTool {
       return;
     }
 
-    if (toolState.activeHandle != HandleType.none) { 
-      _performHandleTransform(localPos, docDelta, toolState, toolNotifier, page, ref); 
-      return; 
+    if (toolState.activeHandle != HandleType.none) {
+      _performHandleTransform(localPos, docDelta, toolState, toolNotifier, page, ref);
+      _throttleTransformBroadcast(ref, page.clientId, ref.read(canvasToolProvider), isMoving: true);
+      return;
     }
-    if (toolState.isMovingSelection) { 
-      toolNotifier.updateSelectionDelta(docDelta); 
-      return; 
+    if (toolState.isMovingSelection) {
+      toolNotifier.updateSelectionDelta(docDelta);
+      _throttleTransformBroadcast(ref, page.clientId, ref.read(canvasToolProvider), isMoving: true);
+      return;
     }
     if (toolState.selectionRectStart != null) { 
       toolNotifier.setSelectionRect(toolState.selectionRectStart, localPos, page); 
@@ -134,9 +151,21 @@ class SelectTool extends CanvasTool {
       return;
     }
 
+    // 🚀 Transmitir libertação do lock remoto (is_moving: false)
+    _throttleTransformBroadcast(ref, page.clientId, toolState, isMoving: false);
+
     if (toolState.activeTableResizeIndex != null) { toolNotifier.endTableResize(); }
     else if (toolState.activeHandle != HandleType.none) { _finalizeTransform(toolState, ref, toolNotifier, page); toolNotifier.endHandleTransform(); }
     else if (toolState.totalSelectionDelta != Offset.zero) { ref.read(canvasDocumentProvider.notifier).moveSelection(page, objectIds: toolState.selectedObjectIds, delta: toolState.totalSelectionDelta); toolNotifier.resetSelectionDelta(); }
+    
+    // 🚀 Persistir Overrides se existirem e depois limpar a RAM
+    if (toolState.liveObjectOverrides.isNotEmpty) {
+      for (var obj in toolState.liveObjectOverrides.values) {
+        ref.read(canvasDocumentProvider.notifier).updateObject(page, obj);
+      }
+      toolNotifier.clearLiveObjectOverrides();
+    }
+
     toolNotifier.setSelectionRect(null, null);
   }
 
@@ -188,7 +217,9 @@ class SelectTool extends CanvasTool {
       newWidths[index - 1] = (newWidths[index - 1] + deltaX).clamp(30.0, 1500.0);
     }
 
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(columnWidths: newWidths, position: newPos));
+    final updated = table.copyWith(columnWidths: newWidths, position: newPos);
+    ref.read(canvasToolProvider.notifier).setLiveObjectOverride(updated);
+    _throttleTransformBroadcast(ref, page.clientId, ref.read(canvasToolProvider), overrideState: updated.toJson());
   }
 
   void _handleTableRowResize(TableObject table, int index, double deltaY, dynamic ref, LocalPage page) {
@@ -205,7 +236,9 @@ class SelectTool extends CanvasTool {
       newHeights[index - 1] = (newHeights[index - 1] + deltaY).clamp(20.0, 1000.0);
     }
 
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, table.copyWith(rowHeights: newHeights, position: newPos));
+    final updated = table.copyWith(rowHeights: newHeights, position: newPos);
+    ref.read(canvasToolProvider.notifier).setLiveObjectOverride(updated);
+    _throttleTransformBroadcast(ref, page.clientId, ref.read(canvasToolProvider), overrideState: updated.toJson());
   }
 
   HandleType _detectHandleHit(Offset localPos, CanvasToolState toolState, LocalPage page, dynamic ref) {
@@ -350,7 +383,35 @@ class SelectTool extends CanvasTool {
       position: obj.position + Offset(dx, dy),
       size: Size(obj.width + dw, obj.height + dh),
     );
-    ref.read(canvasDocumentProvider.notifier).updateObject(page, updated);
+    ref.read(canvasToolProvider.notifier).setLiveObjectOverride(updated);
+    _throttleTransformBroadcast(ref, page.clientId, ref.read(canvasToolProvider), overrideState: updated.toJson());
+  }
+
+  void _throttleTransformBroadcast(dynamic ref, String pageClientId, CanvasToolState toolState, {Map<String, dynamic>? overrideState, bool? isMoving}) {
+    if (toolState.selectedObjectIds.length != 1) return;
+    
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastTransformEmitTime >= 16 || isMoving == false) {
+      _lastTransformEmitTime = now;
+      final collabService = ref.read(collaborationRoomServiceProvider);
+      final String objectId = toolState.selectedObjectIds.first;
+      
+      final int notebookId = collabService.liveNotebookSid ?? ref.read(canvasDocumentProvider).liveNotebookSid ?? 0;
+      final String userId = collabService.myUserId;
+      if (notebookId == 0 || userId.isEmpty) return;
+
+      ref.read(realtimeServiceProvider).broadcastObjectTransform(
+        notebookId: notebookId,
+        myUserId: userId,
+        pageClientId: pageClientId,
+        objectId: objectId,
+        delta: toolState.totalSelectionDelta,
+        scale: toolState.liveScale.width, // Assumption scale.width == scale.height
+        rotation: toolState.liveRotation,
+        overrideState: overrideState,
+        isMoving: isMoving,
+      );
+    }
   }
 
   bool _isAnySelectedLocked(CanvasToolState toolState, LocalPage page) => page.objects.any((o) => toolState.selectedObjectIds.contains(o.id) && o.isLocked);

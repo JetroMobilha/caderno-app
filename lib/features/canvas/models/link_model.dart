@@ -173,9 +173,12 @@ class LinkObject implements PageObject {
 
   factory LinkObject.fromJson(Map<String, dynamic> json) {
     return LinkObject(
-      id: json['id'],
+      id: json['id'] ?? const Uuid().v4(),
       parentId: json['parent_id'],
-      linkType: LinkType.values.firstWhere((e) => e.name == json['link_type']),
+      linkType: LinkType.values.firstWhere(
+        (e) => e.name == json['link_type'],
+        orElse: () => LinkType.externalUrl,
+      ),
       targetPageClientId: json['target_page_client_id'],
       url: json['url'],
       label: json['label'] ?? 'Link',

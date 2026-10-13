@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; 
+import 'package:flutter/material.dart';
 import 'package:dart_pusher_channels/dart_pusher_channels.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,104 +11,237 @@ import 'api_config.dart';
 
 enum RealtimeStatus { disconnected, connecting, connected, error }
 
-class RealtimeService {
+class RealtimeService with WidgetsBindingObserver {
   PrivateChannel? _userChannel;
   PusherChannelsClient? _pusher;
   PresenceChannel? _notebookChannel;
-  final Set<String> _boundEvents = {}; 
+  final Set<String> _boundEvents = {};
   final Map<String, StreamSubscription> _eventSubscriptions = {};
-  
+
   // 🛡️ Subscrições e Estado de Membros
   StreamSubscription? _subSucceededSub;
   StreamSubscription? _memberAddedSub;
   StreamSubscription? _memberRemovedSub;
-  StreamSubscription? _lifecycleSubscription; // 🚀 Única subscrição de ciclo de vida
+  StreamSubscription?
+  _lifecycleSubscription; // 🚀 Única subscrição de ciclo de vida
   final Map<String, dynamic> _estudantesNaSala = {};
 
-  final ValueNotifier<RealtimeStatus> statusNotifier = ValueNotifier(RealtimeStatus.disconnected);
+  int? _lastNotebookId;
+  int? _lastUserId;
+  Function? _lastOnGlobalSyncNeeded;
+  bool _isIntentionallyDisconnected = false;
+  bool _isReconnecting = false;
+  Timer? _reconnectTimer;
 
-  final _strokeStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _textStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _imageStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _viewportStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _followStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final ValueNotifier<RealtimeStatus> statusNotifier = ValueNotifier(
+    RealtimeStatus.disconnected,
+  );
+
+  RealtimeService() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // O History Manager vai ser notificado na view, mas podemos reforçar a suspensão aqui
+      suspendConnection();
+    } else if (state == AppLifecycleState.resumed) {
+      reconnectIfNeeded(force: true);
+    }
+  }
+
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    disconnect();
+  }
+
+  final _strokeStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _textStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _imageStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _viewportStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _followStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final _usersStreamController = StreamController<List<dynamic>>.broadcast();
-  final _pageEventStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _pageUpdatedStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _handStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _uploadingStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _inviteStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _syncRequestedStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
-  final _voiceCallStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _voiceStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _activityStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _sessionMetaStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
-  final _roleUpdateStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
-  final _pointerStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _objectTransformStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _chatStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _audioMessageStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _chatSyncRequestController = StreamController<Map<String, dynamic>>.broadcast();
-  final _chatSyncResponseController = StreamController<Map<String, dynamic>>.broadcast();
-  final _reactionStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _collectiveSyncRequestController = StreamController<Map<String, dynamic>>.broadcast();
-  final _fullStateRequestController = StreamController<Map<String, dynamic>>.broadcast();
-  final _fullStateReceivedController = StreamController<Map<String, dynamic>>.broadcast();
-  final _pageFingerprintStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _cloudSyncSignalStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
-  final _globalActionStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
-  final _syncPushFinishedController = StreamController<Map<String, dynamic>>.broadcast();
-  final _pageDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
-  final _notebookDeletedStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
-  final _notebookAccessRevokedController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
-  final _notebookStructureStreamController = StreamController<Map<String, dynamic>>.broadcast(); 
-  final _voicePolicyStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _pageEventStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _pageUpdatedStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _handStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _uploadingStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _inviteStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _syncRequestedStreamController =
+      StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _voiceCallStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _voiceStateStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _activityStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _sessionMetaStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _roleUpdateStreamController =
+      StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _pointerStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _objectTransformStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _chatStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _audioMessageStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _chatSyncRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _chatSyncResponseController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _reactionStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _collectiveSyncRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _fullStateRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _fullStateReceivedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _pageFingerprintStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _cloudSyncSignalStreamController =
+      StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _globalActionStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _historyRequestStreamController =
+      StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Histórico
+  final _historyDeliverStreamController =
+      StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Histórico
+  final _syncPushFinishedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _pageDeletedStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _notebookDeletedStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _notebookAccessRevokedController =
+      StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  final _notebookStructureStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _voicePolicyStreamController =
+      StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
 
-  Stream<Map<String, dynamic>> get onStrokeReceived => _strokeStreamController.stream;
-  Stream<Map<String, dynamic>> get onTextReceived => _textStreamController.stream;
-  Stream<Map<String, dynamic>> get onImageReceived => _imageStreamController.stream;
-  Stream<Map<String, dynamic>> get onViewportReceived => _viewportStreamController.stream;
-  Stream<Map<String, dynamic>> get onFollowUpdateReceived => _followStreamController.stream;
+  Stream<Map<String, dynamic>> get onStrokeReceived =>
+      _strokeStreamController.stream;
+  Stream<Map<String, dynamic>> get onTextReceived =>
+      _textStreamController.stream;
+  Stream<Map<String, dynamic>> get onImageReceived =>
+      _imageStreamController.stream;
+  Stream<Map<String, dynamic>> get onViewportReceived =>
+      _viewportStreamController.stream;
+  Stream<Map<String, dynamic>> get onFollowUpdateReceived =>
+      _followStreamController.stream;
   Stream<List<dynamic>> get onUsersUpdated => _usersStreamController.stream;
-  Stream<Map<String, dynamic>> get onPageEventReceived => _pageEventStreamController.stream;
-  Stream<Map<String, dynamic>> get onPageUpdated => _pageUpdatedStreamController.stream;
-  Stream<Map<String, dynamic>> get onHandEventReceived => _handStreamController.stream;
-  Stream<Map<String, dynamic>> get onRemoteUploading => _uploadingStreamController.stream;
-  Stream<Map<String, dynamic>> get onLiveInviteReceived => _inviteStreamController.stream;
-  Stream<Map<String, dynamic>> get onSyncRequestedReceived => _syncRequestedStreamController.stream; // 🚀 Novo
-  Stream<Map<String, dynamic>> get onVoiceCallStarted => _voiceCallStreamController.stream;
-  Stream<Map<String, dynamic>> get onVoiceStateReceived => _voiceStateStreamController.stream;
-  Stream<Map<String, dynamic>> get onUserActivityReceived => _activityStreamController.stream;
-  Stream<Map<String, dynamic>> get onSessionMetaReceived => _sessionMetaStreamController.stream; 
-  Stream<Map<String, dynamic>> get onRoleUpdateReceived => _roleUpdateStreamController.stream; // 🚀 Novo
-  Stream<Map<String, dynamic>> get onPointerMoveReceived => _pointerStreamController.stream;
-  Stream<Map<String, dynamic>> get onObjectTransformReceived => _objectTransformStreamController.stream;
-  Stream<Map<String, dynamic>> get onChatMessageReceived => _chatStreamController.stream;
-  Stream<Map<String, dynamic>> get onAudioMessageReceived => _audioMessageStreamController.stream;
-  Stream<Map<String, dynamic>> get onChatSyncRequestReceived => _chatSyncRequestController.stream;
-  Stream<Map<String, dynamic>> get onChatSyncResponseReceived => _chatSyncResponseController.stream;
-  Stream<Map<String, dynamic>> get onReactionReceived => _reactionStreamController.stream;
-  Stream<Map<String, dynamic>> get onCollectiveSyncRequested => _collectiveSyncRequestController.stream;
-  Stream<Map<String, dynamic>> get onFullStateRequested => _fullStateRequestController.stream;
-  Stream<Map<String, dynamic>> get onFullStateReceived => _fullStateReceivedController.stream;
-  Stream<Map<String, dynamic>> get onPageFingerprintReceived => _pageFingerprintStreamController.stream;
-  Stream<Map<String, dynamic>> get onCloudSyncSignalReceived => _cloudSyncSignalStreamController.stream; // 🚀 Novo
-  Stream<Map<String, dynamic>> get onGlobalActionReceived => _globalActionStreamController.stream; 
-  Stream<Map<String, dynamic>> get onSyncPushFinished => _syncPushFinishedController.stream; 
-  Stream<Map<String, dynamic>> get onPageDeleted => _pageDeletedStreamController.stream; 
-  Stream<Map<String, dynamic>> get onNotebookDeleted => _notebookDeletedStreamController.stream; 
-  Stream<Map<String, dynamic>> get onNotebookAccessRevoked => _notebookAccessRevokedController.stream; // 🚀
-  Stream<Map<String, dynamic>> get onNotebookStructureUpdated => _notebookStructureStreamController.stream; 
-  Stream<Map<String, dynamic>> get onVoicePolicyUpdated => _voicePolicyStreamController.stream; // 🚀 Novo
+  Stream<Map<String, dynamic>> get onPageEventReceived =>
+      _pageEventStreamController.stream;
+  Stream<Map<String, dynamic>> get onPageUpdated =>
+      _pageUpdatedStreamController.stream;
+  Stream<Map<String, dynamic>> get onHandEventReceived =>
+      _handStreamController.stream;
+  Stream<Map<String, dynamic>> get onRemoteUploading =>
+      _uploadingStreamController.stream;
+  Stream<Map<String, dynamic>> get onLiveInviteReceived =>
+      _inviteStreamController.stream;
+  Stream<Map<String, dynamic>> get onSyncRequestedReceived =>
+      _syncRequestedStreamController.stream; // 🚀 Novo
+  Stream<Map<String, dynamic>> get onVoiceCallStarted =>
+      _voiceCallStreamController.stream;
+  Stream<Map<String, dynamic>> get onVoiceStateReceived =>
+      _voiceStateStreamController.stream;
+  Stream<Map<String, dynamic>> get onUserActivityReceived =>
+      _activityStreamController.stream;
+  Stream<Map<String, dynamic>> get onSessionMetaReceived =>
+      _sessionMetaStreamController.stream;
+  Stream<Map<String, dynamic>> get onRoleUpdateReceived =>
+      _roleUpdateStreamController.stream; // 🚀 Novo
+  Stream<Map<String, dynamic>> get onPointerMoveReceived =>
+      _pointerStreamController.stream;
+  Stream<Map<String, dynamic>> get onObjectTransformReceived =>
+      _objectTransformStreamController.stream;
+  Stream<Map<String, dynamic>> get onChatMessageReceived =>
+      _chatStreamController.stream;
+  Stream<Map<String, dynamic>> get onAudioMessageReceived =>
+      _audioMessageStreamController.stream;
+  Stream<Map<String, dynamic>> get onChatSyncRequestReceived =>
+      _chatSyncRequestController.stream;
+  Stream<Map<String, dynamic>> get onChatSyncResponseReceived =>
+      _chatSyncResponseController.stream;
+  Stream<Map<String, dynamic>> get onReactionReceived =>
+      _reactionStreamController.stream;
+  Stream<Map<String, dynamic>> get onCollectiveSyncRequested =>
+      _collectiveSyncRequestController.stream;
+  Stream<Map<String, dynamic>> get onFullStateRequested =>
+      _fullStateRequestController.stream;
+  Stream<Map<String, dynamic>> get onFullStateReceived =>
+      _fullStateReceivedController.stream;
+  Stream<Map<String, dynamic>> get onPageFingerprintReceived =>
+      _pageFingerprintStreamController.stream;
+  Stream<Map<String, dynamic>> get onCloudSyncSignalReceived =>
+      _cloudSyncSignalStreamController.stream; // 🚀 Novo
+  Stream<Map<String, dynamic>> get onGlobalActionReceived =>
+      _globalActionStreamController.stream;
+  Stream<Map<String, dynamic>> get onHistoryRequested =>
+      _historyRequestStreamController.stream; // 🚀 Histórico
+  Stream<Map<String, dynamic>> get onHistoryDelivered =>
+      _historyDeliverStreamController.stream; // 🚀 Histórico
+  Stream<Map<String, dynamic>> get onSyncPushFinished =>
+      _syncPushFinishedController.stream;
+  Stream<Map<String, dynamic>> get onPageDeleted =>
+      _pageDeletedStreamController.stream;
+  Stream<Map<String, dynamic>> get onNotebookDeleted =>
+      _notebookDeletedStreamController.stream;
+  Stream<Map<String, dynamic>> get onNotebookAccessRevoked =>
+      _notebookAccessRevokedController.stream; // 🚀
+  Stream<Map<String, dynamic>> get onNotebookStructureUpdated =>
+      _notebookStructureStreamController.stream;
+  Stream<Map<String, dynamic>> get onVoicePolicyUpdated =>
+      _voicePolicyStreamController.stream; // 🚀 Novo
 
   bool get isConnected => statusNotifier.value == RealtimeStatus.connected;
+  bool get isChannelReady =>
+      _notebookChannel != null &&
+      statusNotifier.value == RealtimeStatus.connected;
 
-  final _webrtcStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get onWebRTCSignalReceived => _webrtcStreamController.stream;
+  Future<bool> ensureChannelReady({
+    Duration timeout = const Duration(seconds: 6),
+  }) async {
+    if (isChannelReady) return true;
+    final end = DateTime.now().add(timeout);
+    while (!isChannelReady && DateTime.now().isBefore(end)) {
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
+    return isChannelReady;
+  }
+
+  final _webrtcStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onWebRTCSignalReceived =>
+      _webrtcStreamController.stream;
+
+  void _clearRoomPresence() {
+    if (_estudantesNaSala.isNotEmpty) {
+      _estudantesNaSala.clear();
+      _broadcastUsersList();
+    }
+  }
 
   Future<void> initConnection() async {
-    if (statusNotifier.value == RealtimeStatus.connected && _pusher != null) return;
+    if (statusNotifier.value == RealtimeStatus.connected && _pusher != null)
+      return;
     statusNotifier.value = RealtimeStatus.connecting;
+    _isIntentionallyDisconnected = false;
 
     final options = PusherChannelsOptions.fromHost(
       scheme: 'wss',
@@ -116,7 +249,11 @@ class RealtimeService {
       key: ApiConfig.reverbKey,
       port: ApiConfig.reverbPort,
       shouldSupplyMetadataQueries: true,
-      metadata: const PusherChannelsOptionsMetadata(client: 'dart', version: '1.3.1', protocol: 7),
+      metadata: const PusherChannelsOptionsMetadata(
+        client: 'dart',
+        version: '1.3.1',
+        protocol: 7,
+      ),
     );
 
     _pusher = PusherChannelsClient.websocket(
@@ -124,8 +261,8 @@ class RealtimeService {
       connectionErrorHandler: (exception, trace, refresh) async {
         debugPrint('⚠️ [Realtime] Erro na conexão: $exception');
         statusNotifier.value = RealtimeStatus.error;
-        await Future.delayed(const Duration(seconds: 5));
-        refresh();
+        _clearRoomPresence();
+        if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
       },
     );
 
@@ -143,18 +280,36 @@ class RealtimeService {
             _rebindGlobalListeners(parsedId);
           }
         }
-      } else if (state == PusherChannelsClientLifeCycleState.pendingConnection) {
+        if (_lastNotebookId != null) {
+          debugPrint(
+            '🔄 [Realtime] Re-subscrevendo ao caderno $_lastNotebookId...',
+          );
+          joinNotebookChannel(notebookId: _lastNotebookId!);
+        }
+        if (_lastUserId != null && _lastOnGlobalSyncNeeded != null) {
+          debugPrint(
+            '🔄 [Realtime] Re-ativando canal do utilizador $_lastUserId...',
+          );
+          listenToUserAccount(_lastUserId!, _lastOnGlobalSyncNeeded!);
+        }
+      } else if (state ==
+          PusherChannelsClientLifeCycleState.pendingConnection) {
         statusNotifier.value = RealtimeStatus.connecting;
       } else if (state == PusherChannelsClientLifeCycleState.disconnected) {
         statusNotifier.value = RealtimeStatus.disconnected;
         debugPrint('🔌 [Realtime] Socket desconectado.');
+        _clearRoomPresence();
+        if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
       } else if (state == PusherChannelsClientLifeCycleState.reconnecting) {
         statusNotifier.value = RealtimeStatus.connecting;
         debugPrint('🔄 [Realtime] Tentando reconectar...');
-      } else if (state == PusherChannelsClientLifeCycleState.connectionError || 
-                 state == PusherChannelsClientLifeCycleState.gotPusherError) {
+        _clearRoomPresence();
+      } else if (state == PusherChannelsClientLifeCycleState.connectionError ||
+          state == PusherChannelsClientLifeCycleState.gotPusherError) {
         statusNotifier.value = RealtimeStatus.error;
         debugPrint('❌ [Realtime] Erro crítico de conexão.');
+        _clearRoomPresence();
+        if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
       }
     });
 
@@ -163,14 +318,31 @@ class RealtimeService {
     } catch (e) {
       statusNotifier.value = RealtimeStatus.error;
       debugPrint('❌ [Realtime] Falha ao ligar Reverb: $e');
+      _clearRoomPresence();
+      if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
     }
+  }
+
+  void _triggerAutoReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+      if (!_isIntentionallyDisconnected &&
+          statusNotifier.value != RealtimeStatus.connected) {
+        debugPrint(
+          '🔄 [Realtime] Resiliência: Auto-reconexão após perda de sinal...',
+        );
+        reconnectIfNeeded();
+      }
+    });
   }
 
   void _bindEvent(String eventName, void Function(ChannelReadEvent) onEvent) {
     if (_notebookChannel == null) return;
     if (_boundEvents.contains(eventName)) return;
     _boundEvents.add(eventName);
-    _eventSubscriptions[eventName] = _notebookChannel!.bind(eventName).listen(onEvent);
+    _eventSubscriptions[eventName] = _notebookChannel!
+        .bind(eventName)
+        .listen(onEvent);
   }
 
   Map<String, dynamic> _safeParse(dynamic data) {
@@ -189,50 +361,61 @@ class RealtimeService {
   }
 
   Future<void> joinNotebookChannel({required int notebookId}) async {
-    if (statusNotifier.value != RealtimeStatus.connected) await initConnection();
-    
+    _lastNotebookId = notebookId;
+    if (_pusher == null) await initConnection();
+
     int attempts = 0;
     while (statusNotifier.value != RealtimeStatus.connected && attempts < 10) {
-      debugPrint('⏳ [Realtime] Aguardando conexão para entrar no canal (tentativa ${attempts + 1})...');
-      await Future.delayed(const Duration(milliseconds: 1000));
+      await Future.delayed(const Duration(seconds: 1));
       attempts++;
     }
-
-    if (statusNotifier.value != RealtimeStatus.connected) {
-      debugPrint('❌ [Realtime] Não foi possível conectar ao Reverb após $attempts tentativas.');
+    if (statusNotifier.value != RealtimeStatus.connected || _pusher == null)
       return;
-    }
 
     final channelName = 'presence-notebook.$notebookId';
 
     if (_notebookChannel != null) {
       if (_notebookChannel!.name == channelName) {
-        debugPrint('ℹ️ [Realtime] Já inscrito no canal $channelName. Ignorando re-subscrição redundante.');
+        debugPrint(
+          'ℹ️ [Realtime] Já inscrito no canal $channelName. Ignorando re-subscrição redundante.',
+        );
         return;
       }
-      debugPrint('🧹 [Realtime] Saindo do canal anterior: ${_notebookChannel!.name}');
+      debugPrint(
+        '🧹 [Realtime] Saindo do canal anterior: ${_notebookChannel!.name}',
+      );
       _notebookChannel!.unsubscribe();
     }
 
+    _lastNotebookId = notebookId;
+
     final prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('sanctum_token');
-    
+
     _boundEvents.clear();
 
-    final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPresenceChannel(
-      authorizationEndpoint: Uri.parse(ApiConfig.authEndpoint),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
+    final authDelegate =
+        EndpointAuthorizableChannelTokenAuthorizationDelegate.forPresenceChannel(
+          authorizationEndpoint: Uri.parse(ApiConfig.authEndpoint),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        );
+
+    _notebookChannel = _pusher!.presenceChannel(
+      channelName,
+      authorizationDelegate: authDelegate,
     );
 
-    _notebookChannel = _pusher!.presenceChannel(channelName, authorizationDelegate: authDelegate);
-
-    _subSucceededSub = _notebookChannel!.whenSubscriptionSucceeded().listen((event) {
+    _subSucceededSub = _notebookChannel!.whenSubscriptionSucceeded().listen((
+      event,
+    ) {
       final data = _safeParse(event.data);
-      debugPrint('📡 [Realtime] Subscrição Presence confirmada para $channelName');
-      
+      debugPrint(
+        '📡 [Realtime] Subscrição Presence confirmada para $channelName',
+      );
+
       _estudantesNaSala.clear();
       if (data['presence'] != null && data['presence']['hash'] != null) {
         final hash = Map<String, dynamic>.from(data['presence']['hash']);
@@ -245,13 +428,14 @@ class RealtimeService {
             flattenedInfo = infoMap;
           }
           final String effectiveId = uid.toString();
-          flattenedInfo['id'] = effectiveId; 
-          
+          flattenedInfo['id'] = effectiveId;
+
           // 🚀 PERSISTÊNCIA DE ESTADO: Recuperar estados de voz se existirem
-          if (flattenedInfo['isInCall'] == null && flattenedInfo['is_in_call'] != null) {
+          if (flattenedInfo['isInCall'] == null &&
+              flattenedInfo['is_in_call'] != null) {
             flattenedInfo['isInCall'] = flattenedInfo['is_in_call'] == true;
           }
-          
+
           _estudantesNaSala[effectiveId] = flattenedInfo;
         });
       }
@@ -260,7 +444,10 @@ class RealtimeService {
 
     _memberAddedSub = _notebookChannel!.whenMemberAdded().listen((event) {
       final data = _safeParse(event.data);
-      final String? uid = event.userId?.toString() ?? data['id']?.toString() ?? data['user_id']?.toString();
+      final String? uid =
+          event.userId?.toString() ??
+          data['id']?.toString() ??
+          data['user_id']?.toString();
       debugPrint('🟢 [Realtime] EVENTO MEMBER_ADDED DETECTADO: $uid');
       if (uid == null) return;
 
@@ -270,8 +457,8 @@ class RealtimeService {
       } else {
         userInfo = data;
       }
-      userInfo['id'] = uid; 
-      
+      userInfo['id'] = uid;
+
       // 🚀 NORMALIZAÇÃO DE CAMPOS
       if (userInfo['isInCall'] == null && userInfo['is_in_call'] != null) {
         userInfo['isInCall'] = userInfo['is_in_call'] == true;
@@ -284,57 +471,166 @@ class RealtimeService {
     _memberRemovedSub = _notebookChannel!.whenMemberRemoved().listen((event) {
       String? uid = event.userId?.toString();
       final dynamic rawData = event.data;
-      
-      debugPrint('🔴 [Realtime] EVENTO MEMBER_REMOVED DETECTADO: $uid | Data: $rawData');
+
+      debugPrint(
+        '🔴 [Realtime] EVENTO MEMBER_REMOVED DETECTADO: $uid | Data: $rawData',
+      );
 
       // 🚀 RECUPERAÇÃO DE ID MELHORADA PARA REVERB
       if (uid == null && rawData != null) {
         final parsedData = _safeParse(rawData);
         uid = parsedData['user_id']?.toString() ?? parsedData['id']?.toString();
       }
-      
+
       if (uid != null) {
         _estudantesNaSala.remove(uid);
         _broadcastUsersList();
       }
     });
 
-    _bindEvent('client-ink-stroke', (event) => _strokeStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-text-block', (event) => _textStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-image-block', (event) => _imageStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-viewport-sync', (event) => _viewportStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-follow-update', (event) => _followStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-page-event', (event) => _pageEventStreamController.add(_safeParse(event.data)));
-    _bindEvent('PageUpdated', (event) => _pageUpdatedStreamController.add(_safeParse(event.data)));
+    _bindEvent(
+      'client-ink-stroke',
+      (event) => _strokeStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-text-block',
+      (event) => _textStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-image-block',
+      (event) => _imageStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-viewport-sync',
+      (event) => _viewportStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-follow-update',
+      (event) => _followStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-page-event',
+      (event) => _pageEventStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'PageUpdated',
+      (event) => _pageUpdatedStreamController.add(_safeParse(event.data)),
+    );
     _bindEvent('client-webrtc-signal', (event) {
       _webrtcStreamController.add(_safeParse(event.data));
     });
-    _bindEvent('client-hand-event', (event) => _handStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-image-uploading', (event) => _uploadingStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-voice-call-started', (event) => _voiceCallStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-voice-state-update', (event) => _voiceStateStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-session-meta', (event) => _sessionMetaStreamController.add(_safeParse(event.data))); 
-    _bindEvent('client-role-updated', (event) => _roleUpdateStreamController.add(_safeParse(event.data))); // 🚀 Novo
-    _bindEvent('client-user-activity', (event) => _activityStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-pointer-move', (event) => _pointerStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-object-transform', (event) => _objectTransformStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-chat-message', (event) => _chatStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-audio-message', (event) => _audioMessageStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-chat-sync-request', (event) => _chatSyncRequestController.add(_safeParse(event.data)));
-    _bindEvent('client-chat-sync-response', (event) => _chatSyncResponseController.add(_safeParse(event.data)));
-    _bindEvent('client-reaction', (event) => _reactionStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-collective-sync', (event) => _collectiveSyncRequestController.add(_safeParse(event.data)));
-    _bindEvent('client-full-state-request', (event) => _fullStateRequestController.add(_safeParse(event.data)));
-    _bindEvent('client-full-state-deliver', (event) => _fullStateReceivedController.add(_safeParse(event.data)));
-    _bindEvent('client-page-fingerprint', (event) => _pageFingerprintStreamController.add(_safeParse(event.data)));
-    _bindEvent('client-cloud-sync-signal', (event) => _cloudSyncSignalStreamController.add(_safeParse(event.data))); // 🚀 Novo
-    _bindEvent('client-global-action', (event) => _globalActionStreamController.add(_safeParse(event.data))); 
-    _bindEvent('client-sync-push-finished', (event) => _syncPushFinishedController.add(_safeParse(event.data)));
-    _bindEvent('page.deleted', (event) => _pageDeletedStreamController.add(_safeParse(event.data))); // 🚀
-    _bindEvent('notebook.deleted', (event) => _notebookDeletedStreamController.add(_safeParse(event.data))); // 🚀
-    _bindEvent('notebook.structure.updated', (event) => _notebookStructureStreamController.add(_safeParse(event.data))); // 🚀
-    _bindEvent('client-voice-policy-updated', (event) => _voicePolicyStreamController.add(_safeParse(event.data))); // 🚀 Novo
-    _bindEvent('client-live-invite', (event) => _inviteStreamController.add(_safeParse(event.data)));
+    _bindEvent(
+      'client-hand-event',
+      (event) => _handStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-image-uploading',
+      (event) => _uploadingStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-voice-call-started',
+      (event) => _voiceCallStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-voice-state-update',
+      (event) => _voiceStateStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-session-meta',
+      (event) => _sessionMetaStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-role-updated',
+      (event) => _roleUpdateStreamController.add(_safeParse(event.data)),
+    ); // 🚀 Novo
+    _bindEvent(
+      'client-user-activity',
+      (event) => _activityStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-pointer-move',
+      (event) => _pointerStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-object-transform',
+      (event) => _objectTransformStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-chat-message',
+      (event) => _chatStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-audio-message',
+      (event) => _audioMessageStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-chat-sync-request',
+      (event) => _chatSyncRequestController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-chat-sync-response',
+      (event) => _chatSyncResponseController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-reaction',
+      (event) => _reactionStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-collective-sync',
+      (event) => _collectiveSyncRequestController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-full-state-request',
+      (event) => _fullStateRequestController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-full-state-deliver',
+      (event) => _fullStateReceivedController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-page-fingerprint',
+      (event) => _pageFingerprintStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-cloud-sync-signal',
+      (event) => _cloudSyncSignalStreamController.add(_safeParse(event.data)),
+    ); // 🚀 Novo
+    _bindEvent(
+      'client-global-action',
+      (event) => _globalActionStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-history-request',
+      (event) => _historyRequestStreamController.add(_safeParse(event.data)),
+    ); // 🚀 Histórico
+    _bindEvent(
+      'client-history-deliver',
+      (event) => _historyDeliverStreamController.add(_safeParse(event.data)),
+    ); // 🚀 Histórico
+    _bindEvent(
+      'client-sync-push-finished',
+      (event) => _syncPushFinishedController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'page.deleted',
+      (event) => _pageDeletedStreamController.add(_safeParse(event.data)),
+    ); // 🚀
+    _bindEvent(
+      'notebook.deleted',
+      (event) => _notebookDeletedStreamController.add(_safeParse(event.data)),
+    ); // 🚀
+    _bindEvent(
+      'notebook.structure.updated',
+      (event) => _notebookStructureStreamController.add(_safeParse(event.data)),
+    ); // 🚀
+    _bindEvent(
+      'client-voice-policy-updated',
+      (event) => _voicePolicyStreamController.add(_safeParse(event.data)),
+    ); // 🚀 Novo
+    _bindEvent(
+      'client-live-invite',
+      (event) => _inviteStreamController.add(_safeParse(event.data)),
+    );
 
     _notebookChannel!.subscribe();
   }
@@ -346,155 +642,288 @@ class RealtimeService {
     if (signalData.containsKey('target_id')) {
       signalData['target_id'] = signalData['target_id'].toString();
     }
-    _notebookChannel?.trigger(eventName: 'client-webrtc-signal', data: jsonEncode(signalData));
+    _notebookChannel?.trigger(
+      eventName: 'client-webrtc-signal',
+      data: jsonEncode(signalData),
+    );
   }
 
-  Future<bool> broadcastStroke({required int notebookId, required Map<String, dynamic> strokeData, String? myUserId}) async {
+  Future<bool> broadcastStroke({
+    required int notebookId,
+    required Map<String, dynamic> strokeData,
+    String? myUserId,
+  }) async {
     if (_notebookChannel == null) return false;
     if (myUserId != null) strokeData['sender_id'] = myUserId;
-    _notebookChannel!.trigger(eventName: 'client-ink-stroke', data: jsonEncode(strokeData));
+    _notebookChannel!.trigger(
+      eventName: 'client-ink-stroke',
+      data: jsonEncode(strokeData),
+    );
     return true;
   }
 
-  Future<bool> broadcastTextBlock({required int notebookId, required Map<String, dynamic> textData, String? myUserId}) async {
+  Future<bool> broadcastTextBlock({
+    required int notebookId,
+    required Map<String, dynamic> textData,
+    String? myUserId,
+  }) async {
     if (_notebookChannel == null) return false;
     if (myUserId != null) textData['sender_id'] = myUserId;
-    _notebookChannel!.trigger(eventName: 'client-text-block', data: jsonEncode(textData));
+    _notebookChannel!.trigger(
+      eventName: 'client-text-block',
+      data: jsonEncode(textData),
+    );
     return true;
   }
 
-  Future<bool> broadcastImageBlock({required int notebookId, required Map<String, dynamic> imageData, String? myUserId}) async {
+  Future<bool> broadcastImageBlock({
+    required int notebookId,
+    required Map<String, dynamic> imageData,
+    String? myUserId,
+  }) async {
     if (_notebookChannel == null) return false;
     if (myUserId != null) imageData['sender_id'] = myUserId;
-    _notebookChannel!.trigger(eventName: 'client-image-block', data: jsonEncode(imageData));
+    _notebookChannel!.trigger(
+      eventName: 'client-image-block',
+      data: jsonEncode(imageData),
+    );
     return true;
   }
 
-  Future<bool> broadcastImageUploading({required int notebookId, required String myUserId, required bool isUploading}) async {
+  Future<bool> broadcastImageUploading({
+    required int notebookId,
+    required String myUserId,
+    required bool isUploading,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {'sender_id': myUserId, 'is_uploading': isUploading};
-    _notebookChannel!.trigger(eventName: 'client-image-uploading', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-image-uploading',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastViewport({required int notebookId, required Map<String, dynamic> viewportData, required String myUserId}) async {
+  Future<bool> broadcastViewport({
+    required int notebookId,
+    required Map<String, dynamic> viewportData,
+    required String myUserId,
+  }) async {
     if (_notebookChannel == null) return false;
     viewportData['sender_id'] = myUserId;
-    _notebookChannel!.trigger(eventName: 'client-viewport-sync', data: jsonEncode(viewportData));
+    _notebookChannel!.trigger(
+      eventName: 'client-viewport-sync',
+      data: jsonEncode(viewportData),
+    );
     return true;
   }
 
-  Future<bool> broadcastFollowUpdate({required int notebookId, required String myUserId, String? followingUserId}) async {
+  Future<bool> broadcastFollowUpdate({
+    required int notebookId,
+    required String myUserId,
+    String? followingUserId,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {'follower_id': myUserId, 'following_id': followingUserId};
-    _notebookChannel!.trigger(eventName: 'client-follow-update', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-follow-update',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastPageEvent({required int notebookId, required Map<String, dynamic> pageData, required String myUserId}) async {
-    if (_notebookChannel == null) return false;
+  Future<bool> broadcastPageEvent({
+    required int notebookId,
+    required Map<String, dynamic> pageData,
+    required String myUserId,
+  }) async {
+    if (!await ensureChannelReady()) return false;
     pageData['sender_id'] = myUserId;
-    _notebookChannel!.trigger(eventName: 'client-page-event', data: jsonEncode(pageData));
+    _notebookChannel!.trigger(
+      eventName: 'client-page-event',
+      data: jsonEncode(pageData),
+    );
     return true;
   }
 
-  Future<bool> broadcastHandEvent({required int notebookId, required String myUserId, required bool isRaised}) async {
+  Future<bool> broadcastHandEvent({
+    required int notebookId,
+    required String myUserId,
+    required bool isRaised,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {'sender_id': myUserId, 'is_raised': isRaised};
-    _notebookChannel!.trigger(eventName: 'client-hand-event', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-hand-event',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastVoiceCallStarted({required int notebookId, required String myUserId, required String senderName}) async {
+  Future<bool> broadcastVoiceCallStarted({
+    required int notebookId,
+    required String myUserId,
+    required String senderName,
+  }) async {
     if (_notebookChannel == null) return false;
-    final data = {'sender_id': myUserId, 'sender_name': senderName, 'timestamp': DateTime.now().toIso8601String()};
-    _notebookChannel!.trigger(eventName: 'client-voice-call-started', data: jsonEncode(data));
+    final data = {
+      'sender_id': myUserId,
+      'sender_name': senderName,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-voice-call-started',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
   void startVoiceCall({required int notebookId, required String myUserId}) {
     if (_notebookChannel == null) return;
     final data = {'sender_id': myUserId, 'is_in_call': true};
-    _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-voice-state-update',
+      data: jsonEncode(data),
+    );
   }
 
   void stopVoiceCall({required int notebookId, required String myUserId}) {
     if (_notebookChannel == null) return;
     final data = {'sender_id': myUserId, 'is_in_call': false};
-    _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-voice-state-update',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<bool> broadcastVoicePolicy({required int notebookId, required String targetId, required bool canSpeak}) async {
+  Future<bool> broadcastVoicePolicy({
+    required int notebookId,
+    required String targetId,
+    required bool canSpeak,
+  }) async {
     if (_notebookChannel == null) return false;
-    final data = {'notebook_id': notebookId, 'target_id': targetId, 'can_speak': canSpeak};
-    _notebookChannel!.trigger(eventName: 'client-voice-policy-updated', data: jsonEncode(data));
+    final data = {
+      'notebook_id': notebookId,
+      'target_id': targetId,
+      'can_speak': canSpeak,
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-voice-policy-updated',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastLiveInvite({required int notebookId, required String myUserId, required String senderName, required List<String> targetUserIds}) async {
+  Future<bool> broadcastLiveInvite({
+    required int notebookId,
+    required String myUserId,
+    required String senderName,
+    required List<String> targetUserIds,
+  }) async {
     if (_notebookChannel == null) return false;
-    final data = {'notebook_id': notebookId, 'sender_id': myUserId, 'sender_name': senderName, 'targets': targetUserIds};
-    _notebookChannel!.trigger(eventName: 'client-live-invite', data: jsonEncode(data));
+    final data = {
+      'notebook_id': notebookId,
+      'sender_id': myUserId,
+      'sender_name': senderName,
+      'targets': targetUserIds,
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-live-invite',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastRoleUpdate({required int notebookId, required String targetUserId, required String newRole}) async {
+  Future<bool> broadcastRoleUpdate({
+    required int notebookId,
+    required String targetUserId,
+    required String newRole,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {'target_id': targetUserId, 'role': newRole};
-    _notebookChannel!.trigger(eventName: 'client-role-updated', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-role-updated',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
   Future<bool> broadcastVoiceStateUpdate({
-    required int notebookId, 
-    required String myUserId, 
+    required int notebookId,
+    required String myUserId,
     required bool isInCall,
     bool isTalking = false,
     double audioLevel = 0.0,
   }) async {
     if (_notebookChannel == null) return false;
     final data = {
-      'sender_id': myUserId, 
+      'sender_id': myUserId,
       'is_in_call': isInCall,
       'is_talking': isTalking,
       'audio_level': audioLevel,
     };
-    _notebookChannel!.trigger(eventName: 'client-voice-state-update', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-voice-state-update',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastSessionMeta({required int notebookId, required Map<String, dynamic> metaData}) async {
+  Future<bool> broadcastSessionMeta({
+    required int notebookId,
+    required Map<String, dynamic> metaData,
+  }) async {
     if (_notebookChannel == null) return false;
-    _notebookChannel!.trigger(eventName: 'client-session-meta', data: jsonEncode(metaData));
+    _notebookChannel!.trigger(
+      eventName: 'client-session-meta',
+      data: jsonEncode(metaData),
+    );
     return true;
   }
 
-  Future<bool> broadcastUserActivity({required int notebookId, required String myUserId, required String activity}) async {
+  Future<bool> broadcastUserActivity({
+    required int notebookId,
+    required String myUserId,
+    required String activity,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {'sender_id': myUserId, 'activity': activity};
-    _notebookChannel!.trigger(eventName: 'client-user-activity', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-user-activity',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastPointerMove({required int notebookId, required String myUserId, required Offset pos, int? pageNumber, String? tool}) async {
+  Future<bool> broadcastPointerMove({
+    required int notebookId,
+    required String myUserId,
+    required Offset pos,
+    int? pageNumber,
+    String? tool,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {
-      'sender_id': myUserId, 
-      'x': double.parse(pos.dx.toStringAsFixed(1)), 
+      'sender_id': myUserId,
+      'x': double.parse(pos.dx.toStringAsFixed(1)),
       'y': double.parse(pos.dy.toStringAsFixed(1)),
       'page_number': pageNumber,
       if (tool != null) 'tool': tool,
     };
-    _notebookChannel!.trigger(eventName: 'client-pointer-move', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-pointer-move',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
   Future<bool> broadcastObjectTransform({
-    required int notebookId, 
-    required String myUserId, 
+    required int notebookId,
+    required String myUserId,
     required String pageClientId,
-    required String objectId, 
+    required String objectId,
     Offset? delta,
+    Offset? positionDelta,
     double? scale,
     double? rotation,
     Map<String, dynamic>? overrideState,
@@ -507,33 +936,47 @@ class RealtimeService {
       'object_id': objectId,
       if (delta != null) 'dx': double.parse(delta.dx.toStringAsFixed(2)),
       if (delta != null) 'dy': double.parse(delta.dy.toStringAsFixed(2)),
+      if (positionDelta != null)
+        'pdx': double.parse(positionDelta.dx.toStringAsFixed(2)),
+      if (positionDelta != null)
+        'pdy': double.parse(positionDelta.dy.toStringAsFixed(2)),
       if (scale != null) 'scale': scale,
       if (rotation != null) 'rotation': rotation,
       if (overrideState != null) 'state': overrideState,
       if (isMoving != null) 'is_moving': isMoving,
     };
-    _notebookChannel!.trigger(eventName: 'client-object-transform', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-object-transform',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
-  Future<bool> broadcastChatMessage({required int notebookId, required String myUserId, required String message}) async {
+  Future<bool> broadcastChatMessage({
+    required int notebookId,
+    required String myUserId,
+    required String message,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {
       'msg_id': const Uuid().v4(),
       'type': 'text',
-      'sender_id': myUserId, 
-      'message': message, 
-      'timestamp': DateTime.now().toIso8601String()
+      'sender_id': myUserId,
+      'message': message,
+      'timestamp': DateTime.now().toIso8601String(),
     };
-    _notebookChannel!.trigger(eventName: 'client-chat-message', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-chat-message',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
   Future<bool> broadcastAudioMessage({
-    required int notebookId, 
-    required String myUserId, 
-    required String audioUrl, 
-    required num duration, 
+    required int notebookId,
+    required String myUserId,
+    required String audioUrl,
+    required num duration,
     bool isLive = false,
     String? streamMsgId,
     int? segmentIndex,
@@ -543,59 +986,88 @@ class RealtimeService {
     final data = {
       'msg_id': streamMsgId ?? const Uuid().v4(),
       'type': isLive ? 'audio_stream' : 'audio',
-      'sender_id': myUserId, 
-      'audio_url': audioUrl, 
-      'duration': duration, 
+      'sender_id': myUserId,
+      'audio_url': audioUrl,
+      'duration': duration,
       'is_live': isLive,
       'index': segmentIndex,
       'is_final': isFinal,
-      'timestamp': DateTime.now().toIso8601String()
+      'timestamp': DateTime.now().toIso8601String(),
     };
-    _notebookChannel!.trigger(eventName: 'client-audio-message', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-audio-message',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
   Future<void> requestChatSync({required String myUserId}) async {
     if (_notebookChannel == null) return;
     final data = {'sender_id': myUserId};
-    _notebookChannel!.trigger(eventName: 'client-chat-sync-request', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-chat-sync-request',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<void> sendChatSyncResponse({required String targetUserId, required List<Map<String, dynamic>> history}) async {
+  Future<void> sendChatSyncResponse({
+    required String targetUserId,
+    required List<Map<String, dynamic>> history,
+  }) async {
     if (_notebookChannel == null) return;
-    final data = {
-      'target_id': targetUserId,
-      'history': history,
-    };
-    _notebookChannel!.trigger(eventName: 'client-chat-sync-response', data: jsonEncode(data));
+    final data = {'target_id': targetUserId, 'history': history};
+    _notebookChannel!.trigger(
+      eventName: 'client-chat-sync-response',
+      data: jsonEncode(data),
+    );
   }
 
   Future<void> requestCollectiveSync({required String myUserId}) async {
     if (_notebookChannel == null) return;
     final data = {'sender_id': myUserId};
-    _notebookChannel!.trigger(eventName: 'client-collective-sync', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-collective-sync',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<void> requestFullState({required int notebookId, required String targetUserId, required int pageNumber}) async {
+  Future<void> requestFullState({
+    required int notebookId,
+    required String targetUserId,
+    required int pageNumber,
+  }) async {
     if (_notebookChannel == null) return;
     final data = {
       'sender_id': targetUserId, // Quem está a pedir
       'target_id': targetUserId, // Resiliência
       'page_number': pageNumber,
     };
-    _notebookChannel!.trigger(eventName: 'client-full-state-request', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-full-state-request',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<void> deliverFullState({required int notebookId, required String targetUserId, required Map<String, dynamic> pageData}) async {
+  Future<void> deliverFullState({
+    required int notebookId,
+    required String targetUserId,
+    required Map<String, dynamic> pageData,
+  }) async {
     if (_notebookChannel == null) return;
-    final data = {
-      'target_id': targetUserId,
-      'page_data': pageData,
-    };
-    _notebookChannel!.trigger(eventName: 'client-full-state-deliver', data: jsonEncode(data));
+    final data = {'target_id': targetUserId, 'page_data': pageData};
+    _notebookChannel!.trigger(
+      eventName: 'client-full-state-deliver',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<void> broadcastPageFingerprint({required int notebookId, required String myUserId, required int pageNumber, required String fingerprint, int? updatedAt}) async {
+  Future<void> broadcastPageFingerprint({
+    required int notebookId,
+    required String myUserId,
+    required int pageNumber,
+    required String fingerprint,
+    int? updatedAt,
+  }) async {
     if (_notebookChannel == null) return;
     final data = {
       'sender_id': myUserId,
@@ -603,33 +1075,59 @@ class RealtimeService {
       'fingerprint': fingerprint,
       'updated_at': updatedAt, // 🚀 Para eleição de fonte
     };
-    _notebookChannel!.trigger(eventName: 'client-page-fingerprint', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-page-fingerprint',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<void> broadcastCloudSyncSignal({required int notebookId, required String myUserId, required int pageNumber}) async {
+  Future<void> broadcastCloudSyncSignal({
+    required int notebookId,
+    required String myUserId,
+    required int pageNumber,
+  }) async {
     if (_notebookChannel == null) return;
-    final data = {
-      'sender_id': myUserId,
-      'page_number': pageNumber,
-    };
-    _notebookChannel!.trigger(eventName: 'client-cloud-sync-signal', data: jsonEncode(data));
+    final data = {'sender_id': myUserId, 'page_number': pageNumber};
+    _notebookChannel!.trigger(
+      eventName: 'client-cloud-sync-signal',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<void> broadcastGlobalAction({required int notebookId, required Map<String, dynamic> actionData}) async {
-    if (_notebookChannel == null) return;
-    _notebookChannel!.trigger(eventName: 'client-global-action', data: jsonEncode(actionData));
+  Future<void> broadcastGlobalAction({
+    required int notebookId,
+    required Map<String, dynamic> actionData,
+  }) async {
+    if (!await ensureChannelReady()) return;
+    _notebookChannel!.trigger(
+      eventName: 'client-global-action',
+      data: jsonEncode(actionData),
+    );
   }
 
-  Future<void> broadcastSyncPushFinished({required int notebookId, required String myUserId}) async {
+  Future<void> broadcastSyncPushFinished({
+    required int notebookId,
+    required String myUserId,
+  }) async {
     if (_notebookChannel == null) return;
     final data = {'sender_id': myUserId};
-    _notebookChannel!.trigger(eventName: 'client-sync-push-finished', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-sync-push-finished',
+      data: jsonEncode(data),
+    );
   }
 
-  Future<bool> broadcastReaction({required int notebookId, required String myUserId, required String reaction}) async {
+  Future<bool> broadcastReaction({
+    required int notebookId,
+    required String myUserId,
+    required String reaction,
+  }) async {
     if (_notebookChannel == null) return false;
     final data = {'sender_id': myUserId, 'reaction': reaction};
-    _notebookChannel!.trigger(eventName: 'client-reaction', data: jsonEncode(data));
+    _notebookChannel!.trigger(
+      eventName: 'client-reaction',
+      data: jsonEncode(data),
+    );
     return true;
   }
 
@@ -638,12 +1136,14 @@ class RealtimeService {
   }
 
   List<Map<String, dynamic>> getConnectedUsers() {
-    return _estudantesNaSala.values.map((v) => Map<String, dynamic>.from(v)).toList();
+    return _estudantesNaSala.values
+        .map((v) => Map<String, dynamic>.from(v))
+        .toList();
   }
 
   void leaveNotebookChannel(int notebookId) {
     debugPrint('🚪 [Realtime] A sair da sala do caderno $notebookId');
-    
+
     for (var sub in _eventSubscriptions.values) {
       sub.cancel();
     }
@@ -654,39 +1154,113 @@ class RealtimeService {
     _memberRemovedSub?.cancel();
     _notebookChannel?.unsubscribe();
     _notebookChannel = null;
-    _boundEvents.clear(); 
+    _lastNotebookId = null;
+    _boundEvents.clear();
     _estudantesNaSala.clear();
-    _usersStreamController.add([]); 
+    _usersStreamController.add([]);
   }
 
-  void disconnect() {
-    _pusher?.disconnect();
+  void _cleanupOldConnection() {
+    try {
+      _pusher?.disconnect();
+    } catch (_) {}
+    _pusher = null;
+
+    _lifecycleSubscription?.cancel();
+    _lifecycleSubscription = null;
+
+    for (var sub in _eventSubscriptions.values) {
+      sub.cancel();
+    }
+    _eventSubscriptions.clear();
+
+    _subSucceededSub?.cancel();
+    _memberAddedSub?.cancel();
+    _memberRemovedSub?.cancel();
+    _notebookChannel = null;
+
+    _notebookChannel = null;
+    _userChannel = null;
+    _boundEvents.clear();
+    _clearRoomPresence();
+  }
+
+  void suspendConnection() {
+    debugPrint(
+      '🛑 [Realtime] App suspensa. Desconectando do Reverb para sair da sala...',
+    );
+    _isIntentionallyDisconnected = true;
+    _cleanupOldConnection();
     statusNotifier.value = RealtimeStatus.disconnected;
   }
 
-  Future<void> reconnectIfNeeded() async {
-    debugPrint('🔄 [Realtime] A verificar saúde da ligação no regresso de hibernação...');
-    if (statusNotifier.value != RealtimeStatus.connected || _pusher == null) {
-      debugPrint('⚡ [Realtime] Reverb desligado ou instável pós-hibernação. A forçar reconexão limpa...');
-      try {
-        _pusher?.disconnect();
-      } catch (_) {}
-      statusNotifier.value = RealtimeStatus.disconnected;
-      await initConnection();
+  void disconnect() {
+    _isIntentionallyDisconnected = true;
+    _lastNotebookId = null;
+    _lastUserId = null;
+    _lastOnGlobalSyncNeeded = null;
+    _cleanupOldConnection();
+    statusNotifier.value = RealtimeStatus.disconnected;
+  }
+
+  Future<void> reconnectIfNeeded({bool force = false}) async {
+    if (_isReconnecting) return;
+    _isReconnecting = true;
+    try {
+      debugPrint(
+        '🔄 [Realtime] A verificar saúde da ligação no regresso de hibernação (Force: $force)...',
+      );
+      if (force ||
+          statusNotifier.value != RealtimeStatus.connected ||
+          _pusher == null) {
+        debugPrint(
+          '⚡ [Realtime] Reverb desligado ou instável pós-hibernação. A forçar reconexão limpa...',
+        );
+
+        _cleanupOldConnection();
+        statusNotifier.value = RealtimeStatus.disconnected;
+
+        await initConnection();
+      } else {
+        debugPrint('✅ [Realtime] Conexão ativa mantida durante a hibernação.');
+      }
+    } finally {
+      _isReconnecting = false;
     }
   }
 
-  Future<void> listenToUserAccount(int userId, Function onGlobalSyncNeeded) async {
+  Future<void> listenToUserAccount(
+    int userId,
+    Function onGlobalSyncNeeded,
+  ) async {
+    _lastUserId = userId;
+    _lastOnGlobalSyncNeeded = onGlobalSyncNeeded;
+
     if (_pusher == null) await initConnection();
-    if (_pusher == null) return;
+
+    int attempts = 0;
+    while (statusNotifier.value != RealtimeStatus.connected && attempts < 10) {
+      await Future.delayed(const Duration(seconds: 1));
+      attempts++;
+    }
+    if (statusNotifier.value != RealtimeStatus.connected || _pusher == null)
+      return;
+
     final prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('sanctum_token');
     final channelName = 'private-user.$userId';
-    final authDelegate = EndpointAuthorizableChannelTokenAuthorizationDelegate.forPrivateChannel(
-      authorizationEndpoint: Uri.parse(ApiConfig.authEndpoint),
-      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+    final authDelegate =
+        EndpointAuthorizableChannelTokenAuthorizationDelegate.forPrivateChannel(
+          authorizationEndpoint: Uri.parse(ApiConfig.authEndpoint),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        );
+    _userChannel = _pusher!.privateChannel(
+      channelName,
+      authorizationDelegate: authDelegate,
     );
-    _userChannel = _pusher!.privateChannel(channelName, authorizationDelegate: authDelegate);
     _userChannel!.bind('SyncRequested').listen((event) {
       _syncRequestedStreamController.add(_safeParse(event.data));
       onGlobalSyncNeeded();
@@ -700,7 +1274,7 @@ class RealtimeService {
     _userChannel!.bind('LiveSessionInvite').listen((event) {
       _inviteStreamController.add(_safeParse(event.data));
     });
-    
+
     // 🚀 OUVIR REVOGAÇÃO DE ACESSO
     _userChannel!.bind('notebook.access_revoked').listen((event) {
       debugPrint('🚨 [Realtime] Acesso revogado recebido via canal privado!');
@@ -737,5 +1311,7 @@ class RealtimeService {
 }
 
 final realtimeServiceProvider = Provider<RealtimeService>((ref) {
-  return RealtimeService();
+  final service = RealtimeService();
+  ref.onDispose(() => service.dispose());
+  return service;
 });

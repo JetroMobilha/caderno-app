@@ -19,6 +19,7 @@ import '../widgets/toolbars/top_action_toolbar.dart'; // 🚀 v10.14
 import '../widgets/page_canvas.dart';
 import '../../explanations/widgets/explanation_layer.dart';
 import '../widgets/dialogs/thickness_studio_dialog.dart';
+import '../widgets/dialogs/page_settings_dialog.dart';
 import '../widgets/dialogs/paper_style_dialog.dart';
 import '../widgets/dialogs/page_action_helper.dart';
 import '../widgets/dialogs/add_page_dialog.dart';
@@ -39,7 +40,8 @@ class CanvasScreen extends ConsumerStatefulWidget {
   ConsumerState<CanvasScreen> createState() => _CanvasScreenState();
 }
 
-class _CanvasScreenState extends ConsumerState<CanvasScreen> with WidgetsBindingObserver {
+class _CanvasScreenState extends ConsumerState<CanvasScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
 
@@ -56,13 +58,15 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> with WidgetsBinding
       final user = _container?.read(authProvider).currentUser;
       final String myUserId = (user?.serverId ?? user?.id)?.toString() ?? '';
 
-      _container?.read(canvasDocumentProvider.notifier).initNotebook(
-        widget.notebook.id ?? 0,
-        widget.notebook.serverId,
-        widget.notebook.role,
-        myUserId,
-        templateType: widget.notebook.templateType,
-      );
+      _container
+          ?.read(canvasDocumentProvider.notifier)
+          .initNotebook(
+            widget.notebook.id ?? 0,
+            widget.notebook.serverId,
+            widget.notebook.role,
+            myUserId,
+            templateType: widget.notebook.templateType,
+          );
 
       _collabService = _container?.read(collaborationRoomServiceProvider);
 
@@ -101,24 +105,39 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> with WidgetsBinding
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      debugPrint('📱 [CanvasScreen] App entrou em segundo plano. Limpando toques e gestos...');
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      debugPrint(
+        '📱 [CanvasScreen] App entrou em segundo plano. Limpando toques e gestos...',
+      );
       if (_container != null) {
         try {
           _container!.read(liveStrokeProvider).clear();
-          _container!.read(canvasViewportProvider.notifier).updatePointerCount(0);
+          _container!
+              .read(canvasViewportProvider.notifier)
+              .updatePointerCount(0);
+          _container!
+              .read(canvasDocumentProvider.notifier)
+              .markAsDisconnected(); // 🚀 Marca a suspensão para o histórico
         } catch (e) {
           debugPrint('⚠️ [CanvasScreen] Erro ao limpar estado na pausa: $e');
         }
       }
     } else if (state == AppLifecycleState.resumed) {
-      debugPrint('📱 [CanvasScreen] App retomou da hibernação. A verificar ligação WebSocket...');
+      debugPrint(
+        '📱 [CanvasScreen] App retomou da hibernação. Desimpedindo Canvas...',
+      );
       if (_container != null) {
         try {
-          final realtime = _container!.read(realtimeServiceProvider);
-          realtime.reconnectIfNeeded();
+          _container!.read(liveStrokeProvider).clear();
+          _container!
+              .read(canvasViewportProvider.notifier)
+              .updatePointerCount(0);
+          _container!
+              .read(canvasDocumentProvider.notifier)
+              .requestMissingHistory(); // 🚀 Pede as ações que perdeu
         } catch (e) {
-          debugPrint('⚠️ [CanvasScreen] Erro ao reconectar no resume: $e');
+          debugPrint('⚠️ [CanvasScreen] Erro ao reativar Canvas no resume: $e');
         }
       }
     }
@@ -218,160 +237,164 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen> with WidgetsBinding
         }
       },
       child: Scaffold(
-      backgroundColor: const Color(0xFFD6D6D6),
-      resizeToAvoidBottomInset:
-          true, // 🚀 v5.8: Garantir que a folha sobe no Android/iOS
-      appBar: isFocusMode ? null : CanvasAppBar(notebook: widget.notebook),
-      endDrawer: hasPages
-          ? CanvasPageDrawer(
-              notebook: widget.notebook,
-              onCollaborationTap: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) =>
-                    CollaborationCenterSheet(notebook: widget.notebook),
-              ),
-              onAddPage: () => showDialog(
-                context: context,
-                builder: (_) => AddPageDialog(
-                  defaultLineType: 'ruled',
-                  defaultLineSpacing: 28.0,
+        backgroundColor: const Color(0xFFD6D6D6),
+        resizeToAvoidBottomInset:
+            true, // 🚀 v5.8: Garantir que a folha sobe no Android/iOS
+        appBar: isFocusMode ? null : CanvasAppBar(notebook: widget.notebook),
+        endDrawer: hasPages
+            ? CanvasPageDrawer(
+                notebook: widget.notebook,
+                onCollaborationTap: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) =>
+                      CollaborationCenterSheet(notebook: widget.notebook),
                 ),
-              ),
-            )
-          : null,
-      body: !hasPages
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                onAddPage: () => showDialog(
+                  context: context,
+                  builder: (_) => AddPageDialog(
+                    defaultLineType: 'ruled',
+                    defaultLineSpacing: 28.0,
+                  ),
+                ),
+              )
+            : null,
+        body: !hasPages
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.note_add_rounded,
+                      size: 64,
+                      color: Colors.black.withValues(alpha: 0.1),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Este caderno ainda não tem folhas.',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          showDialog(
+                            context: context,
+                            builder: (_) => AddPageDialog(
+                              defaultLineType: 'ruled',
+                              defaultLineSpacing: 28.0,
+                            ),
+                          );
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F4C5C),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.add),
+                      label: const Text(
+                        'CRIAR PRIMEIRA FOLHA',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : Stack(
                 children: [
-                  Icon(
-                    Icons.note_add_rounded,
-                    size: 64,
-                    color: Colors.black.withValues(alpha: 0.1),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Este caderno ainda não tem folhas.',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      color: Colors.black54,
+                  ExcludeSemantics(
+                    child: _CanvasPageView(
+                      textController: _textController,
+                      textFocusNode: _textFocusNode,
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        showDialog(
-                          context: context,
-                          builder: (_) => AddPageDialog(
-                            defaultLineType: 'ruled',
-                            defaultLineSpacing: 28.0,
+
+                  // 🚀 v10.14: Barra de Ferramentas Superior (Ações de Criação Inteligentes)
+                  if (!isFocusMode)
+                    Positioned(
+                      top: 15,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: TopActionToolbar(
+                          currentPage: currentPage!,
+                          onAddImageTap: () => ref
+                              .read(canvasDocumentProvider.notifier)
+                              .pickAndInsertImage(currentPage, context: context),
+                        ),
+                      ),
+                    ),
+
+                  // 🚀 v10.11: Barra de Ferramentas Horizontal (Propriedades e Sistema)
+                  if (!isFocusMode)
+                    Positioned(
+                      bottom: 20,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: CanvasToolbar(
+                          currentPage: currentPage!,
+                          textController: _textController, // 🚀 v10.58
+                          onColorTap: () async {
+                            if (toolState.selectedStrokeIds.isNotEmpty) {
+                              final hex = await ColorEngine.show(
+                                context,
+                                initialColor: toolState.selectedColorHex,
+                                title: 'Cor da Seleção',
+                              );
+                              if (hex != null) {
+                                ref
+                                    .read(canvasDocumentProvider.notifier)
+                                    .updateStrokesColor(
+                                      currentPage,
+                                      toolState.selectedStrokeIds,
+                                      hex,
+                                    );
+                              }
+                            } else {
+                              final hex = await ColorEngine.show(
+                                context,
+                                initialColor: toolState.selectedColorHex,
+                                title: 'Cor da Caneta',
+                              );
+                              if (hex != null) toolNotifier.setColor(hex);
+                            }
+                          },
+                          onThicknessTap: () => showDialog(
+                            context: context,
+                            builder: (_) => const ThicknessStudioDialog(),
                           ),
-                        );
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F4C5C),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                          onChangePaperTap: () => showDialog(
+                            context: context,
+                            builder: (_) =>
+                                PageSettingsDialog(page: currentPage),
+                          ),
+                          onDeletePageTap: () =>
+                              PageActionHelper.showConfirmDelete(
+                                context,
+                                ref,
+                                currentPage,
+                              ),
+                          onAiAssistantTap: () {},
+                          onAddImageTap: () => ref
+                              .read(canvasDocumentProvider.notifier)
+                              .pickAndInsertImage(currentPage, context: context),
+                        ),
                       ),
                     ),
-                    icon: const Icon(Icons.add),
-                    label: const Text(
-                      'CRIAR PRIMEIRA FOLHA',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
                 ],
               ),
-            )
-          : Stack(
-              children: [
-                ExcludeSemantics(
-                  child: _CanvasPageView(
-                    textController: _textController,
-                    textFocusNode: _textFocusNode,
-                  ),
-                ),
-
-                // 🚀 v10.14: Barra de Ferramentas Superior (Ações de Criação Inteligentes)
-                if (!isFocusMode)
-                  Positioned(
-                    top: 15,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: TopActionToolbar(
-                        currentPage: currentPage!,
-                        onAddImageTap: () => ref
-                            .read(canvasDocumentProvider.notifier)
-                            .pickAndInsertImage(currentPage),
-                      ),
-                    ),
-                  ),
-
-                // 🚀 v10.11: Barra de Ferramentas Horizontal (Propriedades e Sistema)
-                if (!isFocusMode)
-                  Positioned(
-                    bottom: 20,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: CanvasToolbar(
-                        currentPage: currentPage!,
-                        textController: _textController, // 🚀 v10.58
-                        onColorTap: () async {
-                          if (toolState.selectedStrokeIds.isNotEmpty) {
-                            final hex = await ColorEngine.show(
-                              context,
-                              initialColor: toolState.selectedColorHex,
-                              title: 'Cor da Seleção',
-                            );
-                            if (hex != null) {
-                              ref
-                                  .read(canvasDocumentProvider.notifier)
-                                  .updateStrokesColor(
-                                    currentPage,
-                                    toolState.selectedStrokeIds,
-                                    hex,
-                                  );
-                            }
-                          } else {
-                            final hex = await ColorEngine.show(
-                              context,
-                              initialColor: toolState.selectedColorHex,
-                              title: 'Cor da Caneta',
-                            );
-                            if (hex != null) toolNotifier.setColor(hex);
-                          }
-                        },
-                        onThicknessTap: () => showDialog(
-                          context: context,
-                          builder: (_) => const ThicknessStudioDialog(),
-                        ),
-                        onChangePaperTap: () => showDialog(
-                          context: context,
-                          builder: (_) =>
-                              PaperStyleDialog(currentPage: currentPage),
-                        ),
-                        onDeletePageTap: () =>
-                            PageActionHelper.showConfirmDelete(context, ref, currentPage),
-                        onAiAssistantTap: () {},
-                        onAddImageTap: () => ref
-                            .read(canvasDocumentProvider.notifier)
-                            .pickAndInsertImage(currentPage),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
       ),
     );
   }

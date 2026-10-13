@@ -56,6 +56,7 @@ class DrawingLayer extends ConsumerWidget {
                     : null,
                 pageVersion: page.version,
                 remoteMovingStrokeIds: collabService.remoteMovingStrokeIds,
+                remoteObjectTransforms: collabService.remoteObjectTransforms.value,
                 userColors: collabService.userColorsMap,
                 isAuthorColorEnabled: collabService.isAuthorColorEnabled,
                 selectionDelta: toolState.totalSelectionDelta,

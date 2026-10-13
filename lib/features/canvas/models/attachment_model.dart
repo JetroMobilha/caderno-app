@@ -96,6 +96,7 @@ class AttachmentObject implements PageObject {
     bool? syncedWithCloud,
     bool? deletedInSession,
     int? pageNumber,
+    String? creatorId,
     String? layerId,
   }) {
     return AttachmentObject(
@@ -119,7 +120,7 @@ class AttachmentObject implements PageObject {
       syncedWithCloud: syncedWithCloud ?? this.syncedWithCloud,
       deletedInSession: deletedInSession ?? this.deletedInSession,
       pageNumber: pageNumber ?? this.pageNumber,
-      creatorId: creatorId,
+      creatorId: creatorId ?? this.creatorId,
       layerId: layerId ?? this.layerId,
     );
   }

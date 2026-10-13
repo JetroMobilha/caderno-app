@@ -6,6 +6,13 @@ import 'time_service.dart';
 /// 🚀 Utilitários para processamento de dados de sincronização v29 (Fase 2)
 class SyncIsolates {
   
+  static int _isDeleted(dynamic val) {
+    if (val == true || val == 1 || val == '1' || val.toString().toLowerCase() == 'true') {
+      return 1;
+    }
+    return 0;
+  }
+
   static List<dynamic> processCanvasDataBatch(Map<String, dynamic> input) {
     final List<dynamic> serverPages = input['serverPages'];
     final int currentTime = input['currentTime'];
@@ -39,14 +46,14 @@ class SyncIsolates {
           case 'stroke':
             strokes.add(CanvasStrokesCompanion.insert(
               clientStrokeId: id, pageId: localPageId, strokeData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
           case 'text':
             texts.add(CanvasTextBlocksCompanion.insert(
               clientTextId: id, pageId: localPageId, textData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), updatedAt: Value(ts), layerId: Value(layerId)
             ));
             break;
@@ -59,7 +66,7 @@ class SyncIsolates {
               width: (obj['width'] as num?)?.toDouble() ?? 300.0, height: (obj['height'] as num?)?.toDouble() ?? 200.0,
               rotation: (obj['rotation'] as num?)?.toDouble() ?? 0.0,
               cropData: Value(cropJson),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), updatedAt: Value(ts), 
               layerId: Value(layerId),
               parentId: Value(obj['parent_id']?.toString()),
@@ -71,7 +78,7 @@ class SyncIsolates {
           case 'shape':
             shapes.add(CanvasShapesCompanion.insert(
               clientShapeId: id, pageId: localPageId, shapeData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
@@ -79,7 +86,7 @@ class SyncIsolates {
           case 'audio':
             audios.add(CanvasAudioBlocksCompanion.insert(
               clientAudioId: id, pageId: localPageId, audioData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
@@ -87,7 +94,7 @@ class SyncIsolates {
           case 'animation':
             animations.add(CanvasAnimationsCompanion.insert(
               clientAnimationId: id, pageId: localPageId, animationData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
@@ -95,7 +102,7 @@ class SyncIsolates {
           case 'table':
             tables.add(CanvasTablesCompanion.insert(
               clientTableId: id, pageId: localPageId, tableData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
@@ -103,7 +110,7 @@ class SyncIsolates {
           case 'link':
             links.add(CanvasLinksCompanion.insert(
               clientLinkId: id, pageId: localPageId, linkData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
@@ -111,7 +118,7 @@ class SyncIsolates {
           case 'attachment':
             attachments.add(CanvasAttachmentsCompanion.insert(
               clientAttachmentId: id, pageId: localPageId, attachmentData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1), // 🚀 v30
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
@@ -121,7 +128,7 @@ class SyncIsolates {
           case 'explanation_engineering':
             explanations.add(CanvasExplanationsCompanion.insert(
               clientExplanationId: id, pageId: localPageId, explanationData: jsonEncode(obj),
-              isDeleted: Value(obj['is_deleted'] == true ? 1 : 0),
+              isDeleted: Value(_isDeleted(obj['is_deleted'])),
               syncedWithCloud: const Value(1),
               updatedAt: Value(ts), layerId: Value(layerId)
             ));
@@ -138,7 +145,7 @@ class SyncIsolates {
     final String id = st['id']?.toString() ?? 'err';
     return CanvasStrokesCompanion.insert(
       clientStrokeId: id, pageId: localPageId, strokeData: jsonEncode(st),
-      isDeleted: Value(st['is_deleted'] == true ? 1 : 0),
+      isDeleted: Value(_isDeleted(st['is_deleted'])),
       syncedWithCloud: const Value(1), updatedAt: Value((st['updated_at'] as num?)?.toInt() ?? currentTime)
     );
   }
@@ -147,7 +154,7 @@ class SyncIsolates {
     final String id = txt['id']?.toString() ?? 'err';
     return CanvasTextBlocksCompanion.insert(
       clientTextId: id, pageId: localPageId, textData: jsonEncode(txt),
-      isDeleted: Value(txt['is_deleted'] == true ? 1 : 0),
+      isDeleted: Value(_isDeleted(txt['is_deleted'])),
       syncedWithCloud: const Value(1), updatedAt: Value((txt['updated_at'] as num?)?.toInt() ?? currentTime)
     );
   }
@@ -159,7 +166,7 @@ class SyncIsolates {
       posX: (img['dx'] as num?)?.toDouble() ?? 0.0, posY: (img['dy'] as num?)?.toDouble() ?? 0.0,
       width: (img['width'] as num?)?.toDouble() ?? 300.0, height: (img['height'] as num?)?.toDouble() ?? 200.0,
       rotation: (img['rotation'] as num?)?.toDouble() ?? 0.0,
-      isDeleted: Value(img['is_deleted'] == true ? 1 : 0),
+      isDeleted: Value(_isDeleted(img['is_deleted'])),
       syncedWithCloud: const Value(1), updatedAt: Value((img['updated_at'] as num?)?.toInt() ?? currentTime)
     );
   }

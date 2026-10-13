@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io' as io;
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Offset, Size, Rect, debugPrint;
@@ -619,16 +620,17 @@ class CanvasRepository {
   }
 
   Future<void> deleteObjectById(String objectId) async {
-    await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(objectId))).write(const CanvasStrokesCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasTextBlocks)..where((t) => t.clientTextId.equals(objectId))).write(const CanvasTextBlocksCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasImageBlocks)..where((t) => t.clientImageId.equals(objectId))).write(const CanvasImageBlocksCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasShapes)..where((t) => t.clientShapeId.equals(objectId))).write(const CanvasShapesCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasTables)..where((t) => t.clientTableId.equals(objectId))).write(const CanvasTablesCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasLinks)..where((t) => t.clientLinkId.equals(objectId))).write(const CanvasLinksCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasAttachments)..where((t) => t.clientAttachmentId.equals(objectId))).write(const CanvasAttachmentsCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasAudioBlocks)..where((t) => t.clientAudioId.equals(objectId))).write(const CanvasAudioBlocksCompanion(isDeleted: Value(1)));
-    await (_db.update(_db.canvasAnimations)..where((t) => t.clientAnimationId.equals(objectId))).write(const CanvasAnimationsCompanion(isDeleted: Value(1)));
-    try { await (_db.update(_db.canvasExplanations)..where((t) => t.clientExplanationId.equals(objectId))).write(const CanvasExplanationsCompanion(isDeleted: Value(1))); } catch (_) {}
+    final int now = TimeService().nowMs();
+    await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(objectId))).write(CanvasStrokesCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasTextBlocks)..where((t) => t.clientTextId.equals(objectId))).write(CanvasTextBlocksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasImageBlocks)..where((t) => t.clientImageId.equals(objectId))).write(CanvasImageBlocksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasShapes)..where((t) => t.clientShapeId.equals(objectId))).write(CanvasShapesCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasTables)..where((t) => t.clientTableId.equals(objectId))).write(CanvasTablesCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasLinks)..where((t) => t.clientLinkId.equals(objectId))).write(CanvasLinksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasAttachments)..where((t) => t.clientAttachmentId.equals(objectId))).write(CanvasAttachmentsCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasAudioBlocks)..where((t) => t.clientAudioId.equals(objectId))).write(CanvasAudioBlocksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    await (_db.update(_db.canvasAnimations)..where((t) => t.clientAnimationId.equals(objectId))).write(CanvasAnimationsCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
+    try { await (_db.update(_db.canvasExplanations)..where((t) => t.clientExplanationId.equals(objectId))).write(CanvasExplanationsCompanion(isDeleted: const Value(1), updatedAt: Value(now))); } catch (_) {}
   }
 
   Future<void> markPageAsUnsynced(String pageClientId, {int? updatedAt}) async {
@@ -663,6 +665,19 @@ class CanvasRepository {
     return null;
   }
 
+  Future<String?> uploadFile(int notebookId, String fileName, Uint8List bytes) async {
+    try {
+      final uri = Uri.parse('${ApiService.baseUrl}/notebooks/$notebookId/upload-file');
+      final request = http.MultipartRequest('POST', uri);
+      final token = await _apiService.getToken();
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
+      final response = await request.send();
+      if (response.statusCode == 200) { final data = jsonDecode(await response.stream.bytesToString()); return data['url']; }
+    } catch (e) {}
+    return null;
+  }
+
   Future<String?> uploadAudio(int notebookId, String fileName, Uint8List bytes) async {
     try {
       final uri = Uri.parse('${ApiService.baseUrl}/notebooks/$notebookId/upload-audio');
@@ -690,6 +705,24 @@ class CanvasRepository {
       if (response.statusCode == 200) { final data = jsonDecode(await response.stream.bytesToString()); return data['url']; }
     } catch (e) {}
     return null;
+  }
+
+  Future<bool> downloadFile(String url, String localSavePath) async {
+    try {
+      final token = await _apiService.getToken();
+      final response = await http.get(
+        Uri.parse(url),
+        headers: token != null ? {'Authorization': 'Bearer $token'} : null,
+      );
+      if (response.statusCode == 200) {
+        final file = io.File(localSavePath);
+        await file.writeAsBytes(response.bodyBytes);
+        return true;
+      }
+    } catch (e) {
+      debugPrint('⚠️ [CanvasRepository] Erro ao descarregar ficheiro: $e');
+    }
+    return false;
   }
 
   /// 🚀 v10.88: Limpeza física de registos apagados e já sincronizados.

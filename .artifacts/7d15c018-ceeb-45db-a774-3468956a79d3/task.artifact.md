@@ -1,0 +1,2 @@
+- `[x]` Modify `lib/core/network/realtime_service.dart` to stop disconnecting on `inactive`.
+- `[x]` Modify `lib/features/canvas/views/canvas_screen.dart` to stop clearing on `inactive`.

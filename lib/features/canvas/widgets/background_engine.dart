@@ -27,9 +27,11 @@ class BackgroundEngine {
 
     switch (bgConfig.type) {
       case 'lines':
+      case 'ruled':
         _drawLines(canvas, W, H, spacing, margins, paint, bgConfig.showRedMargin, mmToPixel);
         break;
       case 'grid':
+      case 'squared':
         _drawGrid(canvas, W, H, spacing, paint);
         break;
       case 'dots':

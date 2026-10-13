@@ -143,8 +143,8 @@ class BrushTool extends CanvasTool {
       );
     }
 
-    if (now - _lastEmitTime >= 16) {
-      // Já passou o tempo limite, podemos enviar imediatamente (16ms ~ 60 FPS para máxima fluidez e igualar os Pointers)
+    if (now - _lastEmitTime >= 50) {
+      // 50ms = 20 FPS para manter fluidez sem sobrecarregar o WebSocket
       _trailingTimer?.cancel();
       emit(currentPoints);
     } else {
@@ -153,8 +153,8 @@ class BrushTool extends CanvasTool {
       
       // Se não houver um timer a correr para esta "janela", criamos um.
       if (!(_trailingTimer?.isActive ?? false)) {
-        final timeLeft = 16 - (now - _lastEmitTime);
-        _trailingTimer = Timer(Duration(milliseconds: timeLeft > 0 ? timeLeft : 16), () {
+        final int timeLeft = 50 - (now - _lastEmitTime);
+        _trailingTimer = Timer(Duration(milliseconds: timeLeft > 0 ? timeLeft : 50), () {
           if (_trailingEmit != null) {
             _trailingEmit!();
             _trailingEmit = null;

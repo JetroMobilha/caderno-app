@@ -53,7 +53,7 @@ class BackgroundPainter extends CustomPainter {
       ..color = const Color(0xFF1B365D).withOpacity(0.18)
       ..strokeWidth = 1.0;
 
-    if (type == 'ruled') {
+    if (type == 'ruled' || type == 'lines') {
       canvas.drawLine(
           const Offset(60, 0),
           Offset(60, size.height),
@@ -63,7 +63,7 @@ class BackgroundPainter extends CustomPainter {
       for (double y = 90; y < size.height - 60; y += spacing) {
         canvas.drawLine(Offset(60, y), Offset(size.width - 20, y), bgPaint);
       }
-    } else if (type == 'grid') {
+    } else if (type == 'grid' || type == 'squared') {
       for (double y = 90; y < size.height - 60; y += spacing) {
         canvas.drawLine(Offset(20, y), Offset(size.width - 20, y), bgPaint);
       }
@@ -107,6 +107,7 @@ class StrokesPainter extends CustomPainter {
   final Rect? selectionRect;
   final int pageVersion;
   final Set<String> remoteMovingStrokeIds;
+  final Map<String, Map<String, dynamic>> remoteObjectTransforms;
   final Set<String>? visibleAuthorIds;
   final bool isAuthorColorEnabled;
   final Map<String, Color> userColors;
@@ -118,6 +119,7 @@ class StrokesPainter extends CustomPainter {
     required this.selectionRect,
     required this.pageVersion,
     this.remoteMovingStrokeIds = const {},
+    this.remoteObjectTransforms = const {},
     this.visibleAuthorIds,
     this.isAuthorColorEnabled = false,
     this.userColors = const {},
@@ -139,6 +141,13 @@ class StrokesPainter extends CustomPainter {
       canvas.save();
       if (isSelected && selectionDelta != Offset.zero) {
         canvas.translate(selectionDelta.dx, selectionDelta.dy);
+      } else if (remoteObjectTransforms.containsKey(stroke.id)) {
+        final tx = remoteObjectTransforms[stroke.id]!;
+        if (tx['dx'] != null && tx['dy'] != null) {
+          canvas.translate(tx['dx'], tx['dy']);
+        }
+        // Nota: Escala e Rotação precisariam do centro do Rect do traço, 
+        // mas a maioria dos movimentos de laço são puras translações.
       }
 
       final path = buildPath(stroke.points);
@@ -170,6 +179,7 @@ class StrokesPainter extends CustomPainter {
         oldDelegate.selectionDelta != selectionDelta ||
         !setEquals(oldDelegate.visibleAuthorIds, visibleAuthorIds) ||
         !setEquals(oldDelegate.remoteMovingStrokeIds, remoteMovingStrokeIds) ||
+        !mapEquals(oldDelegate.remoteObjectTransforms, remoteObjectTransforms) ||
         !setEquals(oldDelegate.selectedStrokeIds, selectedStrokeIds) ||
         !listEquals(oldDelegate.strokes, strokes);
   }

@@ -31,7 +31,14 @@ class _PageSettingsDialogState extends ConsumerState<PageSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final docState = ref.watch(canvasDocumentProvider);
-    
+    final targetPage = docState.pages.cast<LocalPage?>().firstWhere(
+          (p) =>
+              p?.clientId == widget.page.clientId ||
+              (p != null && p.id == widget.page.id),
+          orElse: () => widget.page,
+        ) ??
+        widget.page;
+
     // 🚀 Calcular Nível Superior do Caderno
     int minLevel = 6;
     for (var p in docState.pages) {
@@ -52,14 +59,14 @@ class _PageSettingsDialogState extends ConsumerState<PageSettingsDialog> {
         child: SingleChildScrollView(
           child: PageConfigurationForm(
             config: _currentConfig,
-            page: widget.page, // 🚀 Passar página para aviso de orientação
+            page: targetPage, // 🚀 Passar página para aviso de orientação
             minPaperLevel: minLevel, // 🚀 Passar nível para bloqueio de tamanho
             onChanged: (newConfig) {
               setState(() {
                 _currentConfig = newConfig;
               });
               // 🚀 FEEDBACK EM TEMPO REAL
-              ref.read(canvasDocumentProvider.notifier).updatePageSettings(widget.page, newConfig);
+              ref.read(canvasDocumentProvider.notifier).updatePageSettings(targetPage, newConfig);
             },
           ),
         ),

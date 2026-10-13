@@ -115,6 +115,11 @@ class SyncNotifier extends StateNotifier<SyncState> with WidgetsBindingObserver 
     if (lifecycleState == AppLifecycleState.resumed) {
       final auth = ref.read(authProvider);
       if (auth.isAuthenticated) {
+        // 🚀 Se estiver em sala de colaboração ativa, o CollaborationRoomService já cuida da sincronização via WebSocket
+        if (SyncService.isCollaborationActive) {
+          debugPrint('📱 [Sync] App retoma primeiro plano em sala ativa. Sincronização gerida pelo Realtime/Collab.');
+          return;
+        }
         debugPrint('📱 [Sync] App retoma primeiro plano (resumed). Agendando sincronização não-bloqueante...');
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (mounted) performSync();

@@ -117,7 +117,7 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
         
         // A. Desenho Visual (Todos os envolvidos no duelo desenham para latência zero)
         if (event.pointer == _activeDrawingPointerId && !widget.isBlocked && isDrawingTool) {
-          toolNotifier.activeToolLogic.onPanUpdate(event.localPosition, event.delta, ref, widget.page, pointerId: event.pointer);
+          toolNotifier.activeToolLogic.onPanUpdate(event.localPosition, event.localDelta, ref, widget.page, pointerId: event.pointer);
           
           // 🚀 v10.87: Atualizar cursor da borracha
           if (toolState.activeTool == ToolMode.pixelEraser) {
@@ -246,7 +246,9 @@ class _InteractionLayerState extends ConsumerState<InteractionLayer> {
                     toolNotifier.activeToolLogic.onPanStart(d.localPosition, ref, widget.page);
                   } : null,
                   onPanUpdate: !widget.isBlocked && !isDrawingTool ? (d) {
-                    toolNotifier.activeToolLogic.onPanUpdate(d.localPosition, d.delta, ref, widget.page);
+                    final double currentScale = ref.read(canvasViewportProvider.notifier).currentScale;
+                    final Offset localDelta = d.delta / currentScale;
+                    toolNotifier.activeToolLogic.onPanUpdate(d.localPosition, localDelta, ref, widget.page);
                   } : null,
                   onPanEnd: !widget.isBlocked && !isDrawingTool ? (_) {
                     ref.read(canvasUiProvider.notifier).setHudMode(false);

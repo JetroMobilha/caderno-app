@@ -50,20 +50,26 @@ class PageCanvas extends ConsumerWidget {
     for (var item in renderList) {
       if (item is StrokesRenderItem) {
         widgets.add(
-          RepaintBoundary(
-            child: CustomPaint(
-              size: pageSize,
-              painter: StrokesPainter(
-                strokes: item.strokes,
-                selectedStrokeIds: toolState.selectedStrokeIds, 
-                selectionRect: null,
-                pageVersion: page.version,
-                remoteMovingStrokeIds: collabService.remoteMovingStrokeIds,
-                userColors: collabService.userColorsMap,
-                isAuthorColorEnabled: collabService.isAuthorColorEnabled,
-                selectionDelta: toolState.totalSelectionDelta,
-              ),
-            ),
+          ValueListenableBuilder(
+            valueListenable: collabService.remoteObjectTransforms,
+            builder: (context, transforms, _) {
+              return RepaintBoundary(
+                child: CustomPaint(
+                  size: pageSize,
+                  painter: StrokesPainter(
+                    strokes: item.strokes,
+                    selectedStrokeIds: toolState.selectedStrokeIds, 
+                    selectionRect: null,
+                    pageVersion: page.version,
+                    remoteMovingStrokeIds: collabService.remoteMovingStrokeIds,
+                    remoteObjectTransforms: transforms,
+                    userColors: collabService.userColorsMap,
+                    isAuthorColorEnabled: collabService.isAuthorColorEnabled,
+                    selectionDelta: toolState.totalSelectionDelta,
+                  ),
+                ),
+              );
+            }
           ),
         );
       } else if (item is ObjectRenderItem) {
@@ -76,12 +82,16 @@ class PageCanvas extends ConsumerWidget {
             final remoteTx = transforms[item.object.id];
             
             Offset? finalDelta = item.isSelected ? toolState.totalSelectionDelta : null;
+            Offset? finalPosDelta = item.isSelected ? toolState.livePositionDelta : null;
             Size? finalScale = item.isSelected ? toolState.liveScale : null;
             double? finalRotation = item.isSelected ? toolState.liveRotation : null;
             PageObject renderObj = effectiveObject;
 
             if (!item.isSelected && remoteTx != null) {
               finalDelta = Offset(remoteTx['dx'] ?? 0.0, remoteTx['dy'] ?? 0.0);
+              if (remoteTx['pdx'] != null || remoteTx['pdy'] != null) {
+                finalPosDelta = Offset(remoteTx['pdx'] ?? 0.0, remoteTx['pdy'] ?? 0.0);
+              }
               if (remoteTx['scale'] != null) finalScale = Size(remoteTx['scale'], remoteTx['scale']);
               if (remoteTx['rotation'] != null) finalRotation = remoteTx['rotation'];
               
@@ -99,7 +109,7 @@ class PageCanvas extends ConsumerWidget {
               movementDelta: finalDelta,
               liveScale: finalScale,
               liveRotation: finalRotation,
-              livePositionDelta: item.isSelected ? toolState.livePositionDelta : null,
+              livePositionDelta: finalPosDelta,
             );
           },
         ));

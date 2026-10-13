@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/canvas_tool_provider.dart';
 import '../../providers/canvas_document_provider.dart';
+import '../../providers/canvas_viewport_provider.dart';
 import '../../models/canvas_enums.dart';
 import '../../models/local_page_model.dart';
 import '../../models/shape_model.dart';
@@ -209,7 +210,7 @@ class TopActionToolbar extends ConsumerWidget {
         } else if (val == 'link') {
           _handleInsertLink(context, ref);
         } else if (val == 'attach') {
-          _handleInsertAttachment(ref);
+          _handleInsertAttachment(context, ref);
         }
       },
       itemBuilder: (context) => [
@@ -256,16 +257,29 @@ class TopActionToolbar extends ConsumerWidget {
     }
   }
 
+  Offset _getInsertPosition(WidgetRef ref, {double width = 220, double height = 60}) {
+    final center = ref.read(canvasViewportProvider).currentViewportCenter;
+    if (center != null) {
+      return Offset(
+        (center.dx - width / 2).clamp(0.0, 10000.0),
+        (center.dy - height / 2).clamp(0.0, 10000.0),
+      );
+    }
+    return const Offset(100, 300);
+  }
+
   void _handleInsertShape(WidgetRef ref, String typeName) {
     final type = ShapeType.values.firstWhere((e) => e.name == typeName);
-    final shape = ShapeObject(id: const Uuid().v4(), shapeType: type, position: const Offset(150, 150), size: const Size(150, 100), strokeColor: '#0F4C5C', zIndex: currentPage.objects.length);
+    final pos = _getInsertPosition(ref, width: 150, height: 100);
+    final shape = ShapeObject(id: const Uuid().v4(), shapeType: type, position: pos, size: const Size(150, 100), strokeColor: '#0F4C5C', zIndex: currentPage.objects.length);
     ref.read(canvasDocumentProvider.notifier).addShape(currentPage, shape);
   }
 
   void _handleInsertTable(BuildContext context, WidgetRef ref) async {
     final result = await TableCreationDialog.show(context);
     if (result != null) {
-      final table = TableObject(id: const Uuid().v4(), rows: result['rows']!, cols: result['cols']!, position: const Offset(150, 150), zIndex: currentPage.objects.length);
+      final pos = _getInsertPosition(ref, width: 200, height: 150);
+      final table = TableObject(id: const Uuid().v4(), rows: result['rows']!, cols: result['cols']!, position: pos, zIndex: currentPage.objects.length);
       ref.read(canvasDocumentProvider.notifier).addTable(currentPage, table);
     }
   }
@@ -273,19 +287,20 @@ class TopActionToolbar extends ConsumerWidget {
   void _handleInsertLink(BuildContext context, WidgetRef ref) async {
     final result = await LinkCreationDialog.show(context);
     if (result != null) {
+      final pos = _getInsertPosition(ref, width: 200, height: 50);
       final link = LinkObject(
         id: const Uuid().v4(), 
         linkType: LinkType.externalUrl, 
         url: result['url']!, 
         label: result['label']!, 
-        position: const Offset(200, 200), 
+        position: pos, 
         zIndex: currentPage.objects.length
       );
       ref.read(canvasDocumentProvider.notifier).addLink(currentPage, link);
     }
   }
 
-  void _handleInsertAttachment(WidgetRef ref) async {
+  void _handleInsertAttachment(BuildContext context, WidgetRef ref) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'jpg', 'png'],
@@ -294,51 +309,15 @@ class TopActionToolbar extends ConsumerWidget {
 
     if (result != null && result.files.isNotEmpty) {
       final file = result.files.first;
-      final String fileName = file.name;
-      final String extension = fileName.contains('.') ? fileName.split('.').last : '';
-      String newPath = '';
-      String? base64Data;
-      final int sizeBytes = await file.xFile.length();
-
-      final filePath = file.xFile.path;
-
-      if (!kIsWeb && filePath.isNotEmpty && io.File(filePath).existsSync()) {
-        final ioFile = io.File(filePath);
-        final appDir = await getApplicationDocumentsDirectory();
-        
-        // Criar diretório para anexos se não existir
-        final attachDir = io.Directory('${appDir.path}/attachments');
-        if (!await attachDir.exists()) await attachDir.create();
-        
-        newPath = '${attachDir.path}/attach_${DateTime.now().millisecondsSinceEpoch}.$extension';
-        await ioFile.copy(newPath);
-      } else if (!kIsWeb) {
-        final bytes = await file.xFile.readAsBytes();
-        final appDir = await getApplicationDocumentsDirectory();
-        final attachDir = io.Directory('${appDir.path}/attachments');
-        if (!await attachDir.exists()) await attachDir.create();
-        
-        newPath = '${attachDir.path}/attach_${DateTime.now().millisecondsSinceEpoch}.$extension';
-        await io.File(newPath).writeAsBytes(bytes);
-      } else if (kIsWeb) {
-        newPath = 'web_attachment_${DateTime.now().millisecondsSinceEpoch}.$extension';
-        final bytes = await file.xFile.readAsBytes();
-        if (bytes.isNotEmpty) {
-          base64Data = base64Encode(bytes);
-        }
-      }
-
-      final attach = AttachmentObject(
-        id: const Uuid().v4(), 
-        fileName: fileName, 
-        fileExtension: extension,
-        fileSize: sizeBytes,
-        localPath: newPath, 
-        remoteUrl: base64Data, // 🚀 Web Hack: Armazenamos temporariamente o Base64 na coluna remote_url para enviar
-        position: const Offset(100, 300), 
-        zIndex: currentPage.objects.length
-      );
-      ref.read(canvasDocumentProvider.notifier).addAttachment(currentPage, attach);
+      final pos = _getInsertPosition(ref, width: 220, height: 60);
+      await ref
+          .read(canvasDocumentProvider.notifier)
+          .pickAndInsertAttachment(
+            currentPage,
+            file: file,
+            position: pos,
+            context: context,
+          );
     }
   }
 

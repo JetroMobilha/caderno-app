@@ -31,6 +31,14 @@ class CanvasAppBar extends ConsumerWidget implements PreferredSizeWidget {
           onTap: hasPages
               ? () => Scaffold.of(scaffoldContext).openEndDrawer()
               : null,
+          onLongPress: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => CollaborationCenterSheet(notebook: notebook),
+              );
+            },
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

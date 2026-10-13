@@ -198,6 +198,33 @@ class BackgroundConfig {
     'line_color': lineColor, 'margin_color': marginColor, 'show_red_margin': showRedMargin,
     'opacity': opacity, 'line_width': lineWidth,
   };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BackgroundConfig &&
+          runtimeType == other.runtimeType &&
+          type == other.type &&
+          subType == other.subType &&
+          spacing == other.spacing &&
+          color == other.color &&
+          lineColor == other.lineColor &&
+          marginColor == other.marginColor &&
+          showRedMargin == other.showRedMargin &&
+          opacity == other.opacity &&
+          lineWidth == other.lineWidth;
+
+  @override
+  int get hashCode =>
+      type.hashCode ^
+      subType.hashCode ^
+      spacing.hashCode ^
+      color.hashCode ^
+      lineColor.hashCode ^
+      marginColor.hashCode ^
+      showRedMargin.hashCode ^
+      opacity.hashCode ^
+      lineWidth.hashCode;
 }
 
 class MarginsConfig {

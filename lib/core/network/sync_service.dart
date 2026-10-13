@@ -20,6 +20,8 @@ class SyncService {
   final CanvasRepository _canvasRepository;
   
   bool _isGlobalSyncing = false; // 🚀 Semáforo interno
+  final Set<String> _activePullUrls = {}; // 🚀 Previne PULLs simultâneos idênticos
+  final Set<String> _activePushNotebookKeys = {}; // 🚀 Previne PUSHs simultâneos do mesmo caderno
 
   SyncService(this._apiService, this._canvasRepository);
 
@@ -568,8 +570,13 @@ class SyncService {
   // 4. PÁGINAS E CANVAS
   // =========================================================================
   Future<bool> pushPages({int? onlyNotebookId, int? onlyNotebookServerId, bool pushOnly = false}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_pages_sync'));
+    final pushKey = 'push_${onlyNotebookId ?? 'all'}_${onlyNotebookServerId ?? 'all'}';
+    if (_activePushNotebookKeys.contains(pushKey)) return false;
+    _activePushNotebookKeys.add(pushKey);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_pages_sync'));
 
     // 🚀 Resolver ID local e ID do servidor do caderno
     int? targetLocalNbId = onlyNotebookId;
@@ -592,7 +599,6 @@ class SyncService {
       targetLocalNbId = nb?.id;
     }
 
-    try {
       final query = _db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(0));
       if (targetLocalNbId != null) {
         final localId = targetLocalNbId;
@@ -854,7 +860,11 @@ class SyncService {
       }
 
       return serverHasMore;
-    } catch (e) { return false; }
+    } catch (e) { 
+      return false; 
+    } finally {
+      _activePushNotebookKeys.remove(pushKey);
+    }
   }
 
   Future<void> _markPageItemsAsSynced(int localPageId) async {
@@ -943,7 +953,7 @@ class SyncService {
                 final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
                 final int serverTs = _parseSafeInt(sPage['updated_at_ms']) ?? _parseSafeInt(sPage['updated_at']) ?? 0;
                 
-                if (existingPage != null && existingPage.syncedWithCloud == 0 && existingPage.updatedAt > serverTs) {
+                if (existingPage != null && existingPage.syncedWithCloud == 0 && existingPage.updatedAt >= serverTs) {
                   localPageIdsForBatch.add(existingPage.id);
                   serverPageDataMap[existingPage.id] = sPage;
                   continue;
@@ -977,9 +987,13 @@ class SyncService {
   }
 
   Future<void> pullSpecificPage(int notebookServerId, int pageNumber, {String? clientId, bool isRetry = false}) async {
+    String url = '/sync/pages/pull?notebook_id=$notebookServerId';
+    if (clientId != null) url += '&client_id=$clientId'; else url += '&page_number=$pageNumber';
+
+    if (_activePullUrls.contains(url)) return;
+    _activePullUrls.add(url);
+
     try {
-      String url = '/sync/pages/pull?notebook_id=$notebookServerId';
-      if (clientId != null) url += '&client_id=$clientId'; else url += '&page_number=$pageNumber';
       final response = await _apiService.get(url);
       if (response.statusCode == 200) {
         final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
@@ -1002,11 +1016,11 @@ class SyncService {
           await _pullCanvasData(localId, sPage);
         }
       }
- else if (!isRetry && response.statusCode != 429) {
-        await Future.delayed(const Duration(seconds: 2));
-        return pullSpecificPage(notebookServerId, pageNumber, isRetry: true);
-      }
-    } catch (e) { debugPrint('🚨 [Sync] Erro pullSpecificPage: $e'); }
+    } catch (e) { 
+      debugPrint('🚨 [Sync] Erro pullSpecificPage: $e'); 
+    } finally {
+      _activePullUrls.remove(url);
+    }
   }
 
   Future<void> _pullCanvasDataBatch(List<int> localPageIds, Map<int, Map<String, dynamic>> serverPageDataMap) async {
@@ -1220,12 +1234,42 @@ class SyncService {
   Future<bool> fastPushPage(pages_model.LocalPage page, int notebookServerId, String myUserId) async {
     try {
       final Map<String, dynamic> payload = await page.toJsonAsync();
-      // 🚀 OTIMIZAÇÃO: Servidor simplifica os traços, App envia dados puros para poupar CPU
       payload['notebook_id'] = notebookServerId;
       payload['sender_id'] = myUserId;
       if (page.serverId == null) payload['is_new_page'] = true;
       final response = await _apiService.post('/sync/realtime/update', {'page': payload});
       return response.statusCode == 200;
     } catch (e) { return false; }
+  }
+
+  // =========================================================================
+  // 6. HISTÓRICO DE COLABORAÇÃO (REDIS)
+  // =========================================================================
+  
+  /// 🚀 Envia uma ação validada para o backend guardar no Redis
+  Future<void> recordActionToCloud(int notebookServerId, Map<String, dynamic> actionData) async {
+    try {
+      await _apiService.post('/notebooks/$notebookServerId/session/action', {
+        'action': actionData
+      });
+    } catch (e) {
+      debugPrint('⚠️ [Sync] Falha ao guardar ação no Redis: $e');
+    }
+  }
+
+  /// 🚀 Recupera ações do Redis que falharam/foram perdidas durante a hibernação
+  Future<List<Map<String, dynamic>>> pullSessionHistory(int notebookServerId, int sinceTimestamp) async {
+    try {
+      final response = await _apiService.get('/notebooks/$notebookServerId/session/history?since=$sinceTimestamp');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'ok' && data['actions'] != null) {
+          return List<Map<String, dynamic>>.from(data['actions']);
+        }
+      }
+    } catch (e) {
+      debugPrint('🚨 [Sync] Erro a puxar histórico do Redis: $e');
+    }
+    return [];
   }
 }

@@ -293,6 +293,7 @@ class LocalPage {
     components.add('fav:${isFavorite ? 1 : 0}');
     components.add('ps:$paperSize');
     components.add('inf:${isInfinite ? 1 : 0}');
+    components.add('lt:${lineType ?? "blank"}');
     if (sectionTitle != null) components.add('sc:$sectionTitle:$sectionColor');
     return components.join('|');
   }

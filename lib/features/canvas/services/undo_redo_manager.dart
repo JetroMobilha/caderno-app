@@ -4,6 +4,12 @@ import 'package:caderno_digital_app/features/canvas/models/canvas_action_model.d
 
 import '../models/local_page_model.dart';
 
+class UndoResult {
+  final LocalPage page;
+  final CanvasAction action;
+  UndoResult({required this.page, required this.action});
+}
+
 /// 🚀 v9.6: Gestor independente para o histórico de ações do Canvas.
 /// Centraliza a lógica de Undo/Redo para simplificar o DocumentNotifier.
 class UndoRedoManager {
@@ -28,19 +34,27 @@ class UndoRedoManager {
   }
 
   LocalPage? undo(LocalPage page) {
+    return undoResult(page)?.page;
+  }
+
+  UndoResult? undoResult(LocalPage page) {
     if (_undoStack.isEmpty) return null;
     final action = _undoStack.removeLast();
     final updatedPage = action.undo(page);
     _redoStack.add(action);
-    return updatedPage;
+    return UndoResult(page: updatedPage, action: action);
   }
 
   LocalPage? redo(LocalPage page) {
+    return redoResult(page)?.page;
+  }
+
+  UndoResult? redoResult(LocalPage page) {
     if (_redoStack.isEmpty) return null;
     final action = _redoStack.removeLast();
     final updatedPage = action.execute(page);
     _undoStack.add(action);
-    return updatedPage;
+    return UndoResult(page: updatedPage, action: action);
   }
 
   void clear() {

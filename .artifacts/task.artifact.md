@@ -1,0 +1,4 @@
+- `[x]` Diagnosticar o porquê do anexo não ser transmitido no tempo real (timeout na verificação de `_realtimeService.isConnected`)
+- `[x]` Unificar transmissão de anexos em `_uploadAttachmentInBackground` via `_broadcastAction` (que utiliza `ensureChannelReady` automaticamente)
+- `[x]` Validar compilação e ausência de erros
+- `[x]` Atualizar artefactos

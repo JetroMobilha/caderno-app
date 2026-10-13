@@ -5,7 +5,7 @@ import 'canvas_enums.dart';
 import 'page_object.dart';
 
 /// 🚀 v10.0: Modelo Imutável de um Traço (Desenho Finalizado).
-/// 
+///
 /// Representa um desenho persistido no caderno. Ao contrário do LiveStroke,
 /// esta classe é **Imutável** para garantir a segurança em operações de
 /// Undo/Redo, Sincronização em Nuvem e Persistência Local.
@@ -16,24 +16,24 @@ class Stroke implements PageObject {
   String get type => 'stroke';
   @override
   final String? parentId; // 🚀 v10
-  
+
   final BrushType brushType;
   final String color;
   final double thickness;
   final List<Offset> points;
-  
+
   @override
-  final bool isDeleted; 
+  final bool isDeleted;
   @override
-  final bool deletedInSession; 
+  final bool deletedInSession;
   @override
-  final int updatedAt; 
+  final int updatedAt;
   @override
   final int version;
   @override
-  final int? pageNumber; 
-  
-  final Offset liveOffset; 
+  final int? pageNumber;
+
+  final Offset liveOffset;
   @override
   final String? creatorId;
   @override
@@ -48,10 +48,10 @@ class Stroke implements PageObject {
   final bool isVisible;
   @override
   final double opacity; // 🚀 v10
-  
+
   @override
   double get rotation => 0.0;
-  
+
   @override
   final String? layerId;
 
@@ -142,10 +142,14 @@ class Stroke implements PageObject {
         final scaleX = size.width / currentSize.width;
         final scaleY = size.height / currentSize.height;
         final pos = currentPos;
-        finalPoints = finalPoints.map((p) => Offset(
-          pos.dx + (p.dx - pos.dx) * scaleX,
-          pos.dy + (p.dy - pos.dy) * scaleY,
-        )).toList();
+        finalPoints = finalPoints
+            .map(
+              (p) => Offset(
+                pos.dx + (p.dx - pos.dx) * scaleX,
+                pos.dy + (p.dy - pos.dy) * scaleY,
+              ),
+            )
+            .toList();
       }
     }
 
@@ -186,7 +190,10 @@ class Stroke implements PageObject {
   }
 
   @override
-  Map<String, dynamic> toJson({bool includePoints = true}) {
+  Map<String, dynamic> toJson({
+    bool includePoints = true,
+    bool useDeltaEncoding = false,
+  }) {
     return {
       'id': id,
       'type': type,
@@ -207,11 +214,78 @@ class Stroke implements PageObject {
       'opacity': opacity,
       'layer_id': layerId,
       if (pageNumber != null) 'page_number': pageNumber,
-      if (includePoints) 'points': points.map((p) => {
-        'dx': double.parse(p.dx.toStringAsFixed(3)),
-        'dy': double.parse(p.dy.toStringAsFixed(3))
-      }).toList(),
+      if (includePoints && !useDeltaEncoding)
+        'points': points
+            .map(
+              (p) => {
+                'dx': double.parse(p.dx.toStringAsFixed(3)),
+                'dy': double.parse(p.dy.toStringAsFixed(3)),
+              },
+            )
+            .toList(),
+      if (includePoints && useDeltaEncoding) 'pts_enc': 'd1',
+      if (includePoints && useDeltaEncoding)
+        'points': _encodePointsDelta(points),
     };
+  }
+
+  static List<int> _encodePointsDelta(List<Offset> ptsList) {
+    final maxPts = 4000;
+    final int step = ptsList.length > maxPts
+        ? (ptsList.length / maxPts).ceil()
+        : 1;
+    final encodedPts = <int>[];
+
+    if (ptsList.isNotEmpty) {
+      int lastX = (ptsList[0].dx * 10).round();
+      int lastY = (ptsList[0].dy * 10).round();
+      encodedPts.add(lastX);
+      encodedPts.add(lastY);
+
+      for (int i = step; i < ptsList.length; i += step) {
+        int curX = (ptsList[i].dx * 10).round();
+        int curY = (ptsList[i].dy * 10).round();
+        encodedPts.add(curX - lastX);
+        encodedPts.add(curY - lastY);
+        lastX = curX;
+        lastY = curY;
+      }
+    }
+    return encodedPts;
+  }
+
+  static List<Offset> _parsePoints(dynamic pointsData, String? enc) {
+    if (pointsData == null) return <Offset>[];
+    if (pointsData is! List) return <Offset>[];
+    final rawPts = pointsData as List;
+    if (rawPts.isEmpty) return <Offset>[];
+
+    final pts = <Offset>[];
+    if (enc == 'd1') {
+      int currentX = (rawPts[0] as num).toInt();
+      int currentY = (rawPts[1] as num).toInt();
+      pts.add(Offset(currentX / 10.0, currentY / 10.0));
+      for (int i = 2; i < rawPts.length - 1; i += 2) {
+        currentX += (rawPts[i] as num).toInt();
+        currentY += (rawPts[i + 1] as num).toInt();
+        pts.add(Offset(currentX / 10.0, currentY / 10.0));
+      }
+    } else {
+      for (var p in rawPts) {
+        if (p is Map) {
+          pts.add(
+            Offset(
+              ((p['dx'] ?? p['x']) as num).toDouble(),
+              ((p['dy'] ?? p['y']) as num).toDouble(),
+            ),
+          );
+        } else if (p is num) {
+          // Flatten array fallback, only for backwards comp
+          // We won't hit this since old arrays were list of maps
+        }
+      }
+    }
+    return pts;
   }
 
   factory Stroke.fromJson(Map<String, dynamic> json) {
@@ -221,24 +295,33 @@ class Stroke implements PageObject {
       color: json['color']?.toString() ?? '#1A1A24',
       thickness: (json['thickness'] as num?)?.toDouble() ?? 3.0,
       isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
-      deletedInSession: json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
-      updatedAt: (json['updated_at'] as num?)?.toInt() ?? (json['updatedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      deletedInSession:
+          json['deleted_in_session'] == true || json['deleted_in_session'] == 1,
+      updatedAt:
+          (json['updated_at'] as num?)?.toInt() ??
+          (json['updatedAt'] as num?)?.toInt() ??
+          DateTime.now().millisecondsSinceEpoch,
       version: int.tryParse(json['version']?.toString() ?? '1') ?? 1,
       pageNumber: json['page_number'] as int?,
       creatorId: json['creator_id']?.toString(),
-      syncedWithCloud: json['synced_with_cloud'] == null ? true : (json['synced_with_cloud'] == true || json['synced_with_cloud'] == 1),
-      isHighlighter: json['is_highlighter'] == true || json['is_highlighter'] == 1,
-      brushType: BrushType.values.firstWhere((e) => e.name == (json['brush_type'] ?? 'gel'), orElse: () => BrushType.gel),
+      syncedWithCloud: json['synced_with_cloud'] == null
+          ? true
+          : (json['synced_with_cloud'] == true ||
+                json['synced_with_cloud'] == 1),
+      isHighlighter:
+          json['is_highlighter'] == true || json['is_highlighter'] == 1,
+      brushType: BrushType.values.firstWhere(
+        (e) => e.name == (json['brush_type'] ?? 'gel'),
+        orElse: () => BrushType.gel,
+      ),
       zIndex: (json['z_index'] as num?)?.toInt() ?? 0,
       isLocked: json['is_locked'] == true || json['is_locked'] == 1,
-      isVisible: json['is_visible'] == null ? true : (json['is_visible'] == true || json['is_visible'] == 1),
+      isVisible: json['is_visible'] == null
+          ? true
+          : (json['is_visible'] == true || json['is_visible'] == 1),
       opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
       layerId: json['layer_id']?.toString(),
-      points: json['points'] != null
-          ? (json['points'] as List)
-          .map((p) => Offset((p['dx'] as num).toDouble(), (p['dy'] as num).toDouble()))
-          .toList()
-          : <Offset>[],
+      points: _parsePoints(json['points'], json['pts_enc']?.toString()),
     );
   }
 

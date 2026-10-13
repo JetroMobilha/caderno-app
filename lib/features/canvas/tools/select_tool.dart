@@ -388,29 +388,34 @@ class SelectTool extends CanvasTool {
   }
 
   void _throttleTransformBroadcast(dynamic ref, String pageClientId, CanvasToolState toolState, {Map<String, dynamic>? overrideState, bool? isMoving}) {
-    if (toolState.selectedObjectIds.length != 1) return;
+    if (toolState.selectedObjectIds.isEmpty) return;
     
     final int now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastTransformEmitTime >= 16 || isMoving == false) {
       _lastTransformEmitTime = now;
       final collabService = ref.read(collaborationRoomServiceProvider);
-      final String objectId = toolState.selectedObjectIds.first;
       
       final int notebookId = collabService.liveNotebookSid ?? ref.read(canvasDocumentProvider).liveNotebookSid ?? 0;
       final String userId = collabService.myUserId;
       if (notebookId == 0 || userId.isEmpty) return;
 
-      ref.read(realtimeServiceProvider).broadcastObjectTransform(
-        notebookId: notebookId,
-        myUserId: userId,
-        pageClientId: pageClientId,
-        objectId: objectId,
-        delta: toolState.totalSelectionDelta,
-        scale: toolState.liveScale.width, // Assumption scale.width == scale.height
-        rotation: toolState.liveRotation,
-        overrideState: overrideState,
-        isMoving: isMoving,
-      );
+      // Se temos múltiplos objetos, podemos enviar o transform para cada um
+      // Idealmente a API aceitaria uma lista de objects_id, mas iterar para pequenos grupos
+      // de objetos na mesma frame funciona pelo Reverb pois envia pacotes agrupados no socket.
+      for (final objectId in toolState.selectedObjectIds) {
+        ref.read(realtimeServiceProvider).broadcastObjectTransform(
+          notebookId: notebookId,
+          myUserId: userId,
+          pageClientId: pageClientId,
+          objectId: objectId,
+          delta: toolState.isMovingSelection ? toolState.totalSelectionDelta : Offset.zero,
+          positionDelta: toolState.activeHandle != HandleType.none ? toolState.livePositionDelta : Offset.zero,
+          scale: toolState.liveScale.width, // Assumption scale.width == scale.height
+          rotation: toolState.liveRotation,
+          overrideState: toolState.selectedObjectIds.length == 1 ? overrideState : null, // Apenas override para obj singular
+          isMoving: isMoving,
+        );
+      }
     }
   }
 

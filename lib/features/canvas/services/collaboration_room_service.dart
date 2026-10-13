@@ -43,8 +43,11 @@ class CollaborationRoomService extends ChangeNotifier {
   // 🛡️ [STATE] PRESENCE & CURSORS
   // -------------------------------------------------------------------------
   final ValueNotifier<Map<String, dynamic>> remotePointers = ValueNotifier({});
-  final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier({});
-  final ValueNotifier<Map<String, Map<String, dynamic>>> remoteObjectTransforms = ValueNotifier({}); // 🚀 Novo
+  final ValueNotifier<Map<String, Stroke>> remoteLiveStrokes = ValueNotifier(
+    {},
+  );
+  final ValueNotifier<Map<String, Map<String, dynamic>>>
+  remoteObjectTransforms = ValueNotifier({}); // 🚀 Novo
   final Set<String> usersInLiveSession = {};
   Map<String, double> userAudioLevels = {};
   List<Map<String, dynamic>> onlineUsers = [];
@@ -53,14 +56,19 @@ class CollaborationRoomService extends ChangeNotifier {
   final Set<String> remoteUploadingUsers = {};
   final Set<String> tearingPageClientIds = {};
   final Set<String> remoteMovingStrokeIds = {};
-  final Set<String> remoteMovingObjectIds = {}; // 🚀 Lock de Intenção para Objetos (Imagens, Textos, Tabelas, etc.)
+  final Set<String> remoteMovingObjectIds =
+      {}; // 🚀 Lock de Intenção para Objetos (Imagens, Textos, Tabelas, etc.)
   final Map<String, DateTime> _lastRemoteStrokeUpdate = {};
   final Map<String, Color> userColorsMap = {};
   final List<Color> avatarColorsPool = [
-    const Color(0xFFE67E22), const Color(0xFF9B59B6), const Color(0xFF27AE60),
-    const Color(0xFF2980B9), const Color(0xFFE74C3C), const Color(0xFF1ABC9C)
+    const Color(0xFFE67E22),
+    const Color(0xFF9B59B6),
+    const Color(0xFF27AE60),
+    const Color(0xFF2980B9),
+    const Color(0xFFE74C3C),
+    const Color(0xFF1ABC9C),
   ];
-  
+
   // -------------------------------------------------------------------------
   // 🛡️ [STATE] SESSION POLICIES
   // -------------------------------------------------------------------------
@@ -68,7 +76,8 @@ class CollaborationRoomService extends ChangeNotifier {
   bool isGlobalSyncing = false;
   String currentTemplateType = 'study';
   String currentSyncStepMessage = '';
-  int currentSyncStepInt = 0; // 0=offline, 1=cloud_sync, 2=reverb_connect, 3=room_join, 4=ready
+  int currentSyncStepInt =
+      0; // 0=offline, 1=cloud_sync, 2=reverb_connect, 3=room_join, 4=ready
 
   bool isSessionLocked = false;
   bool isAuthorColorEnabled = false;
@@ -80,11 +89,15 @@ class CollaborationRoomService extends ChangeNotifier {
   String? sessionTitle;
   Set<int>? authorizedPageIds;
 
-  ValueNotifier<RealtimeStatus> get statusNotifier => _realtimeService.statusNotifier;
+  ValueNotifier<RealtimeStatus> get statusNotifier =>
+      _realtimeService.statusNotifier;
   int? get liveNotebookSid => _liveNotebookSid;
   String get myUserId => _myUserId ?? '';
   String get currentUserRole => _currentUserRole ?? 'viewer';
   bool get isSyncing => isGlobalSyncing; // Alias for UI consistency
+
+  /// 🚀 Variável que controla se estamos a recuperar histórico (Para bloquear UI temporariamente se necessário)
+  bool isRecoveringHistory = false;
 
   // -------------------------------------------------------------------------
   // 🛡️ [STATE] CHAT & COMUNICAÇÃO
@@ -109,14 +122,14 @@ class CollaborationRoomService extends ChangeNotifier {
   double? currentVisibleWidth;
   Size? lastScreenSize;
   Offset? _lastSentViewportCenter;
-  
+
   final Map<int, String> remoteEditingTitles = {};
   final Set<String> _deniedActionKeys = {};
   Map<String, dynamic>? incomingVoiceCall;
   bool isConnectingVoice = false;
   bool isLiveSessionActive = false;
   bool get isRemoteVoiceCallActive => incomingVoiceCall != null;
-  
+
   // -------------------------------------------------------------------------
   // 🚀 [CALLBACKS] PARA MODIFICAÇÃO DE PÁGINAS & NAVEGAÇÃO
   // -------------------------------------------------------------------------
@@ -132,9 +145,16 @@ class CollaborationRoomService extends ChangeNotifier {
   Future<void> Function()? onSyncRequested;
   Future<void> Function(Map<String, dynamic> data)? onFullStateRequested;
   Future<void> Function(Map<String, dynamic> data)? onFullStateReceived;
+  Future<void> Function(Map<String, dynamic> data)? onHistoryRequested;
+  Future<void> Function(Map<String, dynamic> data)? onHistoryDelivered;
   Future<void> Function(Map<String, dynamic> data)? onFingerprintReceived;
   Future<void> Function(Map<String, dynamic> data)? onCloudSyncSignal;
-  Future<void> Function(String pageClientId, List<PageObject> newObjects, int remoteTs)? onApplyRemoteChange;
+  Future<void> Function(
+    String pageClientId,
+    List<PageObject> newObjects,
+    int remoteTs,
+  )?
+  onApplyRemoteChange;
   void Function()? onNotebookDeleted;
   void Function()? onAccessRevoked;
   Future<void> Function(Map<String, dynamic> data)? onNotebookStructureUpdated;
@@ -145,34 +165,42 @@ class CollaborationRoomService extends ChangeNotifier {
   // -------------------------------------------------------------------------
   // 🚀 [STREAMS] ALERTAS E EVENTOS
   // -------------------------------------------------------------------------
-  StreamController<Map<String, dynamic>> _newMessageAlertController = StreamController.broadcast();
+  StreamController<Map<String, dynamic>> _newMessageAlertController =
+      StreamController.broadcast();
   Stream<Map<String, dynamic>> get onNewMessageAlert {
-    if (_newMessageAlertController.isClosed) _newMessageAlertController = StreamController.broadcast();
+    if (_newMessageAlertController.isClosed)
+      _newMessageAlertController = StreamController.broadcast();
     return _newMessageAlertController.stream;
   }
 
-  StreamController<String> _permissionAlertController = StreamController.broadcast();
+  StreamController<String> _permissionAlertController =
+      StreamController.broadcast();
   Stream<String> get onPermissionAlert {
-    if (_permissionAlertController.isClosed) _permissionAlertController = StreamController.broadcast();
+    if (_permissionAlertController.isClosed)
+      _permissionAlertController = StreamController.broadcast();
     return _permissionAlertController.stream;
   }
 
-  StreamController<void> _notebookDeletedByOwnerController = StreamController.broadcast();
+  StreamController<void> _notebookDeletedByOwnerController =
+      StreamController.broadcast();
   Stream<void> get onNotebookDeletedByOwner {
-    if (_notebookDeletedByOwnerController.isClosed) _notebookDeletedByOwnerController = StreamController.broadcast();
+    if (_notebookDeletedByOwnerController.isClosed)
+      _notebookDeletedByOwnerController = StreamController.broadcast();
     return _notebookDeletedByOwnerController.stream;
   }
 
-  StreamController<Map<String, dynamic>> _sessionMetaStreamController = StreamController.broadcast();
+  StreamController<Map<String, dynamic>> _sessionMetaStreamController =
+      StreamController.broadcast();
   Stream<Map<String, dynamic>> get onSessionMetaReceived {
-    if (_sessionMetaStreamController.isClosed) _sessionMetaStreamController = StreamController.broadcast();
+    if (_sessionMetaStreamController.isClosed)
+      _sessionMetaStreamController = StreamController.broadcast();
     return _sessionMetaStreamController.stream;
   }
 
   // -------------------------------------------------------------------------
   // 🕒 [INTERNOS] TIMERS & SUBSCRIPTIONS
   // -------------------------------------------------------------------------
-  
+
   StreamSubscription? _usersSubscription;
   StreamSubscription? _strokesSubscription;
   StreamSubscription? _textSubscription;
@@ -187,6 +215,8 @@ class CollaborationRoomService extends ChangeNotifier {
   StreamSubscription? _collectiveSyncSubscription;
   StreamSubscription? _fullStateRequestSubscription;
   StreamSubscription? _fullStateReceivedSubscription;
+  StreamSubscription? _historyRequestSubscription;
+  StreamSubscription? _historyDeliverSubscription;
   StreamSubscription? _fingerprintSubscription;
   StreamSubscription? _globalActionSubscription;
   StreamSubscription? _followSubscription;
@@ -224,7 +254,7 @@ class CollaborationRoomService extends ChangeNotifier {
   // -------------------------------------------------------------------------
   // 🚀 [MÉTODOS PÚBLICOS] INICIALIZAÇÃO & CICLO DE VIDA
   // -------------------------------------------------------------------------
-  
+
   Future<void> init(
     int liveNotebookSid,
     String myUserId,
@@ -241,7 +271,9 @@ class CollaborationRoomService extends ChangeNotifier {
     _setupSubscriptions();
 
     // 🚀 Só entra na sala e conecta se a colaboração estiver HABILITADA
-    if (isCollaborationEnabled && _liveNotebookSid != null && _liveNotebookSid! > 0) {
+    if (isCollaborationEnabled &&
+        _liveNotebookSid != null &&
+        _liveNotebookSid! > 0) {
       await _connectAndJoinRoom(
         pageIds: pageIds,
         alternativeTitle: alternativeTitle,
@@ -255,7 +287,8 @@ class CollaborationRoomService extends ChangeNotifier {
     String? alternativeTitle,
     String? sharingType,
   }) async {
-    if (_isDisposed || _liveNotebookSid == null || _liveNotebookSid == 0) return;
+    if (_isDisposed || _liveNotebookSid == null || _liveNotebookSid == 0)
+      return;
 
     try {
       currentSyncStepInt = 1;
@@ -270,13 +303,20 @@ class CollaborationRoomService extends ChangeNotifier {
       }
 
       _statusListener = () async {
-        if (!_isDisposed && isCollaborationEnabled && _liveNotebookSid != null && _liveNotebookSid! > 0) {
+        if (_realtimeService.statusNotifier.value != RealtimeStatus.connected)
+          return;
+        if (!_isDisposed &&
+            isCollaborationEnabled &&
+            _liveNotebookSid != null &&
+            _liveNotebookSid! > 0) {
           try {
             currentSyncStepInt = 2;
             currentSyncStepMessage = '2/3 Entrando na sala em tempo real...';
             _safeNotify();
 
-            await _realtimeService.joinNotebookChannel(notebookId: _liveNotebookSid!);
+            await _realtimeService.joinNotebookChannel(
+              notebookId: _liveNotebookSid!,
+            );
             await Future.delayed(const Duration(milliseconds: 350));
 
             currentSyncStepInt = 3;
@@ -293,9 +333,9 @@ class CollaborationRoomService extends ChangeNotifier {
             _debounceRoomSync();
             _startHeartbeat();
             _startCleanupTimer();
-            // 🚀 v10.99: Removido o sincronismo periódico em background a pedido do utilizador,
-            // confiando inteiramente nos pushes a pedido (quando há alteração local) e no Reverb.
-            // _startBackgroundSync();
+
+            // 🚀 Pedir histórico perdido e sincronização pós-reconexão
+            if (onSyncRequested != null) unawaited(onSyncRequested!());
 
             if (_currentUserRole == 'owner') {
               _realtimeService.broadcastSessionMeta(
@@ -333,7 +373,8 @@ class CollaborationRoomService extends ChangeNotifier {
     }
   }
 
-  Future<void> toggleCollaboration(bool enable, {
+  Future<void> toggleCollaboration(
+    bool enable, {
     int? localId,
     int? remoteId,
     String? userId,
@@ -354,10 +395,13 @@ class CollaborationRoomService extends ChangeNotifier {
       final targetLocalId = localId ?? _localNotebookId;
 
       // 1. Resolver rapidamente o ID remoto no banco se não informado
-      if ((effectiveRemoteId == null || effectiveRemoteId == 0) && targetLocalId != null) {
+      if ((effectiveRemoteId == null || effectiveRemoteId == 0) &&
+          targetLocalId != null) {
         currentSyncStepMessage = 'A registrar caderno na nuvem...';
         _safeNotify();
-        final nbRow = await (_repository.db.select(_repository.db.notebooks)..where((t) => t.id.equals(targetLocalId))).getSingleOrNull();
+        final nbRow = await (_repository.db.select(
+          _repository.db.notebooks,
+        )..where((t) => t.id.equals(targetLocalId))).getSingleOrNull();
         effectiveRemoteId = nbRow?.serverId;
       }
 
@@ -365,7 +409,10 @@ class CollaborationRoomService extends ChangeNotifier {
       final targetUserId = userId ?? _myUserId;
       final targetRole = role ?? _currentUserRole ?? 'viewer';
 
-      if (targetRemoteId != null && targetRemoteId != 0 && targetUserId != null && targetUserId.isNotEmpty) {
+      if (targetRemoteId != null &&
+          targetRemoteId != 0 &&
+          targetUserId != null &&
+          targetUserId.isNotEmpty) {
         try {
           _localNotebookId = targetLocalId;
           _liveNotebookSid = targetRemoteId;
@@ -389,25 +436,36 @@ class CollaborationRoomService extends ChangeNotifier {
             );
           }
 
-          unawaited(Future(() async {
-            try {
-              isGlobalSyncing = true;
-              _safeNotify();
-              await _syncService.pushNotebooks().timeout(const Duration(seconds: 5), onTimeout: () => false);
-              if (targetLocalId != null) {
-                await _syncService.pushPages(
-                  onlyNotebookId: targetLocalId,
-                  onlyNotebookServerId: targetRemoteId,
-                ).timeout(const Duration(seconds: 5), onTimeout: () => false);
+          unawaited(
+            Future(() async {
+              try {
+                isGlobalSyncing = true;
+                _safeNotify();
+                await _syncService.pushNotebooks().timeout(
+                  const Duration(seconds: 5),
+                  onTimeout: () => false,
+                );
+                if (targetLocalId != null) {
+                  await _syncService
+                      .pushPages(
+                        onlyNotebookId: targetLocalId,
+                        onlyNotebookServerId: targetRemoteId,
+                      )
+                      .timeout(
+                        const Duration(seconds: 5),
+                        onTimeout: () => false,
+                      );
+                }
+              } catch (e) {
+                debugPrint(
+                  '⚠️ [Collaboration] Sincronização em segundo plano: $e',
+                );
+              } finally {
+                isGlobalSyncing = false;
+                _safeNotify();
               }
-            } catch (e) {
-              debugPrint('⚠️ [Collaboration] Sincronização em segundo plano: $e');
-            } finally {
-              isGlobalSyncing = false;
-              _safeNotify();
-            }
-          }));
-
+            }),
+          );
         } catch (e) {
           debugPrint('🚨 [Collaboration] Falha ao ligar ao Reverb: $e');
           currentSyncStepInt = -1;
@@ -418,28 +476,38 @@ class CollaborationRoomService extends ChangeNotifier {
         }
       } else {
         try {
-          await _syncService.pushNotebooks().timeout(const Duration(seconds: 4), onTimeout: () => false);
+          await _syncService.pushNotebooks().timeout(
+            const Duration(seconds: 4),
+            onTimeout: () => false,
+          );
           if (targetLocalId != null) {
-            final nbRow = await (_repository.db.select(_repository.db.notebooks)..where((t) => t.id.equals(targetLocalId))).getSingleOrNull();
+            final nbRow = await (_repository.db.select(
+              _repository.db.notebooks,
+            )..where((t) => t.id.equals(targetLocalId))).getSingleOrNull();
             effectiveRemoteId = nbRow?.serverId;
           }
         } catch (_) {}
 
         if (effectiveRemoteId != null && effectiveRemoteId != 0) {
-          return toggleCollaboration(true,
-              localId: localId,
-              remoteId: effectiveRemoteId,
-              userId: userId,
-              role: role,
-              suppressBroadcast: suppressBroadcast,
-              pageIds: pageIds,
-              alternativeTitle: alternativeTitle,
-              sharingType: sharingType);
+          return toggleCollaboration(
+            true,
+            localId: localId,
+            remoteId: effectiveRemoteId,
+            userId: userId,
+            role: role,
+            suppressBroadcast: suppressBroadcast,
+            pageIds: pageIds,
+            alternativeTitle: alternativeTitle,
+            sharingType: sharingType,
+          );
         }
 
-        debugPrint('🚨 [Collaboration] ID remota do caderno indisponível ($targetRemoteId).');
+        debugPrint(
+          '🚨 [Collaboration] ID remota do caderno indisponível ($targetRemoteId).',
+        );
         currentSyncStepInt = -1;
-        currentSyncStepMessage = 'Não foi possível obter a ID remota do caderno na nuvem.';
+        currentSyncStepMessage =
+            'Não foi possível obter a ID remota do caderno na nuvem.';
         isCollaborationEnabled = false;
         SyncService.isCollaborationActive = false;
         _safeNotify();
@@ -450,7 +518,7 @@ class CollaborationRoomService extends ChangeNotifier {
       isCollaborationEnabled = false;
       SyncService.isCollaborationActive = false;
       isLiveSessionActive = false;
-      
+
       _cleanupSession();
 
       onlineUsers.clear();
@@ -494,6 +562,22 @@ class CollaborationRoomService extends ChangeNotifier {
     }
   }
 
+  void clearAllObjectTransforms() {
+    remoteObjectTransforms.value = {};
+    remoteMovingObjectIds.clear();
+  }
+
+  void clearObjectTransform(String objectId) {
+    remoteMovingObjectIds.remove(objectId);
+    if (remoteObjectTransforms.value.containsKey(objectId)) {
+      final cur = Map<String, Map<String, dynamic>>.from(
+        remoteObjectTransforms.value,
+      );
+      cur.remove(objectId);
+      remoteObjectTransforms.value = cur;
+    }
+  }
+
   void _setupSubscriptions() {
     final rt = _realtimeService;
     final notebookId = _liveNotebookSid!;
@@ -503,20 +587,21 @@ class CollaborationRoomService extends ChangeNotifier {
       if (_isDisposed) return;
       final prevCount = onlineUsers.length;
       onlineUsers = _mapUserList(ul.toList());
-      
-      if (onlineUsers.length > prevCount && (_currentUserRole == 'owner' || _currentUserRole == 'editor')) {
-         final pages = getPages?.call() ?? [];
-         final currentIndex = getCurrentPageIndex?.call() ?? 0;
-         if (pages.isNotEmpty && currentIndex < pages.length) {
-            final cp = pages[currentIndex];
-            rt.broadcastPageFingerprint(
-              notebookId: notebookId,
-              myUserId: _myUserId!,
-              pageNumber: cp.pageNumber,
-              fingerprint: cp.generateFingerprint(),
-              updatedAt: cp.updatedAt,
-            );
-         }
+
+      if (onlineUsers.length > prevCount &&
+          (_currentUserRole == 'owner' || _currentUserRole == 'editor')) {
+        final pages = getPages?.call() ?? [];
+        final currentIndex = getCurrentPageIndex?.call() ?? 0;
+        if (pages.isNotEmpty && currentIndex < pages.length) {
+          final cp = pages[currentIndex];
+          rt.broadcastPageFingerprint(
+            notebookId: notebookId,
+            myUserId: _myUserId!,
+            pageNumber: cp.pageNumber,
+            fingerprint: cp.generateFingerprint(),
+            updatedAt: cp.updatedAt,
+          );
+        }
       }
       _safeNotify();
     });
@@ -525,7 +610,8 @@ class CollaborationRoomService extends ChangeNotifier {
     _sessionMetaSubscription = rt.onSessionMetaReceived.listen((d) {
       if (_isDisposed) return;
       if (d['is_locked'] != null) isSessionLocked = d['is_locked'] == true;
-      if (d['is_colors_enabled'] != null) isAuthorColorEnabled = d['is_colors_enabled'] == true;
+      if (d['is_colors_enabled'] != null)
+        isAuthorColorEnabled = d['is_colors_enabled'] == true;
       if (d['voice_mode'] != null) sessionVoiceMode = d['voice_mode'];
       _sessionMetaStreamController.add(d);
       _safeNotify();
@@ -539,15 +625,19 @@ class CollaborationRoomService extends ChangeNotifier {
       if (d['target_id']?.toString() == _myUserId) {
         final bool canISpeakNow = d['can_speak'] == true;
         if (canISpeakNow != _isVoiceAuthorized) {
-          _permissionAlertController.add(canISpeakNow 
-            ? 'O professor deu-te a palavra. Podes falar!' 
-            : 'O teu microfone foi desativado pelo professor.');
+          _permissionAlertController.add(
+            canISpeakNow
+                ? 'O professor deu-te a palavra. Podes falar!'
+                : 'O teu microfone foi desativado pelo professor.',
+          );
         }
         _isVoiceAuthorized = canISpeakNow;
       }
 
       if (d['target_id'] != null && enrolledMembers.isNotEmpty) {
-        final idx = enrolledMembers.indexWhere((m) => m['id'].toString() == d['target_id'].toString());
+        final idx = enrolledMembers.indexWhere(
+          (m) => m['id'].toString() == d['target_id'].toString(),
+        );
         if (idx != -1) enrolledMembers[idx]['can_speak'] = d['can_speak'];
       }
       _safeNotify();
@@ -568,7 +658,9 @@ class CollaborationRoomService extends ChangeNotifier {
         onlineUsers[idx]['role'] = newRole;
       }
 
-      final enrolledIdx = enrolledMembers.indexWhere((m) => m['id'].toString() == targetId);
+      final enrolledIdx = enrolledMembers.indexWhere(
+        (m) => m['id'].toString() == targetId,
+      );
       if (enrolledIdx != -1) {
         enrolledMembers[enrolledIdx]['role'] = newRole;
       }
@@ -578,7 +670,8 @@ class CollaborationRoomService extends ChangeNotifier {
     _voiceCallSubscription?.cancel();
     _voiceCallSubscription = rt.onVoiceCallStarted.listen((d) {
       if (_isDisposed || isLiveSessionActive) return;
-      final String? senderId = d['sender_id']?.toString() ?? d['senderId']?.toString();
+      final String? senderId =
+          d['sender_id']?.toString() ?? d['senderId']?.toString();
       if (senderId == _myUserId || senderId == null) return;
       if (_deniedActionKeys.contains('voice_call_$senderId')) return;
       incomingVoiceCall = d;
@@ -590,14 +683,17 @@ class CollaborationRoomService extends ChangeNotifier {
       if (_isDisposed) return;
       final String uid = d['sender_id'].toString();
       if (uid == _myUserId) return;
-      
+
       final bool isInCall = d['is_in_call'] == true;
       final bool isTalking = d['is_talking'] == true;
       final double level = (d['audio_level'] as num?)?.toDouble() ?? 0.0;
-      
-      if (isInCall) usersInLiveSession.add(uid); else usersInLiveSession.remove(uid);
+
+      if (isInCall)
+        usersInLiveSession.add(uid);
+      else
+        usersInLiveSession.remove(uid);
       userAudioLevels[uid] = isTalking ? level : 0.0;
-      
+
       final userIdx = onlineUsers.indexWhere((u) => u['id'].toString() == uid);
       if (userIdx != -1) {
         onlineUsers[userIdx]['isTalking'] = isTalking;
@@ -610,13 +706,17 @@ class CollaborationRoomService extends ChangeNotifier {
     _strokesSubscription = rt.onStrokeReceived.listen((d) async {
       debugPrint('🟢 [Realtime] onStrokeReceived disparado! d: $d');
       if (_isDisposed || d['sender_id']?.toString() == _myUserId) {
-        debugPrint('🟡 [Realtime] onStrokeReceived ignorado. isDisposed: $_isDisposed, sender: ${d['sender_id']}, myUser: $_myUserId');
+        debugPrint(
+          '🟡 [Realtime] onStrokeReceived ignorado. isDisposed: $_isDisposed, sender: ${d['sender_id']}, myUser: $_myUserId',
+        );
         return;
       }
-      
+
       final pages = getPages?.call() ?? [];
       if (pages.isEmpty) {
-        debugPrint('🔴 [Realtime] onStrokeReceived abortado: pages está vazio!');
+        debugPrint(
+          '🔴 [Realtime] onStrokeReceived abortado: pages está vazio!',
+        );
         return;
       }
 
@@ -625,13 +725,18 @@ class CollaborationRoomService extends ChangeNotifier {
 
       int idx = -1;
       if (pcid != null) idx = pages.indexWhere((p) => p.clientId == pcid);
-      if (idx == -1 && ipn > 0) idx = pages.indexWhere((p) => p.pageNumber == ipn);
+      if (idx == -1 && ipn > 0)
+        idx = pages.indexWhere((p) => p.pageNumber == ipn);
       if (idx == -1) {
-        debugPrint('🔴 [Realtime] onStrokeReceived abortado: página não encontrada! pcid: $pcid, ipn: $ipn');
+        debugPrint(
+          '🔴 [Realtime] onStrokeReceived abortado: página não encontrada! pcid: $pcid, ipn: $ipn',
+        );
         return;
       }
 
-      debugPrint('✅ [Realtime] onStrokeReceived processando tinta na página $ipn');
+      debugPrint(
+        '✅ [Realtime] onStrokeReceived processando tinta na página $ipn',
+      );
 
       final tp = pages[idx];
       final List<PageObject> currentObjects = List<PageObject>.from(tp.objects);
@@ -644,23 +749,33 @@ class CollaborationRoomService extends ChangeNotifier {
       List<Offset> decodePoints(List rawPts, String? enc) {
         final pts = <Offset>[];
         if (rawPts.isEmpty) return pts;
-        
+
         if (enc == 'd1') {
           int currentX = (rawPts[0] as num).toInt();
           int currentY = (rawPts[1] as num).toInt();
           pts.add(Offset(currentX / 10.0, currentY / 10.0));
           for (int i = 2; i < rawPts.length - 1; i += 2) {
             currentX += (rawPts[i] as num).toInt();
-            currentY += (rawPts[i+1] as num).toInt();
+            currentY += (rawPts[i + 1] as num).toInt();
             pts.add(Offset(currentX / 10.0, currentY / 10.0));
           }
         } else if (rawPts.first is num) {
           for (int i = 0; i < rawPts.length - 1; i += 2) {
-            pts.add(Offset((rawPts[i] as num).toDouble(), (rawPts[i+1] as num).toDouble()));
+            pts.add(
+              Offset(
+                (rawPts[i] as num).toDouble(),
+                (rawPts[i + 1] as num).toDouble(),
+              ),
+            );
           }
         } else {
           for (var p in rawPts) {
-            pts.add(Offset(((p['dx'] ?? p['x']) as num).toDouble(), ((p['dy'] ?? p['y']) as num).toDouble()));
+            pts.add(
+              Offset(
+                ((p['dx'] ?? p['x']) as num).toDouble(),
+                ((p['dy'] ?? p['y']) as num).toDouble(),
+              ),
+            );
           }
         }
         return pts;
@@ -668,12 +783,15 @@ class CollaborationRoomService extends ChangeNotifier {
 
       for (var sm in d['strokes']) {
         final sid = sm['id'];
-        
+
         if (sm['is_deleted'] == true) {
           final remoteTs = sm['updated_at'] ?? TimeService().nowMs();
           final objIdx = currentObjects.indexWhere((o) => o.id == sid);
           if (objIdx != -1) {
-            currentObjects[objIdx] = currentObjects[objIdx].copyWith(isDeleted: true, updatedAt: remoteTs);
+            currentObjects[objIdx] = currentObjects[objIdx].copyWith(
+              isDeleted: true,
+              updatedAt: remoteTs,
+            );
             hasPermanentChanges = true;
             if (remoteTs > maxRemoteTs) maxRemoteTs = remoteTs;
           }
@@ -690,69 +808,100 @@ class CollaborationRoomService extends ChangeNotifier {
               ((sm['offset']['dx'] ?? sm['offset']['x']) as num).toDouble(),
               ((sm['offset']['dy'] ?? sm['offset']['y']) as num).toDouble(),
             );
-            final baseS = tp.strokes.firstWhere((s) => s.id == sid, orElse: () => Stroke(color: '#000000', thickness: 1, points: []));
+            final baseS = tp.strokes.firstWhere(
+              (s) => s.id == sid,
+              orElse: () => Stroke(color: '#000000', thickness: 1, points: []),
+            );
             curM[sid] = baseS.copyWith(liveOffset: off);
           } else {
             final rawPts = sm['points'] as List;
             final pts = decodePoints(rawPts, sm['pts_enc']);
-            debugPrint('🔥 [Live Stroke] raw: ${rawPts.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}');
+            debugPrint(
+              '🔥 [Live Stroke] raw: ${rawPts.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}',
+            );
             final exS = curM[sid];
             if (exS != null && !isMove) {
               curM[sid] = Stroke(
-                id: sid, 
-                color: sm['color'] ?? exS.color, 
-                thickness: (sm['thickness'] as num?)?.toDouble() ?? exS.thickness, 
-                points: pts, // 🚀 Apenas substitui pela última coleção enviada, em vez de acumular duplicados!
+                id: sid,
+                color: sm['color'] ?? exS.color,
+                thickness:
+                    (sm['thickness'] as num?)?.toDouble() ?? exS.thickness,
+                points:
+                    pts, // 🚀 Apenas substitui pela última coleção enviada, em vez de acumular duplicados!
                 pageNumber: ipn,
                 creatorId: d['sender_id']?.toString() ?? exS.creatorId,
-                brushType: sm['brush_type'] != null ? BrushType.values.firstWhere((e) => e.name == sm['brush_type'], orElse: () => BrushType.gel) : exS.brushType,
-                isHighlighter: sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
+                brushType: sm['brush_type'] != null
+                    ? BrushType.values.firstWhere(
+                        (e) => e.name == sm['brush_type'],
+                        orElse: () => BrushType.gel,
+                      )
+                    : exS.brushType,
+                isHighlighter:
+                    sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
                 opacity: (sm['opacity'] as num?)?.toDouble() ?? exS.opacity,
               );
             } else {
               curM[sid] = Stroke(
-                id: sid, 
-                color: sm['color'] ?? '#000000', 
-                thickness: (sm['thickness'] as num?)?.toDouble() ?? 1.0, 
-                points: pts, 
+                id: sid,
+                color: sm['color'] ?? '#000000',
+                thickness: (sm['thickness'] as num?)?.toDouble() ?? 1.0,
+                points: pts,
                 pageNumber: ipn,
                 creatorId: d['sender_id']?.toString(),
-                brushType: sm['brush_type'] != null ? BrushType.values.firstWhere((e) => e.name == sm['brush_type'], orElse: () => BrushType.gel) : BrushType.gel,
-                isHighlighter: sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
+                brushType: sm['brush_type'] != null
+                    ? BrushType.values.firstWhere(
+                        (e) => e.name == sm['brush_type'],
+                        orElse: () => BrushType.gel,
+                      )
+                    : BrushType.gel,
+                isHighlighter:
+                    sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
                 opacity: (sm['opacity'] as num?)?.toDouble() ?? 1.0,
               );
             }
           }
         } else {
-          final int remoteTs = sm['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
+          final int remoteTs =
+              sm['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
           final rawPts2 = sm['points'] as List;
           final pts = decodePoints(rawPts2, sm['pts_enc']);
-          debugPrint('🔥 [Final Stroke] raw: ${rawPts2.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}');
-          
+          debugPrint(
+            '🔥 [Final Stroke] raw: ${rawPts2.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}',
+          );
+
           final ns = Stroke(
-            id: sid, 
-            color: sm['color'] ?? '#000000', 
-            thickness: (sm['thickness'] as num?)?.toDouble() ?? 1.0, 
-            points: pts, 
-            pageNumber: ipn, 
+            id: sid,
+            color: sm['color'] ?? '#000000',
+            thickness: (sm['thickness'] as num?)?.toDouble() ?? 1.0,
+            points: pts,
+            pageNumber: ipn,
             updatedAt: remoteTs,
             creatorId: d['sender_id']?.toString(),
-            brushType: sm['brush_type'] != null ? BrushType.values.firstWhere((e) => e.name == sm['brush_type'], orElse: () => BrushType.gel) : BrushType.gel,
-            isHighlighter: sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
+            brushType: sm['brush_type'] != null
+                ? BrushType.values.firstWhere(
+                    (e) => e.name == sm['brush_type'],
+                    orElse: () => BrushType.gel,
+                  )
+                : BrushType.gel,
+            isHighlighter:
+                sm['is_highlighter'] == 1 || sm['is_highlighter'] == true,
             opacity: (sm['opacity'] as num?)?.toDouble() ?? 1.0,
           );
 
           final objIdx = currentObjects.indexWhere((o) => o.id == sid);
           if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) {
-             curM.remove(sid);
-             remoteMovingStrokeIds.remove(sid);
-             continue;
+            curM.remove(sid);
+            remoteMovingStrokeIds.remove(sid);
+            continue;
           }
 
           curM.remove(sid);
           remoteMovingStrokeIds.remove(sid);
-          if (objIdx != -1) currentObjects[objIdx] = ns; else currentObjects.add(ns);
-          
+          if (objIdx != -1)
+            currentObjects[objIdx] = ns;
+          else
+            currentObjects.add(ns);
+
           if (remoteTs > maxRemoteTs) maxRemoteTs = remoteTs;
           hasPermanentChanges = true;
           _repository.saveSingleStroke(tp.clientId, ns);
@@ -770,7 +919,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _textSubscription?.cancel();
     _textSubscription = rt.onTextReceived.listen((d) async {
       if (_isDisposed || d['sender_id']?.toString() == _myUserId) return;
-      
+
       final pages = getPages?.call() ?? [];
       final String? pcid = d['page_client_id']?.toString();
       final int ipn = d['page_number'] ?? 0;
@@ -785,7 +934,7 @@ class CollaborationRoomService extends ChangeNotifier {
       final bd = d['block'];
       final bid = bd['id'];
       final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
-      
+
       if (d['is_deleted'] == true) {
         currentObjects.removeWhere((t) => t.id == bid);
         _repository.deleteObjectById(bid);
@@ -794,10 +943,18 @@ class CollaborationRoomService extends ChangeNotifier {
         if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) return;
 
         final nb = TextBlock.fromJson(bd);
-        if (objIdx != -1) currentObjects[objIdx] = nb; else currentObjects.add(nb);
-        _repository.saveSingleTextBlock(tp.clientId, nb, pageId: tp.id, updatedAt: remoteTs);
+        if (objIdx != -1)
+          currentObjects[objIdx] = nb;
+        else
+          currentObjects.add(nb);
+        _repository.saveSingleTextBlock(
+          tp.clientId,
+          nb,
+          pageId: tp.id,
+          updatedAt: remoteTs,
+        );
       }
-      
+
       if (onApplyRemoteChange != null) {
         await onApplyRemoteChange!(tp.clientId, currentObjects, remoteTs);
       }
@@ -808,7 +965,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _imageSubscription?.cancel();
     _imageSubscription = rt.onImageReceived.listen((d) async {
       if (_isDisposed || d['sender_id']?.toString() == _myUserId) return;
-      
+
       final pages = getPages?.call() ?? [];
       final String? pcid = d['page_client_id']?.toString();
       final int ipn = d['page_number'] ?? 0;
@@ -823,7 +980,7 @@ class CollaborationRoomService extends ChangeNotifier {
       final bd = d['block'];
       final bid = bd['id'];
       final int remoteTs = bd['updated_at'] ?? TimeService().nowMs();
-      
+
       if (d['is_deleted'] == true) {
         currentObjects.removeWhere((i) => i.id == bid);
         _repository.deleteObjectById(bid);
@@ -832,17 +989,24 @@ class CollaborationRoomService extends ChangeNotifier {
         if (objIdx != -1 && currentObjects[objIdx].updatedAt > remoteTs) return;
 
         final nib = ImageBlock.fromJson(bd);
-        if (objIdx != -1) currentObjects[objIdx] = nib; else currentObjects.add(nib);
-        _repository.saveSingleImageBlock(tp.clientId, nib, pageId: tp.id, updatedAt: remoteTs);
+        if (objIdx != -1)
+          currentObjects[objIdx] = nib;
+        else
+          currentObjects.add(nib);
+        _repository.saveSingleImageBlock(
+          tp.clientId,
+          nib,
+          pageId: tp.id,
+          updatedAt: remoteTs,
+        );
       }
-      
+
       if (onApplyRemoteChange != null) {
         await onApplyRemoteChange!(tp.clientId, currentObjects, remoteTs);
       }
       _safeNotify();
       if (onImageReceived != null) await onImageReceived!(d);
     });
-
     _collectiveSyncSubscription?.cancel();
     _collectiveSyncSubscription = rt.onCollectiveSyncRequested.listen((d) {
       if (!_isDisposed && d['sender_id'].toString() != _myUserId) {
@@ -865,12 +1029,12 @@ class CollaborationRoomService extends ChangeNotifier {
     _fingerprintSubscription?.cancel();
     _fingerprintSubscription = rt.onPageFingerprintReceived.listen((d) {
       if (_isDisposed || d['sender_id'].toString() == _myUserId) return;
-      
+
       final int pNum = d['page_number'];
       final String remoteFingerprint = d['fingerprint'];
       final int remoteTs = d['updated_at'] ?? 0;
       final String senderId = d['sender_id'].toString();
-      
+
       final pages = getPages?.call() ?? [];
       final idx = pages.indexWhere((p) => p.pageNumber == pNum);
       if (idx != -1) {
@@ -880,18 +1044,22 @@ class CollaborationRoomService extends ChangeNotifier {
           final lastReq = _lastFullStateRequestTime[pNum];
 
           if (lastReq == null || now.difference(lastReq).inSeconds > 20) {
-             bool shouldSync = (senderId == authorityId) || (remoteTs > pages[idx].updatedAt);
-             if (shouldSync) {
-               _lastFullStateRequestTime[pNum] = now;
-               rt.requestFullState(notebookId: notebookId, targetUserId: senderId, pageNumber: pNum);
-               
-               Future.delayed(const Duration(seconds: 2), () async {
-                 if (!_isDisposed) {
-                   await _syncService.pullSpecificPage(notebookId, pNum);
-                   if (onSyncRequested != null) onSyncRequested!();
-                 }
-               });
-             }
+            bool shouldSync =
+                (senderId == authorityId) || (remoteTs > pages[idx].updatedAt);
+            if (shouldSync) {
+              _lastFullStateRequestTime[pNum] = now;
+              rt.requestFullState(
+                notebookId: notebookId,
+                targetUserId: senderId,
+                pageNumber: pNum,
+              );
+
+              Future.delayed(const Duration(seconds: 2), () async {
+                if (!_isDisposed) {
+                  await _syncService.pullSpecificPage(notebookId, pNum);
+                }
+              });
+            }
           }
         }
       }
@@ -899,7 +1067,9 @@ class CollaborationRoomService extends ChangeNotifier {
     });
 
     _cloudSyncSignalSubscription?.cancel();
-    _cloudSyncSignalSubscription = rt.onCloudSyncSignalReceived.listen((d) async {
+    _cloudSyncSignalSubscription = rt.onCloudSyncSignalReceived.listen((
+      d,
+    ) async {
       if (_isDisposed || d['sender_id'].toString() == _myUserId) return;
       if (onCloudSyncSignal != null) await onCloudSyncSignal!(d);
     });
@@ -912,7 +1082,10 @@ class CollaborationRoomService extends ChangeNotifier {
 
     _activitySubscription?.cancel();
     _activitySubscription = rt.onUserActivityReceived.listen((d) {
-      rt.updateUserActivityState(d['sender_id'].toString(), d['activity'].toString());
+      rt.updateUserActivityState(
+        d['sender_id'].toString(),
+        d['activity'].toString(),
+      );
     });
 
     _pointerSubscription?.cancel();
@@ -920,13 +1093,18 @@ class CollaborationRoomService extends ChangeNotifier {
       if (_isDisposed) return;
       final uid = d['sender_id'].toString();
       if (uid == _myUserId) return;
-      
+
       final cur = Map<String, dynamic>.from(remotePointers.value);
       cur[uid] = {
         'pos': Offset((d['x'] as num).toDouble(), (d['y'] as num).toDouble()),
         'page_number': d['page_number'],
         'tool': d['tool'],
-        'role': onlineUsers.firstWhere((u) => u['id'].toString() == uid, orElse: () => {})['role'] ?? 'student'
+        'role':
+            onlineUsers.firstWhere(
+              (u) => u['id'].toString() == uid,
+              orElse: () => {},
+            )['role'] ??
+            'student',
       };
       remotePointers.value = cur;
     });
@@ -945,21 +1123,34 @@ class CollaborationRoomService extends ChangeNotifier {
         remoteMovingObjectIds.add(objId);
       } else if (isMoving == false) {
         remoteMovingObjectIds.remove(objId);
+        // 🚀 v11.0: Temporizador de segurança de 1.2s para limpar o transform se a ação oficial demorar
+        Timer(const Duration(milliseconds: 1200), () {
+          if (!remoteMovingObjectIds.contains(objId)) {
+            clearObjectTransform(objId);
+          }
+        });
       }
 
-      final cur = Map<String, Map<String, dynamic>>.from(remoteObjectTransforms.value);
+      final cur = Map<String, Map<String, dynamic>>.from(
+        remoteObjectTransforms.value,
+      );
       cur[objId] = {
         if (d['dx'] != null) 'dx': (d['dx'] as num).toDouble(),
         if (d['dy'] != null) 'dy': (d['dy'] as num).toDouble(),
+        if (d['pdx'] != null) 'pdx': (d['pdx'] as num).toDouble(),
+        if (d['pdy'] != null) 'pdy': (d['pdy'] as num).toDouble(),
         if (d['scale'] != null) 'scale': (d['scale'] as num).toDouble(),
-        if (d['rotation'] != null) 'rotation': (d['rotation'] as num).toDouble(),
+        if (d['rotation'] != null)
+          'rotation': (d['rotation'] as num).toDouble(),
         if (d['state'] != null) 'state': d['state'],
       };
       remoteObjectTransforms.value = cur;
     });
 
     _chatSubscription?.cancel();
-    _chatSubscription = rt.onChatMessageReceived.listen((d) => _addChatMessage(d));
+    _chatSubscription = rt.onChatMessageReceived.listen(
+      (d) => _addChatMessage(d),
+    );
 
     _audioMessageSubscription?.cancel();
     _audioMessageSubscription = rt.onAudioMessageReceived.listen((d) {
@@ -996,8 +1187,10 @@ class CollaborationRoomService extends ChangeNotifier {
     _uploadingSubscription = rt.onRemoteUploading.listen((d) {
       if (_isDisposed) return;
       final uid = d['sender_id'].toString();
-      if (d['is_uploading'] == true) remoteUploadingUsers.add(uid);
-      else remoteUploadingUsers.remove(uid);
+      if (d['is_uploading'] == true)
+        remoteUploadingUsers.add(uid);
+      else
+        remoteUploadingUsers.remove(uid);
       _safeNotify();
     });
 
@@ -1028,17 +1221,24 @@ class CollaborationRoomService extends ChangeNotifier {
     });
 
     _notebookStructureSubscription?.cancel();
-    _notebookStructureSubscription = rt.onNotebookStructureUpdated.listen((d) async {
+    _notebookStructureSubscription = rt.onNotebookStructureUpdated.listen((
+      d,
+    ) async {
       if (_isDisposed || d['notebook_id'] != notebookId) return;
       sessionTitle = d['alternative_title']?.toString();
-      
+
       if (d['authorized_page_ids'] != null) {
-        authorizedPageIds = Set<int>.from((d['authorized_page_ids'] as List).map((id) => int.parse(id.toString())));
+        authorizedPageIds = Set<int>.from(
+          (d['authorized_page_ids'] as List).map(
+            (id) => int.parse(id.toString()),
+          ),
+        );
       } else {
         authorizedPageIds = null;
       }
 
-      if (onNotebookStructureUpdated != null) await onNotebookStructureUpdated!(d);
+      if (onNotebookStructureUpdated != null)
+        await onNotebookStructureUpdated!(d);
       _safeNotify();
     });
 
@@ -1046,25 +1246,36 @@ class CollaborationRoomService extends ChangeNotifier {
     _viewportSubscription = rt.onViewportReceived.listen((d) {
       if (_isDisposed || d['sender_id'].toString() == _myUserId) return;
       final String uid = d['sender_id'].toString();
-      
-      if (uid == followingUserId) {
-         if (d['page_number'] != null) {
-            final currentIndex = getCurrentPageIndex?.call() ?? 0;
-            if (currentIndex + 1 != d['page_number']) {
-              onPageNavigationRequested?.call(d['page_number'] - 1);
-            }
-         }
 
-         if (lastScreenSize != null && (d['visibleWidth'] as num).toDouble() > 0) {
-            final screenCenter = Offset(lastScreenSize!.width / 2, lastScreenSize!.height / 2);
-            final double scale = (lastScreenSize!.width / (d['visibleWidth'] as num).toDouble()).clamp(0.8, 3.5);
-            
-            final targetMatrix = Matrix4.translationValues(screenCenter.dx, screenCenter.dy, 0.0)
-              ..scale(scale, scale, 1.0)
-              ..translate(-(d['focusX'] as num).toDouble(), -(d['focusY'] as num).toDouble(), 0.0);
-            
-            onSmoothTransition?.call(targetMatrix);
-         }
+      if (uid == followingUserId) {
+        if (d['page_number'] != null) {
+          final currentIndex = getCurrentPageIndex?.call() ?? 0;
+          if (currentIndex + 1 != d['page_number']) {
+            onPageNavigationRequested?.call(d['page_number'] - 1);
+          }
+        }
+
+        if (lastScreenSize != null &&
+            (d['visibleWidth'] as num).toDouble() > 0) {
+          final screenCenter = Offset(
+            lastScreenSize!.width / 2,
+            lastScreenSize!.height / 2,
+          );
+          final double scale =
+              (lastScreenSize!.width / (d['visibleWidth'] as num).toDouble())
+                  .clamp(0.8, 3.5);
+
+          final targetMatrix =
+              Matrix4.translationValues(screenCenter.dx, screenCenter.dy, 0.0)
+                ..scale(scale, scale, 1.0)
+                ..translate(
+                  -(d['focusX'] as num).toDouble(),
+                  -(d['focusY'] as num).toDouble(),
+                  0.0,
+                );
+
+          onSmoothTransition?.call(targetMatrix);
+        }
       }
       _markUserBroadcasting(uid);
     });
@@ -1074,35 +1285,48 @@ class CollaborationRoomService extends ChangeNotifier {
   // 🚀 [MÉTODOS DE AÇÃO]
   // -------------------------------------------------------------------------
 
-  Future<void> fetchSessionStatus({List<int>? pageIds, String? alternativeTitle, String? sharingType}) async {
+  Future<void> fetchSessionStatus({
+    List<int>? pageIds,
+    String? alternativeTitle,
+    String? sharingType,
+  }) async {
     if (_liveNotebookSid == null || _isDisposed) return;
     try {
-      final response = await _apiService.post('/notebooks/$_liveNotebookSid/session/join', {
-        if (pageIds != null) 'page_ids': pageIds,
-        if (alternativeTitle != null) 'alternative_title': alternativeTitle,
-        if (sharingType != null) 'sharing_type': sharingType,
-      });
-      
+      final response = await _apiService
+          .post('/notebooks/$_liveNotebookSid/session/join', {
+            if (pageIds != null) 'page_ids': pageIds,
+            if (alternativeTitle != null) 'alternative_title': alternativeTitle,
+            if (sharingType != null) 'sharing_type': sharingType,
+          });
+
       if (_isDisposed) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['active'] == true) {
-          if (data['user_role'] != null && data['user_role'].toString().isNotEmpty) {
+          if (data['user_role'] != null &&
+              data['user_role'].toString().isNotEmpty) {
             _currentUserRole = data['user_role'].toString();
           }
           authorityId = data['authority_id']?.toString();
           sessionTitle = data['alternative_title']?.toString();
           sessionVoiceMode = data['voice_mode'] ?? 'open';
           _isVoiceAuthorized = data['can_speak'] == true;
-          
+
           if (data['authorized_page_ids'] != null) {
-            authorizedPageIds = Set<int>.from((data['authorized_page_ids'] as List).map((id) => int.parse(id.toString())));
+            authorizedPageIds = Set<int>.from(
+              (data['authorized_page_ids'] as List).map(
+                (id) => int.parse(id.toString()),
+              ),
+            );
           }
 
           if (data['pages_summary'] != null) {
             await _syncSmartByFingerprint(data['pages_summary']);
           }
+
+          // 🚀 RECUPERAR CHAT HISTORY DO REDIS AO ENTRAR
+          fetchChatHistory();
 
           if (!_isDisposed) _safeNotify();
         }
@@ -1117,13 +1341,18 @@ class CollaborationRoomService extends ChangeNotifier {
   Future<void> _syncSmartByFingerprint(List summary) async {
     final pages = getPages?.call() ?? [];
     if (pages.isEmpty && summary.isNotEmpty) {
-      await _syncService.pullPages(forceFull: true, onlyNotebookId: _liveNotebookSid);
+      await _syncService.pullPages(
+        forceFull: true,
+        onlyNotebookId: _liveNotebookSid,
+      );
       if (onSyncRequested != null) await onSyncRequested!();
       return;
     }
 
     final List<int> dirtyPageNumbers = [];
-    final int currentPageNumber = pages.isNotEmpty ? pages[getCurrentPageIndex?.call() ?? 0].pageNumber : -1;
+    final int currentPageNumber = pages.isNotEmpty
+        ? pages[getCurrentPageIndex?.call() ?? 0].pageNumber
+        : -1;
 
     for (var item in summary) {
       final int pNum = item['page_number'];
@@ -1135,23 +1364,29 @@ class CollaborationRoomService extends ChangeNotifier {
       final idx = pages.indexWhere((p) => p.pageNumber == pNum);
       if (idx != -1) {
         LocalPage p = pages[idx];
-        
+
         bool metaChanged = false;
         String newTitle = p.title;
         String newFooter = p.footer;
 
         if (hData != null) {
           final String parsedTitle = LocalPage.parseMeta(hData);
-          if (p.title != parsedTitle) { newTitle = parsedTitle; metaChanged = true; }
+          if (p.title != parsedTitle) {
+            newTitle = parsedTitle;
+            metaChanged = true;
+          }
         }
         if (fData != null) {
           final String parsedFooter = LocalPage.parseMeta(fData);
-          if (p.footer != parsedFooter) { newFooter = parsedFooter; metaChanged = true; }
+          if (p.footer != parsedFooter) {
+            newFooter = parsedFooter;
+            metaChanged = true;
+          }
         }
 
         if (metaChanged) {
-           p = p.copyWith(title: newTitle, footer: newFooter);
-           await _repository.savePage(p, _liveNotebookSid);
+          p = p.copyWith(title: newTitle, footer: newFooter);
+          await _repository.savePage(p, _liveNotebookSid);
         }
 
         final localFingerprint = p.generateFingerprint();
@@ -1167,7 +1402,8 @@ class CollaborationRoomService extends ChangeNotifier {
 
     if (dirtyPageNumbers.isEmpty) return;
 
-    if (currentPageNumber != -1 && dirtyPageNumbers.contains(currentPageNumber)) {
+    if (currentPageNumber != -1 &&
+        dirtyPageNumbers.contains(currentPageNumber)) {
       await _syncService.pullSpecificPage(_liveNotebookSid!, currentPageNumber);
       dirtyPageNumbers.remove(currentPageNumber);
     }
@@ -1177,7 +1413,7 @@ class CollaborationRoomService extends ChangeNotifier {
         await _syncService.pullSpecificPage(_liveNotebookSid!, pNum);
       }
     }
-    
+
     if (onSyncRequested != null) await onSyncRequested!();
   }
 
@@ -1185,7 +1421,7 @@ class CollaborationRoomService extends ChangeNotifier {
     final String? id = d['msg_id']?.toString();
     if (id != null && chatMessages.any((m) => m['msg_id'] == id)) return;
     chatMessages.add(d);
-    if (chatMessages.length > 50) chatMessages.removeAt(0);
+    if (chatMessages.length > 100) chatMessages.removeAt(0);
     if (!_isChatOpen && d['sender_id'] != _myUserId) {
       unreadChatCount++;
       _newMessageAlertController.add(d);
@@ -1200,10 +1436,55 @@ class CollaborationRoomService extends ChangeNotifier {
       'sender_id': _myUserId,
       'message': m,
       'msg_id': TimeService().nowMs().toString(),
-      'timestamp': TimeService().now().toIso8601String()
+      'timestamp': TimeService().now().toIso8601String(),
     };
     _addChatMessage(msg);
-    _realtimeService.broadcastChatMessage(notebookId: _liveNotebookSid!, myUserId: _myUserId!, message: m);
+    _realtimeService.broadcastChatMessage(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+      message: m,
+    );
+
+    // 🚀 Grava a mensagem na Cloud/Redis para quem entrar na sala depois
+    try {
+      _apiService.post('/notebooks/$_liveNotebookSid/session/chat', {
+        'message': msg
+      });
+    } catch (_) {}
+  }
+
+  Future<void> fetchChatHistory() async {
+    if (_liveNotebookSid == null || _isDisposed) return;
+    try {
+      final response = await _apiService.get('/notebooks/$_liveNotebookSid/session/chat');
+      if (response.statusCode == 200 && !_isDisposed) {
+        final data = jsonDecode(response.body);
+        final List messages = data['messages'] ?? [];
+        if (messages.isNotEmpty) {
+          for (var rawMsg in messages) {
+            if (rawMsg is Map<String, dynamic>) {
+              final String? id = rawMsg['msg_id']?.toString();
+              if (id != null && !chatMessages.any((m) => m['msg_id'] == id)) {
+                chatMessages.add(rawMsg);
+              }
+            }
+          }
+          // Sort by timestamp
+          chatMessages.sort((a, b) {
+            final tsA = DateTime.tryParse(a['timestamp'] ?? '')?.millisecondsSinceEpoch ?? 0;
+            final tsB = DateTime.tryParse(b['timestamp'] ?? '')?.millisecondsSinceEpoch ?? 0;
+            return tsA.compareTo(tsB);
+          });
+          // Keep only last 100
+          if (chatMessages.length > 100) {
+            chatMessages.removeRange(0, chatMessages.length - 100);
+          }
+          _safeNotify();
+        }
+      }
+    } catch (e) {
+      debugPrint('🚨 [Chat] Erro a puxar histórico do Redis: $e');
+    }
   }
 
   Offset? _lastPointerPos;
@@ -1211,11 +1492,13 @@ class CollaborationRoomService extends ChangeNotifier {
 
   void broadcastPointer(Offset pos, int pageNumber, String tool) {
     if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
-    
+
     final now = DateTime.now();
-    if (_lastPointerPos != null && (pos - _lastPointerPos!).distance < 1.0) return;
-    if (now.difference(_lastPointerBroadcastTime).inMilliseconds < 16) return; // 🚀 60 fps para cursores ultra fluidos
-    
+    if (_lastPointerPos != null && (pos - _lastPointerPos!).distance < 1.0)
+      return;
+    if (now.difference(_lastPointerBroadcastTime).inMilliseconds < 16)
+      return; // 🚀 60 fps para cursores ultra fluidos
+
     _lastPointerPos = pos;
     _lastPointerBroadcastTime = now;
 
@@ -1241,7 +1524,11 @@ class CollaborationRoomService extends ChangeNotifier {
     if (_isDisposed || _myUserId == null || _liveNotebookSid == null) return;
     isMyHandRaised = !isMyHandRaised;
     _safeNotify();
-    _realtimeService.broadcastHandEvent(notebookId: _liveNotebookSid!, myUserId: _myUserId!, isRaised: isMyHandRaised);
+    _realtimeService.broadcastHandEvent(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+      isRaised: isMyHandRaised,
+    );
     _realtimeService.updateUserHandState(_myUserId!, isMyHandRaised);
   }
 
@@ -1255,7 +1542,11 @@ class CollaborationRoomService extends ChangeNotifier {
         _safeNotify();
       }
     });
-    _realtimeService.broadcastReaction(notebookId: _liveNotebookSid!, myUserId: _myUserId!, reaction: emoji);
+    _realtimeService.broadcastReaction(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+      reaction: emoji,
+    );
     _safeNotify();
   }
 
@@ -1263,7 +1554,11 @@ class CollaborationRoomService extends ChangeNotifier {
     if (_isDisposed || uid == _myUserId) return;
     followingUserId = (followingUserId == uid) ? null : uid;
     if (_liveNotebookSid != null && _myUserId != null) {
-      _realtimeService.broadcastFollowUpdate(notebookId: _liveNotebookSid!, myUserId: _myUserId!, followingUserId: followingUserId);
+      _realtimeService.broadcastFollowUpdate(
+        notebookId: _liveNotebookSid!,
+        myUserId: _myUserId!,
+        followingUserId: followingUserId,
+      );
     }
     _safeNotify();
   }
@@ -1272,28 +1567,36 @@ class CollaborationRoomService extends ChangeNotifier {
     if (_isDisposed || isBroadcastingViewport) return;
     isBroadcastingViewport = true;
     _safeNotify();
-    _viewportBroadcastTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
-      if (_isDisposed || !isBroadcastingViewport || _liveNotebookSid == null || _myUserId == null) {
-        t.cancel();
-        return;
-      }
-      if (currentViewportCenter != null) {
-        final d = _lastSentViewportCenter == null ? 999 : (currentViewportCenter! - _lastSentViewportCenter!).distance;
-        if (d > 3.0) {
-          _realtimeService.broadcastViewport(
-            notebookId: _liveNotebookSid!,
-            viewportData: {
-              'page_number': (getCurrentPageIndex?.call() ?? 0) + 1,
-              'focusX': currentViewportCenter!.dx,
-              'focusY': currentViewportCenter!.dy,
-              'visibleWidth': currentVisibleWidth ?? 600.0,
-            },
-            myUserId: _myUserId!,
-          );
-          _lastSentViewportCenter = currentViewportCenter;
+    _viewportBroadcastTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (t) {
+        if (_isDisposed ||
+            !isBroadcastingViewport ||
+            _liveNotebookSid == null ||
+            _myUserId == null) {
+          t.cancel();
+          return;
         }
-      }
-    });
+        if (currentViewportCenter != null) {
+          final d = _lastSentViewportCenter == null
+              ? 999
+              : (currentViewportCenter! - _lastSentViewportCenter!).distance;
+          if (d > 3.0) {
+            _realtimeService.broadcastViewport(
+              notebookId: _liveNotebookSid!,
+              viewportData: {
+                'page_number': (getCurrentPageIndex?.call() ?? 0) + 1,
+                'focusX': currentViewportCenter!.dx,
+                'focusY': currentViewportCenter!.dy,
+                'visibleWidth': currentVisibleWidth ?? 600.0,
+              },
+              myUserId: _myUserId!,
+            );
+            _lastSentViewportCenter = currentViewportCenter;
+          }
+        }
+      },
+    );
   }
 
   void stopViewportBroadcasting() {
@@ -1306,10 +1609,16 @@ class CollaborationRoomService extends ChangeNotifier {
   void toggleVoiceCall(String userId) {
     if (_isDisposed) return;
     if (isLiveSessionActive) {
-      _realtimeService.stopVoiceCall(notebookId: _liveNotebookSid!, myUserId: _myUserId!);
+      _realtimeService.stopVoiceCall(
+        notebookId: _liveNotebookSid!,
+        myUserId: _myUserId!,
+      );
       isLiveSessionActive = false;
     } else {
-      _realtimeService.startVoiceCall(notebookId: _liveNotebookSid!, myUserId: _myUserId!);
+      _realtimeService.startVoiceCall(
+        notebookId: _liveNotebookSid!,
+        myUserId: _myUserId!,
+      );
       isLiveSessionActive = true;
     }
     _safeNotify();
@@ -1317,7 +1626,10 @@ class CollaborationRoomService extends ChangeNotifier {
 
   void acceptVoiceCall() {
     if (_isDisposed || incomingVoiceCall == null) return;
-    _realtimeService.startVoiceCall(notebookId: _liveNotebookSid!, myUserId: _myUserId!);
+    _realtimeService.startVoiceCall(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+    );
     isLiveSessionActive = true;
     incomingVoiceCall = null;
     _safeNotify();
@@ -1329,25 +1641,37 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   Future<void> toggleParticipantVoice(String userId, bool enabled) async {
-    if (_isDisposed || (_currentUserRole != 'owner' && _currentUserRole != 'editor')) return;
+    if (_isDisposed ||
+        (_currentUserRole != 'owner' && _currentUserRole != 'editor'))
+      return;
     try {
-      await _apiService.post('/notebooks/$_liveNotebookSid/session/update-permission', {
-        'target_id': userId,
-        'can_speak': enabled
-      });
-      _realtimeService.broadcastVoicePolicy(notebookId: _liveNotebookSid!, targetId: userId, canSpeak: enabled);
+      await _apiService.post(
+        '/notebooks/$_liveNotebookSid/session/update-permission',
+        {'target_id': userId, 'can_speak': enabled},
+      );
+      _realtimeService.broadcastVoicePolicy(
+        notebookId: _liveNotebookSid!,
+        targetId: userId,
+        canSpeak: enabled,
+      );
     } catch (e) {
-      debugPrint('🚨 [Collaboration] Erro ao atualizar voz do participante: $e');
+      debugPrint(
+        '🚨 [Collaboration] Erro ao atualizar voz do participante: $e',
+      );
     }
   }
 
   Future<void> fetchEnrolledMembers() async {
     if (_isDisposed || _liveNotebookSid == null) return;
     try {
-      final response = await _apiService.get('/notebooks/$_liveNotebookSid/collaborators');
+      final response = await _apiService.get(
+        '/notebooks/$_liveNotebookSid/collaborators',
+      );
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
-        enrolledMembers = data.map((m) => Map<String, dynamic>.from(m)).toList();
+        enrolledMembers = data
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
         _safeNotify();
       }
     } catch (e) {
@@ -1362,7 +1686,9 @@ class CollaborationRoomService extends ChangeNotifier {
       onlineUsers[idx]['role'] = role;
     }
     // Também atualizar no enrolledMembers se estiver lá
-    final enrolledIdx = enrolledMembers.indexWhere((m) => m['id'].toString() == userId);
+    final enrolledIdx = enrolledMembers.indexWhere(
+      (m) => m['id'].toString() == userId,
+    );
     if (enrolledIdx != -1) {
       enrolledMembers[enrolledIdx]['role'] = role;
     }
@@ -1384,11 +1710,16 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   Future<void> setVoiceMode(String mode) async {
-    if (_isDisposed || (_currentUserRole != 'owner' && _currentUserRole != 'editor')) return;
+    if (_isDisposed ||
+        (_currentUserRole != 'owner' && _currentUserRole != 'editor'))
+      return;
     sessionVoiceMode = mode;
     _safeNotify();
     try {
-      await _apiService.post('/notebooks/$_liveNotebookSid/session/update-settings', {'voice_mode': mode});
+      await _apiService.post(
+        '/notebooks/$_liveNotebookSid/session/update-settings',
+        {'voice_mode': mode},
+      );
       _broadcastSessionPolicies();
     } catch (e) {
       debugPrint('🚨 [Collaboration] Erro ao atualizar modo de voz: $e');
@@ -1423,23 +1754,26 @@ class CollaborationRoomService extends ChangeNotifier {
     return rawList.whereType<Map>().map((u) {
       final m = Map<String, dynamic>.from(u);
       final String uid = m['id'].toString();
-      final bool userInCall = m['isInCall'] == true || usersInLiveSession.contains(uid);
+      final bool userInCall =
+          m['isInCall'] == true || usersInLiveSession.contains(uid);
       if (userInCall) usersInLiveSession.add(uid);
-      
+
       String role = m['role'] ?? 'student';
       if (uid == _myUserId) role = _currentUserRole ?? 'student';
 
       return {
-        'id': uid, 
-        'name': m['name'] ?? 'Colega', 
+        'id': uid,
+        'name': m['name'] ?? 'Colega',
         'email': m['email'] ?? '',
-        'color': avatarColorsPool[(int.tryParse(uid) ?? 0) % avatarColorsPool.length], 
-        'isTalking': m['isTalking'] ?? false, 
-        'activity': m['activity'] ?? 'idle', 
-        'isHandRaised': m['isHandRaised'] ?? false, 
-        'isInCall': userInCall, 
+        'color':
+            avatarColorsPool[(int.tryParse(uid) ?? 0) %
+                avatarColorsPool.length],
+        'isTalking': m['isTalking'] ?? false,
+        'activity': m['activity'] ?? 'idle',
+        'isHandRaised': m['isHandRaised'] ?? false,
+        'isInCall': userInCall,
         'role': role,
-      }; 
+      };
     }).toList();
   }
 
@@ -1450,7 +1784,8 @@ class CollaborationRoomService extends ChangeNotifier {
   void _debounceRoomSync() {
     _roomSyncDebouncer?.cancel();
     _roomSyncDebouncer = Timer(const Duration(milliseconds: 500), () {
-      if (_myUserId != null) _realtimeService.requestCollectiveSync(myUserId: _myUserId!);
+      if (_myUserId != null)
+        _realtimeService.requestCollectiveSync(myUserId: _myUserId!);
     });
   }
 
@@ -1459,10 +1794,10 @@ class CollaborationRoomService extends ChangeNotifier {
     _fingerprintTimer?.cancel();
     _fingerprintTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
-      
+
       final pages = getPages?.call() ?? [];
       final currentIndex = getCurrentPageIndex?.call() ?? 0;
-      
+
       if (pages.isNotEmpty && currentIndex < pages.length) {
         final currentPage = pages[currentIndex];
         _realtimeService.broadcastPageFingerprint(
@@ -1482,14 +1817,14 @@ class CollaborationRoomService extends ChangeNotifier {
       if (_isDisposed) return;
       final now = DateTime.now();
       bool changed = false;
-      
+
       final toRemove = <String>[];
       _lastRemoteStrokeUpdate.forEach((id, lastUpdate) {
         if (now.difference(lastUpdate).inSeconds > 15) {
           toRemove.add(id);
         }
       });
-      
+
       if (toRemove.isNotEmpty) {
         final curM = Map<String, Stroke>.from(remoteLiveStrokes.value);
         for (var id in toRemove) {
@@ -1510,14 +1845,15 @@ class CollaborationRoomService extends ChangeNotifier {
   // 🚀 Desativado a pedido do utilizador para evitar pushes vazios
   void _startBackgroundSync() {
     _backgroundSyncTimer?.cancel();
-    _backgroundSyncTimer = Timer.periodic(const Duration(minutes: 2), (timer) async {
+    _backgroundSyncTimer = Timer.periodic(const Duration(minutes: 2), (
+      timer,
+    ) async {
       if (_isDisposed || _liveNotebookSid == null) return;
       await _syncService.pushPages(onlyNotebookId: _liveNotebookSid!);
       await _syncService.pushRecordings();
       _safeNotify();
     });
   }
-
 
   void leaveSession() {
     if (_statusListener != null) {
@@ -1562,6 +1898,8 @@ class CollaborationRoomService extends ChangeNotifier {
     _collectiveSyncSubscription?.cancel();
     _fullStateRequestSubscription?.cancel();
     _fullStateReceivedSubscription?.cancel();
+    _historyRequestSubscription?.cancel();
+    _historyDeliverSubscription?.cancel();
     _fingerprintSubscription?.cancel();
     _globalActionSubscription?.cancel();
     _followSubscription?.cancel();
@@ -1605,10 +1943,13 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 }
 
-final collaborationRoomServiceProvider = ChangeNotifierProvider<CollaborationRoomService>((ref) {
-  final realtime = ref.read(realtimeServiceProvider);
-  final api = ref.read(apiServiceProvider); // Assuming apiServiceProvider exists
-  final sync = ref.read(appSyncServiceProvider);
-  final repository = ref.read(canvasRepositoryProvider);
-  return CollaborationRoomService(realtime, api, sync, repository);
-});
+final collaborationRoomServiceProvider =
+    ChangeNotifierProvider<CollaborationRoomService>((ref) {
+      final realtime = ref.read(realtimeServiceProvider);
+      final api = ref.read(
+        apiServiceProvider,
+      ); // Assuming apiServiceProvider exists
+      final sync = ref.read(appSyncServiceProvider);
+      final repository = ref.read(canvasRepositoryProvider);
+      return CollaborationRoomService(realtime, api, sync, repository);
+    });

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:caderno_digital_app/core/config/app_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -347,7 +348,7 @@ class CollaborationRoomService extends ChangeNotifier {
               );
             }
           } catch (e) {
-            debugPrint('⚠️ [Collaboration] Erro em _statusListener: $e');
+            AppLog.collab('');
           } finally {
             if (isCollaborationEnabled) {
               currentSyncStepInt = 4;
@@ -364,7 +365,7 @@ class CollaborationRoomService extends ChangeNotifier {
         _statusListener!();
       }
     } catch (e) {
-      debugPrint('⚠️ [Collaboration] Erro em _connectAndJoinRoom: $e');
+      AppLog.collab('');
       if (isCollaborationEnabled) {
         currentSyncStepInt = 4;
         currentSyncStepMessage = '✨ Modo Online Ativo';
@@ -457,7 +458,7 @@ class CollaborationRoomService extends ChangeNotifier {
                       );
                 }
               } catch (e) {
-                debugPrint(
+                AppLog.collab(
                   '⚠️ [Collaboration] Sincronização em segundo plano: $e',
                 );
               } finally {
@@ -467,7 +468,7 @@ class CollaborationRoomService extends ChangeNotifier {
             }),
           );
         } catch (e) {
-          debugPrint('🚨 [Collaboration] Falha ao ligar ao Reverb: $e');
+          AppLog.collab('');
           currentSyncStepInt = -1;
           currentSyncStepMessage = 'Erro de ligação ao servidor de tempo real.';
           isCollaborationEnabled = false;
@@ -502,7 +503,7 @@ class CollaborationRoomService extends ChangeNotifier {
           );
         }
 
-        debugPrint(
+        AppLog.collab(
           '🚨 [Collaboration] ID remota do caderno indisponível ($targetRemoteId).',
         );
         currentSyncStepInt = -1;
@@ -704,9 +705,9 @@ class CollaborationRoomService extends ChangeNotifier {
 
     _strokesSubscription?.cancel();
     _strokesSubscription = rt.onStrokeReceived.listen((d) async {
-      debugPrint('🟢 [Realtime] onStrokeReceived disparado! d: $d');
+      AppLog.collab('');
       if (_isDisposed || d['sender_id']?.toString() == _myUserId) {
-        debugPrint(
+        AppLog.collab(
           '🟡 [Realtime] onStrokeReceived ignorado. isDisposed: $_isDisposed, sender: ${d['sender_id']}, myUser: $_myUserId',
         );
         return;
@@ -714,7 +715,7 @@ class CollaborationRoomService extends ChangeNotifier {
 
       final pages = getPages?.call() ?? [];
       if (pages.isEmpty) {
-        debugPrint(
+        AppLog.collab(
           '🔴 [Realtime] onStrokeReceived abortado: pages está vazio!',
         );
         return;
@@ -728,13 +729,13 @@ class CollaborationRoomService extends ChangeNotifier {
       if (idx == -1 && ipn > 0)
         idx = pages.indexWhere((p) => p.pageNumber == ipn);
       if (idx == -1) {
-        debugPrint(
+        AppLog.collab(
           '🔴 [Realtime] onStrokeReceived abortado: página não encontrada! pcid: $pcid, ipn: $ipn',
         );
         return;
       }
 
-      debugPrint(
+      AppLog.collab(
         '✅ [Realtime] onStrokeReceived processando tinta na página $ipn',
       );
 
@@ -816,7 +817,7 @@ class CollaborationRoomService extends ChangeNotifier {
           } else {
             final rawPts = sm['points'] as List;
             final pts = decodePoints(rawPts, sm['pts_enc']);
-            debugPrint(
+            AppLog.collab(
               '🔥 [Live Stroke] raw: ${rawPts.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}',
             );
             final exS = curM[sid];
@@ -865,7 +866,7 @@ class CollaborationRoomService extends ChangeNotifier {
               sm['updated_at'] ?? DateTime.now().millisecondsSinceEpoch;
           final rawPts2 = sm['points'] as List;
           final pts = decodePoints(rawPts2, sm['pts_enc']);
-          debugPrint(
+          AppLog.collab(
             '🔥 [Final Stroke] raw: ${rawPts2.length}, parsed: ${pts.length}, first: ${pts.isNotEmpty ? pts.first : null}',
           );
 
@@ -1333,7 +1334,7 @@ class CollaborationRoomService extends ChangeNotifier {
       }
     } catch (e) {
       if (!_isDisposed) {
-        debugPrint('🚨 [Collaboration] Erro ao buscar status: $e');
+        AppLog.collab('');
       }
     }
   }
@@ -1448,7 +1449,7 @@ class CollaborationRoomService extends ChangeNotifier {
     // 🚀 Grava a mensagem na Cloud/Redis para quem entrar na sala depois
     try {
       _apiService.post('/notebooks/$_liveNotebookSid/session/chat', {
-        'message': msg
+        'message': msg,
       });
     } catch (_) {}
   }
@@ -1456,7 +1457,9 @@ class CollaborationRoomService extends ChangeNotifier {
   Future<void> fetchChatHistory() async {
     if (_liveNotebookSid == null || _isDisposed) return;
     try {
-      final response = await _apiService.get('/notebooks/$_liveNotebookSid/session/chat');
+      final response = await _apiService.get(
+        '/notebooks/$_liveNotebookSid/session/chat',
+      );
       if (response.statusCode == 200 && !_isDisposed) {
         final data = jsonDecode(response.body);
         final List messages = data['messages'] ?? [];
@@ -1471,8 +1474,16 @@ class CollaborationRoomService extends ChangeNotifier {
           }
           // Sort by timestamp
           chatMessages.sort((a, b) {
-            final tsA = DateTime.tryParse(a['timestamp'] ?? '')?.millisecondsSinceEpoch ?? 0;
-            final tsB = DateTime.tryParse(b['timestamp'] ?? '')?.millisecondsSinceEpoch ?? 0;
+            final tsA =
+                DateTime.tryParse(
+                  a['timestamp'] ?? '',
+                )?.millisecondsSinceEpoch ??
+                0;
+            final tsB =
+                DateTime.tryParse(
+                  b['timestamp'] ?? '',
+                )?.millisecondsSinceEpoch ??
+                0;
             return tsA.compareTo(tsB);
           });
           // Keep only last 100
@@ -1483,7 +1494,7 @@ class CollaborationRoomService extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint('🚨 [Chat] Erro a puxar histórico do Redis: $e');
+      AppLog.collab('');
     }
   }
 
@@ -1655,7 +1666,7 @@ class CollaborationRoomService extends ChangeNotifier {
         canSpeak: enabled,
       );
     } catch (e) {
-      debugPrint(
+      AppLog.collab(
         '🚨 [Collaboration] Erro ao atualizar voz do participante: $e',
       );
     }
@@ -1675,7 +1686,7 @@ class CollaborationRoomService extends ChangeNotifier {
         _safeNotify();
       }
     } catch (e) {
-      debugPrint('🚨 [Collaboration] Erro ao buscar membros inscritos: $e');
+      AppLog.collab('');
     }
   }
 
@@ -1722,7 +1733,7 @@ class CollaborationRoomService extends ChangeNotifier {
       );
       _broadcastSessionPolicies();
     } catch (e) {
-      debugPrint('🚨 [Collaboration] Erro ao atualizar modo de voz: $e');
+      AppLog.collab('');
     }
   }
 

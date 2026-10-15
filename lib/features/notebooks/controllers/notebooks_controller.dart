@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:caderno_digital_app/core/config/app_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:caderno_digital_app/features/notebooks/models/notebook_model.dart';
@@ -92,7 +93,8 @@ class NotebooksController extends Notifier<NotebooksState> {
     }
 
     _subscription = _repository.watchNotebooksBySubject(subjectId).listen((list) {
-      debugPrint('📡 [Notebooks] Stream emitiu ${list.length} cadernos para subject $subjectId');
+      AppLog.sync('📡 [Notebooks] Stream emitiu ${list.length} cadernos para subject $subjectId');
+
       _lastData = list;
       _hasStreamEmitted = true;
       // 🚀 SEGURANÇA TOTAL: Sempre agendar a atualização para evitar conflitos de ciclo de vida

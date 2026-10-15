@@ -6,6 +6,7 @@ import 'package:dart_pusher_channels/dart_pusher_channels.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/config/app_config.dart';
 
 import 'api_config.dart';
 
@@ -259,7 +260,7 @@ class RealtimeService with WidgetsBindingObserver {
     _pusher = PusherChannelsClient.websocket(
       options: options,
       connectionErrorHandler: (exception, trace, refresh) async {
-        debugPrint('⚠️ [Realtime] Erro na conexão: $exception');
+        AppLog.collab('⚠️ [Realtime] Erro na conexão: $exception');
         statusNotifier.value = RealtimeStatus.error;
         _clearRoomPresence();
         if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
@@ -268,10 +269,10 @@ class RealtimeService with WidgetsBindingObserver {
 
     _lifecycleSubscription?.cancel();
     _lifecycleSubscription = _pusher!.lifecycleStream.listen((state) async {
-      debugPrint('📡 [Realtime] Estado do Socket: $state');
+      AppLog.collab('[Realtime] Estado do Socket: $state');
       if (state == PusherChannelsClientLifeCycleState.establishedConnection) {
         statusNotifier.value = RealtimeStatus.connected;
-        debugPrint('✅ [Realtime] Conexão estabelecida com sucesso.');
+        AppLog.collab('[Realtime] Estado do Socket: $state');
         final prefs = await SharedPreferences.getInstance();
         final currentUserIdStr = prefs.getString('user_id');
         if (currentUserIdStr != null) {
@@ -281,13 +282,13 @@ class RealtimeService with WidgetsBindingObserver {
           }
         }
         if (_lastNotebookId != null) {
-          debugPrint(
+          AppLog.collab(
             '🔄 [Realtime] Re-subscrevendo ao caderno $_lastNotebookId...',
           );
           joinNotebookChannel(notebookId: _lastNotebookId!);
         }
         if (_lastUserId != null && _lastOnGlobalSyncNeeded != null) {
-          debugPrint(
+          AppLog.collab(
             '🔄 [Realtime] Re-ativando canal do utilizador $_lastUserId...',
           );
           listenToUserAccount(_lastUserId!, _lastOnGlobalSyncNeeded!);
@@ -297,17 +298,17 @@ class RealtimeService with WidgetsBindingObserver {
         statusNotifier.value = RealtimeStatus.connecting;
       } else if (state == PusherChannelsClientLifeCycleState.disconnected) {
         statusNotifier.value = RealtimeStatus.disconnected;
-        debugPrint('🔌 [Realtime] Socket desconectado.');
+        AppLog.collab('🔌 [Realtime] Socket desconectado.');
         _clearRoomPresence();
         if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
       } else if (state == PusherChannelsClientLifeCycleState.reconnecting) {
         statusNotifier.value = RealtimeStatus.connecting;
-        debugPrint('🔄 [Realtime] Tentando reconectar...');
+        AppLog.collab('🔄 [Realtime] Tentando reconectar...');
         _clearRoomPresence();
       } else if (state == PusherChannelsClientLifeCycleState.connectionError ||
           state == PusherChannelsClientLifeCycleState.gotPusherError) {
         statusNotifier.value = RealtimeStatus.error;
-        debugPrint('❌ [Realtime] Erro crítico de conexão.');
+        AppLog.collab('❌ [Realtime] Erro crítico de conexão.');
         _clearRoomPresence();
         if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
       }
@@ -317,7 +318,7 @@ class RealtimeService with WidgetsBindingObserver {
       _pusher!.connect();
     } catch (e) {
       statusNotifier.value = RealtimeStatus.error;
-      debugPrint('❌ [Realtime] Falha ao ligar Reverb: $e');
+      AppLog.collab('❌ [Realtime] Falha ao ligar Reverb: $e');
       _clearRoomPresence();
       if (!_isIntentionallyDisconnected) _triggerAutoReconnect();
     }
@@ -328,7 +329,7 @@ class RealtimeService with WidgetsBindingObserver {
     _reconnectTimer = Timer(const Duration(seconds: 5), () {
       if (!_isIntentionallyDisconnected &&
           statusNotifier.value != RealtimeStatus.connected) {
-        debugPrint(
+        AppLog.collab(
           '🔄 [Realtime] Resiliência: Auto-reconexão após perda de sinal...',
         );
         reconnectIfNeeded();
@@ -353,7 +354,7 @@ class RealtimeService with WidgetsBindingObserver {
       try {
         return jsonDecode(data);
       } catch (e) {
-        debugPrint('❌ [Realtime] Erro ao decodificar JSON: $e | Data: $data');
+        AppLog.collab('❌ [Realtime] Erro ao decodificar JSON: $e | Data: $data');
         return {};
       }
     }
@@ -376,12 +377,12 @@ class RealtimeService with WidgetsBindingObserver {
 
     if (_notebookChannel != null) {
       if (_notebookChannel!.name == channelName) {
-        debugPrint(
+        AppLog.collab(
           'ℹ️ [Realtime] Já inscrito no canal $channelName. Ignorando re-subscrição redundante.',
         );
         return;
       }
-      debugPrint(
+      AppLog.collab(
         '🧹 [Realtime] Saindo do canal anterior: ${_notebookChannel!.name}',
       );
       _notebookChannel!.unsubscribe();
@@ -412,7 +413,7 @@ class RealtimeService with WidgetsBindingObserver {
       event,
     ) {
       final data = _safeParse(event.data);
-      debugPrint(
+      AppLog.collab(
         '📡 [Realtime] Subscrição Presence confirmada para $channelName',
       );
 
@@ -448,7 +449,7 @@ class RealtimeService with WidgetsBindingObserver {
           event.userId?.toString() ??
           data['id']?.toString() ??
           data['user_id']?.toString();
-      debugPrint('🟢 [Realtime] EVENTO MEMBER_ADDED DETECTADO: $uid');
+      AppLog.collab('🟢 [Realtime] EVENTO MEMBER_ADDED DETECTADO: $uid');
       if (uid == null) return;
 
       Map<String, dynamic> userInfo = {};
@@ -472,7 +473,7 @@ class RealtimeService with WidgetsBindingObserver {
       String? uid = event.userId?.toString();
       final dynamic rawData = event.data;
 
-      debugPrint(
+      AppLog.collab(
         '🔴 [Realtime] EVENTO MEMBER_REMOVED DETECTADO: $uid | Data: $rawData',
       );
 
@@ -1142,7 +1143,7 @@ class RealtimeService with WidgetsBindingObserver {
   }
 
   void leaveNotebookChannel(int notebookId) {
-    debugPrint('🚪 [Realtime] A sair da sala do caderno $notebookId');
+    AppLog.collab('');
 
     for (var sub in _eventSubscriptions.values) {
       sub.cancel();
@@ -1186,7 +1187,7 @@ class RealtimeService with WidgetsBindingObserver {
   }
 
   void suspendConnection() {
-    debugPrint(
+    AppLog.collab(
       '🛑 [Realtime] App suspensa. Desconectando do Reverb para sair da sala...',
     );
     _isIntentionallyDisconnected = true;
@@ -1207,13 +1208,13 @@ class RealtimeService with WidgetsBindingObserver {
     if (_isReconnecting) return;
     _isReconnecting = true;
     try {
-      debugPrint(
+      AppLog.collab(
         '🔄 [Realtime] A verificar saúde da ligação no regresso de hibernação (Force: $force)...',
       );
       if (force ||
           statusNotifier.value != RealtimeStatus.connected ||
           _pusher == null) {
-        debugPrint(
+        AppLog.collab(
           '⚡ [Realtime] Reverb desligado ou instável pós-hibernação. A forçar reconexão limpa...',
         );
 
@@ -1222,7 +1223,7 @@ class RealtimeService with WidgetsBindingObserver {
 
         await initConnection();
       } else {
-        debugPrint('✅ [Realtime] Conexão ativa mantida durante a hibernação.');
+        AppLog.collab('✅ [Realtime] Conexão ativa mantida durante a hibernação.');
       }
     } finally {
       _isReconnecting = false;
@@ -1277,7 +1278,7 @@ class RealtimeService with WidgetsBindingObserver {
 
     // 🚀 OUVIR REVOGAÇÃO DE ACESSO
     _userChannel!.bind('notebook.access_revoked').listen((event) {
-      debugPrint('🚨 [Realtime] Acesso revogado recebido via canal privado!');
+      AppLog.collab('🚨 [Realtime] Acesso revogado recebido via canal privado!');
       _notebookAccessRevokedController.add(_safeParse(event.data));
     });
   }

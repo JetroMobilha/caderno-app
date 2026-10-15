@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/config/app_config.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -106,11 +107,17 @@ class CanvasDocumentState {
       canRedo: canRedo ?? this.canRedo,
       isLoading: isLoading ?? this.isLoading,
       uploadingAttachmentIds:
-          uploadingAttachmentIds ?? (this.uploadingAttachmentIds as Set<String>?) ?? const {},
+          uploadingAttachmentIds ??
+          (this.uploadingAttachmentIds as Set<String>?) ??
+          const {},
       attachmentUploadErrors:
-          attachmentUploadErrors ?? (this.attachmentUploadErrors as Set<String>?) ?? const {},
+          attachmentUploadErrors ??
+          (this.attachmentUploadErrors as Set<String>?) ??
+          const {},
       downloadingAttachmentIds:
-          downloadingAttachmentIds ?? (this.downloadingAttachmentIds as Set<String>?) ?? const {},
+          downloadingAttachmentIds ??
+          (this.downloadingAttachmentIds as Set<String>?) ??
+          const {},
     );
   }
 }
@@ -219,7 +226,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       try {
         ref.read(canvasViewportProvider.notifier).jumpToPage(i);
       } catch (e) {
-        debugPrint(
+        AppLog.canvas(
           '⚠️ [CanvasDocument] onPageNavigationRequested post-dispose: $e',
         );
       }
@@ -388,7 +395,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       // sejam desenhados em duplicado ou saltem na tela.
       _collabService.clearAllObjectTransforms();
     } catch (e) {
-      debugPrint('🚨 ReloadPageContent Error: $e');
+      AppLog.canvas('🚨 ReloadPageContent Error: $e');
     }
   }
 
@@ -466,7 +473,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       // sejam desenhados em duplicado ou saltem na tela.
       _collabService.clearAllObjectTransforms();
     } catch (e) {
-      debugPrint('🚨 LazyLoad Error: $e');
+      AppLog.canvas('🚨 LazyLoad Error: $e');
     }
   }
 
@@ -610,7 +617,9 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     AttachmentObject attach,
   ) async {
     final int? targetSid =
-        _collabService.liveNotebookSid ?? state.liveNotebookSid ?? state.currentNotebookId;
+        _collabService.liveNotebookSid ??
+        state.liveNotebookSid ??
+        state.currentNotebookId;
 
     if (targetSid == null || targetSid == 0)
       return; // O caderno é apenas local, sem ID no servidor cloud
@@ -682,7 +691,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         throw Exception("Upload falhou ou URL remoto é inválido");
       }
     } catch (e) {
-      debugPrint(
+      AppLog.canvas(
         '⚠️ [CanvasDocument] Erro ao carregar anexo para servidor de colaboração: $e',
       );
       // Upload falhou, marcar erro
@@ -699,11 +708,12 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     if (kIsWeb) return;
     for (var obj in page.objects) {
       if (obj is AttachmentObject) {
-        final hasRemote = obj.remoteUrl != null &&
+        final hasRemote =
+            obj.remoteUrl != null &&
             obj.remoteUrl!.isNotEmpty &&
             obj.remoteUrl!.startsWith('http');
-        final hasLocal = obj.localPath.isNotEmpty &&
-            io.File(obj.localPath).existsSync();
+        final hasLocal =
+            obj.localPath.isNotEmpty && io.File(obj.localPath).existsSync();
 
         if (hasRemote && !hasLocal) {
           _downloadAttachmentFileInBackground(page, obj);
@@ -753,9 +763,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           final updatedPage = targetPage.copyWith(objects: updatedObjects);
           state = state.copyWith(
             pages: state.pages
-                .map(
-                  (p) => p.clientId == targetPage.clientId ? updatedPage : p,
-                )
+                .map((p) => p.clientId == targetPage.clientId ? updatedPage : p)
                 .toList(),
           );
           await _repository.saveSingleAttachment(
@@ -766,7 +774,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         }
       }
     } catch (e) {
-      debugPrint(
+      AppLog.canvas(
         '⚠️ [CanvasDocument] Erro ao descarregar anexo para offline: $e',
       );
     } finally {
@@ -834,7 +842,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         try {
           await file.delete();
         } catch (e) {
-          debugPrint('Error deleting local file: $e');
+          AppLog.canvas('Error deleting local file: $e');
         }
       }
     }
@@ -1460,7 +1468,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         scheduleAutoPush();
       }
     } catch (e) {
-      debugPrint('🚨 [CanvasDocument] Erro ao persistir ação incremental: $e');
+      AppLog.canvas('');
     }
   }
 
@@ -1473,7 +1481,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     final int? targetSid =
         _collabService.liveNotebookSid ?? state.liveNotebookSid;
 
-    debugPrint(
+    AppLog.canvas(
       '📣 [CanvasDocument] _broadcastAction isCollab: $isCollab, targetSid: $targetSid',
     );
 
@@ -1568,7 +1576,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
 
     // 🚀 GRAVAR AÇÃO NO REDIS DO SERVIDOR (Server-Authoritative)
     // As ações transmitidas em broadcast acima mostram na UI dos colegas ao vivo,
-    // mas também enviamos via HTTP para ficar na memória de longo prazo (Redis) e 
+    // mas também enviamos via HTTP para ficar na memória de longo prazo (Redis) e
     // os utilizadores que regressem de hibernação consigam fazer download!
     _syncService.recordActionToCloud(targetSid, {
       'sender_id': effectiveUserId,
@@ -1611,6 +1619,23 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       await _repository.markPageAsUnsynced(np.clientId);
     }
     await _repository.reindexPages(state.currentNotebookId);
+
+    final bool isCollab =
+        _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+    final int? targetSid =
+        _collabService.liveNotebookSid ??
+        state.liveNotebookSid ??
+        state.currentNotebookId;
+    if (isCollab && targetSid != null && targetSid > 0) {
+      _realtimeService.broadcastPageEvent(
+        notebookId: targetSid,
+        pageData: {'action': 'add'},
+        myUserId: state.myUserId.isNotEmpty
+            ? state.myUserId
+            : _collabService.myUserId,
+      );
+      scheduleAutoPush();
+    }
   }
 
   Future<void> duplicatePage(LocalPage source) async {
@@ -1658,6 +1683,23 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         await _repository.saveSingleExplanationObject(clonedPage.clientId, obj);
     }
     await _repository.reindexPages(state.currentNotebookId);
+
+    final bool isCollab =
+        _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+    final int? targetSid =
+        _collabService.liveNotebookSid ??
+        state.liveNotebookSid ??
+        state.currentNotebookId;
+    if (isCollab && targetSid != null && targetSid > 0) {
+      _realtimeService.broadcastPageEvent(
+        notebookId: targetSid,
+        pageData: {'action': 'add'},
+        myUserId: state.myUserId.isNotEmpty
+            ? state.myUserId
+            : _collabService.myUserId,
+      );
+      scheduleAutoPush();
+    }
   }
 
   Future<void> duplicatePages(List<LocalPage> sources) async {
@@ -1682,7 +1724,8 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     bool isRemote = false,
     int? remoteTimestamp,
   }) async {
-    final targetPage = state.pages.cast<LocalPage?>().firstWhere(
+    final targetPage =
+        state.pages.cast<LocalPage?>().firstWhere(
           (p) =>
               p?.clientId == page.clientId ||
               (p != null && page.id != null && p.id == page.id),
@@ -1700,7 +1743,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     if (isRemote &&
         remoteTimestamp != null &&
         targetPage.updatedAt > remoteTimestamp) {
-      debugPrint(
+      AppLog.canvas(
         '🛡️ [CanvasDocument] Ignorando update_page_settings remoto desatualizado ($remoteTimestamp < ${targetPage.updatedAt}).',
       );
       return;
@@ -1779,6 +1822,73 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     );
   }
 
+  Future<void> setPageBackgroundImage(
+    LocalPage page,
+    String? imagePath, {
+    bool applyToAll = false,
+  }) async {
+    final int? targetSid =
+        _collabService.liveNotebookSid ??
+        state.liveNotebookSid ??
+        state.currentNotebookId;
+    String finalPath = imagePath ?? '';
+
+    // Fazer upload da imagem se for local e estivermos num caderno na nuvem
+    if (finalPath.isNotEmpty &&
+        !finalPath.startsWith('http') &&
+        targetSid != null &&
+        targetSid > 0) {
+      try {
+        final bytes = await io.File(finalPath).readAsBytes();
+        final String fileName = 'bg_${TimeService().nowMs()}.jpg';
+        final String? remoteUrl = await _repository.uploadImage(
+          targetSid,
+          fileName,
+          bytes,
+        );
+        if (remoteUrl != null && remoteUrl.isNotEmpty) {
+          finalPath = remoteUrl;
+        }
+      } catch (e) {
+        AppLog.canvas('⚠️ Erro no upload da imagem de fundo: $e');
+      }
+    }
+
+    final pagesToUpdate = applyToAll ? state.pages : [page];
+    final int now = TimeService().nowMs();
+
+    List<LocalPage> updatedPagesList = List.from(state.pages);
+
+    for (var p in pagesToUpdate) {
+      final updated = p.copyWith(
+        backgroundPdfPath: finalPath.isEmpty
+            ? ''
+            : finalPath, // String vazia para limpar a imagem, de forma que copyWith aceite e anule a anterior
+        updatedAt: now,
+      );
+
+      await _repository.savePage(updated, targetSid);
+      await _repository.markPageAsUnsynced(p.clientId);
+
+      final idx = updatedPagesList.indexWhere(
+        (element) => element.clientId == p.clientId,
+      );
+      if (idx != -1) {
+        updatedPagesList[idx] = updated;
+      }
+    }
+
+    state = state.copyWith(pages: updatedPagesList);
+    scheduleAutoPush();
+
+    final bool isCollab =
+        _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+    if (isCollab) {
+      // 🚀 Forçar sincronismo imediato para partilhar o URL da imagem recém carregada
+      _performCollectiveSync(immediate: true);
+    }
+  }
+
   Future<void> updatePageViewport(String clientId, Matrix4 matrix) async {
     final idx = state.pages.indexWhere((p) => p.clientId == clientId);
     if (idx == -1) return;
@@ -1833,11 +1943,9 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
   }
 
   Future<void> setLineType(LocalPage page, String type) async {
-    final currentConfig = page.backgroundConfig ??
-        BackgroundConfig(
-          type: type,
-          spacing: page.lineSpacing ?? 30.0,
-        );
+    final currentConfig =
+        page.backgroundConfig ??
+        BackgroundConfig(type: type, spacing: page.lineSpacing ?? 30.0);
     final updatedBackground = currentConfig.copyWith(type: type);
 
     final currentOrientation = page.isLandscape ? 'landscape' : 'portrait';
@@ -1856,11 +1964,15 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       margins: MarginsConfig(),
       header: HeaderFooterConfig(
         enabled: page.title != null && page.title!.isNotEmpty,
-        fields: page.title != null && page.title!.isNotEmpty ? [page.title!] : [],
+        fields: page.title != null && page.title!.isNotEmpty
+            ? [page.title!]
+            : [],
       ),
       footer: HeaderFooterConfig(
         enabled: page.footer != null && page.footer!.isNotEmpty,
-        fields: page.footer != null && page.footer!.isNotEmpty ? [page.footer!] : [],
+        fields: page.footer != null && page.footer!.isNotEmpty
+            ? [page.footer!]
+            : [],
       ),
       numbering: NumberingConfig(),
     );
@@ -1883,6 +1995,23 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           .where((id) => !clientIds.contains(id))
           .toSet(),
     );
+
+    final bool isCollab =
+        _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+    final int? targetSid =
+        _collabService.liveNotebookSid ??
+        state.liveNotebookSid ??
+        state.currentNotebookId;
+    if (isCollab && targetSid != null && targetSid > 0) {
+      _realtimeService.broadcastPageEvent(
+        notebookId: targetSid,
+        pageData: {'action': 'delete'},
+        myUserId: state.myUserId.isNotEmpty
+            ? state.myUserId
+            : _collabService.myUserId,
+      );
+      scheduleAutoPush();
+    }
   }
 
   Future<void> deletePage(LocalPage page) async {
@@ -1985,7 +2114,10 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     await _repository.reindexPages(state.currentNotebookId);
   }
 
-  Future<void> pickAndInsertImage(LocalPage page, {BuildContext? context}) async {
+  Future<void> pickAndInsertImage(
+    LocalPage page, {
+    BuildContext? context,
+  }) async {
     final pf = await ImagePicker().pickImage(
       source: ImageSource.gallery,
       imageQuality: 85,
@@ -2039,7 +2171,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
             finalPath = remoteUrl;
           }
         } catch (e) {
-          debugPrint(
+          AppLog.canvas(
             '⚠️ [CanvasDocument] Erro no upload da imagem para colaboração: $e',
           );
         }
@@ -2067,7 +2199,11 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           const SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 18),
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.greenAccent,
+                  size: 18,
+                ),
                 SizedBox(width: 10),
                 Text('Imagem adicionada ao caderno!'),
               ],
@@ -2088,8 +2224,9 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     BuildContext? context,
   }) async {
     final String fileName = file.name;
-    final String extension =
-        fileName.contains('.') ? fileName.split('.').last : '';
+    final String extension = fileName.contains('.')
+        ? fileName.split('.').last
+        : '';
     final int sizeBytes = file.size;
 
     if (context != null && context.mounted) {
@@ -2163,8 +2300,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         bytes != null &&
         bytes.isNotEmpty) {
       try {
-        final String uploadName =
-            'attach_${TimeService().nowMs()}.$extension';
+        final String uploadName = 'attach_${TimeService().nowMs()}.$extension';
         final String? uploadedUrl = await _repository.uploadFile(
           targetSid,
           uploadName,
@@ -2174,7 +2310,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           remoteUrl = uploadedUrl;
         }
       } catch (e) {
-        debugPrint('⚠️ [CanvasDocument] Erro no upload do anexo: $e');
+        AppLog.canvas('');
       }
     }
 
@@ -2219,7 +2355,11 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 18),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.greenAccent,
+                size: 18,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -2270,7 +2410,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     final int? targetSid =
         _collabService.liveNotebookSid ?? state.liveNotebookSid;
 
-    debugPrint(
+    AppLog.canvas(
       '📣 [CanvasDocument] broadcastLiveStroke isCollab: $isCollab, targetSid: $targetSid',
     );
 
@@ -2344,7 +2484,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     // A Colaboração usa exclusivamente o Laravel Reverb (WebSockets) para
     // manter os clientes sincronizados em tempo real com alta performance.
     if (_collabService.isCollaborationEnabled || state.isCollaborationEnabled) {
-      debugPrint(
+      AppLog.canvas(
         '🛡️ [CanvasDocument] HTTP Push ignorado. Sala de colaboração ativa (Reverb gere o tráfego).',
       );
       return;
@@ -2355,7 +2495,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       try {
         await _syncService.pushPages(onlyNotebookId: nbId);
       } catch (e) {
-        debugPrint('⚠️ [CanvasDocument] Erro no flushUnsyncedPages: $e');
+        AppLog.canvas('');
       }
     }
   }
@@ -2377,49 +2517,109 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     final bool isCollab =
         _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
     final int? targetSid =
-        _collabService.liveNotebookSid ?? state.liveNotebookSid ?? state.currentNotebookId;
+        _collabService.liveNotebookSid ??
+        state.liveNotebookSid ??
+        state.currentNotebookId;
 
     if (!isCollab || targetSid == null || targetSid == 0) return;
 
     bool foundUnsynced = false;
 
     for (var page in state.pages) {
-      final unsyncedObjects = page.objects.where((o) => !o.syncedWithCloud).toList();
+      final unsyncedObjects = page.objects
+          .where((o) => !o.syncedWithCloud)
+          .toList();
+      final List<String> idsToDelete = [];
 
       for (var obj in unsyncedObjects) {
         foundUnsynced = true;
         CanvasAction? action;
 
+        if (obj.isDeleted) {
+          idsToDelete.add(obj.id);
+          continue;
+        }
+
         if (obj is Stroke) {
-          action = AddStrokeAction(pageClientId: page.clientId, pageNumber: page.pageNumber, stroke: obj);
+          action = AddStrokeAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            stroke: obj,
+          );
         } else if (obj is TextBlock) {
-          action = AddTextAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: obj);
+          action = AddTextAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            block: obj,
+          );
         } else if (obj is ImageBlock) {
-          action = AddImageAction(pageClientId: page.clientId, pageNumber: page.pageNumber, block: obj);
+          action = AddImageAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            block: obj,
+          );
         } else if (obj is ShapeObject) {
-          action = AddShapeAction(pageClientId: page.clientId, pageNumber: page.pageNumber, shape: obj);
+          action = AddShapeAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            shape: obj,
+          );
         } else if (obj is AudioBlock) {
-          action = AddAudioAction(pageClientId: page.clientId, pageNumber: page.pageNumber, audio: obj);
+          action = AddAudioAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            audio: obj,
+          );
         } else if (obj is AnimationObject) {
-          action = AddAnimationAction(pageClientId: page.clientId, pageNumber: page.pageNumber, animation: obj);
+          action = AddAnimationAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            animation: obj,
+          );
         } else if (obj is ExplanationModel) {
-          action = AddExplanationAction(pageClientId: page.clientId, pageNumber: page.pageNumber, explanation: obj);
+          action = AddExplanationAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            explanation: obj,
+          );
         } else if (obj is TableObject) {
-          action = AddTableAction(pageClientId: page.clientId, pageNumber: page.pageNumber, table: obj);
+          action = AddTableAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            table: obj,
+          );
         } else if (obj is LinkObject) {
-          action = AddLinkAction(pageClientId: page.clientId, pageNumber: page.pageNumber, link: obj);
+          action = AddLinkAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            link: obj,
+          );
         } else if (obj is AttachmentObject) {
-          action = AddAttachmentAction(pageClientId: page.clientId, pageNumber: page.pageNumber, attach: obj);
+          action = AddAttachmentAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            attach: obj,
+          );
         }
 
         if (action != null) {
           _broadcastAction(action);
         }
       }
+
+      if (idsToDelete.isNotEmpty) {
+        _broadcastAction(
+          DeleteAction(
+            pageClientId: page.clientId,
+            pageNumber: page.pageNumber,
+            objectIds: idsToDelete,
+          ),
+        );
+      }
     }
 
     if (foundUnsynced) {
-      debugPrint('🚀 [CanvasDocument] Edições offline fundidas com sucesso na sessão do Redis e Reverb.');
+      AppLog.canvas('');
       await _syncService.pushPages(onlyNotebookId: targetSid);
     }
   }
@@ -2428,11 +2628,15 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     final bool isCollab =
         _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
     final int? targetSid =
-        _collabService.liveNotebookSid ?? state.liveNotebookSid ?? state.currentNotebookId;
-    final lastTs = forceFromBeginning ? 0 : _historyManager.lastDisconnectTimestamp;
+        _collabService.liveNotebookSid ??
+        state.liveNotebookSid ??
+        state.currentNotebookId;
+    final lastTs = forceFromBeginning
+        ? 0
+        : _historyManager.lastDisconnectTimestamp;
 
     if (isCollab && targetSid != null && (forceFromBeginning || lastTs > 0)) {
-      debugPrint(
+      AppLog.canvas(
         '🔄 [CanvasDocument] Pedindo histórico de colaboração no Redis desde $lastTs (Force: $forceFromBeginning)',
       );
 
@@ -2443,9 +2647,12 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       _collabService.notifyListeners();
 
       try {
-        final actions = await _syncService.pullSessionHistory(targetSid, lastTs);
+        final actions = await _syncService.pullSessionHistory(
+          targetSid,
+          lastTs,
+        );
         if (actions.isNotEmpty) {
-          debugPrint('📦 [CanvasDocument] Histórico Redis Recebido: ${actions.length} ações');
+          AppLog.canvas('');
           for (var rawAction in actions) {
             if (rawAction is Map<String, dynamic>) {
               await _handleRemoteAction(rawAction);
@@ -2467,17 +2674,23 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       await _executeCollectiveSync();
       return;
     }
-    _collectiveSyncDebouncer = Timer(const Duration(milliseconds: 1500), () async {
-      await _executeCollectiveSync();
-    });
+    _collectiveSyncDebouncer = Timer(
+      const Duration(milliseconds: 1500),
+      () async {
+        await _executeCollectiveSync();
+      },
+    );
   }
 
   Future<void> _executeCollectiveSync() async {
     if (state.isGlobalSyncing) return;
     state = state.copyWith(isGlobalSyncing: true);
     try {
-      await requestMissingHistory(forceFromBeginning: true); // 🚀 Pede histórico completo da sessão ao Redis e funde trabalho offline
-      if (state.currentUserRole == 'owner' || state.currentUserRole == 'editor') {
+      await requestMissingHistory(
+        forceFromBeginning: true,
+      ); // 🚀 Pede histórico completo da sessão ao Redis e funde trabalho offline
+      if (state.currentUserRole == 'owner' ||
+          state.currentUserRole == 'editor') {
         await _syncService.pushPages(onlyNotebookId: state.currentNotebookId);
       }
       await _syncService.pullPages(
@@ -2497,7 +2710,8 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       if (type == 'update_page_settings') {
         final String? clientId = d['data']?['page_client_id'];
         final int? pageNumber = d['data']?['page_number'];
-        final int remoteTs = (d['data']?['timestamp'] ?? d['data']?['updated_at'] ?? 0) as int;
+        final int remoteTs =
+            (d['data']?['timestamp'] ?? d['data']?['updated_at'] ?? 0) as int;
         if (d['data']?['config'] != null) {
           final config = NotebookConfiguration.fromJson(d['data']['config']);
           final target = state.pages.cast<LocalPage?>().firstWhere(
@@ -2614,7 +2828,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         }
       }
     } catch (e, stack) {
-      debugPrint(
+      AppLog.canvas(
         '⚠️ [CanvasDocument] Erro ao executar ação remota: $e\n$stack',
       );
     }
@@ -2661,7 +2875,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           : currentIndex;
       viewportNotifier.jumpToPage(targetIndex < 0 ? 0 : targetIndex);
     } catch (e) {
-      debugPrint(
+      AppLog.canvas(
         '⚠️ [CanvasDocument] _autoNavigateAfterDeletion post-dispose: $e',
       );
     }
@@ -2706,7 +2920,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         }
       });
     } catch (e) {
-      debugPrint('⚠️ [CanvasDocument] _startSmoothTransition post-dispose: $e');
+      AppLog.canvas('⚠️ [CanvasDocument] _startSmoothTransition post-dispose: $e');
     }
   }
 }

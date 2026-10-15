@@ -85,12 +85,13 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     String? endpoint,
     Map<String, dynamic>? body, {
     bool? requireAuth = true,
+    bool? compress = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #post,
               [endpoint, body],
-              {#requireAuth: requireAuth},
+              {#requireAuth: requireAuth, #compress: compress},
             ),
             returnValue: _i4.Future<_i2.Response>.value(
               _FakeResponse_0(
@@ -98,7 +99,7 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
                 Invocation.method(
                   #post,
                   [endpoint, body],
-                  {#requireAuth: requireAuth},
+                  {#requireAuth: requireAuth, #compress: compress},
                 ),
               ),
             ),

@@ -1,3 +1,4 @@
+import 'package:caderno_digital_app/core/config/app_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -36,10 +37,10 @@ class TimeService {
       _serverTimeAtMonotonicStart = DateTime.now().millisecondsSinceEpoch + _driftMs;
 
       if (_hasSyncedAtLeastOnce) {
-        debugPrint('🕒 [TimeSync] Desvio carregado: ${_driftMs}ms. Calibração persistente ativa.');
+        AppLog.time('🕒 [TimeSync] Desvio carregado: ${_driftMs}ms. Calibração persistente ativa.');
       }
     } catch (e) {
-      debugPrint('🚨 [TimeSync] Erro inicialização: $e');
+      AppLog.time('🚨 [TimeSync] Erro inicialização: $e');
     }
   }
 
@@ -52,7 +53,7 @@ class TimeService {
       try {
         sMs = DateTime.parse(serverTimeIso).millisecondsSinceEpoch;
       } catch (e) {
-        debugPrint('🚨 [TimeSync] Erro parse data ISO: $e');
+        AppLog.time('🚨 [TimeSync] Erro parse data ISO: $e');
       }
     }
 
@@ -69,15 +70,15 @@ class TimeService {
         _driftMs = newDrift;
         _lastSyncTimestamp = localNow;
         _hasSyncedAtLeastOnce = true;
-        
-        debugPrint('💾 [TimeSync] Calibração Refinada: ${_driftMs}ms (Persistida)');
+
+        AppLog.time('💾 [TimeSync] Calibração Refinada: ${_driftMs}ms (Persistida)');
         
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setInt(_kDriftKey, _driftMs);
           await prefs.setInt(_kLastSyncKey, _lastSyncTimestamp);
         } catch (e) {
-          debugPrint('🚨 [TimeSync] Erro persistência: $e');
+          AppLog.time('🚨 [TimeSync] Erro persistência: $e');
         }
       }
     }

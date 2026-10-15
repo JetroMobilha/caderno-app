@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io' as io;
+import 'package:caderno_digital_app/core/config/app_config.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Offset, Size, Rect, debugPrint;
@@ -40,7 +41,9 @@ class CanvasRepository {
     final int pageId = pRow.id;
     
     // Strokes
-    final strokeRows = await (_db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId))).get();
+    final strokeQ = _db.select(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) strokeQ.where((t) => t.syncedWithCloud.equals(0));
+    final strokeRows = await strokeQ.get();
     final strokes = strokeRows.map((s) {
       final Map<String, dynamic> data = jsonDecode(s.strokeData);
       final dynamic row = s;
@@ -62,7 +65,9 @@ class CanvasRepository {
     }).toList();
 
     // TextBlocks
-    final textRows = await (_db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId))).get();
+    final textQ = _db.select(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) textQ.where((t) => t.syncedWithCloud.equals(0));
+    final textRows = await textQ.get();
     final textBlocks = textRows.map((t) {
       final Map<String, dynamic> data = jsonDecode(t.textData);
       final dynamic row = t;
@@ -84,7 +89,9 @@ class CanvasRepository {
     }).toList();
 
     // Images
-    final imgRows = await (_db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).get();
+    final imgQ = _db.select(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) imgQ.where((t) => t.syncedWithCloud.equals(0));
+    final imgRows = await imgQ.get();
     final imageBlocks = imgRows.map((i) {
       final dynamic row = i;
       Rect? crop;
@@ -118,7 +125,9 @@ class CanvasRepository {
     }).toList();
 
     // Shapes
-    final shapeRows = await (_db.select(_db.canvasShapes)..where((t) => t.pageId.equals(pageId))).get();
+    final shapeQ = _db.select(_db.canvasShapes)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) shapeQ.where((t) => t.syncedWithCloud.equals(0));
+    final shapeRows = await shapeQ.get();
     final shapes = shapeRows.map((s) {
       final Map<String, dynamic> data = jsonDecode(s.shapeData);
       final dynamic row = s;
@@ -137,7 +146,9 @@ class CanvasRepository {
     }).toList();
 
     // Audios
-    final audioRows = await (_db.select(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId))).get();
+    final audioQ = _db.select(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) audioQ.where((t) => t.syncedWithCloud.equals(0));
+    final audioRows = await audioQ.get();
     final audios = audioRows.map((a) {
       final Map<String, dynamic> data = jsonDecode(a.audioData);
       final dynamic row = a;
@@ -156,7 +167,9 @@ class CanvasRepository {
     }).toList();
 
     // Animations
-    final animRows = await (_db.select(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId))).get();
+    final animQ = _db.select(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) animQ.where((t) => t.syncedWithCloud.equals(0));
+    final animRows = await animQ.get();
     final animations = animRows.map((a) {
       final Map<String, dynamic> data = jsonDecode(a.animationData);
       final dynamic row = a;
@@ -175,7 +188,9 @@ class CanvasRepository {
     }).toList();
 
     // Tables
-    final tableRows = await (_db.select(_db.canvasTables)..where((t) => t.pageId.equals(pageId))).get();
+    final tableQ = _db.select(_db.canvasTables)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) tableQ.where((t) => t.syncedWithCloud.equals(0));
+    final tableRows = await tableQ.get();
     final tables = tableRows.map((t) {
       final Map<String, dynamic> data = jsonDecode(t.tableData);
       final dynamic row = t;
@@ -194,7 +209,9 @@ class CanvasRepository {
     }).toList();
 
     // Links
-    final linkRows = await (_db.select(_db.canvasLinks)..where((t) => t.pageId.equals(pageId))).get();
+    final linkQ = _db.select(_db.canvasLinks)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) linkQ.where((t) => t.syncedWithCloud.equals(0));
+    final linkRows = await linkQ.get();
     final links = linkRows.map((l) {
       final Map<String, dynamic> data = jsonDecode(l.linkData);
       final dynamic row = l;
@@ -213,7 +230,9 @@ class CanvasRepository {
     }).toList();
 
     // Attachments
-    final attachRows = await (_db.select(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId))).get();
+    final attachQ = _db.select(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId));
+    if (onlyUnsynced) attachQ.where((t) => t.syncedWithCloud.equals(0));
+    final attachRows = await attachQ.get();
     final attachments = attachRows.map((a) {
       final Map<String, dynamic> data = jsonDecode(a.attachmentData);
       final dynamic row = a;
@@ -234,7 +253,9 @@ class CanvasRepository {
     // Explanations / Animations
     List<ExplanationModel> explanations = [];
     try {
-      final explanationRows = await (_db.select(_db.canvasExplanations)..where((t) => t.pageId.equals(pageId))).get();
+      final expQ = _db.select(_db.canvasExplanations)..where((t) => t.pageId.equals(pageId));
+      if (onlyUnsynced) expQ.where((t) => t.syncedWithCloud.equals(0));
+      final explanationRows = await expQ.get();
       explanations = explanationRows.map((e) {
         final Map<String, dynamic> data = jsonDecode(e.explanationData);
         final dynamic row = e;
@@ -252,7 +273,7 @@ class CanvasRepository {
         });
       }).toList();
     } catch (e) {
-      debugPrint('🚨 [CanvasRepository] Erro ao carregar explanations (tabela pode não existir): $e');
+      AppLog.db('🚨 [CanvasRepository] Erro ao carregar explanations (tabela pode não existir): $e');
     }
 
     return LocalPage(
@@ -611,7 +632,7 @@ class CanvasRepository {
       );
       await _db.into(_db.canvasExplanations).insertOnConflictUpdate(companion);
     } catch (e) {
-      debugPrint('🚨 [CanvasRepository] Erro ao salvar explanation (tabela pode não existir): $e');
+      AppLog.db('⚠️ [CanvasRepository] Erro ao saveSingleExplanationObject: $e');
     }
   }
 
@@ -661,7 +682,9 @@ class CanvasRepository {
       request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: fileName));
       final response = await request.send();
       if (response.statusCode == 200) { final data = jsonDecode(await response.stream.bytesToString()); return data['url']; }
-    } catch (e) {}
+    } catch (e) {
+      AppLog.db('⚠️ [CanvasRepository] Erro ao uploadImage: $e');
+    }
     return null;
   }
 
@@ -674,7 +697,9 @@ class CanvasRepository {
       request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
       final response = await request.send();
       if (response.statusCode == 200) { final data = jsonDecode(await response.stream.bytesToString()); return data['url']; }
-    } catch (e) {}
+    } catch (e) {
+      AppLog.db('⚠️ [CanvasRepository] Erro ao uploadFile: $e');
+    }
     return null;
   }
 
@@ -687,7 +712,9 @@ class CanvasRepository {
       request.files.add(http.MultipartFile.fromBytes('audio', bytes, filename: fileName));
       final response = await request.send();
       if (response.statusCode == 200) { final data = jsonDecode(await response.stream.bytesToString()); return data['url']; }
-    } catch (e) {}
+    } catch (e) {
+      AppLog.db('⚠️ [CanvasRepository] Erro ao uploadAudio: $e');
+    }
     return null;
   }
 
@@ -703,7 +730,9 @@ class CanvasRepository {
       if (clientId != null) request.fields['client_id'] = clientId;
       final response = await request.send();
       if (response.statusCode == 200) { final data = jsonDecode(await response.stream.bytesToString()); return data['url']; }
-    } catch (e) {}
+    } catch (e) {
+      AppLog.db('⚠️ [CanvasRepository] Erro ao uploadLessonAudio: $e');
+    }
     return null;
   }
 
@@ -720,7 +749,7 @@ class CanvasRepository {
         return true;
       }
     } catch (e) {
-      debugPrint('⚠️ [CanvasRepository] Erro ao descarregar ficheiro: $e');
+      AppLog.db('⚠️ [CanvasRepository] Erro ao descarregar ficheiro: $e');
     }
     return false;
   }
@@ -739,7 +768,7 @@ class CanvasRepository {
       await (_db.delete(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
       await (_db.delete(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
     });
-    debugPrint('🧹 [Purge] Limpeza física concluída para a página $pageId.');
+    AppLog.db('🧹 [Purge] Limpeza física concluída para a página $pageId.');
   }
 }
 

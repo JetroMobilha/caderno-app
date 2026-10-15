@@ -39,6 +39,7 @@ dependencies:
   url_launcher: ^6.3.2
   pdf: ^3.11.1
   pdfx: ^2.11.0
+  flutter_cache_manager: ^3.4.5
 
 dev_dependencies:
   flutter_test:

@@ -4,6 +4,8 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'package:caderno_digital_app/core/config/app_config.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../../features/subjects/models/subject_model.dart' as subjects_model;
 import '../../features/notebooks/models/notebook_model.dart' as notebooks_model;
@@ -18,10 +20,12 @@ class SyncService {
   final AppDatabase _db = AppDatabase.instance;
   final ApiService _apiService;
   final CanvasRepository _canvasRepository;
-  
+
   bool _isGlobalSyncing = false; // 🚀 Semáforo interno
-  final Set<String> _activePullUrls = {}; // 🚀 Previne PULLs simultâneos idênticos
-  final Set<String> _activePushNotebookKeys = {}; // 🚀 Previne PUSHs simultâneos do mesmo caderno
+  final Set<String> _activePullUrls =
+      {}; // 🚀 Previne PULLs simultâneos idênticos
+  final Set<String> _activePushNotebookKeys =
+      {}; // 🚀 Previne PUSHs simultâneos do mesmo caderno
 
   SyncService(this._apiService, this._canvasRepository);
 
@@ -46,13 +50,32 @@ class SyncService {
     if (meta == null) return null;
     // Tenta server_time (ISO String) primeiro, depois server_time_ms
     if (meta['server_time'] != null) return meta['server_time'].toString();
-    if (meta['server_time_ms'] != null) return meta['server_time_ms'].toString();
+    if (meta['server_time_ms'] != null)
+      return meta['server_time_ms'].toString();
     return null;
+  }
+
+  void _prewarmBackgroundImage(Map<String, dynamic> pageData) {
+    if (!kIsWeb) {
+      final bgPath =
+          pageData['background_pdf_path']?.toString() ??
+          pageData['background_image_path']?.toString();
+      if (bgPath != null && bgPath.startsWith('http')) {
+        try {
+          DefaultCacheManager().downloadFile(bgPath);
+        } catch (_) {
+          // Ignora o erro silenciosamente se a cache falhar
+        }
+      }
+    }
   }
 
   /// 🚀 Retorna o timestamp ISO do lastSynced recuado com uma janela de segurança (Safety Buffer)
   /// para tolerar pequenas diferenças de relógio entre dispositivos e atrasos de rede.
-  String? _getBufferedLastSynced(String? rawLastSynced, {Duration buffer = const Duration(minutes: 2)}) {
+  String? _getBufferedLastSynced(
+    String? rawLastSynced, {
+    Duration buffer = const Duration(minutes: 2),
+  }) {
     if (rawLastSynced == null || rawLastSynced.isEmpty) return null;
     try {
       final dt = DateTime.parse(rawLastSynced);
@@ -66,20 +89,26 @@ class SyncService {
   // =========================================================================
   // 1. SINCRONIZAÇÃO TOTAL
   // =========================================================================
-  Future<void> syncAll({bool forced = false, bool metadataOnly = false, bool pushOnly = false}) async {
+  Future<void> syncAll({
+    bool forced = false,
+    bool metadataOnly = false,
+    bool pushOnly = false,
+  }) async {
     if (_isGlobalSyncing && !forced) {
-      debugPrint('⏳ [Sync] Ignorado: Já existe um ciclo em curso.');
+      AppLog.sync('⏳ [Sync] Ignorado: Já existe um ciclo em curso.');
       return;
     }
-    
+
     if (isCollaborationActive && !forced) return;
-    
+
     _isGlobalSyncing = true;
-    debugPrint('🔄 [Sync] Sincronização híbrida iniciada... ${pushOnly ? "(Apenas PUSH)" : ""}');
+    AppLog.sync('🔄 [Sync] Sincronização híbrida iniciada... ${pushOnly ? "(Apenas PUSH)" : ""}');
 
     try {
       // 1. Tentar Enviar Novidades (E receber deltas rápidos no retorno)
-      final bool hasMoreSubjects = await pushOfflineSubjects(pushOnly: pushOnly);
+      final bool hasMoreSubjects = await pushOfflineSubjects(
+        pushOnly: pushOnly,
+      );
       final bool hasMoreNotebooks = await pushNotebooks(pushOnly: pushOnly);
 
       // 2. Recuperação de Lotes (Apenas se PUSH indicou que há muito mais dados em lote ou forced)
@@ -98,9 +127,9 @@ class SyncService {
           await pullRecordings();
         }
       }
-      debugPrint('✅ [Sync] Ciclo híbrido concluído.');
+      AppLog.sync('✅ [Sync] Ciclo híbrido concluído.');
     } catch (e) {
-      debugPrint('🚨 [Sync General] Falha: $e');
+      AppLog.sync('🚨 [Sync General] Falha: $e');
       rethrow;
     } finally {
       _isGlobalSyncing = false; // 🚀 Libertar semáforo
@@ -112,51 +141,72 @@ class SyncService {
   // =========================================================================
   Future<bool> pushOfflineSubjects({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_subjects_sync'));
+    final String? lastSynced = _getBufferedLastSynced(
+      prefs.getString('last_subjects_sync'),
+    );
 
     try {
-      final unsynced = await (_db.select(_db.subjects)..where((t) => t.syncedWithCloud.equals(0))).get();
+      final unsynced = await (_db.select(
+        _db.subjects,
+      )..where((t) => t.syncedWithCloud.equals(0))).get();
       final List<Map<String, dynamic>> payload = [];
       for (var s in unsynced) {
         String effectiveUuid = s.clientId ?? uniqid();
         if (s.clientId == null) {
-          await (_db.update(_db.subjects)..where((t) => t.id.equals(s.id))).write(SubjectsCompanion(clientId: Value(effectiveUuid)));
+          await (_db.update(_db.subjects)..where((t) => t.id.equals(s.id)))
+              .write(SubjectsCompanion(clientId: Value(effectiveUuid)));
         }
         final subjectObj = subjects_model.Subject(
-          id: s.id, serverId: s.serverId, clientId: effectiveUuid, userId: s.userId,
-          name: s.name, color: s.color, icon: s.icon, isDeleted: s.isDeleted,
-          syncedWithCloud: s.syncedWithCloud, updatedAt: s.updatedAt,
+          id: s.id,
+          serverId: s.serverId,
+          clientId: effectiveUuid,
+          userId: s.userId,
+          name: s.name,
+          color: s.color,
+          icon: s.icon,
+          isDeleted: s.isDeleted,
+          syncedWithCloud: s.syncedWithCloud,
+          updatedAt: s.updatedAt,
         );
         payload.add(subjectObj.toJson());
       }
 
       if (payload.isNotEmpty) {
-        debugPrint('🛫 [Sync-Push] Enviando ${payload.length} disciplinas: ${payload.map((s) => '${s['name']}(del:${s['is_deleted']})').join(', ')}');
+        AppLog.sync('🛫 [Sync-Push] Enviando ${payload.length} disciplinas: ${payload.map((s) => '${s['name']}(del:${s['is_deleted']})').join(', ')}');
       }
 
       final response = await _apiService.post('/sync/push', {
         'subjects': payload,
         'last_synced_at': lastSynced,
-      });
+      }, compress: true);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        
+
         // 1. Processar confirmações do PUSH
         for (var item in data['synced_subjects'] ?? []) {
           final String clientUuid = item['client_id'].toString();
           final int? serverId = item['id'] ?? item['server_id'];
-          final int serverTime = _parseSafeInt(item['updated_at_ms']) ?? _parseSafeInt(item['updated_at']) ?? TimeService().nowMs();
-          
+          final int serverTime =
+              _parseSafeInt(item['updated_at_ms']) ??
+              _parseSafeInt(item['updated_at']) ??
+              TimeService().nowMs();
+
           if (serverId != null) {
-            await (_db.update(_db.subjects)..where((t) => t.clientId.equals(clientUuid))).write(
-              SubjectsCompanion(serverId: Value(serverId), updatedAt: Value(serverTime), syncedWithCloud: const Value(1))
+            await (_db.update(
+              _db.subjects,
+            )..where((t) => t.clientId.equals(clientUuid))).write(
+              SubjectsCompanion(
+                serverId: Value(serverId),
+                updatedAt: Value(serverTime),
+                syncedWithCloud: const Value(1),
+              ),
             );
           } else {
             // Se o servidor confirmou mas não enviou ID (ex: já estava apagado), apenas marcamos como sincronizado
-            await (_db.update(_db.subjects)..where((t) => t.clientId.equals(clientUuid))).write(
-              const SubjectsCompanion(syncedWithCloud: Value(1))
-            );
+            await (_db.update(_db.subjects)
+                  ..where((t) => t.clientId.equals(clientUuid)))
+                .write(const SubjectsCompanion(syncedWithCloud: Value(1)));
           }
         }
 
@@ -164,26 +214,30 @@ class SyncService {
         if (!pushOnly) {
           final List updates = data['server_updates'] ?? [];
           if (updates.isNotEmpty) {
-             await _applySubjectUpdates(updates);
+            await _applySubjectUpdates(updates);
           }
 
           final String? serverTime = _parseMetaTime(data['meta']);
           if (serverTime != null) {
-             await prefs.setString('last_subjects_sync', serverTime);
+            await prefs.setString('last_subjects_sync', serverTime);
           }
         }
-        
+
         return data['has_more'] == true; // 🚀 Avisar se deve rodar o pull total
       }
       return false;
     } catch (e) {
-      debugPrint('🚨 Erro Sync Subjects: $e');
+      AppLog.sync('🚨 Erro Sync Subjects: $e');
       return false;
     }
   }
 
   Future<void> _applySubjectUpdates(List updates) async {
-    final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
+    final userQuery =
+        await (_db.select(_db.users)
+              ..orderBy([(t) => OrderingTerm(expression: t.id)])
+              ..limit(1))
+            .get();
     if (userQuery.isEmpty) return;
     final int localUserId = userQuery.first.id;
 
@@ -191,27 +245,43 @@ class SyncService {
       for (var sub in updates) {
         final int? sId = sub['id'] ?? sub['server_id'];
         if (sId == null) continue;
-        
+
         final String cId = sub['client_id'] ?? uniqid();
-        final int serverTime = _parseSafeInt(sub['updated_at_ms']) ?? _parseSafeInt(sub['updated_at']) ?? 0;
-        
+        final int serverTime =
+            _parseSafeInt(sub['updated_at_ms']) ??
+            _parseSafeInt(sub['updated_at']) ??
+            0;
+
         final companion = SubjectsCompanion.insert(
-          serverId: Value(sId), clientId: Value(cId), userId: localUserId, 
-          name: sub['name'] ?? '', color: sub['color'] ?? '#0F4C5C', icon: Value(sub['icon']), 
-          isDeleted: Value(sub['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), 
+          serverId: Value(sId),
+          clientId: Value(cId),
+          userId: localUserId,
+          name: sub['name'] ?? '',
+          color: sub['color'] ?? '#0F4C5C',
+          icon: Value(sub['icon']),
+          isDeleted: Value(sub['deleted_at'] != null ? 1 : 0),
+          syncedWithCloud: const Value(1),
           updatedAt: Value(serverTime),
-          isArchived: Value(sub['is_archived'] == 1 || sub['is_archived'] == true ? 1 : 0),
-          isFavorite: Value(sub['is_favorite'] == 1 || sub['is_favorite'] == true ? 1 : 0),
+          isArchived: Value(
+            sub['is_archived'] == 1 || sub['is_archived'] == true ? 1 : 0,
+          ),
+          isFavorite: Value(
+            sub['is_favorite'] == 1 || sub['is_favorite'] == true ? 1 : 0,
+          ),
         );
 
-        final existing = await (_db.select(_db.subjects)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+        final existing = await (_db.select(
+          _db.subjects,
+        )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
         if (existing != null) {
-          // 🚀 PRIORIDADE PARA ELIMINAÇÃO: Se o servidor diz que foi apagado, marcamos localmente 
+          // 🚀 PRIORIDADE PARA ELIMINAÇÃO: Se o servidor diz que foi apagado, marcamos localmente
           // mesmo que o timestamp pareça idêntico, para evitar "ressurreição" de itens.
           final bool serverSaysDeleted = sub['deleted_at'] != null;
-          
+
           if (serverSaysDeleted || serverTime > existing.updatedAt) {
-            await (_db.update(_db.subjects)..where((t) => t.id.equals(existing.id))).write(companion);
+            await (_db.update(
+              _db.subjects,
+            )..where((t) => t.id.equals(existing.id))).write(companion);
           }
         } else {
           await _db.into(_db.subjects).insertOnConflictUpdate(companion);
@@ -223,47 +293,103 @@ class SyncService {
   Future<bool> pullSubjects() async {
     final prefs = await SharedPreferences.getInstance();
     final localCount = await _db.subjects.count().getSingle();
-    final String? lastSynced = localCount > 0 ? _getBufferedLastSynced(prefs.getString('last_subjects_sync')) : null;
+    final String? lastSynced = localCount > 0
+        ? _getBufferedLastSynced(prefs.getString('last_subjects_sync'))
+        : null;
     try {
-      String? nextUrl = lastSynced != null ? '/sync/pull?last_synced_at=$lastSynced' : '/sync/pull';
+      String? nextUrl = lastSynced != null
+          ? '/sync/pull?last_synced_at=$lastSynced'
+          : '/sync/pull';
       bool anyChanges = false;
       while (nextUrl != null) {
         final response = await _apiService.get(nextUrl);
         if (response.statusCode == 200) {
-          final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
-        final Map<String, dynamic> responseData = decoded is Map ? Map<String, dynamic>.from(decoded) : {'data': decoded};
-          final List serverSubjects = responseData['data'] ?? responseData['subjects'] ?? [];
-        final String? serverTime = _parseMetaTime(responseData['meta']);
-        if (serverTime != null) await prefs.setString('last_subjects_sync', serverTime);
+          final dynamic decoded = await compute<String, dynamic>(
+            (jsonStr) => jsonDecode(jsonStr),
+            response.body,
+          );
+          final Map<String, dynamic> responseData = decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : {'data': decoded};
+          final List serverSubjects =
+              responseData['data'] ?? responseData['subjects'] ?? [];
+          final String? serverTime = _parseMetaTime(responseData['meta']);
+          if (serverTime != null)
+            await prefs.setString('last_subjects_sync', serverTime);
           if (serverSubjects.isNotEmpty) {
             anyChanges = true;
-            final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
+            final userQuery =
+                await (_db.select(_db.users)
+                      ..orderBy([(t) => OrderingTerm(expression: t.id)])
+                      ..limit(1))
+                    .get();
             if (userQuery.isEmpty) return false;
             final int localUserId = userQuery.first.id;
             await _db.transaction(() async {
               for (var sub in serverSubjects) {
-                final int? sId = sub['id'] is int ? sub['id'] : int.tryParse(sub['id']?.toString() ?? '');
+                final int? sId = sub['id'] is int
+                    ? sub['id']
+                    : int.tryParse(sub['id']?.toString() ?? '');
                 if (sId == null) continue;
-                
+
                 final String? cId = sub['client_id']?.toString();
-                final int serverTime = sub['updated_at_ms'] != null ? (sub['updated_at_ms'] as num).toInt() : (sub['updated_at'] != null ? DateTime.parse(sub['updated_at'].toString()).millisecondsSinceEpoch : 0);
+                final int serverTime = sub['updated_at_ms'] != null
+                    ? (sub['updated_at_ms'] as num).toInt()
+                    : (sub['updated_at'] != null
+                          ? DateTime.parse(
+                              sub['updated_at'].toString(),
+                            ).millisecondsSinceEpoch
+                          : 0);
                 final companion = SubjectsCompanion.insert(
-                  serverId: Value(sId), clientId: Value(cId ?? uniqid()), userId: localUserId, 
-                  name: sub['name'] ?? '', color: sub['color'] ?? '#0F4C5C', icon: Value(sub['icon']), 
-                  isDeleted: Value(sub['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), 
+                  serverId: Value(sId),
+                  clientId: Value(cId ?? uniqid()),
+                  userId: localUserId,
+                  name: sub['name'] ?? '',
+                  color: sub['color'] ?? '#0F4C5C',
+                  icon: Value(sub['icon']),
+                  isDeleted: Value(sub['deleted_at'] != null ? 1 : 0),
+                  syncedWithCloud: const Value(1),
                   updatedAt: Value(serverTime),
-                  isArchived: Value(sub['is_archived'] == 1 || sub['is_archived'] == true ? 1 : 0),
-                  isFavorite: Value(sub['is_favorite'] == 1 || sub['is_favorite'] == true ? 1 : 0),
+                  isArchived: Value(
+                    sub['is_archived'] == 1 || sub['is_archived'] == true
+                        ? 1
+                        : 0,
+                  ),
+                  isFavorite: Value(
+                    sub['is_favorite'] == 1 || sub['is_favorite'] == true
+                        ? 1
+                        : 0,
+                  ),
                 );
-                final existing = await (_db.select(_db.subjects)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
+                final existing =
+                    await (_db.select(_db.subjects)
+                          ..where((t) => t.clientId.equals(cId ?? '')))
+                        .getSingleOrNull();
                 if (existing != null) {
                   if (serverTime > existing.updatedAt) {
-                    await (_db.update(_db.subjects)..where((t) => t.id.equals(existing.id))).write(SubjectsCompanion(serverId: companion.serverId, name: companion.name, color: companion.color, icon: companion.icon, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: companion.updatedAt));
+                    await (_db.update(
+                      _db.subjects,
+                    )..where((t) => t.id.equals(existing.id))).write(
+                      SubjectsCompanion(
+                        serverId: companion.serverId,
+                        name: companion.name,
+                        color: companion.color,
+                        icon: companion.icon,
+                        isDeleted: companion.isDeleted,
+                        syncedWithCloud: companion.syncedWithCloud,
+                        updatedAt: companion.updatedAt,
+                      ),
+                    );
                   }
                 } else {
-                  final existingByServerId = await (_db.select(_db.subjects)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+                  final existingByServerId = await (_db.select(
+                    _db.subjects,
+                  )..where((t) => t.serverId.equals(sId))).getSingleOrNull();
                   if (existingByServerId != null) {
-                    if (serverTime > existingByServerId.updatedAt) await (_db.update(_db.subjects)..where((t) => t.id.equals(existingByServerId.id))).write(companion);
+                    if (serverTime > existingByServerId.updatedAt)
+                      await (_db.update(_db.subjects)
+                            ..where((t) => t.id.equals(existingByServerId.id)))
+                          .write(companion);
                   } else {
                     await _db.into(_db.subjects).insert(companion);
                   }
@@ -278,7 +404,7 @@ class SyncService {
       }
       return anyChanges;
     } catch (e) {
-      debugPrint('🚨 Erro PULL Subjects: $e');
+      AppLog.sync('🚨 Erro PULL Subjects: $e');
       rethrow;
     }
   }
@@ -288,25 +414,44 @@ class SyncService {
   // =========================================================================
   Future<bool> pushNotebooks({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_notebooks_sync'));
+    final String? lastSynced = _getBufferedLastSynced(
+      prefs.getString('last_notebooks_sync'),
+    );
 
     try {
-      final unsynced = await (_db.select(_db.notebooks)..where((t) => t.syncedWithCloud.equals(0))).get();
+      final unsynced = await (_db.select(
+        _db.notebooks,
+      )..where((t) => t.syncedWithCloud.equals(0))).get();
       final List<Map<String, dynamic>> payload = [];
       for (var row in unsynced) {
         String effectiveUuid = row.clientId ?? uniqid();
-        if (row.clientId == null) await (_db.update(_db.notebooks)..where((t) => t.id.equals(row.id))).write(NotebooksCompanion(clientId: Value(effectiveUuid)));
+        if (row.clientId == null)
+          await (_db.update(_db.notebooks)..where((t) => t.id.equals(row.id)))
+              .write(NotebooksCompanion(clientId: Value(effectiveUuid)));
         int? cloudSubId;
         if (row.subjectId != null) {
-          final sub = await (_db.select(_db.subjects)..where((t) => t.id.equals(row.subjectId!))).getSingleOrNull();
+          final sub = await (_db.select(
+            _db.subjects,
+          )..where((t) => t.id.equals(row.subjectId!))).getSingleOrNull();
           if (sub != null && sub.serverId != null) cloudSubId = sub.serverId;
         }
         final notebookObj = notebooks_model.Notebook(
-          id: row.id, serverId: row.serverId, clientId: effectiveUuid, subjectId: cloudSubId, 
-          title: row.title, coverType: row.coverType, color: row.color, coverImage: row.coverImage, 
-          templateType: row.templateType, collaborationMode: row.collaborationMode, 
-          isPublished: row.isPublished, price: row.price, description: row.description, 
-          authorName: row.authorName, syncedWithCloud: row.syncedWithCloud, isDeleted: row.isDeleted, 
+          id: row.id,
+          serverId: row.serverId,
+          clientId: effectiveUuid,
+          subjectId: cloudSubId,
+          title: row.title,
+          coverType: row.coverType,
+          color: row.color,
+          coverImage: row.coverImage,
+          templateType: row.templateType,
+          collaborationMode: row.collaborationMode,
+          isPublished: row.isPublished,
+          price: row.price,
+          description: row.description,
+          authorName: row.authorName,
+          syncedWithCloud: row.syncedWithCloud,
+          isDeleted: row.isDeleted,
           updatedAt: row.updatedAt,
           tags: notebooks_model.Notebook.parseTags(row.tags),
           isArchived: row.isArchived == 1,
@@ -318,33 +463,52 @@ class SyncService {
       final response = await _apiService.post('/sync/notebooks/push', {
         'notebooks': payload,
         'last_synced_at': lastSynced,
-      });
+      }, compress: true);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        
+
         // 1. Confirmações
         for (var item in data['synced_notebooks'] ?? []) {
           final String clientUuid = item['client_id'].toString();
           final int? sId = item['id'] ?? item['server_id'];
-          final localRow = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(clientUuid))).getSingleOrNull();
+          final localRow = await (_db.select(
+            _db.notebooks,
+          )..where((t) => t.clientId.equals(clientUuid))).getSingleOrNull();
           if (localRow == null) continue;
 
           if (sId != null) {
-            final existing = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId) & t.id.equals(localRow.id).not())).getSingleOrNull();
+            final existing =
+                await (_db.select(_db.notebooks)..where(
+                      (t) =>
+                          t.serverId.equals(sId) &
+                          t.id.equals(localRow.id).not(),
+                    ))
+                    .getSingleOrNull();
             if (existing != null) {
-              await (_db.delete(_db.notebooks)..where((t) => t.id.equals(localRow.id))).go();
+              await (_db.delete(
+                _db.notebooks,
+              )..where((t) => t.id.equals(localRow.id))).go();
             } else {
-              final int serverTime = _parseSafeInt(item['updated_at_ms']) ?? _parseSafeInt(item['updated_at']) ?? TimeService().nowMs();
-              await (_db.update(_db.notebooks)..where((t) => t.id.equals(localRow.id))).write(
-                NotebooksCompanion(serverId: Value(sId), updatedAt: Value(serverTime), syncedWithCloud: const Value(1))
+              final int serverTime =
+                  _parseSafeInt(item['updated_at_ms']) ??
+                  _parseSafeInt(item['updated_at']) ??
+                  TimeService().nowMs();
+              await (_db.update(
+                _db.notebooks,
+              )..where((t) => t.id.equals(localRow.id))).write(
+                NotebooksCompanion(
+                  serverId: Value(sId),
+                  updatedAt: Value(serverTime),
+                  syncedWithCloud: const Value(1),
+                ),
               );
             }
           } else {
             // Confirmação sem ID (ex: apagado no servidor)
-            await (_db.update(_db.notebooks)..where((t) => t.id.equals(localRow.id))).write(
-              const NotebooksCompanion(syncedWithCloud: Value(1))
-            );
+            await (_db.update(_db.notebooks)
+                  ..where((t) => t.id.equals(localRow.id)))
+                .write(const NotebooksCompanion(syncedWithCloud: Value(1)));
           }
         }
 
@@ -352,12 +516,12 @@ class SyncService {
         if (!pushOnly) {
           final List updates = data['server_updates'] ?? [];
           if (updates.isNotEmpty) {
-             await _applyNotebookUpdates(updates);
+            await _applyNotebookUpdates(updates);
           }
 
           final String? serverTime = _parseMetaTime(data['meta']);
           if (serverTime != null) {
-             await prefs.setString('last_notebooks_sync', serverTime);
+            await prefs.setString('last_notebooks_sync', serverTime);
           }
         }
 
@@ -365,68 +529,135 @@ class SyncService {
       }
       return false;
     } catch (e) {
-      debugPrint('🚨 Erro Sync Notebooks: $e');
+      AppLog.sync('🚨 Erro Sync Notebooks: $e');
       return false;
     }
   }
 
   Future<void> _applyNotebookUpdates(List updates) async {
-    final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
+    final userQuery =
+        await (_db.select(_db.users)
+              ..orderBy([(t) => OrderingTerm(expression: t.id)])
+              ..limit(1))
+            .get();
     final int currentUserId = userQuery.isNotEmpty ? userQuery.first.id : 0;
     final allSubjects = await _db.select(_db.subjects).get();
-    final Map<int, int> subjectIdMap = {for (var s in allSubjects) if (s.serverId != null) s.serverId!: s.id};
+    final Map<int, int> subjectIdMap = {
+      for (var s in allSubjects)
+        if (s.serverId != null) s.serverId!: s.id,
+    };
 
     await _db.transaction(() async {
       for (var net in updates) {
-        final int? sId = net['id'] is int ? net['id'] : int.tryParse(net['id']?.toString() ?? '');
+        final int? sId = net['id'] is int
+            ? net['id']
+            : int.tryParse(net['id']?.toString() ?? '');
         if (sId == null) continue;
-        
+
         final String? cId = net['client_id'];
-        final int? serverSubId = net['subject_id'] != null ? int.tryParse(net['subject_id'].toString()) : null;
-        final int? localSubId = (serverSubId != null) ? subjectIdMap[serverSubId] : null;
-        final int serverTime = _parseSafeInt(net['updated_at_ms']) ?? _parseSafeInt(net['updated_at']) ?? 0;
-        
+        final int? serverSubId = net['subject_id'] != null
+            ? int.tryParse(net['subject_id'].toString())
+            : null;
+        final int? localSubId = (serverSubId != null)
+            ? subjectIdMap[serverSubId]
+            : null;
+        final int serverTime =
+            _parseSafeInt(net['updated_at_ms']) ??
+            _parseSafeInt(net['updated_at']) ??
+            0;
+
         final companion = NotebooksCompanion.insert(
-          serverId: Value(sId), clientId: Value(cId ?? uniqid()), subjectId: Value(localSubId), title: net['title'] ?? '',
-          coverType: net['cover_type'] ?? 'color', color: Value(net['color']), coverImage: Value(net['cover_image']),
-          templateType: Value(net['template_type'] ?? 'study'), collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
-          isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0), price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
-          isDeleted: Value(net['deleted_at'] != null ? 1 : 0), syncedWithCloud: const Value(1), updatedAt: Value(serverTime), role: Value(net['role'] ?? 'viewer'),
-          alternativeTitle: Value(net['alternative_title']), sharingType: Value(net['sharing_type'] ?? 'full'),
-          isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
-          isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
+          serverId: Value(sId),
+          clientId: Value(cId ?? uniqid()),
+          subjectId: Value(localSubId),
+          title: net['title'] ?? '',
+          coverType: net['cover_type'] ?? 'color',
+          color: Value(net['color']),
+          coverImage: Value(net['cover_image']),
+          templateType: Value(net['template_type'] ?? 'study'),
+          collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
+          isPublished: Value(
+            int.tryParse(net['is_published']?.toString() ?? '0') ?? 0,
+          ),
+          price: Value(
+            double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0,
+          ),
+          isDeleted: Value(net['deleted_at'] != null ? 1 : 0),
+          syncedWithCloud: const Value(1),
+          updatedAt: Value(serverTime),
+          role: Value(net['role'] ?? 'viewer'),
+          alternativeTitle: Value(net['alternative_title']),
+          sharingType: Value(net['sharing_type'] ?? 'full'),
+          isArchived: Value(
+            net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0,
+          ),
+          isFavorite: Value(
+            net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0,
+          ),
           origin: Value(net['origin']),
           lastUpdatedByName: Value(net['last_updated_by_name']),
-          notificationsEnabled: Value((net['notifications_enabled'] == 1 || net['notifications_enabled'] == true) ? 1 : 0),
-          participantsPreview: Value(net['participants_preview'] != null ? jsonEncode(net['participants_preview']) : null),
+          notificationsEnabled: Value(
+            (net['notifications_enabled'] == 1 ||
+                    net['notifications_enabled'] == true)
+                ? 1
+                : 0,
+          ),
+          participantsPreview: Value(
+            net['participants_preview'] != null
+                ? jsonEncode(net['participants_preview'])
+                : null,
+          ),
         );
 
-        final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
+        final existing = await (_db.select(
+          _db.notebooks,
+        )..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
         if (existing != null) {
           if (serverTime >= existing.updatedAt) {
-            await (_db.update(_db.notebooks)..where((t) => t.id.equals(existing.id))).write(companion);
+            await (_db.update(
+              _db.notebooks,
+            )..where((t) => t.id.equals(existing.id))).write(companion);
           }
         } else {
-           await _db.into(_db.notebooks).insertOnConflictUpdate(companion);
+          await _db.into(_db.notebooks).insertOnConflictUpdate(companion);
         }
 
         // 🚀 NOVIDADE: Atualizar também a tabela de pivô para cadernos partilhados (Visibilidade imediata)
-        final localNb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+        final localNb = await (_db.select(
+          _db.notebooks,
+        )..where((t) => t.serverId.equals(sId))).getSingleOrNull();
         final String? role = net['role']?.toString();
         if (localNb != null && currentUserId > 0 && role != null) {
           if (role != 'owner') {
-             await _db.into(_db.notebookUser).insertOnConflictUpdate(NotebookUserCompanion.insert(
-                notebookId: localNb.id, 
-                userId: currentUserId, 
-                role: Value(role), 
-                syncedWithCloud: const Value(1), 
-                updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-                isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
-                isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
-             ));
+            await _db
+                .into(_db.notebookUser)
+                .insertOnConflictUpdate(
+                  NotebookUserCompanion.insert(
+                    notebookId: localNb.id,
+                    userId: currentUserId,
+                    role: Value(role),
+                    syncedWithCloud: const Value(1),
+                    updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+                    isArchived: Value(
+                      net['is_archived'] == 1 || net['is_archived'] == true
+                          ? 1
+                          : 0,
+                    ),
+                    isFavorite: Value(
+                      net['is_favorite'] == 1 || net['is_favorite'] == true
+                          ? 1
+                          : 0,
+                    ),
+                  ),
+                );
           } else {
-             // Se agora sou dono (raro em update, mas possível), remover do pivô de partilhas
-             await (_db.delete(_db.notebookUser)..where((t) => t.notebookId.equals(localNb.id) & t.userId.equals(currentUserId))).go();
+            // Se agora sou dono (raro em update, mas possível), remover do pivô de partilhas
+            await (_db.delete(_db.notebookUser)..where(
+                  (t) =>
+                      t.notebookId.equals(localNb.id) &
+                      t.userId.equals(currentUserId),
+                ))
+                .go();
           }
         }
       }
@@ -436,86 +667,198 @@ class SyncService {
   Future<bool> pullNotebooks() async {
     final prefs = await SharedPreferences.getInstance();
     final localCount = await _db.notebooks.count().getSingle();
-    final String? lastSynced = localCount > 0 ? _getBufferedLastSynced(prefs.getString('last_notebooks_sync')) : null;
+    final String? lastSynced = localCount > 0
+        ? _getBufferedLastSynced(prefs.getString('last_notebooks_sync'))
+        : null;
     try {
-      String? nextUrl = lastSynced != null ? '/sync/notebooks/pull?last_synced_at=$lastSynced' : '/sync/notebooks/pull';
+      String? nextUrl = lastSynced != null
+          ? '/sync/notebooks/pull?last_synced_at=$lastSynced'
+          : '/sync/notebooks/pull';
       bool anyChanges = false;
       final Set<int> receivedServerIds = {};
       while (nextUrl != null) {
         final response = await _apiService.get(nextUrl);
         if (response.statusCode == 200) {
-          final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
-        final Map<String, dynamic> responseData = decoded is Map ? Map<String, dynamic>.from(decoded) : {'data': decoded};
-          final List serverNotebooks = responseData['data'] ?? responseData['notebooks'] ?? [];
-        final String? serverTime = _parseMetaTime(responseData['meta']);
-        if (serverTime != null) await prefs.setString('last_notebooks_sync', serverTime);
+          final dynamic decoded = await compute<String, dynamic>(
+            (jsonStr) => jsonDecode(jsonStr),
+            response.body,
+          );
+          final Map<String, dynamic> responseData = decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : {'data': decoded};
+          final List serverNotebooks =
+              responseData['data'] ?? responseData['notebooks'] ?? [];
+          final String? serverTime = _parseMetaTime(responseData['meta']);
+          if (serverTime != null)
+            await prefs.setString('last_notebooks_sync', serverTime);
           if (serverNotebooks.isNotEmpty) {
             anyChanges = true;
-            final userQuery = await (_db.select(_db.users)..orderBy([(t) => OrderingTerm(expression: t.id)])..limit(1)).get();
-            final int currentUserId = userQuery.isNotEmpty ? userQuery.first.id : 0;
+            final userQuery =
+                await (_db.select(_db.users)
+                      ..orderBy([(t) => OrderingTerm(expression: t.id)])
+                      ..limit(1))
+                    .get();
+            final int currentUserId = userQuery.isNotEmpty
+                ? userQuery.first.id
+                : 0;
             final allSubjects = await _db.select(_db.subjects).get();
-            final Map<int, int> subjectIdMap = {for (var s in allSubjects) if (s.serverId != null) s.serverId!: s.id};
+            final Map<int, int> subjectIdMap = {
+              for (var s in allSubjects)
+                if (s.serverId != null) s.serverId!: s.id,
+            };
             await _db.transaction(() async {
               for (var net in serverNotebooks) {
-                final int? sId = net['id'] is int ? net['id'] : int.tryParse(net['id']?.toString() ?? '');
+                final int? sId = net['id'] is int
+                    ? net['id']
+                    : int.tryParse(net['id']?.toString() ?? '');
                 if (sId == null) continue;
-                
+
                 receivedServerIds.add(sId);
                 final String? cId = net['client_id']?.toString();
-                final int? serverSubId = net['subject_id'] != null ? (net['subject_id'] is int ? net['subject_id'] : int.parse(net['subject_id'].toString())) : null;
-                final int? localSubId = (serverSubId != null) ? subjectIdMap[serverSubId] : null;
-                final int serverTime = net['updated_at_ms'] != null ? (net['updated_at_ms'] as num).toInt() : (net['updated_at'] != null ? DateTime.parse(net['updated_at'].toString()).millisecondsSinceEpoch : 0);
+                final int? serverSubId = net['subject_id'] != null
+                    ? (net['subject_id'] is int
+                          ? net['subject_id']
+                          : int.parse(net['subject_id'].toString()))
+                    : null;
+                final int? localSubId = (serverSubId != null)
+                    ? subjectIdMap[serverSubId]
+                    : null;
+                final int serverTime = net['updated_at_ms'] != null
+                    ? (net['updated_at_ms'] as num).toInt()
+                    : (net['updated_at'] != null
+                          ? DateTime.parse(
+                              net['updated_at'].toString(),
+                            ).millisecondsSinceEpoch
+                          : 0);
                 final String serverRole = net['role']?.toString() ?? 'viewer';
-                
+
                 final companion = NotebooksCompanion.insert(
-                  serverId: Value(sId), clientId: Value(cId ?? uniqid()), subjectId: Value(localSubId), title: net['title'] ?? '',
-                  coverType: net['cover_type'] ?? 'color', 
-                  color: net['color'] != null ? Value(net['color']) : const Value.absent(),
+                  serverId: Value(sId),
+                  clientId: Value(cId ?? uniqid()),
+                  subjectId: Value(localSubId),
+                  title: net['title'] ?? '',
+                  coverType: net['cover_type'] ?? 'color',
+                  color: net['color'] != null
+                      ? Value(net['color'])
+                      : const Value.absent(),
                   coverImage: Value(net['cover_image']),
-                  templateType: Value(net['template_type'] ?? 'study'), collaborationMode: Value(net['collaboration_mode'] ?? 'study_group'),
-                  isPublished: Value(int.tryParse(net['is_published']?.toString() ?? '0') ?? 0), price: Value(double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0),
-                  description: Value(net['description']), authorName: Value(net['author_name']), isDeleted: Value(net['deleted_at'] != null ? 1 : 0),
-                  syncedWithCloud: const Value(1), updatedAt: Value(serverTime), role: Value(serverRole),
-                  alternativeTitle: Value(net['alternative_title']), sharingType: Value(net['sharing_type'] ?? 'full'),
-                  isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
-                  isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
+                  templateType: Value(net['template_type'] ?? 'study'),
+                  collaborationMode: Value(
+                    net['collaboration_mode'] ?? 'study_group',
+                  ),
+                  isPublished: Value(
+                    int.tryParse(net['is_published']?.toString() ?? '0') ?? 0,
+                  ),
+                  price: Value(
+                    double.tryParse(net['price']?.toString() ?? '0.0') ?? 0.0,
+                  ),
+                  description: Value(net['description']),
+                  authorName: Value(net['author_name']),
+                  isDeleted: Value(net['deleted_at'] != null ? 1 : 0),
+                  syncedWithCloud: const Value(1),
+                  updatedAt: Value(serverTime),
+                  role: Value(serverRole),
+                  alternativeTitle: Value(net['alternative_title']),
+                  sharingType: Value(net['sharing_type'] ?? 'full'),
+                  isArchived: Value(
+                    net['is_archived'] == 1 || net['is_archived'] == true
+                        ? 1
+                        : 0,
+                  ),
+                  isFavorite: Value(
+                    net['is_favorite'] == 1 || net['is_favorite'] == true
+                        ? 1
+                        : 0,
+                  ),
                   origin: Value(net['origin']),
                   lastUpdatedByName: Value(net['last_updated_by_name']),
-                  notificationsEnabled: Value((net['notifications_enabled'] == 1 || net['notifications_enabled'] == true) ? 1 : 0),
-                  participantsPreview: Value(net['participants_preview'] != null ? jsonEncode(net['participants_preview']) : null),
+                  notificationsEnabled: Value(
+                    (net['notifications_enabled'] == 1 ||
+                            net['notifications_enabled'] == true)
+                        ? 1
+                        : 0,
+                  ),
+                  participantsPreview: Value(
+                    net['participants_preview'] != null
+                        ? jsonEncode(net['participants_preview'])
+                        : null,
+                  ),
                 );
 
-                final existing = await (_db.select(_db.notebooks)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
+                final existing =
+                    await (_db.select(_db.notebooks)
+                          ..where((t) => t.clientId.equals(cId ?? '')))
+                        .getSingleOrNull();
                 if (existing != null) {
                   final bool isBeingDeleted = net['deleted_at'] != null;
                   if (isBeingDeleted) {
-                    final unsynced = await (_db.select(_db.pages)..where((t) => t.notebookId.equals(existing.id) & t.syncedWithCloud.equals(0))).get();
+                    final unsynced =
+                        await (_db.select(_db.pages)..where(
+                              (t) =>
+                                  t.notebookId.equals(existing.id) &
+                                  t.syncedWithCloud.equals(0),
+                            ))
+                            .get();
                     if (unsynced.isEmpty) {
-                      await (_db.delete(_db.notebooks)..where((t) => t.id.equals(existing.id))).go();
+                      await (_db.delete(
+                        _db.notebooks,
+                      )..where((t) => t.id.equals(existing.id))).go();
                       continue;
                     } else {
-                      await (_db.update(_db.notebooks)..where((t) => t.id.equals(existing.id))).write(NotebooksCompanion(serverId: const Value(null), clientId: Value(const Uuid().v4()), syncedWithCloud: const Value(0)));
+                      await (_db.update(
+                        _db.notebooks,
+                      )..where((t) => t.id.equals(existing.id))).write(
+                        NotebooksCompanion(
+                          serverId: const Value(null),
+                          clientId: Value(const Uuid().v4()),
+                          syncedWithCloud: const Value(0),
+                        ),
+                      );
                       continue;
                     }
                   }
 
                   if (serverTime >= existing.updatedAt) {
-                    await (_db.update(_db.notebooks)..where((t) => t.id.equals(existing.id))).write(
+                    await (_db.update(
+                      _db.notebooks,
+                    )..where((t) => t.id.equals(existing.id))).write(
                       NotebooksCompanion(
-                        serverId: companion.serverId, subjectId: companion.subjectId, title: companion.title, coverType: companion.coverType, 
-                        color: net['color'] != null ? Value(net['color']) : const Value.absent(),
-                        coverImage: companion.coverImage,templateType: companion.templateType, collaborationMode: companion.collaborationMode, isPublished: companion.isPublished, price: companion.price, description: companion.description, authorName: companion.authorName, isDeleted: companion.isDeleted, syncedWithCloud: companion.syncedWithCloud, updatedAt: Value(serverTime), role: companion.role, alternativeTitle: companion.alternativeTitle, sharingType: companion.sharingType,
+                        serverId: companion.serverId,
+                        subjectId: companion.subjectId,
+                        title: companion.title,
+                        coverType: companion.coverType,
+                        color: net['color'] != null
+                            ? Value(net['color'])
+                            : const Value.absent(),
+                        coverImage: companion.coverImage,
+                        templateType: companion.templateType,
+                        collaborationMode: companion.collaborationMode,
+                        isPublished: companion.isPublished,
+                        price: companion.price,
+                        description: companion.description,
+                        authorName: companion.authorName,
+                        isDeleted: companion.isDeleted,
+                        syncedWithCloud: companion.syncedWithCloud,
+                        updatedAt: Value(serverTime),
+                        role: companion.role,
+                        alternativeTitle: companion.alternativeTitle,
+                        sharingType: companion.sharingType,
                         origin: companion.origin,
                         lastUpdatedByName: companion.lastUpdatedByName,
                         notificationsEnabled: companion.notificationsEnabled,
                         participantsPreview: companion.participantsPreview,
-                      )
+                      ),
                     );
                   }
                 } else {
-                  final existingByServerId = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+                  final existingByServerId = await (_db.select(
+                    _db.notebooks,
+                  )..where((t) => t.serverId.equals(sId))).getSingleOrNull();
                   if (existingByServerId != null) {
-                    if (serverTime >= existingByServerId.updatedAt) await (_db.update(_db.notebooks)..where((t) => t.id.equals(existingByServerId.id))).write(companion);
+                    if (serverTime >= existingByServerId.updatedAt)
+                      await (_db.update(_db.notebooks)
+                            ..where((t) => t.id.equals(existingByServerId.id)))
+                          .write(companion);
                   } else {
                     await _db.into(_db.notebooks).insert(companion);
                   }
@@ -523,24 +866,49 @@ class SyncService {
               }
             });
             final allNotebooksAfter = await _db.select(_db.notebooks).get();
-            final Map<int, int> notebookIdMap = {for (var n in allNotebooksAfter) if (n.serverId != null) n.serverId!: n.id};
+            final Map<int, int> notebookIdMap = {
+              for (var n in allNotebooksAfter)
+                if (n.serverId != null) n.serverId!: n.id,
+            };
             await _db.batch((batch) {
               for (var net in serverNotebooks) {
                 final sId = net['id'];
                 final localNbId = notebookIdMap[sId];
                 final String? role = net['role']?.toString();
-                if (localNbId != null && currentUserId > 0 && role != null && role != 'owner') {
-                  batch.insert(_db.notebookUser, NotebookUserCompanion.insert(
-                    notebookId: localNbId, 
-                    userId: currentUserId, 
-                    role: Value(role), 
-                    syncedWithCloud: const Value(1), 
-                    updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-                    isArchived: Value(net['is_archived'] == 1 || net['is_archived'] == true ? 1 : 0),
-                    isFavorite: Value(net['is_favorite'] == 1 || net['is_favorite'] == true ? 1 : 0),
-                  ), mode: InsertMode.insertOrReplace);
-                } else if (localNbId != null && currentUserId > 0 && role == 'owner') {
-                  batch.deleteWhere(_db.notebookUser, (t) => t.notebookId.equals(localNbId) & t.userId.equals(currentUserId));
+                if (localNbId != null &&
+                    currentUserId > 0 &&
+                    role != null &&
+                    role != 'owner') {
+                  batch.insert(
+                    _db.notebookUser,
+                    NotebookUserCompanion.insert(
+                      notebookId: localNbId,
+                      userId: currentUserId,
+                      role: Value(role),
+                      syncedWithCloud: const Value(1),
+                      updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+                      isArchived: Value(
+                        net['is_archived'] == 1 || net['is_archived'] == true
+                            ? 1
+                            : 0,
+                      ),
+                      isFavorite: Value(
+                        net['is_favorite'] == 1 || net['is_favorite'] == true
+                            ? 1
+                            : 0,
+                      ),
+                    ),
+                    mode: InsertMode.insertOrReplace,
+                  );
+                } else if (localNbId != null &&
+                    currentUserId > 0 &&
+                    role == 'owner') {
+                  batch.deleteWhere(
+                    _db.notebookUser,
+                    (t) =>
+                        t.notebookId.equals(localNbId) &
+                        t.userId.equals(currentUserId),
+                  );
                 }
               }
             });
@@ -550,18 +918,25 @@ class SyncService {
           throw Exception('Erro ${response.statusCode} no PULL Notebooks');
         }
       }
-      
+
       if (lastSynced == null) {
-         final allLocalShared = await (_db.select(_db.notebooks)..where((t) => t.role.isNotValue('owner') & t.serverId.isNotNull())).get();
-         for (var localNb in allLocalShared) {
-           if (localNb.serverId != null && !receivedServerIds.contains(localNb.serverId!)) {
-              await (_db.delete(_db.notebooks)..where((t) => t.id.equals(localNb.id))).go();
-           }
-         }
+        final allLocalShared =
+            await (_db.select(_db.notebooks)..where(
+                  (t) => t.role.isNotValue('owner') & t.serverId.isNotNull(),
+                ))
+                .get();
+        for (var localNb in allLocalShared) {
+          if (localNb.serverId != null &&
+              !receivedServerIds.contains(localNb.serverId!)) {
+            await (_db.delete(
+              _db.notebooks,
+            )..where((t) => t.id.equals(localNb.id))).go();
+          }
+        }
       }
       return anyChanges;
     } catch (e) {
-      debugPrint('🚨 Erro PULL Notebooks: $e');
+      AppLog.sync('🚨 Erro PULL Notebooks: $e');
       rethrow;
     }
   }
@@ -569,43 +944,57 @@ class SyncService {
   // =========================================================================
   // 4. PÁGINAS E CANVAS
   // =========================================================================
-  Future<bool> pushPages({int? onlyNotebookId, int? onlyNotebookServerId, bool pushOnly = false}) async {
-    final pushKey = 'push_${onlyNotebookId ?? 'all'}_${onlyNotebookServerId ?? 'all'}';
+  Future<bool> pushPages({
+    int? onlyNotebookId,
+    int? onlyNotebookServerId,
+    bool pushOnly = false,
+  }) async {
+    final pushKey =
+        'push_${onlyNotebookId ?? 'all'}_${onlyNotebookServerId ?? 'all'}';
     if (_activePushNotebookKeys.contains(pushKey)) return false;
     _activePushNotebookKeys.add(pushKey);
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_pages_sync'));
+      final String? lastSynced = _getBufferedLastSynced(
+        prefs.getString('last_pages_sync'),
+      );
 
-    // 🚀 Resolver ID local e ID do servidor do caderno
-    int? targetLocalNbId = onlyNotebookId;
-    int? targetServerNbId = onlyNotebookServerId;
+      // 🚀 Resolver ID local e ID do servidor do caderno
+      int? targetLocalNbId = onlyNotebookId;
+      int? targetServerNbId = onlyNotebookServerId;
 
-    if (targetLocalNbId != null && targetServerNbId == null) {
-      final localId = targetLocalNbId;
-      final nb = await (_db.select(_db.notebooks)..where((t) => t.id.equals(localId))).getSingleOrNull();
-      targetServerNbId = nb?.serverId;
-      if (targetServerNbId == null) {
-        final nbByServer = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(localId))).getSingleOrNull();
-        if (nbByServer != null) {
-          targetLocalNbId = nbByServer.id;
-          targetServerNbId = nbByServer.serverId;
+      if (targetLocalNbId != null && targetServerNbId == null) {
+        final localId = targetLocalNbId;
+        final nb = await (_db.select(
+          _db.notebooks,
+        )..where((t) => t.id.equals(localId))).getSingleOrNull();
+        targetServerNbId = nb?.serverId;
+        if (targetServerNbId == null) {
+          final nbByServer = await (_db.select(
+            _db.notebooks,
+          )..where((t) => t.serverId.equals(localId))).getSingleOrNull();
+          if (nbByServer != null) {
+            targetLocalNbId = nbByServer.id;
+            targetServerNbId = nbByServer.serverId;
+          }
         }
+      } else if (targetServerNbId != null && targetLocalNbId == null) {
+        final serverId = targetServerNbId;
+        final nb = await (_db.select(
+          _db.notebooks,
+        )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
+        targetLocalNbId = nb?.id;
       }
-    } else if (targetServerNbId != null && targetLocalNbId == null) {
-      final serverId = targetServerNbId;
-      final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
-      targetLocalNbId = nb?.id;
-    }
 
-      final query = _db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(0));
+      final query = _db.select(_db.pages)
+        ..where((t) => t.syncedWithCloud.equals(0));
       if (targetLocalNbId != null) {
         final localId = targetLocalNbId;
         query.where((t) => t.notebookId.equals(localId));
       }
       final unsyncedPages = await query.get();
-      
+
       if (unsyncedPages.isEmpty) {
         if (pushOnly) return false;
 
@@ -624,14 +1013,24 @@ class SyncService {
 
           for (var updData in updates) {
             try {
-              final Map<String, dynamic> updMap = updData is Map ? Map<String, dynamic>.from(updData) : {};
+              final Map<String, dynamic> updMap = updData is Map
+                  ? Map<String, dynamic>.from(updData)
+                  : {};
               if (updMap.isEmpty) continue;
-              final int sNbId = updMap['notebook_id'] is int ? updMap['notebook_id'] : int.parse(updMap['notebook_id'].toString());
-              final localId = await _canvasRepository.savePageFromMap(updMap, sNbId);
+              final int sNbId = updMap['notebook_id'] is int
+                  ? updMap['notebook_id']
+                  : int.parse(updMap['notebook_id'].toString());
+              final localId = await _canvasRepository.savePageFromMap(
+                updMap,
+                sNbId,
+              );
+              _prewarmBackgroundImage(
+                updMap,
+              ); // 🚀 OTIMIZAÇÃO: Caching em plano de fundo
               localIdsToPull.add(localId);
               serverDataForPull[localId] = updMap;
             } catch (e) {
-              debugPrint('🚨 [Sync-Push-Empty] Erro ao processar update do servidor: $e');
+              AppLog.sync('🚨 [Sync-Push-Empty] Erro ao processar update do servidor: $e');
             }
           }
 
@@ -648,7 +1047,7 @@ class SyncService {
         return false;
       }
 
-      debugPrint('🛫 [Sync-Push] Detectadas ${unsyncedPages.length} páginas pendentes: ${unsyncedPages.map((p) => 'p${p.pageNumber}(id:${p.id})').join(', ')}');
+      AppLog.sync('🛫 [Sync-Push] Detectadas ${unsyncedPages.length} páginas pendentes: ${unsyncedPages.map((p) => 'p${p.pageNumber}(id:${p.id})').join(', ')}');
       unsyncedPages.sort((a, b) => b.isDeleted.compareTo(a.isDeleted));
       bool allSuccess = true;
       bool serverHasMore = false;
@@ -662,20 +1061,21 @@ class SyncService {
 
       int currentBatchBytes = 0;
       List<Map<String, dynamic>> currentBatchPayload = [];
+      Map<String, int> sentPageTimestamps = {};
 
       Future<void> sendBatch(List<Map<String, dynamic>> batchPayload) async {
         if (batchPayload.isEmpty) return;
         try {
-          debugPrint('🛫 [Sync-Push-Batch] Enviando lote adaptativo de ${batchPayload.length} páginas (${(jsonEncode(batchPayload).length / 1024).toStringAsFixed(1)} KB)...');
+          AppLog.sync('🛫 [Sync-Push-Batch] Enviando lote adaptativo de ${batchPayload.length} páginas (${(jsonEncode(batchPayload).length / 1024).toStringAsFixed(1)} KB)...');
           var response = await _apiService.post('/sync/pages/push', {
             'pages': batchPayload,
             'last_synced_at': lastSynced, // 🚀 Delta bidirecional
-          });
-          
+          }, compress: true);
+
           if (response.statusCode == 200 || response.statusCode == 201) {
             final data = jsonDecode(response.body);
             if (data['has_more'] == true) serverHasMore = true;
-            
+
             // 1. Processar Confirmações (Resultados do PUSH)
             final List syncedPages = data['synced_pages'] ?? [];
             final List<int> localIdsToPull = [];
@@ -683,73 +1083,141 @@ class SyncService {
 
             for (var syncedPageData in syncedPages) {
               try {
-                final Map<String, dynamic> syncedPageMap = syncedPageData is Map 
-                    ? Map<String, dynamic>.from(syncedPageData) 
+                final Map<String, dynamic> syncedPageMap = syncedPageData is Map
+                    ? Map<String, dynamic>.from(syncedPageData)
                     : {};
-                
+
                 if (syncedPageMap.isEmpty) continue;
 
                 final String? cId = syncedPageMap['client_id'];
                 final String? status = syncedPageMap['status']?.toString();
-                final int? sNbId = syncedPageMap['notebook_id'] != null 
-                    ? int.tryParse(syncedPageMap['notebook_id'].toString()) 
+                final int? sNbId = syncedPageMap['notebook_id'] != null
+                    ? int.tryParse(syncedPageMap['notebook_id'].toString())
                     : null;
-                
+
                 // Procurar notebook local para garantir que existe antes de salvar (Fix FOREIGN KEY)
                 int? localNbId;
                 if (sNbId != null) {
-                  final nbRow = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
+                  final nbRow = await (_db.select(
+                    _db.notebooks,
+                  )..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
                   localNbId = nbRow?.id;
                 }
 
                 if (cId == null) continue;
-                
+                final int? sentTs = sentPageTimestamps[cId];
+
                 if (localNbId == null && sNbId != null) {
-                  debugPrint('⚠️ [Sync] Página ignorada: Caderno servidor $sNbId não encontrado localmente.');
+                  AppLog.sync('⚠️ [Sync] Página ignorada: Caderno servidor $sNbId não encontrado localmente.');
                   continue;
                 }
-                
+
                 // No logout (pushOnly), não precisamos de puxar dados ignorados ou deltas do servidor
                 if (pushOnly) {
-                   // Apenas marcamos como sincronizado localmente se o servidor confirmou
-                   final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                   if (localPage != null) {
-                      await _markPageItemsAsSynced(localPage.id);
-                      await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
-                      await _canvasRepository.purgeSyncedDeletedObjects(localPage.id);
-                   }
-                   continue;
+                  // Apenas marcamos como sincronizado localmente se o servidor confirmou
+                  final localPage = await (_db.select(
+                    _db.pages,
+                  )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                  if (localPage != null) {
+                    await _markPageItemsAsSynced(localPage.id, sentTs: sentTs);
+                    await (_db.update(_db.pages)..where(
+                          (t) => sentTs != null
+                              ? t.id.equals(localPage.id) &
+                                    t.updatedAt.isSmallerOrEqualValue(sentTs)
+                              : t.id.equals(localPage.id),
+                        ))
+                        .write(const PagesCompanion(syncedWithCloud: Value(1)));
+                    await _canvasRepository.purgeSyncedDeletedObjects(
+                      localPage.id,
+                    );
+                  }
+                  continue;
                 }
 
                 if (status == 'ignored_old' && sNbId != null) {
-                  debugPrint('ℹ️ [Sync] Página $cId ignorada pelo servidor (ignored_old). Puxando versão atual do servidor...');
-                  await pullSpecificPage(sNbId, syncedPageMap['page_number'] ?? 0, clientId: cId);
-                  final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                  AppLog.sync('');
+                  await pullSpecificPage(
+                    sNbId,
+                    syncedPageMap['page_number'] ?? 0,
+                    clientId: cId,
+                  );
+                  final localPage = await (_db.select(
+                    _db.pages,
+                  )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
                   if (localPage != null) {
-                    await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
-                  }
-                  continue;
-                }
-                
-                if (status == 'deleted') {
-                  final localPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                  if (localPage != null) {
-                    await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+                    await (_db.update(_db.pages)..where(
+                          (t) => sentTs != null
+                              ? t.id.equals(localPage.id) &
+                                    t.updatedAt.isSmallerOrEqualValue(sentTs)
+                              : t.id.equals(localPage.id),
+                        ))
+                        .write(const PagesCompanion(syncedWithCloud: Value(1)));
                   }
                   continue;
                 }
 
-                final int localId = await _canvasRepository.savePageFromMap(syncedPageMap, sNbId);
-                if (syncedPageMap['_sync_status'] == 'already_current') {
-                  await _markPageItemsAsSynced(localId);
+                if (status == 'deleted') {
+                  final localPage = await (_db.select(
+                    _db.pages,
+                  )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                  if (localPage != null) {
+                    await (_db.update(_db.pages)..where(
+                          (t) => sentTs != null
+                              ? t.id.equals(localPage.id) &
+                                    t.updatedAt.isSmallerOrEqualValue(sentTs)
+                              : t.id.equals(localPage.id),
+                        ))
+                        .write(const PagesCompanion(syncedWithCloud: Value(1)));
+                  }
+                  continue;
+                }
+
+                final existingPage = await (_db.select(
+                  _db.pages,
+                )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
+                int localId = existingPage?.id ?? 0;
+
+                if (existingPage != null &&
+                    existingPage.syncedWithCloud == 0 &&
+                    sentTs != null &&
+                    existingPage.updatedAt > sentTs) {
+                  // A página foi editada durante o upload. Preservamos o estado local.
+                  if (syncedPageMap['id'] != null) {
+                    await (_db.update(
+                      _db.pages,
+                    )..where((t) => t.id.equals(localId))).write(
+                      PagesCompanion(serverId: Value(syncedPageMap['id'])),
+                    );
+                  }
                 } else {
+                  localId = await _canvasRepository.savePageFromMap(
+                    syncedPageMap,
+                    sNbId,
+                  );
+                }
+                _prewarmBackgroundImage(
+                  syncedPageMap,
+                ); // 🚀 OTIMIZAÇÃO: Caching em plano de fundo
+
+                // Sempre marcamos como limpos os itens que acabámos de enviar com sucesso.
+                // Se algum item tiver sido rejeitado pelo servidor, será limpo aqui e apagado no pull.
+                await _markPageItemsAsSynced(localId, sentTs: sentTs);
+
+                if (syncedPageMap['_sync_status'] != 'already_current') {
                   localIdsToPull.add(localId);
                   serverDataForPull[localId] = syncedPageMap;
                 }
-                await (_db.update(_db.pages)..where((t) => t.id.equals(localId))).write(const PagesCompanion(syncedWithCloud: Value(1)));
+
+                await (_db.update(_db.pages)..where(
+                      (t) => sentTs != null
+                          ? t.id.equals(localId) &
+                                t.updatedAt.isSmallerOrEqualValue(sentTs)
+                          : t.id.equals(localId),
+                    ))
+                    .write(const PagesCompanion(syncedWithCloud: Value(1)));
                 await _canvasRepository.purgeSyncedDeletedObjects(localId);
               } catch (e) {
-                debugPrint('🚨 [Sync-Push-Batch] Erro ao processar confirmação de página: $e');
+                AppLog.sync('🚨 [Sync-Push-Batch] Erro ao processar confirmação de página: $e');
               }
             }
 
@@ -758,51 +1226,63 @@ class SyncService {
               final List updates = data['server_updates'] ?? [];
               for (var updData in updates) {
                 try {
-                  final Map<String, dynamic> updMap = updData is Map 
-                      ? Map<String, dynamic>.from(updData) 
+                  final Map<String, dynamic> updMap = updData is Map
+                      ? Map<String, dynamic>.from(updData)
                       : {};
                   if (updMap.isEmpty) continue;
 
-                  final int sNbId = updMap['notebook_id'] is int 
-                      ? updMap['notebook_id'] 
+                  final int sNbId = updMap['notebook_id'] is int
+                      ? updMap['notebook_id']
                       : int.parse(updMap['notebook_id'].toString());
-                  
-                  final localId = await _canvasRepository.savePageFromMap(updMap, sNbId);
+
+                  final localId = await _canvasRepository.savePageFromMap(
+                    updMap,
+                    sNbId,
+                  );
+                  _prewarmBackgroundImage(
+                    updMap,
+                  ); // 🚀 OTIMIZAÇÃO: Caching em plano de fundo
                   localIdsToPull.add(localId);
                   serverDataForPull[localId] = updMap;
                 } catch (e) {
-                  debugPrint('🚨 [Sync-Push-Batch] Erro ao processar update do servidor: $e');
+                  AppLog.sync('🚨 [Sync-Push-Batch] Erro ao processar update do servidor: $e');
                 }
               }
 
               if (localIdsToPull.isNotEmpty) {
                 await _pullCanvasDataBatch(localIdsToPull, serverDataForPull);
               }
-              
+
               final String? serverTime = _parseMetaTime(data['meta']);
               if (serverTime != null) {
-                 await prefs.setString('last_pages_sync', serverTime);
+                await prefs.setString('last_pages_sync', serverTime);
               }
             }
-            
-            debugPrint('✅ [Sync-Push-Batch] Lote processado. Mais dados no servidor: $serverHasMore');
+
+            AppLog.sync('✅ [Sync-Push-Batch] Lote processado. Mais dados no servidor: $serverHasMore');
           } else {
             allSuccess = false;
           }
         } catch (e) {
-          debugPrint('🚨 [Sync-Push-Batch] Erro no lote: $e');
+          AppLog.sync('🚨 [Sync-Push-Batch] Erro no lote: $e');
           allSuccess = false;
+          rethrow; // 🚀 Aborta o push em caso de falha de rede para não perder o lote
         }
       }
 
       for (var row in unsyncedPages) {
-        final notebook = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
+        final notebook = await (_db.select(
+          _db.notebooks,
+        )..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
         if (notebook == null || notebook.serverId == null) continue;
-        
+
         final String? cId = row.clientId;
         if (cId == null) continue;
-        
-        final fullPage = await _canvasRepository.getPageByClientId(cId, onlyUnsynced: true);
+
+        final fullPage = await _canvasRepository.getPageByClientId(
+          cId,
+          onlyUnsynced: true,
+        );
         if (fullPage == null) continue;
 
         final pageMap = await fullPage.toJsonAsync();
@@ -814,43 +1294,69 @@ class SyncService {
         String? bgPath = fullPage.backgroundPdfPath;
         if (bgPath != null && bgPath.isNotEmpty && !bgPath.startsWith('http')) {
           final localFile = io.File(bgPath);
+          bool bgSuccess = false;
           if (localFile.existsSync()) {
             try {
               final bytes = await localFile.readAsBytes();
               final String fileName = bgPath.split('/').last.split('\\').last;
-              final String? remoteUrl = await _canvasRepository.uploadImage(notebook.serverId!, fileName, bytes);
+              final String? remoteUrl = await _canvasRepository.uploadImage(
+                notebook.serverId!,
+                fileName,
+                bytes,
+              );
               if (remoteUrl != null && remoteUrl.isNotEmpty) {
                 pageMap['background_pdf_path'] = remoteUrl;
                 pageMap['background_image_path'] = remoteUrl;
-                
-                await (_db.update(_db.pages)..where((t) => t.clientId.equals(cId))).write(
-                  PagesCompanion(backgroundPdfPath: Value(remoteUrl))
-                );
-                debugPrint('☁️ [Sync-Push] Upload do fundo da página ${row.pageNumber} concluído: $remoteUrl');
+
+                await (_db.update(_db.pages)
+                      ..where((t) => t.clientId.equals(cId)))
+                    .write(PagesCompanion(backgroundPdfPath: Value(remoteUrl)));
+
+                if (!kIsWeb) {
+                  // 🚀 Multi-device sync: Injetar ficheiro local nativamente na cache em vez de re-download!
+                  try {
+                    DefaultCacheManager().putFile(
+                      remoteUrl,
+                      bytes,
+                      fileExtension: 'jpg',
+                    );
+                  } catch (_) {}
+                }
+
+                bgSuccess = true;
+                AppLog.sync('☁️ [Sync-Push] Upload do fundo da página ${row.pageNumber} concluído: $remoteUrl');
               }
             } catch (e) {
-              debugPrint('⚠️ [Sync-Push] Falha ao fazer upload do fundo local da página ${row.pageNumber}: $e');
+              AppLog.sync('⚠️ [Sync-Push] Falha ao fazer upload do fundo local da página ${row.pageNumber}: $e');
             }
+          }
+          if (!bgSuccess) {
+            // 🚀 Prevenir o envenenamento da base de dados cloud com caminhos físicos locais
+            pageMap.remove('background_pdf_path');
+            pageMap.remove('background_image_path');
           }
         }
 
         final int pageEstimatedBytes = jsonEncode(pageMap).length;
 
         // Se adicionar esta página ultrapassar o limite de bytes (~2.5MB) ou número máximo de páginas (10), envia o lote atual
-        if (currentBatchPayload.isNotEmpty && 
-            (currentBatchBytes + pageEstimatedBytes > maxBatchBytes || currentBatchPayload.length >= maxBatchPages)) {
+        if (currentBatchPayload.isNotEmpty &&
+            (currentBatchBytes + pageEstimatedBytes > maxBatchBytes ||
+                currentBatchPayload.length >= maxBatchPages)) {
           await sendBatch(currentBatchPayload);
           currentBatchPayload = [];
           currentBatchBytes = 0;
+          sentPageTimestamps.clear();
         }
 
         currentBatchPayload.add(pageMap);
         currentBatchBytes += pageEstimatedBytes;
+        sentPageTimestamps[cId] = fullPage.updatedAt;
 
         if (row.isDeleted == 1) {
-          debugPrint('🛫 [Sync-Push-Delete] Enviando folha apagada ${row.pageNumber} com conteúdos pendentes.');
+          AppLog.sync('🛫 [Sync-Push-Delete] Enviando folha apagada ${row.pageNumber} com conteúdos pendentes.');
         } else {
-          debugPrint('🛫 [Sync-Push-Delta] Preparando página ${row.pageNumber} (${(pageEstimatedBytes / 1024).toStringAsFixed(1)} KB, ${fullPage.strokes.length} traços).');
+          AppLog.sync('🛫 [Sync-Push-Delta] Preparando página ${row.pageNumber} (${(pageEstimatedBytes / 1024).toStringAsFixed(1)} KB, ${fullPage.strokes.length} traços).');
         }
       }
 
@@ -860,46 +1366,112 @@ class SyncService {
       }
 
       return serverHasMore;
-    } catch (e) { 
-      return false; 
+    } catch (e) {
+      return false;
     } finally {
       _activePushNotebookKeys.remove(pushKey);
     }
   }
 
-  Future<void> _markPageItemsAsSynced(int localPageId) async {
+  Future<void> _markPageItemsAsSynced(int localPageId, {int? sentTs}) async {
     // 🚀 OTIMIZAÇÃO: Atualizar a coluna de sincronismo em TODAS as tabelas de objetos do Canvas
     await _db.batch((batch) {
-      batch.update(_db.canvasStrokes, const CanvasStrokesCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasTextBlocks, const CanvasTextBlocksCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasImageBlocks, const CanvasImageBlocksCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasShapes, const CanvasShapesCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasAudioBlocks, const CanvasAudioBlocksCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasAnimations, const CanvasAnimationsCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasTables, const CanvasTablesCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasLinks, const CanvasLinksCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasAttachments, const CanvasAttachmentsCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
-      batch.update(_db.canvasExplanations, const CanvasExplanationsCompanion(syncedWithCloud: Value(1)), 
-        where: (t) => t.pageId.equals(localPageId));
+      batch.update(
+        _db.canvasStrokes,
+        const CanvasStrokesCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasTextBlocks,
+        const CanvasTextBlocksCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasImageBlocks,
+        const CanvasImageBlocksCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasShapes,
+        const CanvasShapesCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasAudioBlocks,
+        const CanvasAudioBlocksCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasAnimations,
+        const CanvasAnimationsCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasTables,
+        const CanvasTablesCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasLinks,
+        const CanvasLinksCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasAttachments,
+        const CanvasAttachmentsCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
+      batch.update(
+        _db.canvasExplanations,
+        const CanvasExplanationsCompanion(syncedWithCloud: Value(1)),
+        where: (t) => sentTs != null
+            ? t.pageId.equals(localPageId) &
+                  t.updatedAt.isSmallerOrEqualValue(sentTs)
+            : t.pageId.equals(localPageId),
+      );
     });
   }
 
-  Future<bool> pullPages({bool forceFull = false, int? onlyNotebookId, int? onlyNotebookServerId}) async {
+  Future<bool> pullPages({
+    bool forceFull = false,
+    int? onlyNotebookId,
+    int? onlyNotebookServerId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     int? targetServerNbId = onlyNotebookServerId ?? onlyNotebookId;
     if (targetServerNbId != null && onlyNotebookServerId == null) {
       final sId = targetServerNbId;
-      final nbByLocal = await (_db.select(_db.notebooks)..where((t) => t.id.equals(sId))).getSingleOrNull();
+      final nbByLocal = await (_db.select(
+        _db.notebooks,
+      )..where((t) => t.id.equals(sId))).getSingleOrNull();
       if (nbByLocal?.serverId != null) {
         targetServerNbId = nbByLocal!.serverId;
       }
@@ -907,28 +1479,36 @@ class SyncService {
 
     // 🚀 OTIMIZAÇÃO: Se for pull de um caderno específico, não usamos o timestamp global
     // para garantir que trazemos tudo o que falta para esse caderno.
-    final String? lastSynced = (targetServerNbId == null && !forceFull) ? _getBufferedLastSynced(prefs.getString('last_pages_sync')) : null;
-    
+    final String? lastSynced = (targetServerNbId == null && !forceFull)
+        ? _getBufferedLastSynced(prefs.getString('last_pages_sync'))
+        : null;
+
     try {
       String? baseUrl = '/sync/pages/pull';
       if (lastSynced != null) baseUrl += '?last_synced_at=$lastSynced';
-      if (targetServerNbId != null) baseUrl += (lastSynced != null ? '&' : '?') + 'notebook_id=$targetServerNbId';
-      
+      if (targetServerNbId != null)
+        baseUrl +=
+            (lastSynced != null ? '&' : '?') + 'notebook_id=$targetServerNbId';
+
       String? nextUrl = baseUrl;
       bool anyChanges = false;
       final Set<String> serverClientIds = {};
-      
+
       while (nextUrl != null) {
         final response = await _apiService.get(nextUrl);
         if (response.statusCode == 200) {
-          final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
-          final Map<String, dynamic> responseData = decoded is Map 
-              ? Map<String, dynamic>.from(decoded) 
+          final dynamic decoded = await compute<String, dynamic>(
+            (jsonStr) => jsonDecode(jsonStr),
+            response.body,
+          );
+          final Map<String, dynamic> responseData = decoded is Map
+              ? Map<String, dynamic>.from(decoded)
               : (decoded is List ? {'data': decoded} : {});
-          
-          final List serverPages = responseData['data'] ?? responseData['pages'] ?? [];
+
+          final List serverPages =
+              responseData['data'] ?? responseData['pages'] ?? [];
           final String? serverTime = _parseMetaTime(responseData['meta']);
-          
+
           // 🚀 SÓ ATUALIZAMOS O MARCADOR GLOBAL se for um pull completo (sem filtro de caderno)
           if (targetServerNbId == null && serverTime != null) {
             await prefs.setString('last_pages_sync', serverTime);
@@ -939,56 +1519,96 @@ class SyncService {
             final Map<int, Map<String, dynamic>> serverPageDataMap = {};
             for (var sPageData in serverPages) {
               try {
-                final Map<String, dynamic> sPage = sPageData is Map 
-                    ? Map<String, dynamic>.from(sPageData) 
+                final Map<String, dynamic> sPage = sPageData is Map
+                    ? Map<String, dynamic>.from(sPageData)
                     : {};
                 if (sPage.isEmpty) continue;
 
-                final int sNbId = sPage['notebook_id'] is int ? sPage['notebook_id'] : int.parse(sPage['notebook_id'].toString());
+                final int sNbId = sPage['notebook_id'] is int
+                    ? sPage['notebook_id']
+                    : int.parse(sPage['notebook_id'].toString());
                 final String? cId = sPage['client_id']?.toString();
                 if (cId != null) serverClientIds.add(cId);
-                
-                final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
+
+                final notebook = await (_db.select(
+                  _db.notebooks,
+                )..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
                 if (notebook == null) continue;
-                final existingPage = await (_db.select(_db.pages)..where((t) => t.clientId.equals(cId ?? ''))).getSingleOrNull();
-                final int serverTs = _parseSafeInt(sPage['updated_at_ms']) ?? _parseSafeInt(sPage['updated_at']) ?? 0;
-                
-                if (existingPage != null && existingPage.syncedWithCloud == 0 && existingPage.updatedAt >= serverTs) {
+                final existingPage =
+                    await (_db.select(_db.pages)
+                          ..where((t) => t.clientId.equals(cId ?? '')))
+                        .getSingleOrNull();
+                final int serverTs =
+                    _parseSafeInt(sPage['updated_at_ms']) ??
+                    _parseSafeInt(sPage['updated_at']) ??
+                    0;
+
+                if (existingPage != null &&
+                    existingPage.syncedWithCloud == 0 &&
+                    existingPage.updatedAt >= serverTs) {
                   localPageIdsForBatch.add(existingPage.id);
                   serverPageDataMap[existingPage.id] = sPage;
                   continue;
                 }
-                final localPageId = await _canvasRepository.savePageFromMap(sPage, sNbId);
+                final localPageId = await _canvasRepository.savePageFromMap(
+                  sPage,
+                  sNbId,
+                );
+                _prewarmBackgroundImage(
+                  sPage,
+                ); // 🚀 OTIMIZAÇÃO: Caching em plano de fundo
                 localPageIdsForBatch.add(localPageId);
                 serverPageDataMap[localPageId] = sPage;
               } catch (e) {
-                debugPrint('🚨 [Sync-Pull] Erro ao processar página do servidor: $e');
+                AppLog.sync('🚨 [Sync-Pull] Erro ao processar página do servidor:  $e');
               }
             }
-            if (localPageIdsForBatch.isNotEmpty) await _pullCanvasDataBatch(localPageIdsForBatch, serverPageDataMap);
+            if (localPageIdsForBatch.isNotEmpty)
+              await _pullCanvasDataBatch(
+                localPageIdsForBatch,
+                serverPageDataMap,
+              );
           }
           nextUrl = _extractNextUrl(responseData);
-        } else { 
-          throw Exception('Erro ${response.statusCode} no PULL Pages'); 
+        } else {
+          throw Exception('Erro ${response.statusCode} no PULL Pages');
         }
       }
       if (forceFull) {
-        final query = _db.select(_db.pages)..where((t) => t.syncedWithCloud.equals(1));
+        final query = _db.select(_db.pages)
+          ..where((t) => t.syncedWithCloud.equals(1));
         if (targetServerNbId != null) {
           final sId = targetServerNbId;
-          final nb = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(sId))).getSingleOrNull();
+          final nb = await (_db.select(
+            _db.notebooks,
+          )..where((t) => t.serverId.equals(sId))).getSingleOrNull();
           if (nb != null) query.where((t) => t.notebookId.equals(nb.id));
         }
         final localSyncedPages = await query.get();
-        for (var lp in localSyncedPages) { if (!serverClientIds.contains(lp.clientId)) await (_db.delete(_db.pages)..where((t) => t.id.equals(lp.id))).go(); }
+        for (var lp in localSyncedPages) {
+          if (!serverClientIds.contains(lp.clientId))
+            await (_db.delete(
+              _db.pages,
+            )..where((t) => t.id.equals(lp.id))).go();
+        }
       }
       return anyChanges;
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   }
 
-  Future<void> pullSpecificPage(int notebookServerId, int pageNumber, {String? clientId, bool isRetry = false}) async {
+  Future<void> pullSpecificPage(
+    int notebookServerId,
+    int pageNumber, {
+    String? clientId,
+    bool isRetry = false,
+  }) async {
     String url = '/sync/pages/pull?notebook_id=$notebookServerId';
-    if (clientId != null) url += '&client_id=$clientId'; else url += '&page_number=$pageNumber';
+    if (clientId != null)
+      url += '&client_id=$clientId';
+    else
+      url += '&page_number=$pageNumber';
 
     if (_activePullUrls.contains(url)) return;
     _activePullUrls.add(url);
@@ -996,34 +1616,50 @@ class SyncService {
     try {
       final response = await _apiService.get(url);
       if (response.statusCode == 200) {
-        final dynamic decoded = await compute<String, dynamic>((jsonStr) => jsonDecode(jsonStr), response.body);
-        final Map<String, dynamic> responseData = decoded is Map 
-            ? Map<String, dynamic>.from(decoded) 
+        final dynamic decoded = await compute<String, dynamic>(
+          (jsonStr) => jsonDecode(jsonStr),
+          response.body,
+        );
+        final Map<String, dynamic> responseData = decoded is Map
+            ? Map<String, dynamic>.from(decoded)
             : (decoded is List ? {'data': decoded} : {});
-        
-        final List serverPages = responseData['data'] ?? responseData['pages'] ?? [];
+
+        final List serverPages =
+            responseData['data'] ?? responseData['pages'] ?? [];
         if (serverPages.isNotEmpty) {
           final dynamic sPageData = serverPages.first;
-          final Map<String, dynamic> sPage = sPageData is Map 
-              ? Map<String, dynamic>.from(sPageData) 
+          final Map<String, dynamic> sPage = sPageData is Map
+              ? Map<String, dynamic>.from(sPageData)
               : {};
-          
+
           if (sPage.isEmpty) return;
 
-          final notebook = await (_db.select(_db.notebooks)..where((t) => t.serverId.equals(notebookServerId))).getSingleOrNull();
+          final notebook =
+              await (_db.select(_db.notebooks)
+                    ..where((t) => t.serverId.equals(notebookServerId)))
+                  .getSingleOrNull();
           if (notebook == null) return;
-          final localId = await _canvasRepository.savePageFromMap(sPage, notebookServerId);
+          final localId = await _canvasRepository.savePageFromMap(
+            sPage,
+            notebookServerId,
+          );
+          _prewarmBackgroundImage(
+            sPage,
+          ); // 🚀 OTIMIZAÇÃO: Caching em plano de fundo
           await _pullCanvasData(localId, sPage);
         }
       }
-    } catch (e) { 
-      debugPrint('🚨 [Sync] Erro pullSpecificPage: $e'); 
+    } catch (e) {
+      AppLog.sync('🚨 [Sync] Erro pullSpecificPage: $e');
     } finally {
       _activePullUrls.remove(url);
     }
   }
 
-  Future<void> _pullCanvasDataBatch(List<int> localPageIds, Map<int, Map<String, dynamic>> serverPageDataMap) async {
+  Future<void> _pullCanvasDataBatch(
+    List<int> localPageIds,
+    Map<int, Map<String, dynamic>> serverPageDataMap,
+  ) async {
     try {
       // 🚀 LIMPEZA: Filtrar IDs inválidos (0) que podem ter vindo de falhas no repositório
       final validPageIds = localPageIds.where((id) => id > 0).toList();
@@ -1034,7 +1670,7 @@ class SyncService {
         final data = serverPageDataMap[id];
         if (data != null) serverPagesList.add({...data, '_localPageId': id});
       }
-      
+
       final int currentTime = TimeService().nowMs();
       List<CanvasStrokesCompanion> strokes = [];
       List<CanvasTextBlocksCompanion> texts = [];
@@ -1050,7 +1686,10 @@ class SyncService {
       if (kIsWeb) {
         // ... (Mapeamento web simplificado omitido para brevidade, segue lógica similar ao Isolate)
       } else {
-        final List<dynamic> results = await compute(SyncIsolates.processCanvasDataBatch, {'serverPages': serverPagesList, 'currentTime': currentTime});
+        final List<dynamic> results = await compute(
+          SyncIsolates.processCanvasDataBatch,
+          {'serverPages': serverPagesList, 'currentTime': currentTime},
+        );
         strokes = results[0];
         texts = results[1];
         images = results[2];
@@ -1064,70 +1703,282 @@ class SyncService {
       }
 
       // 🚀 VERIFICAÇÃO DE EXISTÊNCIA
-      final existingPageRows = await (_db.select(_db.pages)..where((t) => t.id.isIn(validPageIds))).get();
+      final existingPageRows = await (_db.select(
+        _db.pages,
+      )..where((t) => t.id.isIn(validPageIds))).get();
       final Set<int> confirmedIds = existingPageRows.map((r) => r.id).toSet();
-      
-      final finalPageIds = validPageIds.where((id) => confirmedIds.contains(id)).toList();
+
+      final finalPageIds = validPageIds
+          .where((id) => confirmedIds.contains(id))
+          .toList();
       if (finalPageIds.isEmpty) return;
 
+      // 🚀 OCC: Obter IDs de objetos sujos locais para não serem substituídos pelo PULL
+      final dirtyStrokes =
+          await (_db.select(_db.canvasStrokes)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> ds = dirtyStrokes.map((e) => e.clientStrokeId).toSet();
+
+      final dirtyTexts =
+          await (_db.select(_db.canvasTextBlocks)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> dt = dirtyTexts.map((e) => e.clientTextId).toSet();
+
+      final dirtyImages =
+          await (_db.select(_db.canvasImageBlocks)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> di = dirtyImages.map((e) => e.clientImageId).toSet();
+
+      final dirtyShapes =
+          await (_db.select(_db.canvasShapes)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> dsh = dirtyShapes.map((e) => e.clientShapeId).toSet();
+
+      final dirtyAudios =
+          await (_db.select(_db.canvasAudioBlocks)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> da = dirtyAudios.map((e) => e.clientAudioId).toSet();
+
+      final dirtyAnims =
+          await (_db.select(_db.canvasAnimations)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> dan = dirtyAnims
+          .map((e) => e.clientAnimationId)
+          .toSet();
+
+      final dirtyTables =
+          await (_db.select(_db.canvasTables)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> dtb = dirtyTables.map((e) => e.clientTableId).toSet();
+
+      final dirtyLinks =
+          await (_db.select(_db.canvasLinks)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> dl = dirtyLinks.map((e) => e.clientLinkId).toSet();
+
+      final dirtyAttachs =
+          await (_db.select(_db.canvasAttachments)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> dat = dirtyAttachs
+          .map((e) => e.clientAttachmentId)
+          .toSet();
+
+      final dirtyExps =
+          await (_db.select(_db.canvasExplanations)..where(
+                (t) =>
+                    t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(0),
+              ))
+              .get();
+      final Set<String> de = dirtyExps
+          .map((e) => e.clientExplanationId)
+          .toSet();
+
       await _db.batch((batch) {
-        batch.deleteWhere(_db.canvasStrokes, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasTextBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasImageBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasShapes, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasAudioBlocks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasAnimations, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasTables, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasLinks, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasAttachments, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        batch.deleteWhere(_db.canvasExplanations, (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1));
-        
-        for (var s in strokes) { if (confirmedIds.contains(s.pageId.value)) batch.insert(_db.canvasStrokes, s, mode: InsertMode.insertOrReplace); }
-        for (var t in texts) { if (confirmedIds.contains(t.pageId.value)) batch.insert(_db.canvasTextBlocks, t, mode: InsertMode.insertOrReplace); }
-        for (var i in images) { if (confirmedIds.contains(i.pageId.value)) batch.insert(_db.canvasImageBlocks, i, mode: InsertMode.insertOrReplace); }
-        for (var s in shapes) { if (confirmedIds.contains(s.pageId.value)) batch.insert(_db.canvasShapes, s, mode: InsertMode.insertOrReplace); }
-        for (var a in audios) { if (confirmedIds.contains(a.pageId.value)) batch.insert(_db.canvasAudioBlocks, a, mode: InsertMode.insertOrReplace); }
-        for (var a in animations) { if (confirmedIds.contains(a.pageId.value)) batch.insert(_db.canvasAnimations, a, mode: InsertMode.insertOrReplace); }
-        for (var t in tables) { if (confirmedIds.contains(t.pageId.value)) batch.insert(_db.canvasTables, t, mode: InsertMode.insertOrReplace); }
-        for (var l in links) { if (confirmedIds.contains(l.pageId.value)) batch.insert(_db.canvasLinks, l, mode: InsertMode.insertOrReplace); }
-        for (var a in attachments) { if (confirmedIds.contains(a.pageId.value)) batch.insert(_db.canvasAttachments, a, mode: InsertMode.insertOrReplace); }
-        for (var e in explanations) { if (confirmedIds.contains(e.pageId.value)) batch.insert(_db.canvasExplanations, e, mode: InsertMode.insertOrReplace); }
+        batch.deleteWhere(
+          _db.canvasStrokes,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasTextBlocks,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasImageBlocks,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasShapes,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasAudioBlocks,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasAnimations,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasTables,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasLinks,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasAttachments,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+        batch.deleteWhere(
+          _db.canvasExplanations,
+          (t) => t.pageId.isIn(finalPageIds) & t.syncedWithCloud.equals(1),
+        );
+
+        for (var s in strokes) {
+          if (confirmedIds.contains(s.pageId.value) &&
+              !ds.contains(s.clientStrokeId.value))
+            batch.insert(
+              _db.canvasStrokes,
+              s,
+              mode: InsertMode.insertOrReplace,
+            );
+        }
+        for (var t in texts) {
+          if (confirmedIds.contains(t.pageId.value) &&
+              !dt.contains(t.clientTextId.value))
+            batch.insert(
+              _db.canvasTextBlocks,
+              t,
+              mode: InsertMode.insertOrReplace,
+            );
+        }
+        for (var i in images) {
+          if (confirmedIds.contains(i.pageId.value) &&
+              !di.contains(i.clientImageId.value))
+            batch.insert(
+              _db.canvasImageBlocks,
+              i,
+              mode: InsertMode.insertOrReplace,
+            );
+        }
+        for (var s in shapes) {
+          if (confirmedIds.contains(s.pageId.value) &&
+              !dsh.contains(s.clientShapeId.value))
+            batch.insert(_db.canvasShapes, s, mode: InsertMode.insertOrReplace);
+        }
+        for (var a in audios) {
+          if (confirmedIds.contains(a.pageId.value) &&
+              !da.contains(a.clientAudioId.value))
+            batch.insert(
+              _db.canvasAudioBlocks,
+              a,
+              mode: InsertMode.insertOrReplace,
+            );
+        }
+        for (var a in animations) {
+          if (confirmedIds.contains(a.pageId.value) &&
+              !dan.contains(a.clientAnimationId.value))
+            batch.insert(
+              _db.canvasAnimations,
+              a,
+              mode: InsertMode.insertOrReplace,
+            );
+        }
+        for (var t in tables) {
+          if (confirmedIds.contains(t.pageId.value) &&
+              !dtb.contains(t.clientTableId.value))
+            batch.insert(_db.canvasTables, t, mode: InsertMode.insertOrReplace);
+        }
+        for (var l in links) {
+          if (confirmedIds.contains(l.pageId.value) &&
+              !dl.contains(l.clientLinkId.value))
+            batch.insert(_db.canvasLinks, l, mode: InsertMode.insertOrReplace);
+        }
+        for (var a in attachments) {
+          if (confirmedIds.contains(a.pageId.value) &&
+              !dat.contains(a.clientAttachmentId.value))
+            batch.insert(
+              _db.canvasAttachments,
+              a,
+              mode: InsertMode.insertOrReplace,
+            );
+        }
+        for (var e in explanations) {
+          if (confirmedIds.contains(e.pageId.value) &&
+              !de.contains(e.clientExplanationId.value))
+            batch.insert(
+              _db.canvasExplanations,
+              e,
+              mode: InsertMode.insertOrReplace,
+            );
+        }
 
         for (var id in finalPageIds) {
-           batch.update(_db.pages, PagesCompanion(updatedAt: Value(TimeService().nowMs()), syncedWithCloud: const Value(1)), where: (t) => t.id.equals(id));
+          final int serverPageUpdatedAt =
+              serverPageDataMap[id]?['updated_at_ms'] ?? 0;
+          batch.update(
+            _db.pages,
+            PagesCompanion(
+              updatedAt: Value(TimeService().nowMs()),
+              syncedWithCloud: const Value(1),
+            ),
+            where: (t) =>
+                t.id.equals(id) &
+                t.updatedAt.isSmallerOrEqualValue(serverPageUpdatedAt),
+          );
         }
       });
       // 🚀 v10.88: Purge após pull massivo
       for (var id in finalPageIds) {
         await _canvasRepository.purgeSyncedDeletedObjects(id);
       }
-      debugPrint('✅ [Sync-Batch] Sincronizados ${strokes.length} elementos em ${finalPageIds.length} páginas.');
-    } catch (e) { 
-      debugPrint('🚨 [Sync-Batch] Falha crítica: $e'); 
+      AppLog.sync('');
+    } catch (e) {
+      AppLog.sync('');
     }
   }
 
-  Future<void> _pullCanvasData(int localPageId, Map<String, dynamic> sPage) async {
+  Future<void> _pullCanvasData(
+    int localPageId,
+    Map<String, dynamic> sPage,
+  ) async {
     await _pullCanvasDataBatch([localPageId], {localPageId: sPage});
   }
 
   String? _extractNextUrl(Map<String, dynamic> responseData) {
     final dynamic links = responseData['links'];
     if (links is Map) return links['next']?.toString();
-    if (links is List) for (var link in links) if (link is Map && link['label']?.toString().contains('Next') == true) return link['url']?.toString();
+    if (links is List)
+      for (var link in links)
+        if (link is Map && link['label']?.toString().contains('Next') == true)
+          return link['url']?.toString();
     return responseData['next_page_url']?.toString();
   }
 
   Future<bool> pushRecordings({bool pushOnly = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_recordings_sync'));
+    final String? lastSynced = _getBufferedLastSynced(
+      prefs.getString('last_recordings_sync'),
+    );
 
     try {
-      final unsynced = await (_db.select(_db.lessonRecordings)..where((t) => t.syncedWithCloud.equals(0))).get();
+      final unsynced = await (_db.select(
+        _db.lessonRecordings,
+      )..where((t) => t.syncedWithCloud.equals(0))).get();
       final List<Map<String, dynamic>> payload = [];
 
       for (var row in unsynced) {
-        final notebookRow = await (_db.select(_db.notebooks)..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
+        final notebookRow = await (_db.select(
+          _db.notebooks,
+        )..where((t) => t.id.equals(row.notebookId))).getSingleOrNull();
         if (notebookRow?.serverId == null) continue;
 
         String audioUrl = row.audioUrl;
@@ -1135,29 +1986,56 @@ class SyncService {
           final file = io.File(audioUrl);
           if (await file.exists()) {
             final bytes = await file.readAsBytes();
-            final remoteUrl = await _canvasRepository.uploadLessonAudio(notebookRow!.serverId!, 'lesson_${row.clientId}.m4a', bytes, title: row.title, duration: row.durationSeconds, clientId: row.clientId);
-            if (remoteUrl != null) audioUrl = remoteUrl; else continue;
+            final remoteUrl = await _canvasRepository.uploadLessonAudio(
+              notebookRow!.serverId!,
+              'lesson_${row.clientId}.m4a',
+              bytes,
+              title: row.title,
+              duration: row.durationSeconds,
+              clientId: row.clientId,
+            );
+            if (remoteUrl != null)
+              audioUrl = remoteUrl;
+            else
+              continue;
           }
         }
-        payload.add({'notebook_id': notebookRow!.serverId, 'client_id': row.clientId, 'title': row.title, 'audio_url': audioUrl, 'duration_seconds': row.durationSeconds, 'updated_at': row.updatedAt});
+        payload.add({
+          'notebook_id': notebookRow!.serverId,
+          'client_id': row.clientId,
+          'title': row.title,
+          'audio_url': audioUrl,
+          'duration_seconds': row.durationSeconds,
+          'updated_at': row.updatedAt,
+        });
       }
 
       final response = await _apiService.post('/sync/recordings/push', {
         'recordings': payload,
         'last_synced_at': lastSynced,
-      });
+      }, compress: true);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        
+
         // 1. Confirmações
         for (var item in data['synced_recordings'] ?? []) {
           final String clientUuid = item['client_id'].toString();
           final int sId = item['id'] ?? item['server_id'];
-          final int serverTime = _parseSafeInt(item['updated_at_ms']) ?? _parseSafeInt(item['updated_at']) ?? TimeService().nowMs();
-          
-          await (_db.update(_db.lessonRecordings)..where((t) => t.clientId.equals(clientUuid))).write(
-            LessonRecordingsCompanion(serverId: Value(sId), audioUrl: Value(item['audio_url']), syncedWithCloud: const Value(1), updatedAt: Value(serverTime))
+          final int serverTime =
+              _parseSafeInt(item['updated_at_ms']) ??
+              _parseSafeInt(item['updated_at']) ??
+              TimeService().nowMs();
+
+          await (_db.update(
+            _db.lessonRecordings,
+          )..where((t) => t.clientId.equals(clientUuid))).write(
+            LessonRecordingsCompanion(
+              serverId: Value(sId),
+              audioUrl: Value(item['audio_url']),
+              syncedWithCloud: const Value(1),
+              updatedAt: Value(serverTime),
+            ),
           );
         }
 
@@ -1165,43 +2043,50 @@ class SyncService {
         if (!pushOnly) {
           final List updates = data['server_updates'] ?? [];
           if (updates.isNotEmpty) {
-             await _applyRecordingUpdates(updates);
+            await _applyRecordingUpdates(updates);
           }
 
           if (data['meta'] != null && data['meta']['server_time'] != null) {
-             await prefs.setString('last_recordings_sync', data['meta']['server_time']);
+            await prefs.setString(
+              'last_recordings_sync',
+              data['meta']['server_time'],
+            );
           }
         }
         return data['has_more'] == true;
       }
       return false;
     } catch (e) {
-      debugPrint('🚨 [Sync-Recordings] Erro: $e');
+      AppLog.sync('🚨 [Sync-Recordings] Erro: $e');
       return false;
     }
   }
 
   Future<void> _applyRecordingUpdates(List updates) async {
     final allNotebooks = await _db.select(_db.notebooks).get();
-    final Map<int, int> serverToLocalNotebookId = {for (var n in allNotebooks) if (n.serverId != null) n.serverId!: n.id};
+    final Map<int, int> serverToLocalNotebookId = {
+      for (var n in allNotebooks)
+        if (n.serverId != null) n.serverId!: n.id,
+    };
 
     await _db.batch((batch) {
       for (var rec in updates) {
         final int? localNbId = serverToLocalNotebookId[rec['notebook_id']];
         if (localNbId == null) continue;
-        
-        batch.insert(_db.lessonRecordings, 
+
+        batch.insert(
+          _db.lessonRecordings,
           LessonRecordingsCompanion.insert(
-            serverId: Value(rec['id']), 
-            clientId: Value(rec['client_id'] ?? const Uuid().v4()), 
-            notebookId: localNbId, 
-            title: rec['title'] ?? 'Sem título', 
-            audioUrl: rec['audio_url'] ?? '', 
-            durationSeconds: Value(rec['duration_seconds'] ?? 0), 
-            syncedWithCloud: const Value(1), 
-            updatedAt: Value(_parseSafeInt(rec['updated_at_ms']) ?? 0)
-          ), 
-          mode: InsertMode.insertOrReplace
+            serverId: Value(rec['id']),
+            clientId: Value(rec['client_id'] ?? const Uuid().v4()),
+            notebookId: localNbId,
+            title: rec['title'] ?? 'Sem título',
+            audioUrl: rec['audio_url'] ?? '',
+            durationSeconds: Value(rec['duration_seconds'] ?? 0),
+            syncedWithCloud: const Value(1),
+            updatedAt: Value(_parseSafeInt(rec['updated_at_ms']) ?? 0),
+          ),
+          mode: InsertMode.insertOrReplace,
         );
       }
     });
@@ -1210,57 +2095,97 @@ class SyncService {
   Future<void> pullRecordings() async {
     // PULL explícito mantido para gravações pois são ficheiros grandes e fluxo diferente
     final prefs = await SharedPreferences.getInstance();
-    final String? lastSynced = _getBufferedLastSynced(prefs.getString('last_recordings_sync'));
+    final String? lastSynced = _getBufferedLastSynced(
+      prefs.getString('last_recordings_sync'),
+    );
     try {
-      final url = lastSynced != null ? '/sync/recordings/pull?last_synced_at=$lastSynced' : '/sync/recordings/pull';
+      final url = lastSynced != null
+          ? '/sync/recordings/pull?last_synced_at=$lastSynced'
+          : '/sync/recordings/pull';
       final response = await _apiService.get(url);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List serverRecordings = data['data'] ?? [];
         final allNotebooks = await _db.select(_db.notebooks).get();
-        final Map<int, int> serverToLocalNotebookId = {for (var n in allNotebooks) if (n.serverId != null) n.serverId!: n.id};
-        if (data['meta'] != null && data['meta']['server_time'] != null) await prefs.setString('last_recordings_sync', data['meta']['server_time']);
+        final Map<int, int> serverToLocalNotebookId = {
+          for (var n in allNotebooks)
+            if (n.serverId != null) n.serverId!: n.id,
+        };
+        if (data['meta'] != null && data['meta']['server_time'] != null)
+          await prefs.setString(
+            'last_recordings_sync',
+            data['meta']['server_time'],
+          );
         await _db.batch((batch) {
           for (var rec in serverRecordings) {
             final int? localNbId = serverToLocalNotebookId[rec['notebook_id']];
             if (localNbId == null) continue;
-            batch.insert(_db.lessonRecordings, LessonRecordingsCompanion.insert(serverId: Value(rec['id']), clientId: Value(rec['client_id'] ?? Uuid().v4()), notebookId: localNbId, title: rec['title'] ?? 'Sem título', audioUrl: rec['audio_url'] ?? '', durationSeconds: Value(rec['duration_seconds'] ?? 0), syncedWithCloud: const Value(1), updatedAt: Value(rec['updated_at_ms'] ?? 0)), mode: InsertMode.insertOrReplace);
+            batch.insert(
+              _db.lessonRecordings,
+              LessonRecordingsCompanion.insert(
+                serverId: Value(rec['id']),
+                clientId: Value(rec['client_id'] ?? Uuid().v4()),
+                notebookId: localNbId,
+                title: rec['title'] ?? 'Sem título',
+                audioUrl: rec['audio_url'] ?? '',
+                durationSeconds: Value(rec['duration_seconds'] ?? 0),
+                syncedWithCloud: const Value(1),
+                updatedAt: Value(rec['updated_at_ms'] ?? 0),
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
           }
         });
       }
     } catch (e) {}
   }
 
-  Future<bool> fastPushPage(pages_model.LocalPage page, int notebookServerId, String myUserId) async {
+  Future<bool> fastPushPage(
+    pages_model.LocalPage page,
+    int notebookServerId,
+    String myUserId,
+  ) async {
     try {
       final Map<String, dynamic> payload = await page.toJsonAsync();
       payload['notebook_id'] = notebookServerId;
       payload['sender_id'] = myUserId;
       if (page.serverId == null) payload['is_new_page'] = true;
-      final response = await _apiService.post('/sync/realtime/update', {'page': payload});
+      final response = await _apiService.post('/sync/realtime/update', {
+        'page': payload,
+      }, compress: true);
       return response.statusCode == 200;
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   }
 
   // =========================================================================
   // 6. HISTÓRICO DE COLABORAÇÃO (REDIS)
   // =========================================================================
-  
+
   /// 🚀 Envia uma ação validada para o backend guardar no Redis
-  Future<void> recordActionToCloud(int notebookServerId, Map<String, dynamic> actionData) async {
+  Future<void> recordActionToCloud(
+    int notebookServerId,
+    Map<String, dynamic> actionData,
+  ) async {
     try {
       await _apiService.post('/notebooks/$notebookServerId/session/action', {
-        'action': actionData
+        'action': actionData,
       });
     } catch (e) {
-      debugPrint('⚠️ [Sync] Falha ao guardar ação no Redis: $e');
+      AppLog.sync('⚠️ [Sync] Falha ao guardar ação no Redis: $e');
     }
   }
 
   /// 🚀 Recupera ações do Redis que falharam/foram perdidas durante a hibernação
-  Future<List<Map<String, dynamic>>> pullSessionHistory(int notebookServerId, int sinceTimestamp) async {
+  Future<List<Map<String, dynamic>>> pullSessionHistory(
+    int notebookServerId,
+    int sinceTimestamp,
+  ) async {
     try {
-      final response = await _apiService.get('/notebooks/$notebookServerId/session/history?since=$sinceTimestamp');
+      final response = await _apiService.get(
+        '/notebooks/$notebookServerId/session/history?since=$sinceTimestamp',
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == 'ok' && data['actions'] != null) {
@@ -1268,7 +2193,7 @@ class SyncService {
         }
       }
     } catch (e) {
-      debugPrint('🚨 [Sync] Erro a puxar histórico do Redis: $e');
+      AppLog.sync('🚨 [Sync] Erro a puxar histórico do Redis: $e');
     }
     return [];
   }

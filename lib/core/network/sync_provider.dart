@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/controllers/auth_controller.dart';
 import '../../features/auth/controllers/auth_state.dart';
 import '../../features/canvas/repositories/canvas_repository.dart';
+import '../config/app_config.dart';
 import 'api_provider.dart';
 import 'realtime_service.dart';
 import 'sync_service.dart';
@@ -34,7 +35,7 @@ class SyncNotifier extends StateNotifier<SyncState> with WidgetsBindingObserver 
       final isNowAuthenticated = next.isAuthenticated;
 
       if (!wasAuthenticated && isNowAuthenticated) {
-        debugPrint('🔐 [Sync] Login detetado. Reiniciando rede e forçando sincronização...');
+        AppLog.sync('🔐 [Sync] Login detetado. Reiniciando rede e forçando sincronização...');
         
         // A. Forçar reinício do WebSocket (Realtime)
         ref.read(realtimeServiceProvider).initConnection();
@@ -80,7 +81,7 @@ class SyncNotifier extends StateNotifier<SyncState> with WidgetsBindingObserver 
         _connectivityDebouncer = Timer(const Duration(seconds: 2), () async {
           final auth = ref.read(authProvider);
           if (auth.isAuthenticated) {
-            debugPrint('🌐 [Sync] Ligação estável detectada. Disparando sincronização...');
+            AppLog.sync('🌐 [Sync] Ligação estável detectada. Disparando sincronização...');
             await performSync();
           }
         });
@@ -92,14 +93,14 @@ class SyncNotifier extends StateNotifier<SyncState> with WidgetsBindingObserver 
     if (state == SyncState.syncing) return;
 
     state = SyncState.syncing;
-    debugPrint('🔄 [SyncProvider] A iniciar ciclo de sincronização... (Forced: $forced, Meta: $metadataOnly, Push: $pushOnly)');
+    AppLog.sync('🔄 [SyncProvider] A iniciar ciclo de sincronização... (Forced: $forced, Meta: $metadataOnly, Push: $pushOnly)');
     
     try {
       await _syncService.syncAll(forced: forced, metadataOnly: metadataOnly, pushOnly: pushOnly);
       state = SyncState.idle;
-      debugPrint('✅ [SyncProvider] Ciclo concluído.');
+      AppLog.sync('✅ [SyncProvider] Ciclo concluído.');
     } catch (e) {
-      debugPrint('❌ [SyncProvider] Erro no ciclo: $e');
+      AppLog.sync('❌ [SyncProvider] Erro no ciclo: $e');
       if (mounted) state = SyncState.error;
       // Volta para idle após um tempo para permitir novas tentativas
       Future.delayed(const Duration(seconds: 10), () {
@@ -117,10 +118,10 @@ class SyncNotifier extends StateNotifier<SyncState> with WidgetsBindingObserver 
       if (auth.isAuthenticated) {
         // 🚀 Se estiver em sala de colaboração ativa, o CollaborationRoomService já cuida da sincronização via WebSocket
         if (SyncService.isCollaborationActive) {
-          debugPrint('📱 [Sync] App retoma primeiro plano em sala ativa. Sincronização gerida pelo Realtime/Collab.');
+          AppLog.sync('📱 [Sync] App retoma primeiro plano em sala ativa. Sincronização gerida pelo Realtime/Collab.');
           return;
         }
-        debugPrint('📱 [Sync] App retoma primeiro plano (resumed). Agendando sincronização não-bloqueante...');
+        AppLog.sync('📱 [Sync] App retoma primeiro plano (resumed). Agendando sincronização não-bloqueante...');
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (mounted) performSync();
         });

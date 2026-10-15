@@ -9,6 +9,7 @@ class NotebookConfiguration {
   final HeaderFooterConfig footer;
   final NumberingConfig numbering;
   final String defaultPageTemplate;
+  final bool protectOwnerContent;
 
   NotebookConfiguration({
     required this.page,
@@ -18,6 +19,7 @@ class NotebookConfiguration {
     required this.footer,
     required this.numbering,
     this.defaultPageTemplate = 'normal',
+    this.protectOwnerContent = false,
   });
 
   NotebookConfiguration copyWith({
@@ -28,6 +30,7 @@ class NotebookConfiguration {
     HeaderFooterConfig? footer,
     NumberingConfig? numbering,
     String? defaultPageTemplate,
+    bool? protectOwnerContent,
   }) {
     return NotebookConfiguration(
       page: page ?? this.page,
@@ -37,6 +40,7 @@ class NotebookConfiguration {
       footer: footer ?? this.footer,
       numbering: numbering ?? this.numbering,
       defaultPageTemplate: defaultPageTemplate ?? this.defaultPageTemplate,
+      protectOwnerContent: protectOwnerContent ?? this.protectOwnerContent,
     );
   }
 
@@ -49,6 +53,7 @@ class NotebookConfiguration {
       footer: HeaderFooterConfig.fromJson(json['footer'] ?? {}),
       numbering: NumberingConfig.fromJson(json['numbering'] ?? {}),
       defaultPageTemplate: json['default_page_template'] ?? 'normal',
+      protectOwnerContent: json['protect_owner_content'] == true || json['protect_owner_content'] == 1,
     );
   }
 
@@ -60,6 +65,7 @@ class NotebookConfiguration {
     'footer': footer.toJson(),
     'numbering': numbering.toJson(),
     'default_page_template': defaultPageTemplate,
+    'protect_owner_content': protectOwnerContent,
   };
 
   String toJsonString() => jsonEncode(toJson());
@@ -71,6 +77,7 @@ class NotebookConfiguration {
     header: HeaderFooterConfig(enabled: false),
     footer: HeaderFooterConfig(enabled: false),
     numbering: NumberingConfig(enabled: false),
+    protectOwnerContent: false,
   );
 }
 

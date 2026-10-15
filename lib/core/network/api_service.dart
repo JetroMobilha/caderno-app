@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:caderno_digital_app/core/network/api_config.dart';
 import 'package:caderno_digital_app/core/network/time_service.dart'; // 🚀 Novo
+import 'package:caderno_digital_app/core/config/app_config.dart';
+import 'package:caderno_digital_app/core/network/gzip_stub.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -58,6 +60,7 @@ class ApiService {
     final Map<String, String> headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Accept-Encoding': 'gzip', // 🚀 Indica ao servidor que a app aceita JSON comprimido
     };
 
     if (requireAuth) {
@@ -72,6 +75,11 @@ class ApiService {
   // =========================================================================
   // 📡 MÉTODOS HTTP BLINDADOS
   // =========================================================================
+  String _truncateLog(String text, {int maxLength = 500}) {
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength)}... [TRUNCADO, total: ${text.length} chars]';
+  }
+
   void _processTimeMetadata(http.Response response) {
      try {
        final Map<String, dynamic> data = jsonDecode(response.body);
@@ -83,10 +91,9 @@ class ApiService {
      } catch (_) {}
   }
 
-  Future<http.Response> post(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
+  Future<http.Response> post(String endpoint, Map<String, dynamic> body, {bool requireAuth = true, bool compress = false}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
-    debugPrint('🛫 POST $url');
 
     // 🚀 OTIMIZAÇÃO: Encode pesado em Isolate para payloads grandes
     final String bodyStr = await compute<Map<String, dynamic>, String>(
@@ -94,12 +101,28 @@ class ApiService {
       body,
     );
 
+    AppLog.api('🛫 POST $url | Body: ${_truncateLog(bodyStr)}');
+
+    dynamic requestBody = bodyStr;
+
+    if (compress && !kIsWeb) {
+      final List<int>? compressedBytes = await compute<String, List<int>?>(
+        (str) => compressGzipBytes(str),
+        bodyStr,
+      );
+      if (compressedBytes != null) {
+        headers['Content-Encoding'] = 'gzip';
+        requestBody = compressedBytes;
+        AppLog.api('🗜️ [GZIP] Payload comprimido. Original: ${utf8.encode(bodyStr).length} bytes, Comprimido: ${compressedBytes.length} bytes.');
+      }
+    }
+
     final response = await http
-        .post(url, headers: headers, body: bodyStr)
+        .post(url, headers: headers, body: requestBody)
         .timeout(defaultTimeout);
 
     _processTimeMetadata(response); // 🕒 Calibrar relógio
-    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
+    AppLog.api('🛬 RESPOSTA [${response.statusCode}]: ${_truncateLog(response.body)}');
     return response;
   }
 
@@ -108,14 +131,14 @@ class ApiService {
     final url = isAbsolute ? Uri.parse(endpoint) : Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
 
-    debugPrint('🛫 GET $url');
+    AppLog.api('🛫 GET $url');
 
     final response = await http
         .get(url, headers: headers)
         .timeout(defaultTimeout);
 
     _processTimeMetadata(response); // 🕒 Calibrar relógio
-    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
+    AppLog.api('🛬 RESPOSTA [${response.statusCode}]: ${_truncateLog(response.body)}');
     return response;
   }
 
@@ -127,20 +150,20 @@ class ApiService {
   Future<http.Response> put(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
-
-    debugPrint('🔄 PUT $url');
     
     final String bodyStr = await compute<Map<String, dynamic>, String>(
       (map) => jsonEncode(map),
       body,
     );
 
+    AppLog.api('🔄 PUT $url | Body: ${_truncateLog(bodyStr)}');
+
     final response = await http
         .put(url, headers: headers, body: bodyStr)
         .timeout(defaultTimeout);
 
     _processTimeMetadata(response);
-    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
+    AppLog.api('🛬 RESPOSTA [${response.statusCode}]: ${_truncateLog(response.body)}');
     return response;
   }
 
@@ -148,13 +171,14 @@ class ApiService {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
 
-    debugPrint('🗑️ DELETE $url');
+    AppLog.api('🗑️ DELETE $url');
 
     final response = await http
         .delete(url, headers: headers)
         .timeout(defaultTimeout);
 
     _processTimeMetadata(response);
+    AppLog.api('🛬 RESPOSTA [${response.statusCode}]: ${_truncateLog(response.body)}');
     return response;
   }
 
@@ -162,12 +186,13 @@ class ApiService {
   Future<http.Response> deleteWithBody(String endpoint, Map<String, dynamic> body, {bool requireAuth = true}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final headers = await _getHeaders(requireAuth: requireAuth);
-    debugPrint('🗑️ DELETE (With Body) $url');
 
     final String bodyStr = await compute<Map<String, dynamic>, String>(
       (map) => jsonEncode(map),
       body,
     );
+
+    AppLog.api('🗑️ DELETE (With Body) $url | Body: ${_truncateLog(bodyStr)}');
 
     final request = http.Request('DELETE', url);
     request.headers.addAll(headers);
@@ -177,7 +202,7 @@ class ApiService {
     final response = await http.Response.fromStream(streamedResponse);
     
     _processTimeMetadata(response);
-    debugPrint('🛬 RESPOSTA [${response.statusCode}]: ${response.body}');
+    AppLog.api('🛬 RESPOSTA [${response.statusCode}]: ${_truncateLog(response.body)}');
     return response;
   }
 
@@ -188,12 +213,12 @@ class ApiService {
     try {
       await post('/logout', {}, requireAuth: true);
     } catch (e) {
-      debugPrint('🚨 Erro a avisar o servidor do logout: $e');
+      AppLog.error('API', 'Erro a avisar o servidor do logout', e);
     } finally {
       await deleteToken();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('user_data');
-      debugPrint('🛑 Tokens locais eliminados com sucesso!');
+      AppLog.api('🛑 Tokens locais eliminados com sucesso!');
     }
   }
 
@@ -259,7 +284,7 @@ class ApiService {
       }
     }
 
-    debugPrint('📢 [API] 5. A disparar para o servidor Laravel...');
+    AppLog.api('📢 A enviar dados atualizado do usuario para o servidor');
     final streamedResponse = await request.send();
     return await http.Response.fromStream(streamedResponse);
   }

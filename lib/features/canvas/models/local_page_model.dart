@@ -257,7 +257,9 @@ class LocalPage {
       sectionColor: clearSection ? null : (sectionColor ?? this.sectionColor),
       footer: footer ?? this.footer,
       extractedText: extractedText ?? this.extractedText,
-      backgroundPdfPath: backgroundPdfPath ?? this.backgroundPdfPath,
+      backgroundPdfPath: backgroundPdfPath != null 
+          ? (backgroundPdfPath.isEmpty ? null : backgroundPdfPath) 
+          : this.backgroundPdfPath,
       objects: objects ?? this.objects,
       layers: layers ?? this.layers,
       redoHistory: redoHistory ?? this.redoHistory,

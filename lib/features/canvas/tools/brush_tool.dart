@@ -80,7 +80,6 @@ class BrushTool extends CanvasTool {
       final double dist = (localPos - points.last).distance;
 
       if (dist > _maxAllowedJump) {
-        debugPrint('⚠️ [BrushTool] Salto anómalo detetado ($dist px). Traço corrompido.');
         _isCorrupted = true;
         return;
       }
@@ -134,7 +133,6 @@ class BrushTool extends CanvasTool {
     
     void emit(List<Offset> pts) {
       _lastEmitTime = DateTime.now().millisecondsSinceEpoch;
-      debugPrint('📡 [Rede - Live Stroke] A enviar ${pts.length} pontos para o Reverb...');
       ref.read(canvasDocumentProvider.notifier).broadcastLiveStroke(
         pageClientId: page.clientId, pageNumber: page.pageNumber, strokeId: id,
         points: pts, color: toolState.selectedColorHex, thickness: toolState.selectedThickness,

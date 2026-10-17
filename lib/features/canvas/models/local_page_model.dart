@@ -227,6 +227,7 @@ class LocalPage {
     String? footer,
     String? extractedText,
     String? backgroundPdfPath,
+    bool clearBackgroundImage = false,
     List<PageObject>? objects,
     List<LayerDefinition>? layers,
     List<Stroke>? redoHistory,
@@ -257,9 +258,11 @@ class LocalPage {
       sectionColor: clearSection ? null : (sectionColor ?? this.sectionColor),
       footer: footer ?? this.footer,
       extractedText: extractedText ?? this.extractedText,
-      backgroundPdfPath: backgroundPdfPath != null 
-          ? (backgroundPdfPath.isEmpty ? null : backgroundPdfPath) 
-          : this.backgroundPdfPath,
+      backgroundPdfPath: clearBackgroundImage
+          ? null
+          : (backgroundPdfPath != null 
+              ? (backgroundPdfPath.isEmpty ? null : backgroundPdfPath) 
+              : this.backgroundPdfPath),
       objects: objects ?? this.objects,
       layers: layers ?? this.layers,
       redoHistory: redoHistory ?? this.redoHistory,
@@ -297,6 +300,7 @@ class LocalPage {
     components.add('inf:${isInfinite ? 1 : 0}');
     components.add('lt:${lineType ?? "blank"}');
     if (sectionTitle != null) components.add('sc:$sectionTitle:$sectionColor');
+    components.add('bg:${backgroundPdfPath ?? ""}');
     return components.join('|');
   }
 
@@ -398,9 +402,13 @@ class LocalPage {
       sectionColor: LocalPage.parseSectionColor(json['header_data']),
       footer: LocalPage.parseMeta(json['footer_data']),
       extractedText: json['extracted_text']?.toString(),
-      backgroundPdfPath: json['background_pdf_path']?.toString() ??
-          json['background_image_path']?.toString() ??
-          json['backgroundPdfPath']?.toString(),
+      backgroundPdfPath: (json['background_pdf_path'] != null && json['background_pdf_path'].toString().isNotEmpty)
+          ? json['background_pdf_path'].toString()
+          : ((json['background_image_path'] != null && json['background_image_path'].toString().isNotEmpty)
+              ? json['background_image_path'].toString()
+              : ((json['backgroundPdfPath'] != null && json['backgroundPdfPath'].toString().isNotEmpty)
+                  ? json['backgroundPdfPath'].toString()
+                  : null)),
       objects: objs,
       layers: layers,
       backgroundConfig: json['background_config'] != null ? BackgroundConfig.fromJson(json['background_config']) : null,

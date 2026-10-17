@@ -29,6 +29,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
     final uiSettings = ref.watch(subjectsUiProvider);
     final showArchived = uiSettings.showArchivedInNotebooks;
     final activeSubject = ref.watch(activeSubjectProvider);
+    final bool isSharedTab = activeSubject?.id == -1;
     final notebooksState = ref.watch(notebooksProvider);
     final dynamicColor = Theme.of(context).colorScheme.primary;
 
@@ -52,22 +53,24 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
           style: GoogleFonts.lora(fontWeight: FontWeight.bold),
         ),
         actions: [
-          if (activeSubject != null && !showArchived)
+          if (activeSubject != null && !showArchived && !isSharedTab)
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_rounded),
               onPressed: () => _handleImportPdf(context, activeSubject),
               tooltip: 'Importar PDF',
             ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => TrashScreen(initialTabIndex: 1))),
-            tooltip: 'Ver Lixeira',
-          ),
-          IconButton(
-            icon: Icon(showArchived ? Icons.inventory_2_rounded : Icons.archive_outlined),
-            onPressed: () => ref.read(subjectsUiProvider.notifier).toggleNotebooksArchive(),
-            tooltip: showArchived ? 'Ver Ativos' : 'Ver Arquivados',
-          ),
+          if (!isSharedTab)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => TrashScreen(initialTabIndex: 1))),
+              tooltip: 'Ver Lixeira',
+            ),
+          if (!isSharedTab)
+            IconButton(
+              icon: Icon(showArchived ? Icons.inventory_2_rounded : Icons.archive_outlined),
+              onPressed: () => ref.read(subjectsUiProvider.notifier).toggleNotebooksArchive(),
+              tooltip: showArchived ? 'Ver Ativos' : 'Ver Arquivados',
+            ),
           if (ref.watch(syncProvider) == SyncState.syncing)
             const Padding(
               padding: EdgeInsets.only(right: 16.0),
@@ -80,7 +83,11 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
           : activeSubject == null
               ? NoSubjectState(themeColor: dynamicColor)
               : displayNotebooks.isEmpty
-                  ? EmptyNotebooksState(themeColor: dynamicColor, subjectName: showArchived ? 'arquivados' : activeSubject.name)
+                  ? EmptyNotebooksState(
+                      themeColor: dynamicColor,
+                      subjectName: showArchived ? 'arquivados' : activeSubject.name,
+                      isSharedTab: isSharedTab,
+                    )
                   : CustomScrollView(
                       slivers: [
                         if (favorites.isNotEmpty && !showArchived) ...[
@@ -94,7 +101,7 @@ class _NotebooksListScreenState extends ConsumerState<NotebooksListScreen> {
                         ],
                       ],
                     ),
-      floatingActionButton: activeSubject == null || showArchived
+      floatingActionButton: activeSubject == null || showArchived || isSharedTab
           ? null
           : Column(
               mainAxisSize: MainAxisSize.min,

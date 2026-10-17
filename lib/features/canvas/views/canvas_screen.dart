@@ -24,6 +24,7 @@ import '../widgets/dialogs/paper_style_dialog.dart';
 import '../widgets/dialogs/page_action_helper.dart';
 import '../widgets/dialogs/add_page_dialog.dart';
 import '../widgets/collaboration_center_sheet.dart';
+import '../widgets/collaboration_chat_widget.dart';
 import '../../shared/widgets/color_engine_widget.dart'; // 🚀
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -125,7 +126,7 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen>
       }
     } else if (state == AppLifecycleState.resumed) {
       debugPrint(
-        '📱 [CanvasScreen] App retomou da hibernação. Desimpedindo Canvas...',
+        '📱 [CanvasScreen] App retomou da hibernação. Auto-gestão de conexão...',
       );
       if (_container != null) {
         try {
@@ -133,9 +134,12 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen>
           _container!
               .read(canvasViewportProvider.notifier)
               .updatePointerCount(0);
+
+          // 🚀 AUTO-GESTÃO NA HIBERNAÇÃO: Se o modo colaborativo estava ativo, reconecta o socket
+          _container!.read(realtimeServiceProvider).reconnectIfNeeded();
           _container!
               .read(canvasDocumentProvider.notifier)
-              .requestMissingHistory(); // 🚀 Pede as ações que perdeu
+              .requestMissingHistory(); // 🚀 Pede as ações que perdeu em lote único
         } catch (e) {
           debugPrint('⚠️ [CanvasScreen] Erro ao reativar Canvas no resume: $e');
         }
@@ -149,14 +153,15 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen>
     final collabService = _collabService;
     final container = _container;
 
-    if (collabService != null) {
-      collabService.getPages = null;
-      collabService.getCurrentPageIndex = null;
-      collabService.getCurrentScale = null;
-    }
-
     Future.microtask(() {
-      collabService?.leaveSession();
+      if (collabService != null) {
+        collabService.getPages = null;
+        collabService.getCurrentPageIndex = null;
+        collabService.getCurrentScale = null;
+        // 🚀 ENCERRAMENTO DEFINITIVO AO SAIR DO CADERNO: Fecha WebSocket, timers e notifica o backend
+        collabService.leaveSession();
+      }
+
       if (container != null) {
         container.read(canvasDocumentProvider.notifier).flushUnsyncedPages();
         container.read(canvasDocumentProvider.notifier).reset();
@@ -229,6 +234,12 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen>
         ? currentPageIndex.clamp(0, docState.pages.length - 1)
         : 0;
     final currentPage = hasPages ? docState.pages[safeIndex] : null;
+
+    final viewportState = ref.watch(canvasViewportProvider);
+    if (_collabService != null && _collabService!.isCollaborationEnabled) {
+      _collabService!.currentViewportCenter = viewportState.currentViewportCenter;
+      _collabService!.currentVisibleWidth = viewportState.currentVisibleWidth;
+    }
 
     return PopScope(
       onPopInvokedWithResult: (didPop, result) {
@@ -392,6 +403,14 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen>
                               .pickAndInsertImage(currentPage, context: context),
                         ),
                       ),
+                    ),
+
+                  // 🚀 Chat de Colaboração em Tempo Real (Redis-backed)
+                  if (!isFocusMode)
+                    const Positioned(
+                      bottom: 90,
+                      right: 16,
+                      child: CollaborationChatWidget(),
                     ),
                 ],
               ),

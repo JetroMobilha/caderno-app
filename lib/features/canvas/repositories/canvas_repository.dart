@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io' as io;
+import 'package:uuid/uuid.dart';
 import 'package:caderno_digital_app/core/config/app_config.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
@@ -377,6 +378,40 @@ class CanvasRepository {
       }
     }
 
+    // 🚀 RESOLUÇÃO PRECISA DE CADERNO (Fix Foreign Key Constraint / Mapeamento ServerID x LocalID):
+    int resolvedNotebookLocalId = page.notebookId;
+    final int? effectiveSid = notebookSid ?? (page.notebookId > 0 ? page.notebookId : null);
+
+    if (effectiveSid != null && effectiveSid > 0) {
+      // 1. Procurar SEMPRE primeiro pelo Server ID para não confundir com ID local que coincida com o número
+      final nbByServer = await (_db.select(_db.notebooks)
+            ..where((t) => t.serverId.equals(effectiveSid)))
+          .getSingleOrNull();
+
+      if (nbByServer != null) {
+        resolvedNotebookLocalId = nbByServer.id;
+      } else {
+        // 2. Se não encontrou por Server ID, tenta por ID local
+        final nbByLocal = await (_db.select(_db.notebooks)
+              ..where((t) => t.id.equals(page.notebookId)))
+            .getSingleOrNull();
+
+        if (nbByLocal != null) {
+          resolvedNotebookLocalId = nbByLocal.id;
+        } else {
+          // 3. Se o caderno ainda NÃO EXISTE no SQLite local, cria um registo stub
+          resolvedNotebookLocalId = await _db.into(_db.notebooks).insertOnConflictUpdate(
+            NotebooksCompanion.insert(
+              serverId: Value(effectiveSid),
+              title: 'Caderno $effectiveSid',
+              coverType: 'basic',
+              clientId: Value(const Uuid().v4()),
+            ),
+          );
+        }
+      }
+    }
+
     final headerDataMap = {
       'title': page.title,
       'section': page.sectionTitle,
@@ -390,7 +425,7 @@ class CanvasRepository {
       id: localId != null ? Value(localId) : const Value.absent(),
       serverId: Value(page.serverId),
       clientId: Value(page.clientId),
-      notebookId: page.notebookId,
+      notebookId: resolvedNotebookLocalId,
       pageNumber: page.pageNumber,
       isLandscape: Value(page.isLandscape ? 1 : 0),
       paperSize: Value(page.paperSize),
@@ -637,21 +672,21 @@ class CanvasRepository {
   }
 
   Future<void> deleteSingleStroke(String strokeId) async {
-    await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(strokeId))).write(const CanvasStrokesCompanion(isDeleted: Value(1)));
+    await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(strokeId))).write(const CanvasStrokesCompanion(isDeleted: Value(1), syncedWithCloud: Value(0)));
   }
 
   Future<void> deleteObjectById(String objectId) async {
     final int now = TimeService().nowMs();
-    await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(objectId))).write(CanvasStrokesCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasTextBlocks)..where((t) => t.clientTextId.equals(objectId))).write(CanvasTextBlocksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasImageBlocks)..where((t) => t.clientImageId.equals(objectId))).write(CanvasImageBlocksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasShapes)..where((t) => t.clientShapeId.equals(objectId))).write(CanvasShapesCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasTables)..where((t) => t.clientTableId.equals(objectId))).write(CanvasTablesCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasLinks)..where((t) => t.clientLinkId.equals(objectId))).write(CanvasLinksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasAttachments)..where((t) => t.clientAttachmentId.equals(objectId))).write(CanvasAttachmentsCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasAudioBlocks)..where((t) => t.clientAudioId.equals(objectId))).write(CanvasAudioBlocksCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    await (_db.update(_db.canvasAnimations)..where((t) => t.clientAnimationId.equals(objectId))).write(CanvasAnimationsCompanion(isDeleted: const Value(1), updatedAt: Value(now)));
-    try { await (_db.update(_db.canvasExplanations)..where((t) => t.clientExplanationId.equals(objectId))).write(CanvasExplanationsCompanion(isDeleted: const Value(1), updatedAt: Value(now))); } catch (_) {}
+    await (_db.update(_db.canvasStrokes)..where((t) => t.clientStrokeId.equals(objectId))).write(CanvasStrokesCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasTextBlocks)..where((t) => t.clientTextId.equals(objectId))).write(CanvasTextBlocksCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasImageBlocks)..where((t) => t.clientImageId.equals(objectId))).write(CanvasImageBlocksCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasShapes)..where((t) => t.clientShapeId.equals(objectId))).write(CanvasShapesCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasTables)..where((t) => t.clientTableId.equals(objectId))).write(CanvasTablesCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasLinks)..where((t) => t.clientLinkId.equals(objectId))).write(CanvasLinksCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasAttachments)..where((t) => t.clientAttachmentId.equals(objectId))).write(CanvasAttachmentsCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasAudioBlocks)..where((t) => t.clientAudioId.equals(objectId))).write(CanvasAudioBlocksCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    await (_db.update(_db.canvasAnimations)..where((t) => t.clientAnimationId.equals(objectId))).write(CanvasAnimationsCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now)));
+    try { await (_db.update(_db.canvasExplanations)..where((t) => t.clientExplanationId.equals(objectId))).write(CanvasExplanationsCompanion(isDeleted: const Value(1), syncedWithCloud: const Value(0), updatedAt: Value(now))); } catch (_) {}
   }
 
   Future<void> markPageAsUnsynced(String pageClientId, {int? updatedAt}) async {
@@ -758,17 +793,39 @@ class CanvasRepository {
   /// Evita que a base de dados cresça indefinidamente com lixo.
   Future<void> purgeSyncedDeletedObjects(int pageId) async {
     await _db.transaction(() async {
-      await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasShapes)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasTables)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasLinks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
-      await (_db.delete(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go();
+      try { await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasShapes)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasTables)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasLinks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId) & t.isDeleted.equals(1) & t.syncedWithCloud.equals(1))).go(); } catch (_) {}
     });
     AppLog.db('🧹 [Purge] Limpeza física concluída para a página $pageId.');
+  }
+
+  /// 🚀 EXPURGO FÍSICO TOTAL (Página e todos os objetos)
+  /// Resolve o erro "FOREIGN KEY constraint failed" ao apagar páginas que tinham traços ativos (isDeleted=0)
+  Future<void> purgePageCompletely(int pageId) async {
+    await _db.transaction(() async {
+      // 1. Apagar INCONDICIONALMENTE todos os objetos filhos da página (ignora isDeleted/syncedWithCloud)
+      try { await (_db.delete(_db.canvasStrokes)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasTextBlocks)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasImageBlocks)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasShapes)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasTables)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasLinks)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasAttachments)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasAudioBlocks)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasAnimations)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+      try { await (_db.delete(_db.canvasExplanations)..where((t) => t.pageId.equals(pageId))).go(); } catch (_) {}
+
+      // 2. Apagar a própria página
+      await (_db.delete(_db.pages)..where((t) => t.id.equals(pageId))).go();
+    });
+    AppLog.db('💾 [DB] 🧹 [PurgeCompletely] Folha $pageId e todos os seus objetos foram fisicamente expurgados.');
   }
 }
 

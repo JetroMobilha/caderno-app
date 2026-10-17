@@ -2151,9 +2151,7 @@ class CanvasToolbar extends ConsumerWidget {
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     onSelected: (val) => _handlePageAction(context, ref, page, val),
     itemBuilder: (context) => [
-      _buildPopupItem('rename', Icons.edit_outlined, 'Renomear Folha'),
       _buildPopupItem('settings', Icons.settings_outlined, 'Configurações'),
-      _buildPopupItem('section', Icons.category_outlined, 'Mover para Secção'),
       const PopupMenuDivider(),
       _buildPopupItem(
         'favorite',
@@ -2162,7 +2160,7 @@ class CanvasToolbar extends ConsumerWidget {
       ),
       _buildPopupItem('duplicate', Icons.copy_rounded, 'Duplicar Página'),
       _buildPopupItem('move_to', Icons.drive_file_move_outlined, 'Mover Folha'),
-      _buildPopupItem('copy_to', Icons.file_copy_outlined, 'Copiar Folha'),
+      _buildPopupItem('copy_to', Icons.file_copy_outlined, 'Copiar Para'),
       const PopupMenuDivider(),
       _buildPopupItem('delete', Icons.delete_outline_rounded, 'Rasgar Folha'),
     ],
@@ -2191,14 +2189,8 @@ class CanvasToolbar extends ConsumerWidget {
     String action,
   ) {
     switch (action) {
-      case 'rename':
-        PageActionHelper.showRenameDialog(context, ref, page);
-        break;
       case 'settings':
         PageActionHelper.showSettingsDialog(context, ref, page);
-        break;
-      case 'section':
-        PageActionHelper.showSectionDialog(context, ref, page);
         break;
       case 'favorite':
         ref.read(canvasDocumentProvider.notifier).toggleFavorite(page);

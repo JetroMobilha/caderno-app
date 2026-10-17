@@ -370,135 +370,133 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('PRAGMA foreign_keys = ON');
       },
       onUpgrade: (m, from, to) async {
-        if (from < 2) await m.addColumn(pages, pages.extractedText);
+        if (from < 2) try { await m.addColumn(pages, pages.extractedText); } catch (_) {}
         if (from < 3) {
-          await m.alterTable(TableMigration(subjects, newColumns: [subjects.clientId]));
-          await m.alterTable(TableMigration(notebooks, newColumns: [notebooks.clientId]));
+          try { await m.alterTable(TableMigration(subjects, newColumns: [subjects.clientId])); } catch (_) {}
+          try { await m.alterTable(TableMigration(notebooks, newColumns: [notebooks.clientId])); } catch (_) {}
         }
         if (from < 4) {
-          await m.addColumn(canvasStrokes, canvasStrokes.deletedInSession);
-          await m.addColumn(canvasTextBlocks, canvasTextBlocks.deletedInSession);
-          await m.addColumn(canvasImageBlocks, canvasImageBlocks.deletedInSession);
+          try { await m.addColumn(canvasStrokes, canvasStrokes.deletedInSession); } catch (_) {}
+          try { await m.addColumn(canvasTextBlocks, canvasTextBlocks.deletedInSession); } catch (_) {}
+          try { await m.addColumn(canvasImageBlocks, canvasImageBlocks.deletedInSession); } catch (_) {}
         }
-        if (from < 5) await m.alterTable(TableMigration(pages, newColumns: [pages.clientId]));
-        if (from < 6)  ;
+        if (from < 5) try { await m.alterTable(TableMigration(pages, newColumns: [pages.clientId])); } catch (_) {}
+        if (from < 6) ;
         if (from < 7) {
-          await m.addColumn(users, users.version);
-          await m.addColumn(subjects, subjects.version);
-          await m.addColumn(notebooks, notebooks.version);
-          await m.addColumn(pages, pages.version);
-          await m.addColumn(canvasStrokes, canvasStrokes.version);
-          await m.addColumn(canvasTextBlocks, canvasTextBlocks.version);
-          await m.addColumn(canvasImageBlocks, canvasImageBlocks.version);
-          await m.addColumn(notebookUser, notebookUser.version);
-          await m.addColumn(payments, payments.version);
+          try { await m.addColumn(users, users.version); } catch (_) {}
+          try { await m.addColumn(subjects, subjects.version); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.version); } catch (_) {}
+          try { await m.addColumn(pages, pages.version); } catch (_) {}
+          try { await m.addColumn(canvasStrokes, canvasStrokes.version); } catch (_) {}
+          try { await m.addColumn(canvasTextBlocks, canvasTextBlocks.version); } catch (_) {}
+          try { await m.addColumn(canvasImageBlocks, canvasImageBlocks.version); } catch (_) {}
+          try { await m.addColumn(notebookUser, notebookUser.version); } catch (_) {}
+          try { await m.addColumn(payments, payments.version); } catch (_) {}
         }
         if (from < 8) {
-          await customStatement('ALTER TABLE canvas_strokes ADD COLUMN creator_id TEXT');
-          await customStatement('ALTER TABLE canvas_text_blocks ADD COLUMN creator_id TEXT');
-          await customStatement('ALTER TABLE canvas_image_blocks ADD COLUMN creator_id TEXT');
+          try { await customStatement('ALTER TABLE canvas_strokes ADD COLUMN creator_id TEXT'); } catch (_) {}
+          try { await customStatement('ALTER TABLE canvas_text_blocks ADD COLUMN creator_id TEXT'); } catch (_) {}
+          try { await customStatement('ALTER TABLE canvas_image_blocks ADD COLUMN creator_id TEXT'); } catch (_) {}
         }
-        if (from < 9) await m.addColumn(notebooks, notebooks.templateType);
-        if (from < 10) await m.addColumn(pages, pages.isFrozen);
+        if (from < 9) try { await m.addColumn(notebooks, notebooks.templateType); } catch (_) {}
+        if (from < 10) try { await m.addColumn(pages, pages.isFrozen); } catch (_) {}
         if (from < 11) {
-          await m.addColumn(pages, pages.backgroundPdfPath);
-          await m.addColumn(canvasStrokes, canvasStrokes.layerId);
+          try { await m.addColumn(pages, pages.backgroundPdfPath); } catch (_) {}
+          try { await m.addColumn(canvasStrokes, canvasStrokes.layerId); } catch (_) {}
         }
-        if (from < 12) await m.createTable(lessonRecordings);
-        if (from < 13) await m.addColumn(pages, pages.paperSize);
-        if (from < 14) await m.addColumn(notebooks, notebooks.collaborationMode);
-        if (from < 15) await customStatement('ALTER TABLE notebooks ADD COLUMN role TEXT DEFAULT "owner"');
+        if (from < 12) try { await m.createTable(lessonRecordings); } catch (_) {}
+        if (from < 13) try { await m.addColumn(pages, pages.paperSize); } catch (_) {}
+        if (from < 14) try { await m.addColumn(notebooks, notebooks.collaborationMode); } catch (_) {}
+        if (from < 15) try { await customStatement('ALTER TABLE notebooks ADD COLUMN role TEXT DEFAULT "owner"'); } catch (_) {}
         if (from < 16) {
-          await customStatement('ALTER TABLE notebooks ADD COLUMN alternative_title TEXT');
-          await customStatement('ALTER TABLE notebooks ADD COLUMN sharing_type TEXT DEFAULT "full"');
+          try { await customStatement('ALTER TABLE notebooks ADD COLUMN alternative_title TEXT'); } catch (_) {}
+          try { await customStatement('ALTER TABLE notebooks ADD COLUMN sharing_type TEXT DEFAULT "full"'); } catch (_) {}
         }
         if (from < 17) {
-          await m.addColumn(pages, pages.lineType);
-          await m.addColumn(pages, pages.lineSpacing);
+          try { await m.addColumn(pages, pages.lineType); } catch (_) {}
+          try { await m.addColumn(pages, pages.lineSpacing); } catch (_) {}
         }
         if (from < 18) {
-          await customStatement('ALTER TABLE users ADD COLUMN bio TEXT');
-          await customStatement('ALTER TABLE users ADD COLUMN institution TEXT');
-          await customStatement('ALTER TABLE users ADD COLUMN preferred_color TEXT');
-          await customStatement('ALTER TABLE users ADD COLUMN preferred_font TEXT');
-          await customStatement('ALTER TABLE users ADD COLUMN specialties TEXT');
+          try { await customStatement('ALTER TABLE users ADD COLUMN bio TEXT'); } catch (_) {}
+          try { await customStatement('ALTER TABLE users ADD COLUMN institution TEXT'); } catch (_) {}
+          try { await customStatement('ALTER TABLE users ADD COLUMN preferred_color TEXT'); } catch (_) {}
+          try { await customStatement('ALTER TABLE users ADD COLUMN preferred_font TEXT'); } catch (_) {}
+          try { await customStatement('ALTER TABLE users ADD COLUMN specialties TEXT'); } catch (_) {}
         }
         if (from < 19) {
-          await customStatement('ALTER TABLE pages ADD COLUMN is_favorite INTEGER DEFAULT 0 NOT NULL');
+          try { await customStatement('ALTER TABLE pages ADD COLUMN is_favorite INTEGER DEFAULT 0 NOT NULL'); } catch (_) {}
         }
         if (from < 20) {
-          await m.addColumn(notebooks, notebooks.tags);
-          await m.addColumn(notebooks, notebooks.isArchived);
-          await m.addColumn(notebooks, notebooks.isFavorite);
+          try { await m.addColumn(notebooks, notebooks.tags); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.isArchived); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.isFavorite); } catch (_) {}
         }
         if (from < 21) {}
         if (from < 22) {
-          await m.addColumn(subjects, subjects.isArchived);
-          await m.addColumn(subjects, subjects.isFavorite);
+          try { await m.addColumn(subjects, subjects.isArchived); } catch (_) {}
+          try { await m.addColumn(subjects, subjects.isFavorite); } catch (_) {}
         }
         if (from < 23) {
-          await m.addColumn(users, users.isArchived);
-          await m.addColumn(users, users.isFavorite);
-          await m.addColumn(notebookUser, notebookUser.isArchived);
-          await m.addColumn(notebookUser, notebookUser.isFavorite);
-          await m.addColumn(payments, payments.isArchived);
-          await m.addColumn(payments, payments.isFavorite);
-          await m.addColumn(lessonRecordings, lessonRecordings.isArchived);
-          await m.addColumn(lessonRecordings, lessonRecordings.isFavorite);
-          try { await m.addColumn(subjects, subjects.isArchived); } catch(_) {}
-          try { await m.addColumn(subjects, subjects.isFavorite); } catch(_) {}
-          try { await m.addColumn(notebooks, notebooks.isArchived); } catch(_) {}
-          try { await m.addColumn(notebooks, notebooks.isFavorite); } catch(_) {}
+          try { await m.addColumn(users, users.isArchived); } catch (_) {}
+          try { await m.addColumn(users, users.isFavorite); } catch (_) {}
+          try { await m.addColumn(notebookUser, notebookUser.isArchived); } catch (_) {}
+          try { await m.addColumn(notebookUser, notebookUser.isFavorite); } catch (_) {}
+          try { await m.addColumn(payments, payments.isArchived); } catch (_) {}
+          try { await m.addColumn(payments, payments.isFavorite); } catch (_) {}
+          try { await m.addColumn(lessonRecordings, lessonRecordings.isArchived); } catch (_) {}
+          try { await m.addColumn(lessonRecordings, lessonRecordings.isFavorite); } catch (_) {}
+          try { await m.addColumn(subjects, subjects.isArchived); } catch (_) {}
+          try { await m.addColumn(subjects, subjects.isFavorite); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.isArchived); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.isFavorite); } catch (_) {}
         }
         if (from < 24) {
-          await m.addColumn(notebooks, notebooks.origin);
-          await m.addColumn(notebooks, notebooks.participantsPreview);
-          await m.addColumn(notebooks, notebooks.lastUpdatedByName);
-          await m.addColumn(notebooks, notebooks.notificationsEnabled);
+          try { await m.addColumn(notebooks, notebooks.origin); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.participantsPreview); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.lastUpdatedByName); } catch (_) {}
+          try { await m.addColumn(notebooks, notebooks.notificationsEnabled); } catch (_) {}
         }
         if (from < 25) {
-          try { await m.addColumn(notebooks, notebooks.configuration); } catch(_) {}
-          try { await m.addColumn(pages, pages.backgroundConfig); } catch(_) {}
-          try { await m.createTable(notebookTemplates); } catch(_) {}
-          try { await m.createTable(notebookTemplateVersions); } catch(_) {}
+          try { await m.addColumn(notebooks, notebooks.configuration); } catch (_) {}
+          try { await m.addColumn(pages, pages.backgroundConfig); } catch (_) {}
+          try { await m.createTable(notebookTemplates); } catch (_) {}
+          try { await m.createTable(notebookTemplateVersions); } catch (_) {}
         }
         if (from < 27) {
-          try { await m.addColumn(pages, pages.viewportMatrix); } catch(_) {}
+          try { await m.addColumn(pages, pages.viewportMatrix); } catch (_) {}
         }
         if (from < 28) {
-          try { await m.addColumn(pages, pages.layers); } catch(_) {}
-          try { await m.addColumn(canvasImageBlocks, canvasImageBlocks.layerId); } catch(_) {}
-          try { await m.addColumn(canvasTextBlocks, canvasTextBlocks.layerId); } catch(_) {}
-          try { await m.createTable(canvasShapes); } catch(_) {}
-          try { await m.createTable(canvasAudioBlocks); } catch(_) {}
-          try { await m.createTable(canvasAnimations); } catch(_) {}
+          try { await m.addColumn(pages, pages.layers); } catch (_) {}
+          try { await m.addColumn(canvasImageBlocks, canvasImageBlocks.layerId); } catch (_) {}
+          try { await m.addColumn(canvasTextBlocks, canvasTextBlocks.layerId); } catch (_) {}
+          try { await m.createTable(canvasShapes); } catch (_) {}
+          try { await m.createTable(canvasAudioBlocks); } catch (_) {}
+          try { await m.createTable(canvasAnimations); } catch (_) {}
         }
         if (from < 29) {
-          try { await m.createTable(canvasTables); } catch(_) {}
-          try { await m.createTable(canvasLinks); } catch(_) {}
-          try { await m.createTable(canvasAttachments); } catch(_) {}
+          try { await m.createTable(canvasTables); } catch (_) {}
+          try { await m.createTable(canvasLinks); } catch (_) {}
+          try { await m.createTable(canvasAttachments); } catch (_) {}
         }
         if (from < 30) {
-          try { await m.addColumn(canvasShapes, canvasShapes.syncedWithCloud); } catch(_) {}
-          try { await m.addColumn(canvasAudioBlocks, canvasAudioBlocks.syncedWithCloud); } catch(_) {}
-          try { await m.addColumn(canvasAnimations, canvasAnimations.syncedWithCloud); } catch(_) {}
-          try { await m.addColumn(canvasTables, canvasTables.syncedWithCloud); } catch(_) {}
-          try { await m.addColumn(canvasLinks, canvasLinks.syncedWithCloud); } catch(_) {}
-          try { await m.addColumn(canvasAttachments, canvasAttachments.syncedWithCloud); } catch(_) {}
+          try { await m.addColumn(canvasShapes, canvasShapes.syncedWithCloud); } catch (_) {}
+          try { await m.addColumn(canvasAudioBlocks, canvasAudioBlocks.syncedWithCloud); } catch (_) {}
+          try { await m.addColumn(canvasAnimations, canvasAnimations.syncedWithCloud); } catch (_) {}
+          try { await m.addColumn(canvasTables, canvasTables.syncedWithCloud); } catch (_) {}
+          try { await m.addColumn(canvasLinks, canvasLinks.syncedWithCloud); } catch (_) {}
+          try { await m.addColumn(canvasAttachments, canvasAttachments.syncedWithCloud); } catch (_) {}
         }
         if (from < 31) {
-          // 🚀 v31: Metadados de Grupo, Visibilidade e Bloqueio
-          // NOTA: Acesso via customStatement para evitar dependência do código gerado
           final tables = [
             'canvas_strokes', 'canvas_text_blocks', 'canvas_image_blocks',
             'canvas_shapes', 'canvas_audio_blocks', 'canvas_animations',
             'canvas_tables', 'canvas_links', 'canvas_attachments'
           ];
           for (var t in tables) {
-            await customStatement('ALTER TABLE $t ADD COLUMN parent_id TEXT');
-            await customStatement('ALTER TABLE $t ADD COLUMN is_visible INTEGER DEFAULT 1');
-            await customStatement('ALTER TABLE $t ADD COLUMN is_locked INTEGER DEFAULT 0');
-            await customStatement('ALTER TABLE $t ADD COLUMN opacity REAL DEFAULT 1.0');
+            try { await customStatement('ALTER TABLE $t ADD COLUMN parent_id TEXT'); } catch (_) {}
+            try { await customStatement('ALTER TABLE $t ADD COLUMN is_visible INTEGER DEFAULT 1'); } catch (_) {}
+            try { await customStatement('ALTER TABLE $t ADD COLUMN is_locked INTEGER DEFAULT 0'); } catch (_) {}
+            try { await customStatement('ALTER TABLE $t ADD COLUMN opacity REAL DEFAULT 1.0'); } catch (_) {}
           }
         }
         if (from < 32) {
@@ -538,6 +536,8 @@ class AppDatabase extends _$AppDatabase {
       await delete(notebooks).go();
       await delete(subjects).go();
       await delete(payments).go();
+      await delete(notebookTemplateVersions).go();
+      await delete(notebookTemplates).go();
       await delete(users).go();
     });
   }

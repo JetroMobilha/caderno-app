@@ -1,3 +1,4 @@
+import 'package:caderno_digital_app/core/config/app_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../models/canvas_action_model.dart';
@@ -29,9 +30,17 @@ class CollaborationHistoryManager {
   /// Define o momento em que a app foi para segundo plano
   void markDisconnected() {
     _lastDisconnectTimestamp = TimeService().nowMs();
-    debugPrint(
+    AppLog.histo(
       '🛑 [HistoryManager] Desconexão registada às $_lastDisconnectTimestamp',
     );
+  }
+
+  /// Atualiza o marcador do último sincronismo com o servidor/p2p
+  void updateLastSyncTimestamp(int ts) {
+    if (ts > _lastDisconnectTimestamp) {
+      _lastDisconnectTimestamp = ts;
+      AppLog.histo('⏱️ [HistoryManager] Relógio de histórico atualizado para $ts');
+    }
   }
 
   /// Obtém o timestamp da última desconexão
@@ -47,7 +56,7 @@ class CollaborationHistoryManager {
     
     // Se esteve offline há mais de 1 minuto, forçamos uso exclusivo do REST HTTP
     if (TimeService().nowMs() - safeTimestamp > 60000) {
-      debugPrint('📦 [HistoryManager] Desconexão longa (>60s). P2P ignorado. A usar Sync HTTP.');
+      AppLog.histo('📦 [HistoryManager] Desconexão longa (>60s). P2P ignorado. A usar Sync HTTP.');
       return [];
     }
 
@@ -58,11 +67,11 @@ class CollaborationHistoryManager {
     // Se houver demasiadas ações, o payload arrebenta o Reverb (WebSocket).
     // Delegamos para HTTP
     if (recentActions.length > 50) {
-      debugPrint('📦 [HistoryManager] Demasiadas ações (${recentActions.length}). P2P ignorado. A usar Sync HTTP.');
+      AppLog.histo('📦 [HistoryManager] Demasiadas ações (${recentActions.length}). P2P ignorado. A usar Sync HTTP.');
       return [];
     }
 
-    debugPrint(
+    AppLog.histo(
       '📦 [HistoryManager] Pedido de ações desde $timestamp. Encontradas ${recentActions.length} ações limitadas para envio P2P.',
     );
 

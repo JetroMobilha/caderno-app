@@ -370,17 +370,49 @@ class RemotePointersPainter extends CustomPainter {
       final int? pageNum = data['page_number'];
       if (pageNum != null && pageNum != targetPageNumber) return;
       final Offset pos = data['pos'];
-      final user = onlineUsers.firstWhere((u) => u['id'].toString() == uid, orElse: () => <String, dynamic>{});
-      if (user.isEmpty) return;
-      final Color color = (user['color'] as Color?) ?? Colors.grey;
+      final user = onlineUsers.firstWhere(
+        (u) => u['id'].toString() == uid,
+        orElse: () => <String, dynamic>{},
+      );
+
+      final Color color = (user['color'] as Color?) ?? const Color(0xFF2980B9);
       paint.color = color;
-      final Path path = Path()..moveTo(pos.dx, pos.dy)..lineTo(pos.dx + 12, pos.dy + 12)..lineTo(pos.dx + 5, pos.dy + 12)..lineTo(pos.dx, pos.dy + 18)..close();
+
+      final Path path = Path()
+        ..moveTo(pos.dx, pos.dy)
+        ..lineTo(pos.dx + 12, pos.dy + 12)
+        ..lineTo(pos.dx + 5, pos.dy + 12)
+        ..lineTo(pos.dx, pos.dy + 18)
+        ..close();
       canvas.drawPath(path, paint);
-      final String label = user['name'] ?? 'Colega';
-      final textPainter = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)), textDirection: TextDirection.ltr);
+
+      final String label = (user['name'] != null && user['name'].toString().isNotEmpty)
+          ? user['name'].toString()
+          : 'Colega';
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
       textPainter.layout();
-      final rect = Rect.fromLTWH(pos.dx + 14, pos.dy + 14, textPainter.width + 12, textPainter.height + 6);
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), paint);
+
+      final rect = Rect.fromLTWH(
+        pos.dx + 14,
+        pos.dy + 14,
+        textPainter.width + 12,
+        textPainter.height + 6,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(6)),
+        paint,
+      );
       textPainter.paint(canvas, pos + const Offset(20, 17));
     });
   }

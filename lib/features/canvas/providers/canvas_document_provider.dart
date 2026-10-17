@@ -1481,10 +1481,6 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     final int? targetSid =
         _collabService.liveNotebookSid ?? state.liveNotebookSid;
 
-    AppLog.canvas(
-      '📣 [CanvasDocument] _broadcastAction isCollab: $isCollab, targetSid: $targetSid',
-    );
-
     if (!isCollab || targetSid == null) return;
 
     final String effectiveUserId = state.myUserId.isNotEmpty
@@ -1788,21 +1784,25 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
       final int? targetSid =
           _collabService.liveNotebookSid ?? state.liveNotebookSid;
       if (isCollab && targetSid != null) {
+        final actionPayload = {
+          'sender_id': state.myUserId.isNotEmpty
+              ? state.myUserId
+              : _collabService.myUserId,
+          'action_type': 'update_page_settings',
+          'data': {
+            'page_client_id': targetPage.clientId,
+            'page_number': targetPage.pageNumber,
+            'config': newConfig.toJson(),
+            'timestamp': effectiveTs,
+          },
+        };
+
         _realtimeService.broadcastGlobalAction(
           notebookId: targetSid,
-          actionData: {
-            'sender_id': state.myUserId.isNotEmpty
-                ? state.myUserId
-                : _collabService.myUserId,
-            'action_type': 'update_page_settings',
-            'data': {
-              'page_client_id': targetPage.clientId,
-              'page_number': targetPage.pageNumber,
-              'config': newConfig.toJson(),
-              'timestamp': effectiveTs,
-            },
-          },
+          actionData: actionPayload,
         );
+
+        _syncService.recordActionToCloud(targetSid, actionPayload);
       }
     }
   }
@@ -1826,6 +1826,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     LocalPage page,
     String? imagePath, {
     bool applyToAll = false,
+    bool isRemote = false,
   }) async {
     final int? targetSid =
         _collabService.liveNotebookSid ??
@@ -1861,9 +1862,8 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
 
     for (var p in pagesToUpdate) {
       final updated = p.copyWith(
-        backgroundPdfPath: finalPath.isEmpty
-            ? ''
-            : finalPath, // String vazia para limpar a imagem, de forma que copyWith aceite e anule a anterior
+        backgroundPdfPath: finalPath.isEmpty ? null : finalPath,
+        clearBackgroundImage: finalPath.isEmpty,
         updatedAt: now,
       );
 
@@ -1881,11 +1881,39 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     state = state.copyWith(pages: updatedPagesList);
     scheduleAutoPush();
 
-    final bool isCollab =
-        _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
-    if (isCollab) {
-      // 🚀 Forçar sincronismo imediato para partilhar o URL da imagem recém carregada
-      _performCollectiveSync(immediate: true);
+    if (!isRemote) {
+      final bool isCollab =
+          _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
+      final int? activeNotebookSid =
+          _collabService.liveNotebookSid ?? state.liveNotebookSid;
+
+      if (isCollab && activeNotebookSid != null && activeNotebookSid > 0) {
+        final actionPayload = {
+          'sender_id': state.myUserId.isNotEmpty
+              ? state.myUserId
+              : _collabService.myUserId,
+          'action_type': 'update_page_background',
+          'data': {
+            'page_client_id': page.clientId,
+            'page_number': page.pageNumber,
+            'background_image_path': finalPath,
+            'apply_to_all': applyToAll,
+            'timestamp': now,
+          },
+        };
+
+        _realtimeService.broadcastGlobalAction(
+          notebookId: activeNotebookSid,
+          actionData: actionPayload,
+        );
+
+        _syncService.recordActionToCloud(activeNotebookSid, actionPayload);
+      }
+
+      if (isCollab) {
+        // 🚀 Forçar sincronismo imediato para partilhar o URL da imagem recém carregada ou remoção
+        _performCollectiveSync(immediate: true);
+      }
     }
   }
 
@@ -2378,11 +2406,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     }
   }
 
-  Future<void> moveSelection(
-    LocalPage page, {
-    required Set<String> objectIds,
-    required Offset delta,
-  }) async {
+  Future<void> moveSelection( LocalPage page, { required Set<String> objectIds, required Offset delta, }) async {
     if (page.isFrozen || delta == Offset.zero || objectIds.isEmpty) return;
     final action = MoveAction(
       pageClientId: page.clientId,
@@ -2409,10 +2433,6 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
         _collabService.isCollaborationEnabled || state.isCollaborationEnabled;
     final int? targetSid =
         _collabService.liveNotebookSid ?? state.liveNotebookSid;
-
-    AppLog.canvas(
-      '📣 [CanvasDocument] broadcastLiveStroke isCollab: $isCollab, targetSid: $targetSid',
-    );
 
     if (!isCollab || targetSid == null) return;
 
@@ -2620,7 +2640,7 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
 
     if (foundUnsynced) {
       AppLog.canvas('');
-      await _syncService.pushPages(onlyNotebookId: targetSid);
+      await _syncService.pushPages(onlyNotebookServerId: targetSid);
     }
   }
 
@@ -2652,12 +2672,71 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
           lastTs,
         );
         if (actions.isNotEmpty) {
-          AppLog.canvas('');
+          AppLog.canvas(
+            '⚡ [CanvasDocument] Aplicando ${actions.length} ações recuperadas em lote único (Bulk Apply)...',
+          );
+
+          // 🚀 BULK APPLY: Processa todas as ações recuperadas do histórico na memória primeiro,
+          // emitindo 'state' UMA ÚNICA VEZ no final para evitar o efeito "rebobinar/filme em fast-forward"!
+          List<LocalPage> pagesBuffer = List<LocalPage>.from(state.pages);
+          bool hasChanges = false;
+          int maxActionTs = lastTs;
+
           for (var rawAction in actions) {
             if (rawAction is Map<String, dynamic>) {
-              await _handleRemoteAction(rawAction);
+              final String type = rawAction['action_type'] ?? rawAction['type'] ?? '';
+              final actionData = rawAction['data'] is Map<String, dynamic>
+                  ? rawAction['data']
+                  : rawAction;
+              final action = CanvasAction.fromMap(type, actionData);
+
+              if (action != null) {
+                final targetIdx = pagesBuffer.indexWhere(
+                  (p) =>
+                      p.clientId == action.pageClientId ||
+                      (action.pageNumber != null &&
+                          p.pageNumber == action.pageNumber),
+                );
+                if (targetIdx != -1) {
+                  final target = pagesBuffer[targetIdx];
+                  final updatedTarget = (type == 'sync_undo')
+                      ? action.undo(target)
+                      : action.execute(target);
+                  pagesBuffer[targetIdx] = updatedTarget;
+                  hasChanges = true;
+
+                  if (action.timestamp > maxActionTs) {
+                    maxActionTs = action.timestamp;
+                  }
+
+                  // Grava no SQLite em plano de fundo sem emitir rebuilds intermediários na UI
+                  _persistIncrementalAction(
+                    updatedTarget,
+                    action,
+                    updatedAt: action.timestamp,
+                    isRemote: true,
+                  );
+                }
+              } else {
+                // Fallback para handlers especiais de sistema (ex: update_page_settings ou sync_undo_action)
+                await _handleRemoteAction(rawAction);
+              }
             }
           }
+
+          if (hasChanges) {
+            _collabService.clearAllObjectTransforms();
+            state = state.copyWith(pages: pagesBuffer);
+          }
+
+          // 🚀 ATUALIZA O RELÓGIO DE HISTÓRICO: Impede que a próxima reconexão peça tudo desde a hora 0 de novo!
+          final currentNow = TimeService().nowMs();
+          _historyManager.updateLastSyncTimestamp(
+            maxActionTs > 0 ? maxActionTs : currentNow,
+          );
+        } else {
+          // Se não havia ações novas, avança o relógio para a hora atual
+          _historyManager.updateLastSyncTimestamp(TimeService().nowMs());
         }
       } finally {
         _collabService.isRecoveringHistory = false;
@@ -2686,16 +2765,16 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
     if (state.isGlobalSyncing) return;
     state = state.copyWith(isGlobalSyncing: true);
     try {
-      await requestMissingHistory(
-        forceFromBeginning: true,
-      ); // 🚀 Pede histórico completo da sessão ao Redis e funde trabalho offline
       if (state.currentUserRole == 'owner' ||
           state.currentUserRole == 'editor') {
         await _syncService.pushPages(onlyNotebookId: state.currentNotebookId);
       }
+      await requestMissingHistory(
+        forceFromBeginning: true,
+      ); // 🚀 Pede histórico completo da sessão ao Redis e funde trabalho offline
       await _syncService.pullPages(
         forceFull: true,
-        onlyNotebookId: state.liveNotebookSid,
+        onlyNotebookServerId: state.liveNotebookSid,
       );
     } finally {
       state = state.copyWith(isGlobalSyncing: false);
@@ -2705,6 +2784,30 @@ class CanvasDocumentNotifier extends Notifier<CanvasDocumentState> {
   Future<void> _handleRemoteAction(Map<String, dynamic> d) async {
     try {
       final String type = d['action_type'] ?? d['type'] ?? '';
+
+      // 🚀 Intercetar alteração ou remoção de imagem de fundo em tempo real
+      if (type == 'update_page_background') {
+        final String? clientId = d['data']?['page_client_id'];
+        final int? pageNumber = d['data']?['page_number'];
+        final String? bgPath = d['data']?['background_image_path'];
+        final bool applyToAll = d['data']?['apply_to_all'] == true;
+
+        final target = state.pages.cast<LocalPage?>().firstWhere(
+          (p) =>
+              p?.clientId == clientId ||
+              (p != null && pageNumber != null && p.pageNumber == pageNumber),
+          orElse: () => null,
+        );
+        if (target != null) {
+          await setPageBackgroundImage(
+            target,
+            (bgPath != null && bgPath.isNotEmpty) ? bgPath : null,
+            applyToAll: applyToAll,
+            isRemote: true,
+          );
+        }
+        return;
+      }
 
       // 🚀 v11: Intercetar configuração da página em tempo real
       if (type == 'update_page_settings') {

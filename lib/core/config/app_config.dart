@@ -3,13 +3,14 @@ import 'package:flutter/foundation.dart';
 class AppConfig { 
   static bool enableAllLogs = true; // "Master switch" - Se false, cala tudo.
 
-  static bool showSyncLogs = false; // Pushes/Pulls de dados JSON, Deltas, LWW
+  static bool showSyncLogs = true; // Pushes/Pulls de dados JSON, Deltas, LWW
   static bool showMediaLogs = true; // Upload/Download de Imagens, PDFs, OCR e Áudios
-  static bool showDbLogs = false; // Queries SQLite (CanvasRepository), Drift, IO
-  static bool showCollabLogs = false; // WebSockets, Reverb, Presença, WebRTC
-  static bool showCanvasLogs = false; // Renderização, Undo/Redo, Estados Locais
+  static bool showDbLogs = true; // Queries SQLite (CanvasRepository), Drift, IO
+  static bool showCollabLogs = true; // WebSockets, Reverb, Presença, WebRTC
+  static bool showCanvasLogs = true; // Renderização, Undo/Redo, Estados Locais
   static bool showApiLogs = true; // Requisições HTTP na ApiService
-  static bool showTime = false;
+  static bool showTime = true;
+  static bool showHisto = true;
 }
 
 class AppLog {
@@ -34,6 +35,12 @@ class AppLog {
   static void time(String msg) {
     if ( AppConfig.enableAllLogs && AppConfig.showTime) {
       debugPrint('[TEMPO] $msg');
+    }
+  }
+
+  static void histo(String msg) {
+    if ( AppConfig.enableAllLogs && AppConfig.showHisto) {
+      debugPrint('[HISTO_COLL] $msg');
     }
   }
 

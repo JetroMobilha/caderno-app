@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import 'package:caderno_digital_app/core/network/sync_provider.dart';
 import 'package:caderno_digital_app/core/network/realtime_service.dart';
@@ -93,7 +94,9 @@ class AuthController extends Notifier<AuthState> {
         final String error = responseData['message'] ?? 'Credenciais inválidas.';
         state = state.copyWith(authErrorMessage: error, isLoading: false);
       }
-    } catch (e) {
+    } catch (e,stacktrace) {
+      debugPrint('🚨 Erro crítico no login: $e');
+      debugPrint('Stacktrace: $stacktrace');
       state = state.copyWith(authErrorMessage: 'Erro de sistema: Falha ao comunicar com o servidor.', isLoading: false);
     }
     return false;
@@ -125,7 +128,9 @@ class AuthController extends Notifier<AuthState> {
         final String error = responseData['message'] ?? 'Erro ao criar conta.';
         state = state.copyWith(authErrorMessage: error, isLoading: false);
       }
-    } catch (e) {
+    } catch (e,stacktrace) {
+      debugPrint('🚨 Erro crítico no login: $e');
+      debugPrint('Stacktrace: $stacktrace');
       state = state.copyWith(authErrorMessage: 'Erro de sistema.', isLoading: false);
     }
     return false;
@@ -162,6 +167,11 @@ class AuthController extends Notifier<AuthState> {
         }
       } catch (_) {}
     }
+
+    try {
+      await DefaultCacheManager().emptyCache();
+      debugPrint('🧹 [AuthController] Cache de imagens apagado com sucesso.');
+    } catch (_) {}
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

@@ -1,21 +1,24 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
 import '../services/collaboration_room_service.dart';
 import '../providers/audio_session_provider.dart';
 import '../../canvas/services/audio_session_service.dart';
-import '../../canvas/services/collaboration_room_service.dart';
 import '../../../core/network/realtime_service.dart';
-import 'dart:async';
 
 class CollaborationChatWidget extends ConsumerStatefulWidget {
   const CollaborationChatWidget({super.key});
 
   @override
-  ConsumerState<CollaborationChatWidget> createState() => _CollaborationChatWidgetState();
+  ConsumerState<CollaborationChatWidget> createState() =>
+      _CollaborationChatWidgetState();
 }
 
-class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidget> {
+class _CollaborationChatWidgetState
+    extends ConsumerState<CollaborationChatWidget> {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -40,7 +43,7 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
   Widget build(BuildContext context) {
     final collabService = ref.watch(collaborationRoomServiceProvider);
     final audioService = ref.watch(audioSessionProvider);
-    
+
     if (!collabService.isCollaborationEnabled) return const SizedBox.shrink();
 
     // 🚀 AUTO-SCROLL quando chegam novas mensagens
@@ -48,79 +51,110 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
-    
+
     final double availableHeight = screenHeight - bottomInset;
-    final chatHeight = (availableHeight - (bottomInset > 0 ? 80 : 160)).clamp(200.0, 420.0);
+    final chatHeight =
+        (availableHeight - (bottomInset > 0 ? 80 : 160)).clamp(220.0, 440.0);
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
-      width: collabService.isChatOpen ? 300 : 56,
+      width: collabService.isChatOpen ? 320 : 56,
       height: collabService.isChatOpen ? chatHeight : 56,
       decoration: BoxDecoration(
-        color: collabService.isChatOpen ? Colors.white : const Color(0xFF0F4C5C),
-        borderRadius: BorderRadius.circular(collabService.isChatOpen ? 16 : 28),
+        color: collabService.isChatOpen
+            ? Colors.white
+            : const Color(0xFF0F4C5C),
+        borderRadius: BorderRadius.circular(
+          collabService.isChatOpen ? 18 : 28,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 12,
+            color: Colors.black.withOpacity(0.20),
+            blurRadius: 14,
             offset: const Offset(0, 6),
-          )
+          ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(collabService.isChatOpen ? 16 : 28),
-        child: collabService.isChatOpen 
-            ? _buildFullChatWrapper(collabService, audioService, chatHeight) 
+        borderRadius: BorderRadius.circular(
+          collabService.isChatOpen ? 18 : 28,
+        ),
+        child: collabService.isChatOpen
+            ? _buildFullChatWrapper(collabService, audioService, chatHeight)
             : _buildChatIcon(collabService),
       ),
     );
   }
 
-  // 🚀 WRAPPER PARA EVITAR OVERFLOW
-  Widget _buildFullChatWrapper(CollaborationRoomService collabService, AudioSessionService audioService, double height) {
+  Widget _buildFullChatWrapper(
+    CollaborationRoomService collabService,
+    AudioSessionService audioService,
+    double height,
+  ) {
     return OverflowBox(
-      minWidth: 300, maxWidth: 300,
-      minHeight: height, maxHeight: height,
+      minWidth: 320,
+      maxWidth: 320,
+      minHeight: height,
+      maxHeight: height,
       alignment: Alignment.topLeft,
       child: _buildFullChat(collabService, audioService, height),
     );
   }
 
   Widget _buildChatIcon(CollaborationRoomService collabService) {
-    final bool isConnecting = collabService.statusNotifier.value != RealtimeStatus.connected;
+    final bool isConnecting =
+        collabService.statusNotifier.value != RealtimeStatus.connected;
 
     return InkWell(
       onTap: () => collabService.isChatOpen = true,
       borderRadius: BorderRadius.circular(28),
-      child: Center( 
+      child: Center(
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
             if (isConnecting)
               const SizedBox(
-                width: 24, height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white70,
+                ),
               )
             else
-              const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 26),
-            
+              const Icon(
+                Icons.chat_bubble_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+
             if (collabService.unreadChatCount > 0)
               Positioned(
-                top: -2,
-                right: -2,
+                top: -4,
+                right: -4,
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent, 
+                    color: Colors.redAccent,
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF0F4C5C), width: 1.5),
+                    border: Border.all(
+                      color: const Color(0xFF0F4C5C),
+                      width: 1.5,
+                    ),
                   ),
-                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
                   child: Text(
                     '${collabService.unreadChatCount}',
-                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -131,30 +165,65 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
     );
   }
 
-  Widget _buildFullChat(CollaborationRoomService collabService, AudioSessionService audioService, double height) {
+  Widget _buildFullChat(
+    CollaborationRoomService collabService,
+    AudioSessionService audioService,
+    double height,
+  ) {
     return Column(
       children: [
-        // Header
+        // 🚀 Header do Chat
         Container(
-          height: 50,
+          height: 52,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
             color: Color(0xFF0F4C5C),
           ),
           child: Row(
             children: [
-              const Icon(Icons.forum_rounded, color: Colors.white, size: 18),
+              const Icon(
+                Icons.forum_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Chat de Colaboração',
-                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  'Chat da Sala',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${collabService.onlineUsers.length} online',
+                  style: GoogleFonts.inter(
+                    color: Colors.white70,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               IconButton(
                 onPressed: () => collabService.isChatOpen = false,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 22),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
@@ -162,92 +231,185 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
           ),
         ),
 
+        // 🚀 Corpo da Lista de Mensagens
         Expanded(
           child: Container(
-            color: const Color(0xFFF8F9FA),
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(12),
-              itemCount: collabService.chatMessages.length,
-              itemBuilder: (context, index) {
-                final msg = collabService.chatMessages[index];
-                final isMe = msg['sender_id'] == collabService.myUserId;
-                final type = msg['type'] ?? 'text';
-                
-                final sender = collabService.onlineUsers.firstWhere(
-                  (u) => u['id'].toString() == msg['sender_id'],
-                  orElse: () => {'name': 'Colega'},
-                );
-
-                return Align(
-                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isMe ? const Color(0xFF0F4C5C) : Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(14),
-                        topRight: const Radius.circular(14),
-                        bottomLeft: Radius.circular(isMe ? 14 : 0),
-                        bottomRight: Radius.circular(isMe ? 0 : 14),
-                      ),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
-                      ],
-                    ),
+            color: const Color(0xFFF4F6F8),
+            child: collabService.chatMessages.isEmpty
+                ? Center(
                     child: Column(
-                      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (!isMe)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text(
-                              sender['name'],
-                              style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF0F4C5C)),
-                            ),
+                        Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 40,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Nenhuma mensagem ainda.\nEnvie um texto ou nota de voz!',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
                           ),
-                        if (type == 'text')
-                          Text(
-                            msg['message'] ?? '',
-                            style: GoogleFonts.inter(fontSize: 13, color: isMe ? Colors.white : Colors.black87),
-                          )
-                        else if (type == 'audio')
-                          _AudioPlayerWidget(
-                            url: msg['audio_url'],
-                            duration: msg['duration'],
-                            isMe: isMe,
-                          )
-                        else if (type == 'audio_stream')
-                          _StreamingAudioPlayerWidget(
-                            streamId: msg['msg_id'],
-                            initialDuration: msg['duration'],
-                            isMe: isMe,
-                          ),
+                        ),
                       ],
                     ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(12),
+                    itemCount: collabService.chatMessages.length,
+                    itemBuilder: (context, index) {
+                      final msg = collabService.chatMessages[index];
+                      final isMe =
+                          msg['sender_id']?.toString() == collabService.myUserId;
+                      final type = msg['type'] ?? 'text';
+
+                      final sender = collabService.onlineUsers.firstWhere(
+                        (u) => u['id'].toString() == msg['sender_id']?.toString(),
+                        orElse: () => {
+                          'name': isMe ? 'Você' : 'Colega',
+                          'color': const Color(0xFF2980B9),
+                        },
+                      );
+
+                      final String formattedTime = _formatMsgTime(
+                        msg['timestamp'],
+                      );
+
+                      return Align(
+                        alignment:
+                            isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          constraints: const BoxConstraints(maxWidth: 240),
+                          decoration: BoxDecoration(
+                            gradient: isMe
+                                ? const LinearGradient(
+                                    colors: [
+                                      Color(0xFF0F4C5C),
+                                      Color(0xFF1B4958),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : null,
+                            color: isMe ? null : Colors.white,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(14),
+                              topRight: const Radius.circular(14),
+                              bottomLeft: Radius.circular(isMe ? 14 : 2),
+                              bottomRight: Radius.circular(isMe ? 2 : 14),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: isMe
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!isMe)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: (sender['color'] as Color?) ??
+                                              const Color(0xFF2980B9),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Flexible(
+                                        child: Text(
+                                          sender['name'] ?? 'Colega',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                            color: const Color(0xFF0F4C5C),
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (type == 'text')
+                                Text(
+                                  msg['message'] ?? '',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12.5,
+                                    color: isMe ? Colors.white : Colors.black87,
+                                  ),
+                                )
+                              else if (type == 'audio')
+                                _AudioPlayerWidget(
+                                  url: msg['audio_url'] ?? '',
+                                  duration: (msg['duration'] as num?)?.toInt() ?? 0,
+                                  isMe: isMe,
+                                )
+                              else if (type == 'audio_stream')
+                                _StreamingAudioPlayerWidget(
+                                  streamId: msg['msg_id']?.toString() ?? '',
+                                  initialDuration: (msg['duration'] as num?)?.toInt() ?? 0,
+                                  isMe: isMe,
+                                ),
+                              const SizedBox(height: 2),
+                              Text(
+                                formattedTime,
+                                style: GoogleFonts.inter(
+                                  fontSize: 8.5,
+                                  color: isMe
+                                      ? Colors.white60
+                                      : Colors.black38,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ),
 
+        // 🚀 Indicador de Gravação de Áudio ou Input do Chat
         if (audioService.isRecording)
-          _RecordingIndicator(collabService: collabService, audioService: audioService)
+          _RecordingIndicator(
+            collabService: collabService,
+            audioService: audioService,
+          )
         else
           Container(
-            height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.2))),
+              border: Border(
+                top: BorderSide(color: Colors.grey.withOpacity(0.18)),
+              ),
             ),
             child: Row(
               children: [
                 Material(
-                  color: const Color(0xFF0F4C5C).withOpacity(0.1),
+                  color: const Color(0xFF0F4C5C).withOpacity(0.08),
                   shape: const CircleBorder(),
                   child: IconButton(
                     onPressed: () => audioService.startRecording(
@@ -255,9 +417,17 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                       liveNotebookSid: collabService.liveNotebookSid,
                       myUserId: collabService.myUserId,
                     ),
-                    icon: const Icon(Icons.mic_rounded, color: Color(0xFF0F4C5C), size: 20),
+                    icon: const Icon(
+                      Icons.mic_rounded,
+                      color: Color(0xFF0F4C5C),
+                      size: 20,
+                    ),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints: const BoxConstraints(
+                      minWidth: 34,
+                      minHeight: 34,
+                    ),
+                    tooltip: 'Gravar nota de voz',
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -265,20 +435,33 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
                   child: TextField(
                     controller: _msgController,
                     decoration: InputDecoration(
-                      hintText: 'Escrever...',
-                      hintStyle: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+                      hintText: 'Escrever mensagem...',
+                      hintStyle: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey.shade400,
+                      ),
                       border: InputBorder.none,
                       isDense: true,
                     ),
-                    style: GoogleFonts.inter(fontSize: 13),
-                    onSubmitted: (val) => _sendMessage(collabService),
+                    style: GoogleFonts.inter(fontSize: 12.5),
+                    onSubmitted: (_) => _sendMessage(collabService),
                   ),
                 ),
-                IconButton(
-                  onPressed: () => _sendMessage(collabService),
-                  icon: const Icon(Icons.send_rounded, color: Color(0xFF0F4C5C), size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                Material(
+                  color: const Color(0xFF0F4C5C),
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    onTap: () => _sendMessage(collabService),
+                    borderRadius: BorderRadius.circular(20),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -288,9 +471,23 @@ class _CollaborationChatWidgetState extends ConsumerState<CollaborationChatWidge
   }
 
   void _sendMessage(CollaborationRoomService collabService) {
-    if (_msgController.text.trim().isEmpty) return;
-    collabService.sendMessage(_msgController.text.trim());
+    final text = _msgController.text.trim();
+    if (text.isEmpty) return;
+    collabService.sendMessage(text);
     _msgController.clear();
+  }
+
+  String _formatMsgTime(dynamic rawTs) {
+    if (rawTs == null) return '';
+    try {
+      final dt = DateTime.tryParse(rawTs.toString()) ??
+          DateTime.fromMillisecondsSinceEpoch(
+            int.tryParse(rawTs.toString()) ?? 0,
+          );
+      return DateFormat('HH:mm').format(dt.toLocal());
+    } catch (_) {
+      return '';
+    }
   }
 }
 
@@ -298,7 +495,12 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
   final String streamId;
   final int initialDuration;
   final bool isMe;
-  const _StreamingAudioPlayerWidget({required this.streamId, required this.initialDuration, required this.isMe});
+
+  const _StreamingAudioPlayerWidget({
+    required this.streamId,
+    required this.initialDuration,
+    required this.isMe,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -306,17 +508,18 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
     final bool isPlaying = audioService.isStreamPlaying(streamId);
     final bool isFinal = audioService.isStreamFinalized(streamId);
     final int segmentCount = audioService.getStreamSegmentCount(streamId);
-    
+
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment:
+          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         if (!isFinal)
           Container(
-            margin: const EdgeInsets.only(bottom: 6),
+            margin: const EdgeInsets.only(bottom: 4),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
+              color: Colors.redAccent.withOpacity(0.12),
               borderRadius: BorderRadius.circular(4),
               border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
             ),
@@ -326,8 +529,12 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
                 const _BlinkingDot(),
                 const SizedBox(width: 4),
                 Text(
-                  'EM DIRECTO',
-                  style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.redAccent),
+                  'EM DIRETO',
+                  style: GoogleFonts.inter(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.redAccent,
+                  ),
                 ),
               ],
             ),
@@ -340,28 +547,30 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
               constraints: const BoxConstraints(),
               onPressed: () => audioService.playAudioStream(streamId),
               icon: Icon(
-                isPlaying ? Icons.stop_circle_rounded : Icons.play_circle_filled_rounded, 
+                isPlaying
+                    ? Icons.stop_circle_rounded
+                    : Icons.play_circle_filled_rounded,
                 color: isMe ? Colors.white : const Color(0xFF0F4C5C),
-                size: 32,
+                size: 28,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   isFinal ? 'Voz gravada' : 'A explicar...',
                   style: GoogleFonts.inter(
-                    fontSize: 10, 
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: isMe ? Colors.white70 : Colors.black54
+                    color: isMe ? Colors.white70 : Colors.black87,
                   ),
                 ),
                 Text(
                   '${initialDuration}s • $segmentCount partes',
                   style: GoogleFonts.inter(
-                    fontSize: 10, 
-                    color: isMe ? Colors.white60 : Colors.black38
+                    fontSize: 9,
+                    color: isMe ? Colors.white60 : Colors.black45,
                   ),
                 ),
               ],
@@ -375,62 +584,107 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
 
 class _BlinkingDot extends StatefulWidget {
   const _BlinkingDot();
+
   @override
   State<_BlinkingDot> createState() => _BlinkingDotState();
 }
 
-class _BlinkingDotState extends State<_BlinkingDot> with SingleTickerProviderStateMixin {
+class _BlinkingDotState extends State<_BlinkingDot>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
   }
+
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(opacity: _controller, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)));
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: const BoxDecoration(
+          color: Colors.redAccent,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
   }
 }
 
 class _RecordingIndicator extends StatelessWidget {
   final CollaborationRoomService collabService;
   final AudioSessionService audioService;
-  const _RecordingIndicator({required this.collabService, required this.audioService});
+
+  const _RecordingIndicator({
+    required this.collabService,
+    required this.audioService,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 60,
-      padding: const EdgeInsets.all(12),
-      color: Colors.red.withOpacity(0.05),
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      color: Colors.red.withOpacity(0.06),
       child: Row(
         children: [
-          const Icon(Icons.fiber_manual_record, color: Colors.red, size: 16),
+          const _BlinkingDot(),
           const SizedBox(width: 8),
           Expanded(
             child: StreamBuilder(
               stream: Stream.periodic(const Duration(seconds: 1)),
               builder: (context, snapshot) {
                 final dur = audioService.recordingDuration;
+                final String formatted =
+                    '${dur.inMinutes.toString().padLeft(2, '0')}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}';
                 return Text(
-                  'GRAVANDO... ${dur.inMinutes}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}',
-                  style: GoogleFonts.inter(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                  'GRAVANDO... $formatted',
+                  style: GoogleFonts.inter(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
                 );
               },
             ),
           ),
-          ElevatedButton(
-            onPressed: () => audioService.stopAndSendAudio(collabService.liveNotebookSid, collabService.myUserId),
+          IconButton(
+            onPressed: () {
+              audioService.stopAudio();
+            },
+            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+            tooltip: 'Cancelar',
+          ),
+          const SizedBox(width: 4),
+          ElevatedButton.icon(
+            onPressed: () => audioService.stopAndSendAudio(
+              collabService.liveNotebookSid,
+              collabService.myUserId,
+            ),
+            icon: const Icon(Icons.send_rounded, size: 14),
+            label: const Text('ENVIAR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0F4C5C),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               minimumSize: const Size(60, 32),
             ),
-            child: const Text('ENVIAR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
           ),
         ],
       ),
@@ -442,7 +696,12 @@ class _AudioPlayerWidget extends ConsumerStatefulWidget {
   final String url;
   final int duration;
   final bool isMe;
-  const _AudioPlayerWidget({required this.url, required this.duration, required this.isMe});
+
+  const _AudioPlayerWidget({
+    required this.url,
+    required this.duration,
+    required this.isMe,
+  });
 
   @override
   ConsumerState<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
@@ -450,7 +709,7 @@ class _AudioPlayerWidget extends ConsumerStatefulWidget {
 
 class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
   bool _isLoading = false;
-  
+
   @override
   Widget build(BuildContext context) {
     final audioService = ref.watch(audioSessionProvider);
@@ -459,15 +718,20 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
 
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment:
+          widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_isLoading && !isPlaying)
               const SizedBox(
-                width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.blueAccent,
+                ),
               )
             else
               IconButton(
@@ -478,7 +742,7 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
                     await audioService.playAudioMessage(widget.url);
                     return;
                   }
-                  
+
                   setState(() => _isLoading = true);
                   try {
                     await audioService.playAudioMessage(widget.url);
@@ -488,9 +752,11 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
                   }
                 },
                 icon: Icon(
-                  isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded, 
+                  isPlaying
+                      ? Icons.pause_circle_filled_rounded
+                      : Icons.play_circle_filled_rounded,
                   color: widget.isMe ? Colors.white : const Color(0xFF0F4C5C),
-                  size: 32,
+                  size: 30,
                 ),
               ),
             const SizedBox(width: 8),
@@ -498,18 +764,18 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Mensagem de voz',
+                  'Nota de voz',
                   style: GoogleFonts.inter(
-                    fontSize: 10, 
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: widget.isMe ? Colors.white70 : Colors.black54
+                    color: widget.isMe ? Colors.white70 : Colors.black87,
                   ),
                 ),
                 Text(
                   '${widget.duration}s',
                   style: GoogleFonts.inter(
-                    fontSize: 10, 
-                    color: widget.isMe ? Colors.white60 : Colors.black38
+                    fontSize: 9,
+                    color: widget.isMe ? Colors.white60 : Colors.black45,
                   ),
                 ),
               ],
@@ -518,16 +784,17 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
         ),
         if (isPlaying || (progress > 0 && progress < 1))
           Padding(
-            padding: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.only(top: 4),
             child: SizedBox(
               width: 120,
               child: LinearProgressIndicator(
                 value: progress,
-                backgroundColor: widget.isMe ? Colors.white24 : Colors.black12,
+                backgroundColor:
+                    widget.isMe ? Colors.white24 : Colors.black12,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   widget.isMe ? Colors.white : const Color(0xFF2ECC71),
                 ),
-                minHeight: 2,
+                minHeight: 2.5,
               ),
             ),
           ),

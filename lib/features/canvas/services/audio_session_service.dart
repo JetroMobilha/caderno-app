@@ -4,6 +4,7 @@ import 'dart:io' as io;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
 import 'package:uuid/uuid.dart';
@@ -282,12 +283,21 @@ class AudioSessionService extends ChangeNotifier {
   void _processAndSendSegment(String path, String msgId, int index, num duration, {bool isFinal = false, bool isLive = false, int retryCount = 0, int? liveNotebookSid, String? myUserId}) async {
     if (liveNotebookSid == null) return;
     try {
-      if (kIsWeb) return; 
-      final file = io.File(path);
-      if (!await file.exists()) return;
-      
-      final bytes = await file.readAsBytes(); 
-      final url = await _repository.uploadAudio(liveNotebookSid, 'segment_${msgId}_$index.m4a', bytes);
+      Uint8List bytes;
+      if (kIsWeb) {
+        final response = await http.get(Uri.parse(path));
+        if (response.statusCode != 200) return;
+        bytes = response.bodyBytes;
+      } else {
+        final file = io.File(path);
+        if (!await file.exists()) return;
+        bytes = await file.readAsBytes();
+      }
+
+      if (bytes.isEmpty) return;
+
+      final String ext = kIsWeb ? 'webm' : 'm4a';
+      final url = await _repository.uploadAudio(liveNotebookSid, 'segment_${msgId}_$index.$ext', bytes);
       
       if (url != null) { 
         _realtimeService.broadcastAudioMessage(

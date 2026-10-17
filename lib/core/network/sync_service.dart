@@ -72,15 +72,14 @@ class SyncService {
 
   /// 🚀 Retorna o timestamp ISO do lastSynced recuado com uma janela de segurança (Safety Buffer)
   /// para tolerar pequenas diferenças de relógio entre dispositivos e atrasos de rede.
-  String? _getBufferedLastSynced(
-    String? rawLastSynced, {
-    Duration buffer = const Duration(minutes: 2),
-  }) {
+  String? _getBufferedLastSynced(String? rawLastSynced) {
     if (rawLastSynced == null || rawLastSynced.isEmpty) return null;
     try {
       final dt = DateTime.parse(rawLastSynced);
-      final bufferedDt = dt.subtract(buffer);
-      return bufferedDt.toUtc().toIso8601String();
+      // 🚀 OTIMIZAÇÃO: Sem subtração de tempo. O TimeService já garante a precisão do relógio.
+      // O buffer estava a causar um re-download infinito porque o PULL procurava sempre páginas
+      // 2 minutos antes, re-encontrando as páginas que tinham acabado de ser enviadas no PUSH!
+      return dt.toUtc().toIso8601String();
     } catch (e) {
       return rawLastSynced;
     }
@@ -89,11 +88,7 @@ class SyncService {
   // =========================================================================
   // 1. SINCRONIZAÇÃO TOTAL
   // =========================================================================
-  Future<void> syncAll({
-    bool forced = false,
-    bool metadataOnly = false,
-    bool pushOnly = false,
-  }) async {
+  Future<void> syncAll({ bool forced = false, bool metadataOnly = false, bool pushOnly = false, }) async {
     if (_isGlobalSyncing && !forced) {
       AppLog.sync('⏳ [Sync] Ignorado: Já existe um ciclo em curso.');
       return;
@@ -113,17 +108,17 @@ class SyncService {
 
       // 2. Recuperação de Lotes (Apenas se PUSH indicou que há muito mais dados em lote ou forced)
       if (!pushOnly) {
-        if (hasMoreSubjects || forced) await pullSubjects();
-        if (hasMoreNotebooks || forced) await pullNotebooks();
+        if (hasMoreSubjects) await pullSubjects();
+        if (hasMoreNotebooks) await pullNotebooks();
       }
 
       if (!metadataOnly) {
-        final bool hasMorePages = await pushPages(pushOnly: pushOnly);
-        if (!pushOnly && (hasMorePages || forced)) {
-          await pullPages();
+        await pushPages(pushOnly: pushOnly);
+        if (!pushOnly) {
+          await pullPages(); // 🚀 FIX DEFINITIVO: Não passar forceFull: forced! Mantém sempre o last_synced_at para evitar o re-download desnecessário de 50+ páginas!
         }
         final bool hasMoreRecs = await pushRecordings(pushOnly: pushOnly);
-        if (!pushOnly && (hasMoreRecs || forced)) {
+        if (!pushOnly && hasMoreRecs) {
           await pullRecordings();
         }
       }
@@ -1090,132 +1085,87 @@ class SyncService {
                 if (syncedPageMap.isEmpty) continue;
 
                 final String? cId = syncedPageMap['client_id'];
+                if (cId == null) continue;
+
                 final String? status = syncedPageMap['status']?.toString();
+                final int? sentTs = sentPageTimestamps[cId];
+
+                // 🚀 1. FASE DE CONFIRMAÇÃO DO PUSH (Livre de bloqueios de caderno local)
+                final localPage = await (_db.select(_db.pages)
+                      ..where((t) => t.clientId.equals(cId)))
+                    .getSingleOrNull();
+
+                if (localPage != null) {
+                  // Se a página local ou remota foi apagada, purge físico imediato!
+                  if (localPage.isDeleted == 1 ||
+                      status == 'deleted' ||
+                      status == 'already_deleted' ||
+                      syncedPageMap['is_deleted'] == 1 ||
+                      syncedPageMap['is_deleted'] == true) {
+                    await _canvasRepository.purgePageCompletely(localPage.id);
+                    continue;
+                  }
+
+                  // Marcar a página e todos os seus objetos/traços como sincronizados
+                  await _markPageItemsAsSynced(localPage.id, sentTs: sentTs);
+                  await (_db.update(_db.pages)
+                        ..where((t) => t.id.equals(localPage.id)))
+                      .write(const PagesCompanion(syncedWithCloud: Value(1)));
+                  await _canvasRepository.purgeSyncedDeletedObjects(localPage.id);
+                }
+
+                if (pushOnly || (status != null && status.startsWith('ignored_'))) {
+                  continue;
+                }
+
+                // 🚀 2. FASE DE DELTAS / ATUALIZAÇÕES DO SERVIDOR
                 final int? sNbId = syncedPageMap['notebook_id'] != null
                     ? int.tryParse(syncedPageMap['notebook_id'].toString())
                     : null;
 
-                // Procurar notebook local para garantir que existe antes de salvar (Fix FOREIGN KEY)
                 int? localNbId;
                 if (sNbId != null) {
-                  final nbRow = await (_db.select(
-                    _db.notebooks,
-                  )..where((t) => t.serverId.equals(sNbId))).getSingleOrNull();
+                  var nbRow = await (_db.select(_db.notebooks)
+                        ..where((t) => t.serverId.equals(sNbId)))
+                      .getSingleOrNull();
+                  nbRow ??= await (_db.select(_db.notebooks)
+                        ..where((t) => t.id.equals(sNbId)))
+                      .getSingleOrNull();
                   localNbId = nbRow?.id;
                 }
 
-                if (cId == null) continue;
-                final int? sentTs = sentPageTimestamps[cId];
-
                 if (localNbId == null && sNbId != null) {
-                  AppLog.sync('⚠️ [Sync] Página ignorada: Caderno servidor $sNbId não encontrado localmente.');
+                  AppLog.sync('⚠️ [Sync] Updates ignorados: Caderno servidor $sNbId não encontrado localmente.');
                   continue;
                 }
 
-                // No logout (pushOnly), não precisamos de puxar dados ignorados ou deltas do servidor
-                if (pushOnly) {
-                  // Apenas marcamos como sincronizado localmente se o servidor confirmou
-                  final localPage = await (_db.select(
-                    _db.pages,
-                  )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                  if (localPage != null) {
-                    await _markPageItemsAsSynced(localPage.id, sentTs: sentTs);
-                    await (_db.update(_db.pages)..where(
-                          (t) => sentTs != null
-                              ? t.id.equals(localPage.id) &
-                                    t.updatedAt.isSmallerOrEqualValue(sentTs)
-                              : t.id.equals(localPage.id),
-                        ))
-                        .write(const PagesCompanion(syncedWithCloud: Value(1)));
-                    await _canvasRepository.purgeSyncedDeletedObjects(
-                      localPage.id,
-                    );
-                  }
-                  continue;
-                }
-
-                if (status == 'ignored_old' && sNbId != null) {
-                  AppLog.sync('');
-                  await pullSpecificPage(
-                    sNbId,
-                    syncedPageMap['page_number'] ?? 0,
-                    clientId: cId,
-                  );
-                  final localPage = await (_db.select(
-                    _db.pages,
-                  )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                  if (localPage != null) {
-                    await (_db.update(_db.pages)..where(
-                          (t) => sentTs != null
-                              ? t.id.equals(localPage.id) &
-                                    t.updatedAt.isSmallerOrEqualValue(sentTs)
-                              : t.id.equals(localPage.id),
-                        ))
-                        .write(const PagesCompanion(syncedWithCloud: Value(1)));
-                  }
-                  continue;
-                }
-
-                if (status == 'deleted') {
-                  final localPage = await (_db.select(
-                    _db.pages,
-                  )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                  if (localPage != null) {
-                    await (_db.update(_db.pages)..where(
-                          (t) => sentTs != null
-                              ? t.id.equals(localPage.id) &
-                                    t.updatedAt.isSmallerOrEqualValue(sentTs)
-                              : t.id.equals(localPage.id),
-                        ))
-                        .write(const PagesCompanion(syncedWithCloud: Value(1)));
-                  }
-                  continue;
-                }
-
-                final existingPage = await (_db.select(
-                  _db.pages,
-                )..where((t) => t.clientId.equals(cId))).getSingleOrNull();
-                int localId = existingPage?.id ?? 0;
-
-                if (existingPage != null &&
-                    existingPage.syncedWithCloud == 0 &&
+                int localId = localPage?.id ?? 0;
+                if (localPage != null &&
+                    localPage.syncedWithCloud == 0 &&
                     sentTs != null &&
-                    existingPage.updatedAt > sentTs) {
-                  // A página foi editada durante o upload. Preservamos o estado local.
+                    localPage.updatedAt > sentTs) {
+                  // A página foi editada localmente durante o upload. Preservamos o estado local.
                   if (syncedPageMap['id'] != null) {
-                    await (_db.update(
-                      _db.pages,
-                    )..where((t) => t.id.equals(localId))).write(
-                      PagesCompanion(serverId: Value(syncedPageMap['id'])),
-                    );
+                    await (_db.update(_db.pages)
+                          ..where((t) => t.id.equals(localId)))
+                        .write(PagesCompanion(serverId: Value(syncedPageMap['id'])));
                   }
                 } else {
-                  localId = await _canvasRepository.savePageFromMap(
-                    syncedPageMap,
-                    sNbId,
-                  );
+                  // 🚀 PREVENÇÃO DE LOOP: Se a página já está sincronizada e não tem deltas novos,
+                  // evitamos regravar para não resetar o syncedWithCloud para 0 no SQLite!
+                  if (localPage == null || syncedPageMap['_sync_status'] != 'already_current') {
+                    localId = await _canvasRepository.savePageFromMap(
+                      syncedPageMap,
+                      sNbId,
+                    );
+                    _prewarmBackgroundImage(syncedPageMap);
+                  }
                 }
-                _prewarmBackgroundImage(
-                  syncedPageMap,
-                ); // 🚀 OTIMIZAÇÃO: Caching em plano de fundo
-
-                // Sempre marcamos como limpos os itens que acabámos de enviar com sucesso.
-                // Se algum item tiver sido rejeitado pelo servidor, será limpo aqui e apagado no pull.
-                await _markPageItemsAsSynced(localId, sentTs: sentTs);
 
                 if (syncedPageMap['_sync_status'] != 'already_current') {
                   localIdsToPull.add(localId);
                   serverDataForPull[localId] = syncedPageMap;
                 }
-
-                await (_db.update(_db.pages)..where(
-                      (t) => sentTs != null
-                          ? t.id.equals(localId) &
-                                t.updatedAt.isSmallerOrEqualValue(sentTs)
-                          : t.id.equals(localId),
-                    ))
-                    .write(const PagesCompanion(syncedWithCloud: Value(1)));
-                await _canvasRepository.purgeSyncedDeletedObjects(localId);
               } catch (e) {
                 AppLog.sync('🚨 [Sync-Push-Batch] Erro ao processar confirmação de página: $e');
               }
@@ -1234,6 +1184,21 @@ class SyncService {
                   final int sNbId = updMap['notebook_id'] is int
                       ? updMap['notebook_id']
                       : int.parse(updMap['notebook_id'].toString());
+
+                  // 🚀 PREVENÇÃO DE FANTASMAS (Phase 2): Se a folha vem no array de updates como apagada,
+                  // ou se ELA JÁ ESTÁ MARCADA COMO APAGADA LOCALMENTE (isDeleted == 1),
+                  // expurgamos localmente (se existir) e NUNCA inserimos de volta nem processamos updates!
+                  final bool isUpdDeleted = updMap['is_deleted'] == 1 || updMap['is_deleted'] == true || updMap['deleted_at'] != null;
+                  final String? updCId = updMap['client_id'];
+                  if (updCId != null) {
+                    final existingGhost = await (_db.select(_db.pages)..where((t) => t.clientId.equals(updCId))).getSingleOrNull();
+                    if (isUpdDeleted || (existingGhost != null && existingGhost.isDeleted == 1)) {
+                      if (existingGhost != null) {
+                        await _canvasRepository.purgePageCompletely(existingGhost.id);
+                      }
+                      continue;
+                    }
+                  }
 
                   final localId = await _canvasRepository.savePageFromMap(
                     updMap,
@@ -1259,6 +1224,32 @@ class SyncService {
               }
             }
 
+            // 🚀 SALVAGUARDA ANTI-LOOP: Marcar como sincronizadas todas as páginas enviadas no lote
+            for (var batchItem in batchPayload) {
+              try {
+                final String? sentCId = batchItem['client_id']?.toString();
+                if (sentCId == null) continue;
+                final localPage = await (_db.select(
+                  _db.pages,
+                )..where((t) => t.clientId.equals(sentCId))).getSingleOrNull();
+                if (localPage != null) {
+                  if (localPage.isDeleted == 1) {
+                    await _canvasRepository.purgePageCompletely(localPage.id);
+                  } else if (localPage.syncedWithCloud == 0) {
+                    await _markPageItemsAsSynced(localPage.id);
+                    await (_db.update(_db.pages)..where((t) => t.id.equals(localPage.id)))
+                        .write(const PagesCompanion(syncedWithCloud: Value(1)));
+                  }
+                } else {
+                  // Se localPage == null e o batchItem era de is_deleted == 1, significa
+                  // que a Fase 1 da confirmação já fez o purgeCompletely!
+                  // Não fazemos nada.
+                }
+              } catch (e) {
+                 AppLog.sync('🚨 [Sync-Push-Batch] Erro fatal ao purgar página local: $e');
+              }
+            }
+
             AppLog.sync('✅ [Sync-Push-Batch] Lote processado. Mais dados no servidor: $serverHasMore');
           } else {
             allSuccess = false;
@@ -1279,61 +1270,84 @@ class SyncService {
         final String? cId = row.clientId;
         if (cId == null) continue;
 
-        final fullPage = await _canvasRepository.getPageByClientId(
-          cId,
-          onlyUnsynced: true,
-        );
-        if (fullPage == null) continue;
+        Map<String, dynamic> pageMap;
 
-        final pageMap = await fullPage.toJsonAsync();
-        pageMap['notebook_id'] = notebook.serverId;
-        pageMap['is_deleted'] = row.isDeleted == 1 ? 1 : 0;
-        if (row.serverId != null) pageMap['server_id'] = row.serverId;
-
-        // 🚀 UPLOAD DE IMAGEM DE FUNDO DA PÁGINA (PDF Importado em disco local)
-        String? bgPath = fullPage.backgroundPdfPath;
-        if (bgPath != null && bgPath.isNotEmpty && !bgPath.startsWith('http')) {
-          final localFile = io.File(bgPath);
-          bool bgSuccess = false;
-          if (localFile.existsSync()) {
-            try {
-              final bytes = await localFile.readAsBytes();
-              final String fileName = bgPath.split('/').last.split('\\').last;
-              final String? remoteUrl = await _canvasRepository.uploadImage(
-                notebook.serverId!,
-                fileName,
-                bytes,
-              );
-              if (remoteUrl != null && remoteUrl.isNotEmpty) {
-                pageMap['background_pdf_path'] = remoteUrl;
-                pageMap['background_image_path'] = remoteUrl;
-
-                await (_db.update(_db.pages)
-                      ..where((t) => t.clientId.equals(cId)))
-                    .write(PagesCompanion(backgroundPdfPath: Value(remoteUrl)));
-
-                if (!kIsWeb) {
-                  // 🚀 Multi-device sync: Injetar ficheiro local nativamente na cache em vez de re-download!
-                  try {
-                    DefaultCacheManager().putFile(
-                      remoteUrl,
-                      bytes,
-                      fileExtension: 'jpg',
-                    );
-                  } catch (_) {}
-                }
-
-                bgSuccess = true;
-                AppLog.sync('☁️ [Sync-Push] Upload do fundo da página ${row.pageNumber} concluído: $remoteUrl');
-              }
-            } catch (e) {
-              AppLog.sync('⚠️ [Sync-Push] Falha ao fazer upload do fundo local da página ${row.pageNumber}: $e');
-            }
+        // 🚀 OTIMIZAÇÃO E ANTI-GHOST: Se a página foi apagada localmente, 
+        // não perdemos tempo a carregar os traços do repositório (que podem dar erro/ser nulos), 
+        // mas IMPORTANTE: Não incluímos no batch se ela já não existir no servidor (serverId null).
+        // Se ela só existe no telemóvel e já foi apagada, basta limpar localmente sem gastar rede!
+        if (row.isDeleted == 1) {
+          if (row.serverId == null) {
+             await _canvasRepository.purgePageCompletely(row.id);
+             continue;
           }
-          if (!bgSuccess) {
-            // 🚀 Prevenir o envenenamento da base de dados cloud com caminhos físicos locais
-            pageMap.remove('background_pdf_path');
-            pageMap.remove('background_image_path');
+          pageMap = {
+            'id': row.serverId,
+            'client_id': cId,
+            'notebook_id': notebook.serverId,
+            'is_deleted': 1,
+            'page_number': row.pageNumber,
+            'synced_with_cloud': 0,
+          };
+        } else {
+          final fullPage = await _canvasRepository.getPageByClientId(
+            cId,
+            onlyUnsynced: true,
+          );
+          if (fullPage == null) continue;
+
+          pageMap = await fullPage.toJsonAsync();
+          pageMap['notebook_id'] = notebook.serverId;
+          pageMap['is_deleted'] = 0;
+          if (row.serverId != null) pageMap['server_id'] = row.serverId;
+
+          // 🚀 UPLOAD DE IMAGEM DE FUNDO DA PÁGINA (PDF Importado em disco local)
+          String? bgPath = fullPage.backgroundPdfPath;
+          if (bgPath != null && bgPath.isNotEmpty && !bgPath.startsWith('http')) {
+            final localFile = io.File(bgPath);
+            bool bgSuccess = false;
+            if (localFile.existsSync()) {
+              try {
+                final bytes = await localFile.readAsBytes();
+                final String fileName = bgPath.split('/').last.split('\\').last;
+                final String? remoteUrl = await _canvasRepository.uploadImage(
+                  notebook.serverId!,
+                  fileName,
+                  bytes,
+                );
+                if (remoteUrl != null && remoteUrl.isNotEmpty) {
+                  pageMap['background_pdf_path'] = remoteUrl;
+                  pageMap['background_image_path'] = remoteUrl;
+
+                  await (_db.update(_db.pages)
+                        ..where((t) => t.clientId.equals(cId)))
+                      .write(PagesCompanion(backgroundPdfPath: Value(remoteUrl)));
+
+                  if (!kIsWeb) {
+                    try {
+                      DefaultCacheManager().putFile(
+                        remoteUrl,
+                        bytes,
+                        fileExtension: 'jpg',
+                      );
+                    } catch (_) {}
+                  }
+
+                  bgSuccess = true;
+                  AppLog.sync('☁️ [Sync-Push] Upload do fundo da página ${row.pageNumber} concluído: $remoteUrl');
+                }
+              } catch (e) {
+                AppLog.sync('⚠️ [Sync-Push] Falha ao fazer upload do fundo local da página ${row.pageNumber}: $e');
+              }
+            }
+            if (!bgSuccess) {
+              pageMap.remove('background_pdf_path');
+              pageMap.remove('background_image_path');
+            }
+          } else {
+            // Garantir envio explícito do valor (URL remoto ou "" para remoção)
+            pageMap['background_pdf_path'] = bgPath ?? '';
+            pageMap['background_image_path'] = bgPath ?? '';
           }
         }
 
@@ -1351,12 +1365,13 @@ class SyncService {
 
         currentBatchPayload.add(pageMap);
         currentBatchBytes += pageEstimatedBytes;
-        sentPageTimestamps[cId] = fullPage.updatedAt;
+        // Se a folha for apagada, forçamos o timestamp local, caso contrário usamos o da fullPage
+        sentPageTimestamps[cId] = row.isDeleted == 1 ? row.updatedAt : (pageMap['updated_at'] ?? row.updatedAt);
 
         if (row.isDeleted == 1) {
           AppLog.sync('🛫 [Sync-Push-Delete] Enviando folha apagada ${row.pageNumber} com conteúdos pendentes.');
         } else {
-          AppLog.sync('🛫 [Sync-Push-Delta] Preparando página ${row.pageNumber} (${(pageEstimatedBytes / 1024).toStringAsFixed(1)} KB, ${fullPage.strokes.length} traços).');
+          AppLog.sync('🛫 [Sync-Push-Delta] Preparando página ${row.pageNumber} (${(pageEstimatedBytes / 1024).toStringAsFixed(1)} KB).');
         }
       }
 
@@ -1459,21 +1474,29 @@ class SyncService {
     });
   }
 
-  Future<bool> pullPages({
-    bool forceFull = false,
-    int? onlyNotebookId,
-    int? onlyNotebookServerId,
-  }) async {
+  Future<bool> pullPages({ bool forceFull = false, int? onlyNotebookId, int? onlyNotebookServerId, }) async {
     final prefs = await SharedPreferences.getInstance();
 
-    int? targetServerNbId = onlyNotebookServerId ?? onlyNotebookId;
-    if (targetServerNbId != null && onlyNotebookServerId == null) {
-      final sId = targetServerNbId;
-      final nbByLocal = await (_db.select(
-        _db.notebooks,
-      )..where((t) => t.id.equals(sId))).getSingleOrNull();
-      if (nbByLocal?.serverId != null) {
-        targetServerNbId = nbByLocal!.serverId;
+    int? targetServerNbId = onlyNotebookServerId;
+    if (targetServerNbId == null && onlyNotebookId != null) {
+      final inputId = onlyNotebookId;
+      // 1. Verificar se inputId já é o serverId de algum caderno local
+      final nbByServer = await (_db.select(_db.notebooks)
+            ..where((t) => t.serverId.equals(inputId)))
+          .getSingleOrNull();
+      if (nbByServer != null) {
+        targetServerNbId = nbByServer.serverId;
+      } else {
+        // 2. Tentar buscar por ID primário local (id)
+        final nbByLocal = await (_db.select(_db.notebooks)
+              ..where((t) => t.id.equals(inputId)))
+            .getSingleOrNull();
+        if (nbByLocal?.serverId != null) {
+          targetServerNbId = nbByLocal!.serverId;
+        } else {
+          // 3. Fallback: assumir que é o próprio serverId
+          targetServerNbId = inputId;
+        }
       }
     }
 
@@ -1483,14 +1506,30 @@ class SyncService {
         ? _getBufferedLastSynced(prefs.getString('last_pages_sync'))
         : null;
 
-    try {
-      String? baseUrl = '/sync/pages/pull';
-      if (lastSynced != null) baseUrl += '?last_synced_at=$lastSynced';
-      if (targetServerNbId != null)
-        baseUrl +=
-            (lastSynced != null ? '&' : '?') + 'notebook_id=$targetServerNbId';
+    final String resumeKey = targetServerNbId != null
+        ? 'resume_pull_url_$targetServerNbId'
+        : 'resume_pull_url_global';
 
-      String? nextUrl = baseUrl;
+    try {
+      String? nextUrl;
+      // 🚀 CURSOR DE RETOMADA: Se não for forçado do início, verifica se temos um lote pendente de uma tentativa anterior
+      if (!forceFull && prefs.containsKey(resumeKey)) {
+        final savedUrl = prefs.getString(resumeKey);
+        if (savedUrl != null && savedUrl.isNotEmpty && savedUrl != 'null') {
+          nextUrl = savedUrl;
+          AppLog.sync('🗂️ [Sync-Resume] Retomando download do lote a partir de: $nextUrl');
+        }
+      }
+
+      if (nextUrl == null) {
+        String baseUrl = '/sync/pages/pull';
+        if (lastSynced != null) baseUrl += '?last_synced_at=$lastSynced';
+        if (targetServerNbId != null) {
+          baseUrl += (lastSynced != null ? '&' : '?') + 'notebook_id=$targetServerNbId';
+        }
+        nextUrl = baseUrl;
+      }
+
       bool anyChanges = false;
       final Set<String> serverClientIds = {};
 
@@ -1507,12 +1546,13 @@ class SyncService {
 
           final List serverPages =
               responseData['data'] ?? responseData['pages'] ?? [];
+          // 🚀 AGORA GUARDA O METADATA SEMPRE, MESMO SE A PÁGINA NÃO TIVER DADOS NO ARRAY!
+          // Isto impede o bug de "nextUrl == null" na página 11 não salvar a última data de sincronização!
           final String? serverTime = _parseMetaTime(responseData['meta']);
-
-          // 🚀 SÓ ATUALIZAMOS O MARCADOR GLOBAL se for um pull completo (sem filtro de caderno)
           if (targetServerNbId == null && serverTime != null) {
             await prefs.setString('last_pages_sync', serverTime);
           }
+
           if (serverPages.isNotEmpty) {
             anyChanges = true;
             final List<int> localPageIdsForBatch = [];
@@ -1543,9 +1583,28 @@ class SyncService {
                     _parseSafeInt(sPage['updated_at']) ??
                     0;
 
+                // 🚀 PREVENÇÃO DE FANTASMAS: Se o servidor disser que a folha está apagada,
+                // apagamo-la localmente caso exista, e SALTAMOS a recriação!
+                final bool isServerDeleted = sPage['is_deleted'] == 1 || sPage['is_deleted'] == true || sPage['deleted_at'] != null;
+                if (isServerDeleted) {
+                  if (existingPage != null) {
+                    await _canvasRepository.purgePageCompletely(existingPage.id);
+                  }
+                  continue;
+                }
+
+                // 🚀 OTIMIZAÇÃO CRÍTICA: Se a página já existe localmente, está limpa (syncedWithCloud == 1)
+                // e o timestamp local for IGUAL ou MAIOR que o do servidor, a página NÃO MUDOU.
+                // Ignoramos a re-gravação no SQLite e o re-processamento de objetos!
+                if (existingPage != null &&
+                    existingPage.syncedWithCloud == 1 &&
+                    existingPage.updatedAt >= serverTs) {
+                  continue;
+                }
+
                 if (existingPage != null &&
                     existingPage.syncedWithCloud == 0 &&
-                    existingPage.updatedAt >= serverTs) {
+                    existingPage.updatedAt > serverTs) {
                   localPageIdsForBatch.add(existingPage.id);
                   serverPageDataMap[existingPage.id] = sPage;
                   continue;
@@ -1570,6 +1629,11 @@ class SyncService {
               );
           }
           nextUrl = _extractNextUrl(responseData);
+          if (nextUrl != null && nextUrl.isNotEmpty && nextUrl != 'null') {
+            await prefs.setString(resumeKey, nextUrl);
+          } else {
+            await prefs.remove(resumeKey); // 🚀 Lote 100% concluído! Limpar cursor.
+          }
         } else {
           throw Exception('Erro ${response.statusCode} no PULL Pages');
         }
@@ -1592,6 +1656,36 @@ class SyncService {
             )..where((t) => t.id.equals(lp.id))).go();
         }
       }
+
+      // 🚀 AUTO-RECUPERAÇÃO E RETOMADA DE CADERNOS INCOMPLETOS:
+      // Se for um PULL global (sem filtro de caderno específico),
+      // verifica se há cadernos locais sem páginas OU com cursores de retomada pendentes.
+      if (targetServerNbId == null) {
+        final allLocalNotebooks = await (_db.select(_db.notebooks)
+              ..where((t) => t.serverId.isNotNull() & t.isDeleted.equals(0)))
+            .get();
+
+        for (var nb in allLocalNotebooks) {
+          if (nb.serverId == null) continue;
+          final String nbResumeKey = 'resume_pull_url_${nb.serverId}';
+          final bool hasPendingResume = prefs.containsKey(nbResumeKey);
+
+          final pagesInNb = await (_db.select(_db.pages)
+                ..where((t) => t.notebookId.equals(nb.id) & t.isDeleted.equals(0)))
+              .get();
+
+          if (pagesInNb.isEmpty || hasPendingResume) {
+            AppLog.sync(
+              '📥 [Sync-AutoPull] Caderno "${nb.title}" (ServerID: ${nb.serverId}) ${hasPendingResume ? "possui lote pendente após quebra de rede" : "tem 0 páginas"}! Sincronizando...',
+            );
+            await pullPages(
+              forceFull: pagesInNb.isEmpty,
+              onlyNotebookServerId: nb.serverId,
+            );
+          }
+        }
+      }
+
       return anyChanges;
     } catch (e) {
       return false;
@@ -1954,13 +2048,24 @@ class SyncService {
   }
 
   String? _extractNextUrl(Map<String, dynamic> responseData) {
+    if (responseData['next_page_url'] != null) {
+      final String nextUrl = responseData['next_page_url'].toString();
+      if (nextUrl.isNotEmpty && nextUrl != 'null') return nextUrl;
+    }
     final dynamic links = responseData['links'];
-    if (links is Map) return links['next']?.toString();
-    if (links is List)
-      for (var link in links)
-        if (link is Map && link['label']?.toString().contains('Next') == true)
-          return link['url']?.toString();
-    return responseData['next_page_url']?.toString();
+    if (links is Map && links['next'] != null) {
+      final String nextUrl = links['next'].toString();
+      if (nextUrl.isNotEmpty && nextUrl != 'null') return nextUrl;
+    }
+    if (links is List) {
+      for (var link in links) {
+        if (link is Map && link['label']?.toString().contains('Next') == true) {
+          final String? url = link['url']?.toString();
+          if (url != null && url.isNotEmpty && url != 'null') return url;
+        }
+      }
+    }
+    return null;
   }
 
   Future<bool> pushRecordings({bool pushOnly = false}) async {

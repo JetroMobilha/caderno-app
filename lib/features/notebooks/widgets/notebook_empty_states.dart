@@ -33,11 +33,13 @@ class NoSubjectState extends StatelessWidget {
 class EmptyNotebooksState extends StatelessWidget {
   final Color themeColor;
   final String subjectName;
+  final bool isSharedTab;
 
   const EmptyNotebooksState({
     super.key, 
     required this.themeColor, 
     required this.subjectName,
+    this.isSharedTab = false,
   });
 
   @override
@@ -46,15 +48,27 @@ class EmptyNotebooksState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.book_outlined, size: 52, color: themeColor.withOpacity(0.3)),
+          Icon(
+            isSharedTab ? Icons.share_outlined : Icons.book_outlined,
+            size: 52,
+            color: themeColor.withOpacity(0.3),
+          ),
           const SizedBox(height: 16),
           Text(
-            'Estante Vazia em "$subjectName"',
-            style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+            isSharedTab
+                ? 'Sem Cadernos Compartilhados'
+                : 'Estante Vazia em "$subjectName"',
+            style: GoogleFonts.lora(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
-            'Clica no (+) em baixo para criares o teu primeiro caderno.',
+            isSharedTab
+                ? 'Ainda não tens nenhum caderno compartilhado contigo.'
+                : 'Clica no (+) em baixo para criares o teu primeiro caderno.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(color: Colors.black45, fontSize: 13),
           ),

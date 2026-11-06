@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../services/collaboration_room_service.dart';
 import '../providers/audio_session_provider.dart';
+import '../providers/canvas_ui_provider.dart';
 import '../../canvas/services/audio_session_service.dart';
 import '../../../core/network/realtime_service.dart';
 
@@ -43,6 +44,7 @@ class _CollaborationChatWidgetState
   Widget build(BuildContext context) {
     final collabService = ref.watch(collaborationRoomServiceProvider);
     final audioService = ref.watch(audioSessionProvider);
+    final uiState = ref.watch(canvasUiProvider);
 
     if (!collabService.isCollaborationEnabled) return const SizedBox.shrink();
 
@@ -56,33 +58,40 @@ class _CollaborationChatWidgetState
     final chatHeight =
         (availableHeight - (bottomInset > 0 ? 80 : 160)).clamp(220.0, 440.0);
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      width: collabService.isChatOpen ? 320 : 56,
-      height: collabService.isChatOpen ? chatHeight : 56,
-      decoration: BoxDecoration(
-        color: collabService.isChatOpen
-            ? Colors.white
-            : const Color(0xFF0F4C5C),
-        borderRadius: BorderRadius.circular(
-          collabService.isChatOpen ? 18 : 28,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.20),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: uiState.isHudMode ? 0.10 : 1.0,
+      child: IgnorePointer(
+        ignoring: uiState.isHudMode,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          width: collabService.isChatOpen ? 320 : 56,
+          height: collabService.isChatOpen ? chatHeight : 56,
+          decoration: BoxDecoration(
+            color: collabService.isChatOpen
+                ? Colors.white
+                : const Color(0xFF0F4C5C),
+            borderRadius: BorderRadius.circular(
+              collabService.isChatOpen ? 18 : 28,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.20),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(
-          collabService.isChatOpen ? 18 : 28,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(
+              collabService.isChatOpen ? 18 : 28,
+            ),
+            child: collabService.isChatOpen
+                ? _buildFullChatWrapper(collabService, audioService, chatHeight)
+                : _buildChatIcon(collabService),
+          ),
         ),
-        child: collabService.isChatOpen
-            ? _buildFullChatWrapper(collabService, audioService, chatHeight)
-            : _buildChatIcon(collabService),
       ),
     );
   }
@@ -391,7 +400,7 @@ class _CollaborationChatWidgetState
         ),
 
         // 🚀 Indicador de Gravação de Áudio ou Input do Chat
-        if (audioService.isRecording)
+        if (audioService.isRecording || audioService.isProcessingAudio)
           _RecordingIndicator(
             collabService: collabService,
             audioService: audioService,
@@ -635,57 +644,87 @@ class _RecordingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isProcessing = audioService.isProcessingAudio;
+
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      color: Colors.red.withOpacity(0.06),
+      color: isProcessing
+          ? const Color(0xFF0F4C5C).withOpacity(0.08)
+          : Colors.red.withOpacity(0.06),
       child: Row(
         children: [
-          const _BlinkingDot(),
+          if (isProcessing)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF0F4C5C),
+              ),
+            )
+          else
+            const _BlinkingDot(),
           const SizedBox(width: 8),
           Expanded(
-            child: StreamBuilder(
-              stream: Stream.periodic(const Duration(seconds: 1)),
-              builder: (context, snapshot) {
-                final dur = audioService.recordingDuration;
-                final String formatted =
-                    '${dur.inMinutes.toString().padLeft(2, '0')}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}';
-                return Text(
-                  'GRAVANDO... $formatted',
-                  style: GoogleFonts.inter(
-                    color: Colors.redAccent,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
+            child: isProcessing
+                ? Text(
+                    'A PROCESSAR ÁUDIO...',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF0F4C5C),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  )
+                : StreamBuilder(
+                    stream: Stream.periodic(const Duration(seconds: 1)),
+                    builder: (context, snapshot) {
+                      final dur = audioService.recordingDuration;
+                      final String formatted =
+                          '${dur.inMinutes.toString().padLeft(2, '0')}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}';
+                      return Text(
+                        'GRAVANDO... $formatted',
+                        style: GoogleFonts.inter(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
-          IconButton(
-            onPressed: () {
-              audioService.stopAudio();
-            },
-            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-            tooltip: 'Cancelar',
-          ),
-          const SizedBox(width: 4),
-          ElevatedButton.icon(
-            onPressed: () => audioService.stopAndSendAudio(
-              collabService.liveNotebookSid,
-              collabService.myUserId,
-            ),
-            icon: const Icon(Icons.send_rounded, size: 14),
-            label: const Text('ENVIAR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0F4C5C),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          if (!isProcessing) ...[
+            IconButton(
+              onPressed: () => audioService.cancelRecording(),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.redAccent,
+                size: 20,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              minimumSize: const Size(60, 32),
+              tooltip: 'Cancelar Gravação',
             ),
-          ),
+            const SizedBox(width: 4),
+            ElevatedButton.icon(
+              onPressed: () => audioService.stopAndSendAudio(
+                collabService.liveNotebookSid,
+                collabService.myUserId,
+              ),
+              icon: const Icon(Icons.send_rounded, size: 14),
+              label: const Text(
+                'ENVIAR',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F4C5C),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(60, 32),
+              ),
+            ),
+          ],
         ],
       ),
     );

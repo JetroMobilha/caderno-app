@@ -36,6 +36,7 @@ class AudioSessionService extends ChangeNotifier {
   StreamSubscription? _recordingsSubscription;
 
   bool isRecording = false;
+  bool isProcessingAudio = false;
   bool isLessonRecording = false;
   bool _isRecordingLive = false;
   DateTime? _recordingStartTime;
@@ -269,15 +270,72 @@ class AudioSessionService extends ChangeNotifier {
     } catch (e) { debugPrint('🚨 [Audio] Erro na rotação de segmento: $e'); } 
   }
 
+  Future<void> cancelRecording() async {
+    try {
+      if (_isDisposed || (!isRecording && !isProcessingAudio)) return;
+      _segmentTimer?.cancel();
+      _segmentTimer = null;
+      _amplitudeTimer?.cancel();
+      _amplitudeTimer = null;
+
+      try {
+        await _audioRecorder.stop();
+      } catch (_) {}
+
+      isRecording = false;
+      isProcessingAudio = false;
+      _isRecordingLive = false;
+      _recordingStartTime = null;
+      _activeStreamMessageId = null;
+      safeNotify();
+    } catch (e) {
+      isRecording = false;
+      isProcessingAudio = false;
+      _isRecordingLive = false;
+      safeNotify();
+    }
+  }
+
   Future<void> stopAndSendAudio(int? liveNotebookSid, String? myUserId) async { 
+    if (_isDisposed || !isRecording || isProcessingAudio) return; 
+    _segmentTimer?.cancel(); 
+    _segmentTimer = null; 
+    _amplitudeTimer?.cancel();
+    _amplitudeTimer = null;
+
+    isProcessingAudio = true; 
+    safeNotify();
+
     try { 
-      if (_isDisposed || !isRecording) return; _segmentTimer?.cancel(); _segmentTimer = null; 
-      final String mid = _activeStreamMessageId!; final int idx = _currentSegmentIndex; final int dur = recordingDuration.inSeconds; 
+      final String mid = _activeStreamMessageId!; 
+      final int idx = _currentSegmentIndex; 
+      final int dur = math.max(1, recordingDuration.inSeconds); 
       final bool isLive = _isRecordingLive;
-      final path = await _audioRecorder.stop(); await Future.delayed(const Duration(milliseconds: 150));
-      isRecording = false; _isRecordingLive = false; _recordingStartTime = null; _activeStreamMessageId = null; safeNotify(); 
-      if (path != null) _processAndSendSegment(path, mid, idx, dur % 1 == 0 ? 1 : dur % 1, isFinal: true, isLive: isLive, liveNotebookSid: liveNotebookSid, myUserId: myUserId); 
-    } catch (e) { isRecording = false; _isRecordingLive = false; safeNotify(); } 
+
+      final path = await _audioRecorder.stop(); 
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      if (path != null) {
+        await Future(() async {
+          _processAndSendSegment(
+            path, mid, idx, dur, 
+            isFinal: true, 
+            isLive: isLive, 
+            liveNotebookSid: liveNotebookSid, 
+            myUserId: myUserId,
+          );
+        });
+      } 
+    } catch (e) { 
+      debugPrint('🚨 [Audio] Erro ao parar e enviar áudio: $e'); 
+    } finally {
+      isRecording = false;
+      isProcessingAudio = false; 
+      _isRecordingLive = false; 
+      _recordingStartTime = null; 
+      _activeStreamMessageId = null; 
+      safeNotify(); 
+    }
   }
 
   void _processAndSendSegment(String path, String msgId, int index, num duration, {bool isFinal = false, bool isLive = false, int retryCount = 0, int? liveNotebookSid, String? myUserId}) async {

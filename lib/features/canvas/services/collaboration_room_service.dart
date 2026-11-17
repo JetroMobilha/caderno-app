@@ -309,6 +309,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _liveNotebookSid = liveNotebookSid;
     _myUserId = myUserId;
     _currentUserRole = currentUserRole;
+    _loadMyUserName(); // 🚀 Carregar nome real do utilizador autenticado
 
     _setupSubscriptions();
 
@@ -1539,16 +1540,30 @@ class CollaborationRoomService extends ChangeNotifier {
     return false;
   }
 
+  String? _myUserName;
+
+  Future<void> _loadMyUserName() async {
+    if (_myUserName != null && _myUserName!.isNotEmpty && _myUserName != 'Eu' && _myUserName != 'Você') return;
+    try {
+      final userData = await _apiService.getUserData();
+      if (userData != null && userData['name'] != null && userData['name'].toString().isNotEmpty) {
+        _myUserName = userData['name'].toString();
+      }
+    } catch (_) {}
+  }
+
   void _addChatMessage(Map<String, dynamic> d) {
     if (_isDuplicateMessage(d)) return;
     
-    // Garantir que sender_name existe se não vier
-    if (d['sender_name'] == null && d['sender_id'] != null) {
+    // Garantir que sender_name existe e NUNCA é 'Eu' ou 'Você' para os clientes
+    final String? rawName = d['sender_name']?.toString();
+    if (rawName == null || rawName.isEmpty || rawName == 'Eu' || rawName == 'Você') {
         final sender = onlineUsers.firstWhere(
             (u) => u['id'].toString() == d['sender_id'].toString(),
-            orElse: () => {'name': d['sender_id'] == _myUserId ? 'Você' : 'Colega'},
+            orElse: () => {'name': d['sender_id'] == _myUserId ? myUserName : 'Colega'},
         );
-        d['sender_name'] = sender['name'];
+        final String resolved = (d['sender_id'] == _myUserId) ? myUserName : (sender['name']?.toString() ?? 'Colega');
+        d['sender_name'] = (resolved == 'Eu' || resolved == 'Você') ? myUserName : resolved;
     }
 
     chatMessages.add(d);
@@ -1560,12 +1575,22 @@ class CollaborationRoomService extends ChangeNotifier {
     _safeNotify();
   }
 
-  // 🚀 Novo helper para obter o próprio nome
+  // 🚀 Helper robustecido para obter o próprio nome real (nunca devolve 'Eu')
   String get myUserName {
-      return onlineUsers.firstWhere(
-          (u) => u['id'].toString() == _myUserId,
-          orElse: () => {'name': 'Eu'},
-      )['name'];
+    if (_myUserName != null && _myUserName!.isNotEmpty && _myUserName != 'Eu' && _myUserName != 'Você') {
+      return _myUserName!;
+    }
+    final userFromList = onlineUsers.firstWhere(
+      (u) => u['id'].toString() == _myUserId,
+      orElse: () => {},
+    );
+    final nameFromList = userFromList['name']?.toString();
+    if (nameFromList != null && nameFromList.isNotEmpty && nameFromList != 'Eu' && nameFromList != 'Você') {
+      _myUserName = nameFromList;
+      return nameFromList;
+    }
+    _loadMyUserName();
+    return _myUserName ?? 'Colega';
   }
 
   void sendMessage(String m) {

@@ -390,14 +390,23 @@ class _CollaborationChatWidgetState
                                       ),
                                       const SizedBox(width: 5),
                                       Flexible(
-                                        child: Text(
-                                          msg['sender_name']?.toString() ?? sender['name'] ?? 'Colega', // 🚀
-                                          style: GoogleFonts.inter(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                            color: const Color(0xFF0F4C5C),
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
+                                        child: Builder(
+                                          builder: (context) {
+                                            String name = msg['sender_name']?.toString() ?? sender['name']?.toString() ?? 'Colega';
+                                            if (name == 'Eu' || name == 'Você') {
+                                              final sName = sender['name']?.toString();
+                                              name = (sName != null && sName != 'Eu' && sName != 'Você') ? sName : 'Colega';
+                                            }
+                                            return Text(
+                                              name,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: const Color(0xFF0F4C5C),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            );
+                                          },
                                         ),
                                       ),
                                     ],

@@ -105,12 +105,16 @@ class CollaborationRoomService extends ChangeNotifier {
   // 🛡️ [STATE] CHAT & COMUNICAÇÃO
   // -------------------------------------------------------------------------
   final List<Map<String, dynamic>> chatMessages = [];
+  final Map<String, Set<String>> messageReads = {}; // 🚀 Mapear leituras
   int unreadChatCount = 0;
   bool _isChatOpen = false;
   bool get isChatOpen => _isChatOpen;
   set isChatOpen(bool value) {
     _isChatOpen = value;
-    if (value) unreadChatCount = 0;
+    if (value) {
+      unreadChatCount = 0;
+      _markUnreadMessagesAsRead(); // 🚀 Marcar todas como lidas ao abrir
+    }
     _safeNotify();
   }
 
@@ -233,6 +237,7 @@ class CollaborationRoomService extends ChangeNotifier {
   StreamSubscription? _objectTransformSubscription; // 🚀 Novo
   StreamSubscription? _chatSubscription;
   StreamSubscription? _audioMessageSubscription;
+  StreamSubscription? _chatReadSubscription; // 🚀 Novo
   StreamSubscription? _reactionSubscription;
   StreamSubscription? _collectiveSyncSubscription;
   StreamSubscription? _fullStateRequestSubscription;
@@ -596,6 +601,7 @@ class CollaborationRoomService extends ChangeNotifier {
       isMyHandRaised = false;
       unreadChatCount = 0;
       chatMessages.clear();
+      messageReads.clear(); // 🚀 Limpar leituras
       enrolledMembers.clear();
       authorityId = null;
       sessionTitle = null;
@@ -1196,6 +1202,19 @@ class CollaborationRoomService extends ChangeNotifier {
       (d) => _addChatMessage(d),
     );
 
+    // 🚀 Lidar com Recibos de Leitura em tempo real
+    _chatReadSubscription?.cancel();
+    _chatReadSubscription = rt.onChatReadReceived.listen((d) {
+      if (_isDisposed) return;
+      final String msgId = d['msg_id']?.toString() ?? '';
+      final String readByUserId = d['read_by_user_id']?.toString() ?? '';
+      
+      if (msgId.isNotEmpty && readByUserId.isNotEmpty && readByUserId != _myUserId) {
+        messageReads.putIfAbsent(msgId, () => {}).add(readByUserId);
+        _safeNotify();
+      }
+    });
+
     _audioMessageSubscription?.cancel();
     _audioMessageSubscription = rt.onAudioMessageReceived.listen((d) {
       if (_isDisposed) return;
@@ -1607,6 +1626,40 @@ class CollaborationRoomService extends ChangeNotifier {
     _safeNotify();
   }
 
+  // 🚀 Novo: Assinalar mensagens de colegas como lidas
+  void _markUnreadMessagesAsRead() {
+    if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+    
+    final List<String> msgsToMark = [];
+    for (var m in chatMessages) {
+      final String senderId = m['sender_id']?.toString() ?? '';
+      final String msgId = m['msg_id']?.toString() ?? '';
+      if (senderId.isNotEmpty && senderId != _myUserId && msgId.isNotEmpty) {
+        if (!(messageReads[msgId]?.contains(_myUserId) ?? false)) {
+          msgsToMark.add(msgId);
+          messageReads.putIfAbsent(msgId, () => {}).add(_myUserId);
+        }
+      }
+    }
+
+    if (msgsToMark.isEmpty) return;
+    _safeNotify();
+
+    for (var msgId in msgsToMark) {
+      _realtimeService.broadcastChatRead(
+        notebookId: _liveNotebookSid!,
+        myUserId: _myUserId!,
+        msgId: msgId,
+      );
+    }
+
+    try {
+      _apiService.post('/notebooks/$_liveNotebookSid/session/chat/read', {
+        'msg_ids': msgsToMark,
+      });
+    } catch (_) {}
+  }
+
   // 🚀 Helper robustecido para obter o próprio nome real (nunca devolve 'Eu')
   String get myUserName {
     if (_myUserName != null && _myUserName!.isNotEmpty && _myUserName != 'Eu' && _myUserName != 'Você') {
@@ -1644,6 +1697,10 @@ class CollaborationRoomService extends ChangeNotifier {
   void sendMessage(String m) {
     if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
     final String msgId = TimeService().nowMs().toString();
+    
+    // Auto-ler as próprias mensagens
+    messageReads.putIfAbsent(msgId, () => {}).add(_myUserId!);
+
     final msg = {
       'type': 'text',
       'sender_id': _myUserId,
@@ -1672,6 +1729,10 @@ class CollaborationRoomService extends ChangeNotifier {
   Future<void> sendImageMessage(String imageUrl) async {
     if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
     final String msgId = TimeService().nowMs().toString();
+
+    // Auto-ler as próprias mensagens
+    messageReads.putIfAbsent(msgId, () => {}).add(_myUserId!);
+
     final msg = {
       'type': 'image',
       'sender_id': _myUserId,
@@ -1739,6 +1800,12 @@ class CollaborationRoomService extends ChangeNotifier {
           for (var rawMsg in messages) {
             if (rawMsg is Map<String, dynamic>) {
               if (!_isDuplicateMessage(rawMsg)) {
+                // 🚀 Injetar dados de leitura legados na cache
+                final String? msgId = rawMsg['msg_id']?.toString();
+                if (msgId != null && rawMsg['read_by'] is List) {
+                  final reads = (rawMsg['read_by'] as List).map((e) => e.toString()).toSet();
+                  messageReads.putIfAbsent(msgId, () => {}).addAll(reads);
+                }
                 chatMessages.add(rawMsg);
               }
             }
@@ -2208,6 +2275,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _objectTransformSubscription?.cancel();
     _chatSubscription?.cancel();
     _audioMessageSubscription?.cancel();
+    _chatReadSubscription?.cancel(); // 🚀 Novo
     _reactionSubscription?.cancel();
     _collectiveSyncSubscription?.cancel();
     _fullStateRequestSubscription?.cancel();

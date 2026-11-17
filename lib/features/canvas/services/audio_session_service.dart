@@ -414,6 +414,8 @@ class AudioSessionService extends ChangeNotifier {
         ); 
         
         if (index == 0 && !isLive && !isPodcast) { // 🚀 
+          // 🚀 Notificamos processamento com id pronto
+          // Importante: No RoomService isso vai para a lista, então o próprio utilizador lerá o seu audio
           onAudioMessageProcessed?.call({
             'msg_id': msgId,
             'type': 'audio',

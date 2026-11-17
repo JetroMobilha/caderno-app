@@ -464,14 +464,26 @@ class _CollaborationChatWidgetState
                                   isMe: isMe,
                                 ),
                               const SizedBox(height: 2),
-                              Text(
-                                formattedTime,
-                                style: GoogleFonts.inter(
-                                  fontSize: 8.5,
-                                  color: isMe
-                                      ? Colors.white60
-                                      : Colors.black38,
-                                ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    formattedTime,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 8.5,
+                                      color: isMe
+                                          ? Colors.white60
+                                          : Colors.black38,
+                                    ),
+                                  ),
+                                  if (isMe) ...[
+                                    const SizedBox(width: 4),
+                                    _buildReadReceipts(
+                                      msgId: msg['msg_id']?.toString() ?? '',
+                                      collabService: collabService,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),
@@ -515,8 +527,8 @@ class _CollaborationChatWidgetState
           )
         else
           Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            constraints: const BoxConstraints(minHeight: 56, maxHeight: 130),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border(
@@ -524,62 +536,73 @@ class _CollaborationChatWidgetState
               ),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    onPressed: () async {
-                        final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                        if (image != null && collabService.liveNotebookSid != null) {
-                            final bytes = await image.readAsBytes();
-                            final repository = ref.read(canvasRepositoryProvider);
-                            final url = await repository.uploadImage(collabService.liveNotebookSid!, image.name, bytes);
-                            if (url != null) {
-                                collabService.sendImageMessage(url);
-                            }
-                        }
-                    },
-                    icon: const Icon(
-                      Icons.image_outlined,
-                      color: Colors.grey,
-                      size: 20,
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      onPressed: () async {
+                          final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                          if (image != null && collabService.liveNotebookSid != null) {
+                              final bytes = await image.readAsBytes();
+                              final repository = ref.read(canvasRepositoryProvider);
+                              final url = await repository.uploadImage(collabService.liveNotebookSid!, image.name, bytes);
+                              if (url != null) {
+                                  collabService.sendImageMessage(url);
+                              }
+                          }
+                      },
+                      icon: const Icon(
+                        Icons.image_outlined,
+                        color: Colors.grey,
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      tooltip: 'Enviar imagem',
                     ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 34,
-                      minHeight: 34,
-                    ),
-                    tooltip: 'Enviar imagem',
                   ),
                 ),
-                Material(
-                  color: const Color(0xFF0F4C5C).withOpacity(0.08),
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    onPressed: () => audioService.startRecording(
-                      isLive: false,
-                      isPodcast: false, // 🚀
-                      liveNotebookSid: collabService.liveNotebookSid,
-                      myUserId: collabService.myUserId,
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Material(
+                    color: const Color(0xFF0F4C5C).withOpacity(0.08),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      onPressed: () => audioService.startRecording(
+                        isLive: false,
+                        isPodcast: false, // 🚀
+                        liveNotebookSid: collabService.liveNotebookSid,
+                        myUserId: collabService.myUserId,
+                      ),
+                      icon: const Icon(
+                        Icons.mic_rounded,
+                        color: Color(0xFF0F4C5C),
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      tooltip: 'Gravar nota de voz',
                     ),
-                    icon: const Icon(
-                      Icons.mic_rounded,
-                      color: Color(0xFF0F4C5C),
-                      size: 20,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 34,
-                      minHeight: 34,
-                    ),
-                    tooltip: 'Gravar nota de voz',
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _msgController,
+                    minLines: 1,
+                    maxLines: 4,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
                       hintText: 'Escrever mensagem...',
                       hintStyle: GoogleFonts.inter(
@@ -588,23 +611,26 @@ class _CollaborationChatWidgetState
                       ),
                       border: InputBorder.none,
                       isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     style: GoogleFonts.inter(fontSize: 12.5),
-                    onSubmitted: (_) => _sendMessage(collabService),
                   ),
                 ),
-                Material(
-                  color: const Color(0xFF0F4C5C),
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    onTap: () => _sendMessage(collabService),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Material(
+                    color: const Color(0xFF0F4C5C),
                     borderRadius: BorderRadius.circular(20),
-                    child: const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Icon(
-                        Icons.send_rounded,
-                        color: Colors.white,
-                        size: 16,
+                    child: InkWell(
+                      onTap: () => _sendMessage(collabService),
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
                       ),
                     ),
                   ),
@@ -743,6 +769,53 @@ class _CollaborationChatWidgetState
     collabService.broadcastActivity('idle');
     collabService.sendMessage(text);
     _msgController.clear();
+  }
+
+  // 🚀 NOVO: Renderizar Vistos de Leitura (Read Receipts)
+  Widget _buildReadReceipts({
+    required String msgId,
+    required CollaborationRoomService collabService,
+  }) {
+    if (msgId.isEmpty) return const SizedBox.shrink();
+
+    // 1. Quem leu?
+    final Set<String> readers = collabService.messageReads[msgId] ?? {};
+    
+    // Ignorar a minha própria leitura
+    final int readCount = readers.where((id) => id != collabService.myUserId).length;
+    final int otherUsersCount = collabService.onlineUsers.length > 1 
+                                ? (collabService.onlineUsers.length - 1) 
+                                : 0;
+
+    // Ainda ninguém leu (apenas entregue)
+    if (readCount == 0) {
+      return const Icon(Icons.check, size: 10, color: Colors.white60);
+    }
+
+    // Todos os que estão na sala viram
+    final bool readByAll = (readCount >= otherUsersCount) && otherUsersCount > 0;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.done_all,
+          size: 11,
+          color: readByAll ? const Color(0xFF2ECC71) : Colors.white60,
+        ),
+        if (!readByAll) ...[
+          const SizedBox(width: 2),
+          Text(
+            '$readCount',
+            style: GoogleFonts.inter(
+              fontSize: 7.5,
+              fontWeight: FontWeight.bold,
+              color: Colors.white60,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   String _formatTypingText(List<String> names) {

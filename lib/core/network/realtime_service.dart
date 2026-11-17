@@ -187,6 +187,10 @@ class RealtimeService with WidgetsBindingObserver {
       _chatStreamController.stream;
   Stream<Map<String, dynamic>> get onAudioMessageReceived =>
       _audioMessageStreamController.stream;
+  
+  final _chatReadStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  Stream<Map<String, dynamic>> get onChatReadReceived => _chatReadStreamController.stream; // 🚀 Novo
+
   Stream<Map<String, dynamic>> get onChatSyncRequestReceived =>
       _chatSyncRequestController.stream;
   Stream<Map<String, dynamic>> get onChatSyncResponseReceived =>
@@ -575,6 +579,10 @@ class RealtimeService with WidgetsBindingObserver {
     _bindEvent(
       'client-audio-message',
       (event) => _audioMessageStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-chat-read',
+      (event) => _chatReadStreamController.add(_safeParse(event.data)), // 🚀 Novo
     );
     _bindEvent(
       'client-podcast-state',
@@ -1057,6 +1065,25 @@ class RealtimeService with WidgetsBindingObserver {
     };
     _notebookChannel!.trigger(
       eventName: 'client-audio-message',
+      data: jsonEncode(data),
+    );
+    return true;
+  }
+
+  // 🚀 Novo: Disparar Confirmação de Leitura de Chat (Zero-HTTP Whisper)
+  Future<bool> broadcastChatRead({
+    required int notebookId,
+    required String myUserId,
+    required String msgId,
+  }) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'msg_id': msgId,
+      'read_by_user_id': myUserId,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-chat-read',
       data: jsonEncode(data),
     );
     return true;

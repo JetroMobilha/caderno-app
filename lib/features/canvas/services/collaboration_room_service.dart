@@ -1121,10 +1121,15 @@ class CollaborationRoomService extends ChangeNotifier {
 
     _activitySubscription?.cancel();
     _activitySubscription = rt.onUserActivityReceived.listen((d) {
-      rt.updateUserActivityState(
-        d['sender_id'].toString(),
-        d['activity'].toString(),
-      );
+      if (_isDisposed) return;
+      final String uid = d['sender_id'].toString();
+      final String act = d['activity'].toString();
+      rt.updateUserActivityState(uid, act);
+      final idx = onlineUsers.indexWhere((u) => u['id'].toString() == uid);
+      if (idx != -1) {
+        onlineUsers[idx]['activity'] = act;
+        _safeNotify();
+      }
     });
 
     _pointerSubscription?.cancel();
@@ -1618,6 +1623,22 @@ class CollaborationRoomService extends ChangeNotifier {
     }
     _loadMyUserName();
     return _myUserName ?? 'Utilizador';
+  }
+
+  void broadcastActivity(String activity) {
+    if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+    _realtimeService.broadcastUserActivity(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+      activity: activity,
+    );
+  }
+
+  List<String> get typingUserNames {
+    return onlineUsers
+        .where((u) => u['id'].toString() != _myUserId && u['activity'] == 'typing')
+        .map((u) => resolveSenderName(u['id'], u['name']))
+        .toList();
   }
 
   void sendMessage(String m) {

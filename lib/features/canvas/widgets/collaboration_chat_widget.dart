@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,11 +28,29 @@ class _CollaborationChatWidgetState
   final ScrollController _scrollController = ScrollController();
   late TabController _tabController; // 🚀 Novo
   final ImagePicker _imagePicker = ImagePicker(); // 🚀 Novo
+  Timer? _typingTimer; // 🚀 Debouncer para indicador de escrita
 
   @override
   void initState() {
       super.initState();
       _tabController = TabController(length: 2, vsync: this);
+      _msgController.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    final collabService = ref.read(collaborationRoomServiceProvider);
+    if (!collabService.isCollaborationEnabled) return;
+
+    if (_msgController.text.trim().isNotEmpty) {
+      collabService.broadcastActivity('typing');
+      _typingTimer?.cancel();
+      _typingTimer = Timer(const Duration(seconds: 3), () {
+        collabService.broadcastActivity('idle');
+      });
+    } else {
+      _typingTimer?.cancel();
+      collabService.broadcastActivity('idle');
+    }
   }
 
   void _scrollToBottom() {
@@ -46,6 +65,8 @@ class _CollaborationChatWidgetState
 
   @override
   void dispose() {
+    _typingTimer?.cancel();
+    _msgController.removeListener(_onTextChanged);
     _msgController.dispose();
     _scrollController.dispose();
     _tabController.dispose();
@@ -461,6 +482,31 @@ class _CollaborationChatWidgetState
           ),
         ),
 
+        // 🚀 Indicador Visual de Digitação ("✍️ Jetro está a escrever...")
+        if (collabService.typingUserNames.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            color: const Color(0xFFF4F6F8),
+            child: Row(
+              children: [
+                const _BlinkingDot(size: 6, color: Color(0xFF0F4C5C)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _formatTypingText(collabService.typingUserNames),
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      fontStyle: FontStyle.italic,
+                      color: const Color(0xFF0F4C5C),
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // 🚀 Indicador de Gravação de Áudio ou Input do Chat
         if (audioService.isRecording || audioService.isProcessingAudio)
           _RecordingIndicator(
@@ -693,8 +739,17 @@ class _CollaborationChatWidgetState
   void _sendMessage(CollaborationRoomService collabService) {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
+    _typingTimer?.cancel();
+    collabService.broadcastActivity('idle');
     collabService.sendMessage(text);
     _msgController.clear();
+  }
+
+  String _formatTypingText(List<String> names) {
+    if (names.isEmpty) return '';
+    if (names.length == 1) return '✍️ ${names.first} está a escrever...';
+    if (names.length == 2) return '✍️ ${names[0]} e ${names[1]} estão a escrever...';
+    return '✍️ ${names.first} e mais ${names.length - 1} estão a escrever...';
   }
 
   String _formatMsgTime(dynamic rawTs) {

@@ -1635,9 +1635,9 @@ class CollaborationRoomService extends ChangeNotifier {
       final String senderId = m['sender_id']?.toString() ?? '';
       final String msgId = m['msg_id']?.toString() ?? '';
       if (senderId.isNotEmpty && senderId != _myUserId && msgId.isNotEmpty) {
-        if (!(messageReads[msgId]?.contains(_myUserId) ?? false)) {
+        if (!(messageReads[msgId]?.contains(_myUserId!) ?? false)) {
           msgsToMark.add(msgId);
-          messageReads.putIfAbsent(msgId, () => {}).add(_myUserId);
+          messageReads.putIfAbsent(msgId, () => {}).add(_myUserId!);
         }
       }
     }

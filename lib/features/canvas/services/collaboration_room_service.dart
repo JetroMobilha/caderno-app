@@ -309,7 +309,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _liveNotebookSid = liveNotebookSid;
     _myUserId = myUserId;
     _currentUserRole = currentUserRole;
-    _loadMyUserName(); // 🚀 Carregar nome real do utilizador autenticado
+    await _loadMyUserName(); // 🚀 Carregar e aguardar nome real do utilizador autenticado
 
     _setupSubscriptions();
 
@@ -2015,6 +2015,11 @@ class CollaborationRoomService extends ChangeNotifier {
     return rawList.whereType<Map>().map((u) {
       final m = Map<String, dynamic>.from(u);
       final String uid = m['id'].toString();
+      final String uName = m['name']?.toString() ?? '';
+      if (uid == _myUserId && uName.isNotEmpty && uName != 'Eu' && uName != 'Você' && uName != 'Colega') {
+        _myUserName = uName;
+      }
+
       final bool userInCall =
           m['isInCall'] == true || usersInLiveSession.contains(uid);
       if (userInCall) usersInLiveSession.add(uid);

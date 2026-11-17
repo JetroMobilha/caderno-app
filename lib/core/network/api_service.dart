@@ -52,7 +52,7 @@ class ApiService {
 
   Future<Map<String, dynamic>?> getUserData() async {
     final prefs = await SharedPreferences.getInstance();
-    final str = prefs.getString('user_data');
+    final str = prefs.getString('user_data') ?? prefs.getString('cached_user');
     return str != null ? jsonDecode(str) : null;
   }
 

@@ -25,6 +25,7 @@ import '../widgets/dialogs/page_action_helper.dart';
 import '../widgets/dialogs/add_page_dialog.dart';
 import '../widgets/collaboration_center_sheet.dart';
 import '../widgets/collaboration_chat_widget.dart';
+import '../widgets/live_podcast_floating_button.dart'; // 🚀 Novo
 import '../../shared/widgets/color_engine_widget.dart'; // 🚀
 import 'package:caderno_digital_app/features/canvas/models/text_block_model.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -411,6 +412,26 @@ class _CanvasScreenState extends ConsumerState<CanvasScreen>
                       bottom: 90,
                       right: 16,
                       child: CollaborationChatWidget(),
+                    ),
+
+                  // 🚀 Botão Flutuante de Rádio Aberta / Podcasting
+                  if (!isFocusMode)
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final collabService = ref.watch(collaborationRoomServiceProvider);
+                        final isChatOpen = collabService.isChatOpen;
+                        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+                        final availableHeight = MediaQuery.of(context).size.height - bottomInset;
+                        final chatHeight = (availableHeight - (bottomInset > 0 ? 80 : 160)).clamp(220.0, 440.0);
+                        
+                        return AnimatedPositioned(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOut,
+                          bottom: isChatOpen ? 90.0 + chatHeight + 16.0 : 160.0,
+                          right: 16,
+                          child: const LivePodcastFloatingButton(),
+                        );
+                      },
                     ),
                 ],
               ),

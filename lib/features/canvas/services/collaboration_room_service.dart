@@ -115,6 +115,26 @@ class CollaborationRoomService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------------------
+  // 🛡️ [STATE] PODCASTING / RADIO ABERTA (🚀 NOVO)
+  // -------------------------------------------------------------------------
+  String? activePodcastSpeakerId;
+  String? activePodcastSpeakerName;
+  DateTime? podcastLockTimestamp;
+  Timer? _podcastLockTimeoutTimer;
+
+  bool get isPodcastChannelOccupied {
+    if (activePodcastSpeakerId == null) return false;
+    if (podcastLockTimestamp == null) return false;
+    // Expira o bloqueio se passou mais de 60 segundos por segurança
+    if (DateTime.now().difference(podcastLockTimestamp!).inSeconds > 60) {
+      activePodcastSpeakerId = null;
+      activePodcastSpeakerName = null;
+      return false;
+    }
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
   // 🛡️ [STATE] LIVE INTERACTION
   // -------------------------------------------------------------------------
   bool isMyHandRaised = false;
@@ -237,6 +257,7 @@ class CollaborationRoomService extends ChangeNotifier {
   StreamSubscription? _notebookStructureSubscription;
   StreamSubscription? _voicePolicySubscription;
   StreamSubscription? _cloudSyncSignalSubscription;
+  StreamSubscription? _podcastStateSubscription; // 🚀 Novo
 
   final Map<String, Timer> _reactionTimers = {};
   final Map<String, Timer> _broadcasterTimers = {};
@@ -589,6 +610,9 @@ class CollaborationRoomService extends ChangeNotifier {
       isAuthorColorEnabled = false;
       sessionVoiceMode = 'open';
       _isVoiceAuthorized = true;
+      activePodcastSpeakerId = null; // 🚀
+      activePodcastSpeakerName = null; // 🚀
+      _podcastLockTimeoutTimer?.cancel(); // 🚀
   }
 
   void clearAllObjectTransforms() {
@@ -1080,6 +1104,7 @@ class CollaborationRoomService extends ChangeNotifier {
     });
 
     _cloudSyncSignalSubscription?.cancel();
+    _podcastStateSubscription?.cancel(); // 🚀 Novo
     _cloudSyncSignalSubscription = rt.onCloudSyncSignalReceived.listen((
       d,
     ) async {
@@ -1169,11 +1194,40 @@ class CollaborationRoomService extends ChangeNotifier {
     _audioMessageSubscription = rt.onAudioMessageReceived.listen((d) {
       if (_isDisposed) return;
       final bool isLive = d['is_live'] == true || d['type'] == 'audio_stream';
-      if (isLive && d['sender_id'] != _myUserId) {
+      final bool isPodcast = d['is_podcast'] == true || d['type'] == 'podcast_audio'; // 🚀
+      if ((isLive || isPodcast) && d['sender_id'] != _myUserId) {
         // Handled by controller/audio service via RT service directly
       } else {
         _addChatMessage(d);
       }
+    });
+
+    // 🚀 Novo: Lidar com bloqueio/desbloqueio do Podcasting
+    _podcastStateSubscription?.cancel();
+    _podcastStateSubscription = rt.onPodcastStateReceived.listen((d) {
+      if (_isDisposed) return;
+      final status = d['status'];
+      final senderId = d['sender_id']?.toString();
+      final senderName = d['sender_name']?.toString() ?? 'Colega';
+
+      if (status == 'started') {
+        activePodcastSpeakerId = senderId;
+        activePodcastSpeakerName = senderName;
+        podcastLockTimestamp = DateTime.now();
+        _podcastLockTimeoutTimer?.cancel();
+        _podcastLockTimeoutTimer = Timer(const Duration(seconds: 60), () {
+          activePodcastSpeakerId = null;
+          activePodcastSpeakerName = null;
+          _safeNotify();
+        });
+      } else if (status == 'stopped') {
+        if (activePodcastSpeakerId == senderId) {
+          activePodcastSpeakerId = null;
+          activePodcastSpeakerName = null;
+          _podcastLockTimeoutTimer?.cancel();
+        }
+      }
+      _safeNotify();
     });
 
     _reactionSubscription?.cancel();
@@ -1461,9 +1515,42 @@ class CollaborationRoomService extends ChangeNotifier {
     if (onSyncRequested != null) await onSyncRequested!();
   }
 
+  bool _isDuplicateMessage(Map<String, dynamic> candidate) {
+    final String? id = candidate['msg_id']?.toString();
+    final String? senderId = candidate['sender_id']?.toString();
+    final String? content = candidate['message']?.toString() ?? candidate['image_url']?.toString() ?? candidate['audio_url']?.toString();
+    final String? ts = candidate['timestamp']?.toString();
+
+    for (var m in chatMessages) {
+      final String? existingId = m['msg_id']?.toString();
+      if (id != null && existingId != null && id == existingId) {
+        return true;
+      }
+      final String? existingSender = m['sender_id']?.toString();
+      final String? existingContent = m['message']?.toString() ?? m['image_url']?.toString() ?? m['audio_url']?.toString();
+      final String? existingTs = m['timestamp']?.toString();
+
+      if (senderId != null && existingSender == senderId &&
+          content != null && existingContent == content &&
+          ts != null && existingTs == ts) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void _addChatMessage(Map<String, dynamic> d) {
-    final String? id = d['msg_id']?.toString();
-    if (id != null && chatMessages.any((m) => m['msg_id'] == id)) return;
+    if (_isDuplicateMessage(d)) return;
+    
+    // Garantir que sender_name existe se não vier
+    if (d['sender_name'] == null && d['sender_id'] != null) {
+        final sender = onlineUsers.firstWhere(
+            (u) => u['id'].toString() == d['sender_id'].toString(),
+            orElse: () => {'name': d['sender_id'] == _myUserId ? 'Você' : 'Colega'},
+        );
+        d['sender_name'] = sender['name'];
+    }
+
     chatMessages.add(d);
     if (chatMessages.length > 100) chatMessages.removeAt(0);
     if (!_isChatOpen && d['sender_id'] != _myUserId) {
@@ -1473,28 +1560,97 @@ class CollaborationRoomService extends ChangeNotifier {
     _safeNotify();
   }
 
+  // 🚀 Novo helper para obter o próprio nome
+  String get myUserName {
+      return onlineUsers.firstWhere(
+          (u) => u['id'].toString() == _myUserId,
+          orElse: () => {'name': 'Eu'},
+      )['name'];
+  }
+
   void sendMessage(String m) {
     if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+    final String msgId = TimeService().nowMs().toString();
     final msg = {
       'type': 'text',
       'sender_id': _myUserId,
+      'sender_name': myUserName,
       'message': m,
-      'msg_id': TimeService().nowMs().toString(),
+      'msg_id': msgId,
       'timestamp': TimeService().now().toIso8601String(),
     };
     _addChatMessage(msg);
     _realtimeService.broadcastChatMessage(
       notebookId: _liveNotebookSid!,
       myUserId: _myUserId!,
+      myUserName: myUserName,
       message: m,
+      msgId: msgId, // 🚀 Usar o mesmo ID consistente
     );
 
-    // 🚀 Grava a mensagem na Cloud/Redis para quem entrar na sala depois
     try {
       _apiService.post('/notebooks/$_liveNotebookSid/session/chat', {
         'message': msg,
       });
     } catch (_) {}
+  }
+
+  // 🚀 Novo: Enviar Imagem
+  Future<void> sendImageMessage(String imageUrl) async {
+    if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+    final String msgId = TimeService().nowMs().toString();
+    final msg = {
+      'type': 'image',
+      'sender_id': _myUserId,
+      'sender_name': myUserName,
+      'image_url': imageUrl,
+      'msg_id': msgId,
+      'timestamp': TimeService().now().toIso8601String(),
+    };
+    _addChatMessage(msg);
+    _realtimeService.broadcastImageMessage(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+      myUserName: myUserName,
+      imageUrl: imageUrl,
+      msgId: msgId, // 🚀 Usar o mesmo ID consistente
+    );
+
+    try {
+      _apiService.post('/notebooks/$_liveNotebookSid/session/chat', {
+        'message': msg,
+      });
+    } catch (_) {}
+  }
+
+  // 🚀 Novo: Controles de Podcasting
+  void acquirePodcastLock() {
+      if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+      activePodcastSpeakerId = _myUserId;
+      activePodcastSpeakerName = myUserName;
+      podcastLockTimestamp = DateTime.now();
+      _realtimeService.broadcastPodcastState(
+          notebookId: _liveNotebookSid!, 
+          myUserId: _myUserId!, 
+          myUserName: myUserName, 
+          status: 'started'
+      );
+      _safeNotify();
+  }
+
+  void releasePodcastLock() {
+      if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
+      if (activePodcastSpeakerId == _myUserId) {
+          activePodcastSpeakerId = null;
+          activePodcastSpeakerName = null;
+          _realtimeService.broadcastPodcastState(
+              notebookId: _liveNotebookSid!, 
+              myUserId: _myUserId!, 
+              myUserName: myUserName, 
+              status: 'stopped'
+          );
+          _safeNotify();
+      }
   }
 
   Future<void> fetchChatHistory() async {
@@ -1509,8 +1665,7 @@ class CollaborationRoomService extends ChangeNotifier {
         if (messages.isNotEmpty) {
           for (var rawMsg in messages) {
             if (rawMsg is Map<String, dynamic>) {
-              final String? id = rawMsg['msg_id']?.toString();
-              if (id != null && !chatMessages.any((m) => m['msg_id'] == id)) {
+              if (!_isDuplicateMessage(rawMsg)) {
                 chatMessages.add(rawMsg);
               }
             }
@@ -1999,6 +2154,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _notebookStructureSubscription?.cancel();
     _voicePolicySubscription?.cancel();
     _cloudSyncSignalSubscription?.cancel();
+    _podcastStateSubscription?.cancel(); // 🚀 Novo
 
     if (_liveNotebookSid != null) {
       _realtimeService.leaveNotebookChannel(_liveNotebookSid!);

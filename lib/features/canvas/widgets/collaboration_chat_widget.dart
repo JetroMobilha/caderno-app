@@ -1,14 +1,17 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart'; // 🚀 Novo
 
 import '../services/collaboration_room_service.dart';
 import '../providers/audio_session_provider.dart';
 import '../providers/canvas_ui_provider.dart';
 import '../../canvas/services/audio_session_service.dart';
 import '../../../core/network/realtime_service.dart';
+import '../repositories/canvas_repository.dart';
+import 'dialogs/chat_image_viewer_dialog.dart'; // 🚀 Novo
 
 class CollaborationChatWidget extends ConsumerStatefulWidget {
   const CollaborationChatWidget({super.key});
@@ -19,9 +22,17 @@ class CollaborationChatWidget extends ConsumerStatefulWidget {
 }
 
 class _CollaborationChatWidgetState
-    extends ConsumerState<CollaborationChatWidget> {
+    extends ConsumerState<CollaborationChatWidget> with SingleTickerProviderStateMixin {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late TabController _tabController; // 🚀 Novo
+  final ImagePicker _imagePicker = ImagePicker(); // 🚀 Novo
+
+  @override
+  void initState() {
+      super.initState();
+      _tabController = TabController(length: 2, vsync: this);
+  }
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
@@ -37,6 +48,7 @@ class _CollaborationChatWidgetState
   void dispose() {
     _msgController.dispose();
     _scrollController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -181,92 +193,123 @@ class _CollaborationChatWidgetState
   ) {
     return Column(
       children: [
-        // 🚀 Header do Chat
+        // 🚀 Header do Chat com Tabs
         Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
           decoration: const BoxDecoration(
             color: Color(0xFF0F4C5C),
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.forum_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Chat da Sala',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.forum_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Comunicação',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${collabService.onlineUsers.length} online',
+                        style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      onPressed: () => collabService.isChatOpen = false,
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
+                TabBar(
+                    controller: _tabController,
+                    indicatorColor: Colors.white,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white54,
+                    labelStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold),
+                    tabs: const [
+                        Tab(text: '💬 MENSAGENS'),
+                        Tab(text: '🎙️ RÁDIO ABERTA'),
+                    ],
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${collabService.onlineUsers.length} online',
-                  style: GoogleFonts.inter(
-                    color: Colors.white70,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                onPressed: () => collabService.isChatOpen = false,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
             ],
           ),
         ),
 
-        // 🚀 Corpo da Lista de Mensagens
+        // 🚀 Corpo do Chat ou Podcasting
         Expanded(
-          child: Container(
-            color: const Color(0xFFF4F6F8),
-            child: collabService.chatMessages.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 40,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Nenhuma mensagem ainda.\nEnvie um texto ou nota de voz!',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
+          child: TabBarView(
+              controller: _tabController,
+              children: [
+                  _buildChatTab(collabService, audioService),
+                  _buildPodcastTab(collabService, audioService),
+              ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatTab(CollaborationRoomService collabService, AudioSessionService audioService) {
+      return Column(
+          children: [
+              Expanded(
+                  child: Container(
+                    color: const Color(0xFFF4F6F8),
+                    child: collabService.chatMessages.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 40,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Nenhuma mensagem ainda.\nEnvie um texto ou nota de voz!',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
                     itemCount: collabService.chatMessages.length,
@@ -348,7 +391,7 @@ class _CollaborationChatWidgetState
                                       const SizedBox(width: 5),
                                       Flexible(
                                         child: Text(
-                                          sender['name'] ?? 'Colega',
+                                          msg['sender_name']?.toString() ?? sender['name'] ?? 'Colega', // 🚀
                                           style: GoogleFonts.inter(
                                             fontSize: 10,
                                             fontWeight: FontWeight.w800,
@@ -367,6 +410,25 @@ class _CollaborationChatWidgetState
                                     fontSize: 12.5,
                                     color: isMe ? Colors.white : Colors.black87,
                                   ),
+                                )
+                              else if (type == 'image') // 🚀
+                                GestureDetector(
+                                    onTap: () {
+                                        showDialog(
+                                            context: context, 
+                                            builder: (_) => ChatImageViewerDialog(imageUrl: msg['image_url'] ?? '')
+                                        );
+                                    },
+                                    child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: CachedNetworkImage(
+                                            imageUrl: msg['image_url'] ?? '',
+                                            width: 180,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) => const SizedBox(width: 180, height: 180, child: Center(child: CircularProgressIndicator())),
+                                            errorWidget: (context, url, error) => const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                                        ),
+                                    ),
                                 )
                               else if (type == 'audio')
                                 _AudioPlayerWidget(
@@ -418,11 +480,40 @@ class _CollaborationChatWidgetState
             child: Row(
               children: [
                 Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    onPressed: () async {
+                        final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                        if (image != null && collabService.liveNotebookSid != null) {
+                            final bytes = await image.readAsBytes();
+                            final repository = ref.read(canvasRepositoryProvider);
+                            final url = await repository.uploadImage(collabService.liveNotebookSid!, image.name, bytes);
+                            if (url != null) {
+                                collabService.sendImageMessage(url);
+                            }
+                        }
+                    },
+                    icon: const Icon(
+                      Icons.image_outlined,
+                      color: Colors.grey,
+                      size: 20,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 34,
+                      minHeight: 34,
+                    ),
+                    tooltip: 'Enviar imagem',
+                  ),
+                ),
+                Material(
                   color: const Color(0xFF0F4C5C).withOpacity(0.08),
                   shape: const CircleBorder(),
                   child: IconButton(
                     onPressed: () => audioService.startRecording(
                       isLive: false,
+                      isPodcast: false, // 🚀
                       liveNotebookSid: collabService.liveNotebookSid,
                       myUserId: collabService.myUserId,
                     ),
@@ -477,6 +568,126 @@ class _CollaborationChatWidgetState
           ),
       ],
     );
+  }
+
+  // 🚀 NOVO MODO PODCASTING (RÁDIO ABERTA)
+  Widget _buildPodcastTab(CollaborationRoomService collabService, AudioSessionService audioService) {
+      final isOccupied = collabService.isPodcastChannelOccupied;
+      final speakerName = collabService.activePodcastSpeakerName ?? 'Alguém';
+      final isMeSpeaking = collabService.activePodcastSpeakerId == collabService.myUserId;
+      final isListening = audioService.isAudioPlaying && audioService.currentlyPlayingAudioUrl != null;
+
+      return Container(
+          color: const Color(0xFFF4F6F8),
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                  Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                          color: isOccupied ? Colors.redAccent.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                              Icon(
+                                  isOccupied ? Icons.sensors : Icons.sensors_off,
+                                  color: isOccupied ? Colors.redAccent : Colors.green,
+                                  size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                  isOccupied 
+                                    ? '🔴 $speakerName no ar...' 
+                                    : '🟢 Canal Livre',
+                                  style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.bold,
+                                      color: isOccupied ? Colors.redAccent : Colors.green,
+                                      fontSize: 12,
+                                  ),
+                              )
+                          ],
+                      ),
+                  ),
+                  const SizedBox(height: 30),
+                  
+                  // Indicador visual de gravação ou escuta
+                  if (audioService.isRecording && isMeSpeaking)
+                      const _BlinkingDot(size: 80, color: Colors.redAccent)
+                  else if (isListening && isOccupied && !isMeSpeaking)
+                      const Icon(Icons.graphic_eq, size: 80, color: Colors.blueAccent)
+                  else
+                      Icon(Icons.podcasts, size: 80, color: Colors.grey.shade400),
+                  
+                  const SizedBox(height: 30),
+
+                  GestureDetector(
+                      onPanDown: (_) {
+                          if (isOccupied && !isMeSpeaking) return;
+                          collabService.acquirePodcastLock();
+                          audioService.startRecording(
+                              isLive: false,
+                              isPodcast: true,
+                              liveNotebookSid: collabService.liveNotebookSid,
+                              myUserId: collabService.myUserId,
+                          );
+                      },
+                      onPanEnd: (_) {
+                          if (!isMeSpeaking) return;
+                          collabService.releasePodcastLock();
+                          audioService.stopAndSendAudio(
+                              collabService.liveNotebookSid, 
+                              collabService.myUserId
+                          );
+                      },
+                      onPanCancel: () {
+                          if (!isMeSpeaking) return;
+                          collabService.releasePodcastLock();
+                          audioService.stopAndSendAudio(
+                              collabService.liveNotebookSid, 
+                              collabService.myUserId
+                          );
+                      },
+                      child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: (isOccupied && !isMeSpeaking) 
+                                ? Colors.grey 
+                                : (isMeSpeaking ? Colors.redAccent : const Color(0xFF0F4C5C)),
+                              boxShadow: isMeSpeaking ? [
+                                  BoxShadow(
+                                      color: Colors.redAccent.withOpacity(0.5),
+                                      blurRadius: 20,
+                                      spreadRadius: 5,
+                                  )
+                              ] : null,
+                          ),
+                          child: Icon(
+                              isMeSpeaking ? Icons.mic : Icons.mic_none,
+                              color: Colors.white,
+                              size: 40,
+                          ),
+                      ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                      (isOccupied && !isMeSpeaking) 
+                        ? 'Canal ocupado.\nAguarde a sua vez.'
+                        : 'Mantenha pressionado\npara falar para todos',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: (isOccupied && !isMeSpeaking) ? Colors.redAccent : Colors.grey.shade600,
+                          fontWeight: (isOccupied && !isMeSpeaking) ? FontWeight.bold : FontWeight.normal,
+                      ),
+                  ),
+              ],
+          ),
+      );
   }
 
   void _sendMessage(CollaborationRoomService collabService) {
@@ -592,7 +803,13 @@ class _StreamingAudioPlayerWidget extends ConsumerWidget {
 }
 
 class _BlinkingDot extends StatefulWidget {
-  const _BlinkingDot();
+  final double size; // 🚀
+  final Color color; // 🚀
+
+  const _BlinkingDot({
+      this.size = 6.0,
+      this.color = Colors.redAccent,
+  });
 
   @override
   State<_BlinkingDot> createState() => _BlinkingDotState();
@@ -622,10 +839,10 @@ class _BlinkingDotState extends State<_BlinkingDot>
     return FadeTransition(
       opacity: _controller,
       child: Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(
-          color: Colors.redAccent,
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          color: widget.color,
           shape: BoxShape.circle,
         ),
       ),

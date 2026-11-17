@@ -35,10 +35,13 @@ class AudioSessionService extends ChangeNotifier {
   List<db.LessonRecording> lessonRecordings = [];
   StreamSubscription? _recordingsSubscription;
 
+  bool _isRequestingPermission = false; // 🚀 Novo
+  bool _pendingCancel = false; // 🚀 Novo
   bool isRecording = false;
   bool isProcessingAudio = false;
   bool isLessonRecording = false;
   bool _isRecordingLive = false;
+  bool _isRecordingPodcast = false; // 🚀 Novo
   DateTime? _recordingStartTime;
   String? _activeStreamMessageId;
   int _currentSegmentIndex = 0;
@@ -213,25 +216,45 @@ class AudioSessionService extends ChangeNotifier {
     }
   }
 
-  Future<void> startRecording({bool isLive = false, bool isLiveSessionActive = false, int? liveNotebookSid, String? myUserId}) async { 
+  Future<void> startRecording({bool isLive = false, bool isPodcast = false, bool isLiveSessionActive = false, int? liveNotebookSid, String? myUserId}) async { 
     try { 
-      if (_isDisposed || isRecording) return; 
-      if (await _audioRecorder.hasPermission()) { 
-        isRecording = true; _isRecordingLive = isLive; _recordingStartTime = TimeService().now(); _activeStreamMessageId = const Uuid().v4(); _currentSegmentIndex = 0; 
-        
-        String? path; 
-        if (!kIsWeb) { 
-          final dir = await getTemporaryDirectory(); 
-          path = '${dir.path}/audio_${_activeStreamMessageId}_0.m4a'; 
-        } 
-        
-        await _audioRecorder.start(_getRecordConfig(), path: path ?? ''); safeNotify(); 
-        if (isLive) { 
-          _segmentTimer = Timer.periodic(const Duration(seconds: 1), (timer) => _rotateRecordingSegment(liveNotebookSid, myUserId)); 
-          _startAmplitudeMonitoring(isLiveSessionActive, liveNotebookSid, myUserId); 
-        }
+      if (_isDisposed || isRecording || _isRequestingPermission) return; 
+      _isRequestingPermission = true;
+      _pendingCancel = false;
+      
+      final hasPerm = await _audioRecorder.hasPermission(); 
+      _isRequestingPermission = false;
+
+      if (!hasPerm || _pendingCancel) {
+          _pendingCancel = false;
+          return;
+      }
+
+      isRecording = true; 
+      _isRecordingLive = isLive; 
+      _isRecordingPodcast = isPodcast;
+      _recordingStartTime = TimeService().now(); 
+      _activeStreamMessageId = const Uuid().v4(); 
+      _currentSegmentIndex = 0; 
+      
+      String? path; 
+      if (!kIsWeb) { 
+        final dir = await getTemporaryDirectory(); 
+        path = '${dir.path}/audio_${_activeStreamMessageId}_0.m4a'; 
       } 
-    } catch (e) { isRecording = false; _isRecordingLive = false; safeNotify(); } 
+      
+      await _audioRecorder.start(_getRecordConfig(), path: path ?? ''); safeNotify(); 
+      if (isLive || isPodcast) { 
+        _segmentTimer = Timer.periodic(const Duration(seconds: 1), (timer) => _rotateRecordingSegment(liveNotebookSid, myUserId)); 
+        _startAmplitudeMonitoring(isLiveSessionActive, liveNotebookSid, myUserId); 
+      }
+    } catch (e) { 
+        _isRequestingPermission = false;
+        isRecording = false; 
+        _isRecordingLive = false; 
+        _isRecordingPodcast = false; 
+        safeNotify(); 
+    } 
   }
 
   Timer? _segmentTimer;
@@ -255,6 +278,7 @@ class AudioSessionService extends ChangeNotifier {
     if (!isRecording || _activeStreamMessageId == null) return; 
     final String mid = _activeStreamMessageId!; final int idx = _currentSegmentIndex; 
     final bool isLive = _isRecordingLive;
+    final bool isPodcast = _isRecordingPodcast; // 🚀
     try { 
       final String? stopPath = await _audioRecorder.stop(); _currentSegmentIndex++; 
       String? next; 
@@ -265,13 +289,14 @@ class AudioSessionService extends ChangeNotifier {
       await _audioRecorder.start(_getRecordConfig(), path: next ?? ''); 
       if (stopPath != null) { 
         await Future.delayed(const Duration(milliseconds: 100)); 
-        _processAndSendSegment(stopPath, mid, idx, 1, isFinal: false, isLive: isLive, liveNotebookSid: liveNotebookSid, myUserId: myUserId); 
+        _processAndSendSegment(stopPath, mid, idx, 1, isFinal: false, isLive: isLive, isPodcast: isPodcast, liveNotebookSid: liveNotebookSid, myUserId: myUserId); 
       } 
     } catch (e) { debugPrint('🚨 [Audio] Erro na rotação de segmento: $e'); } 
   }
 
   Future<void> cancelRecording() async {
     try {
+      if (_isRequestingPermission) _pendingCancel = true;
       if (_isDisposed || (!isRecording && !isProcessingAudio)) return;
       _segmentTimer?.cancel();
       _segmentTimer = null;
@@ -285,6 +310,7 @@ class AudioSessionService extends ChangeNotifier {
       isRecording = false;
       isProcessingAudio = false;
       _isRecordingLive = false;
+      _isRecordingPodcast = false; // 🚀
       _recordingStartTime = null;
       _activeStreamMessageId = null;
       safeNotify();
@@ -292,11 +318,16 @@ class AudioSessionService extends ChangeNotifier {
       isRecording = false;
       isProcessingAudio = false;
       _isRecordingLive = false;
+      _isRecordingPodcast = false; // 🚀
       safeNotify();
     }
   }
 
   Future<void> stopAndSendAudio(int? liveNotebookSid, String? myUserId) async { 
+    if (_isRequestingPermission) {
+        _pendingCancel = true;
+        return;
+    }
     if (_isDisposed || !isRecording || isProcessingAudio) return; 
     _segmentTimer?.cancel(); 
     _segmentTimer = null; 
@@ -311,6 +342,7 @@ class AudioSessionService extends ChangeNotifier {
       final int idx = _currentSegmentIndex; 
       final int dur = math.max(1, recordingDuration.inSeconds); 
       final bool isLive = _isRecordingLive;
+      final bool isPodcast = _isRecordingPodcast; // 🚀
 
       final path = await _audioRecorder.stop(); 
       await Future.delayed(const Duration(milliseconds: 150));
@@ -321,6 +353,7 @@ class AudioSessionService extends ChangeNotifier {
             path, mid, idx, dur, 
             isFinal: true, 
             isLive: isLive, 
+            isPodcast: isPodcast, // 🚀
             liveNotebookSid: liveNotebookSid, 
             myUserId: myUserId,
           );
@@ -332,13 +365,14 @@ class AudioSessionService extends ChangeNotifier {
       isRecording = false;
       isProcessingAudio = false; 
       _isRecordingLive = false; 
+      _isRecordingPodcast = false; // 🚀
       _recordingStartTime = null; 
       _activeStreamMessageId = null; 
       safeNotify(); 
     }
   }
 
-  void _processAndSendSegment(String path, String msgId, int index, num duration, {bool isFinal = false, bool isLive = false, int retryCount = 0, int? liveNotebookSid, String? myUserId}) async {
+  void _processAndSendSegment(String path, String msgId, int index, num duration, {bool isFinal = false, bool isLive = false, bool isPodcast = false, int retryCount = 0, int? liveNotebookSid, String? myUserId}) async {
     if (liveNotebookSid == null) return;
     try {
       Uint8List bytes;
@@ -358,22 +392,33 @@ class AudioSessionService extends ChangeNotifier {
       final url = await _repository.uploadAudio(liveNotebookSid, 'segment_${msgId}_$index.$ext', bytes);
       
       if (url != null) { 
+        // 🚀 Apanhar Nome do Utilizador
+        String myUserName = 'Eu';
+        try {
+            // workaround para não injetar RoomService aqui, assumimos 'Eu' ou extraímos do onAudioMessageProcessed se for possível,
+            // mas como quem chama isto é o CollaborationRoomService indiretamente, o RoomService também escuta o onAudioMessageProcessed.
+            // Para efeitos práticos e de broadcast, pedimos um utilitário. Aqui usamos fallback.
+        } catch (_) {}
+
         _realtimeService.broadcastAudioMessage(
           notebookId: liveNotebookSid, 
           myUserId: myUserId ?? '', 
+          myUserName: myUserName, // 🚀
           audioUrl: url, 
           duration: duration, 
           isLive: isLive, 
+          isPodcast: isPodcast, // 🚀
           streamMsgId: msgId, 
           segmentIndex: index, 
           isFinal: isFinal
         ); 
         
-        if (index == 0 && !isLive) {
+        if (index == 0 && !isLive && !isPodcast) { // 🚀 
           onAudioMessageProcessed?.call({
             'msg_id': msgId,
             'type': 'audio',
             'sender_id': myUserId,
+            'sender_name': myUserName, // 🚀
             'audio_url': url,
             'duration': duration, 
             'timestamp': TimeService().now().toIso8601String(),
@@ -382,16 +427,16 @@ class AudioSessionService extends ChangeNotifier {
 
         if (_failedSegmentsQueue.isNotEmpty) { 
           final next = _failedSegmentsQueue.removeAt(0); 
-          _processAndSendSegment(next['path'], next['msgId'], next['index'], next['duration'], isFinal: next['isFinal'], isLive: next['isLive'] ?? false, retryCount: 0, liveNotebookSid: liveNotebookSid, myUserId: myUserId); 
+          _processAndSendSegment(next['path'], next['msgId'], next['index'], next['duration'], isFinal: next['isFinal'], isLive: next['isLive'] ?? false, isPodcast: next['isPodcast'] ?? false, retryCount: 0, liveNotebookSid: liveNotebookSid, myUserId: myUserId); 
         } 
       } else {
         if (retryCount < 5) {
           final int delaySeconds = math.pow(2, retryCount).toInt();
           Timer(Duration(seconds: delaySeconds), () {
-            _processAndSendSegment(path, msgId, index, duration, isFinal: isFinal, isLive: isLive, retryCount: retryCount + 1, liveNotebookSid: liveNotebookSid, myUserId: myUserId);
+            _processAndSendSegment(path, msgId, index, duration, isFinal: isFinal, isLive: isLive, isPodcast: isPodcast, retryCount: retryCount + 1, liveNotebookSid: liveNotebookSid, myUserId: myUserId);
           });
         } else {
-          _failedSegmentsQueue.add({'path': path, 'msgId': msgId, 'index': index, 'duration': duration, 'isFinal': isFinal, 'isLive': isLive, 'retryCount': retryCount});
+          _failedSegmentsQueue.add({'path': path, 'msgId': msgId, 'index': index, 'duration': duration, 'isFinal': isFinal, 'isLive': isLive, 'isPodcast': isPodcast, 'retryCount': retryCount});
         }
       }
     } catch (e) {
@@ -456,12 +501,13 @@ class AudioSessionService extends ChangeNotifier {
     final String? url = data['audio_url']?.toString();
     final int? index = data['index'] as int? ?? data['segment_index'] as int?;
     final String? senderId = data['sender_id']?.toString();
+    final bool isPodcast = data['is_podcast'] == true || data['type'] == 'podcast_audio'; // 🚀 Novo
     if (sid == null || url == null || index == null || senderId == null) return;
     final bool isFinal = data['is_final'] == true;
 
     final buffer = _audioBuffers.putIfAbsent(sid, () => AudioStreamBuffer(msgId: sid, senderId: senderId));
     
-    if (buffer.bufferedCount == 0) {
+    if (buffer.bufferedCount == 0 && !isPodcast) { // 🚀 Não exibir balões de chat para podcasts
       onAudioMessageProcessed?.call(data);
     } else {
       onStreamBufferUpdated?.call(sid, isFinal);
@@ -474,7 +520,8 @@ class AudioSessionService extends ChangeNotifier {
       _audioBuffers.removeWhere((id, b) => !_playingStreamIds.contains(id) && now.difference(b.lastActivity).inMinutes > 5); 
     }
     
-    if (isLiveSessionActive && senderId != myUserId && !_playingStreamIds.contains(sid)) { 
+    // 🚀 Auto-play para Podcast (Rádio Aberta) ou LiveSession
+    if ((isLiveSessionActive || isPodcast) && senderId != myUserId && !_playingStreamIds.contains(sid)) { 
       if (buffer.isReadyToStart) playAudioStream(sid); 
     }
     safeNotify();

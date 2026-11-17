@@ -161,6 +161,18 @@ class RealtimeService with WidgetsBindingObserver {
       _voiceCallStreamController.stream;
   Stream<Map<String, dynamic>> get onVoiceStateReceived =>
       _voiceStateStreamController.stream;
+  final _podcastStateStreamController = StreamController<Map<String, dynamic>>.broadcast(); // 🚀 Novo
+  Stream<Map<String, dynamic>> get onPodcastStateReceived => _podcastStateStreamController.stream; // 🚀 Novo
+
+  // 🚀 PTT WALKIE-TALKIE WHISPERS (Zero-HTTP)
+  final _channelLockedStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onChannelLocked => _channelLockedStreamController.stream;
+
+  final _audioChunkStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onAudioChunk => _audioChunkStreamController.stream;
+
+  final _channelUnlockedStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onChannelUnlocked => _channelUnlockedStreamController.stream;
   Stream<Map<String, dynamic>> get onUserActivityReceived =>
       _activityStreamController.stream;
   Stream<Map<String, dynamic>> get onSessionMetaReceived =>
@@ -565,6 +577,23 @@ class RealtimeService with WidgetsBindingObserver {
       (event) => _audioMessageStreamController.add(_safeParse(event.data)),
     );
     _bindEvent(
+      'client-podcast-state',
+      (event) => _podcastStateStreamController.add(_safeParse(event.data)), // 🚀 Novo
+    );
+    // 🚀 PTT Walkie-Talkie Whispers
+    _bindEvent(
+      'client-channel-locked',
+      (event) => _channelLockedStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-audio-chunk',
+      (event) => _audioChunkStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
+      'client-channel-unlocked',
+      (event) => _channelUnlockedStreamController.add(_safeParse(event.data)),
+    );
+    _bindEvent(
       'client-chat-sync-request',
       (event) => _chatSyncRequestController.add(_safeParse(event.data)),
     );
@@ -956,14 +985,41 @@ class RealtimeService with WidgetsBindingObserver {
   Future<bool> broadcastChatMessage({
     required int notebookId,
     required String myUserId,
+    required String myUserName,
     required String message,
+    String? msgId, // 🚀 ID consistente enviado pelo caller
   }) async {
     if (_notebookChannel == null) return false;
     final data = {
-      'msg_id': const Uuid().v4(),
+      'msg_id': msgId ?? const Uuid().v4(),
       'type': 'text',
       'sender_id': myUserId,
+      'sender_name': myUserName,
       'message': message,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-chat-message',
+      data: jsonEncode(data),
+    );
+    return true;
+  }
+
+  // 🚀 Novo: Enviar Imagem no Chat
+  Future<bool> broadcastImageMessage({
+    required int notebookId,
+    required String myUserId,
+    required String myUserName,
+    required String imageUrl,
+    String? msgId, // 🚀 ID consistente enviado pelo caller
+  }) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'msg_id': msgId ?? const Uuid().v4(),
+      'type': 'image',
+      'sender_id': myUserId,
+      'sender_name': myUserName,
+      'image_url': imageUrl,
       'timestamp': DateTime.now().toIso8601String(),
     };
     _notebookChannel!.trigger(
@@ -976,9 +1032,11 @@ class RealtimeService with WidgetsBindingObserver {
   Future<bool> broadcastAudioMessage({
     required int notebookId,
     required String myUserId,
+    required String myUserName, // 🚀 Novo
     required String audioUrl,
     required num duration,
     bool isLive = false,
+    bool isPodcast = false, // 🚀 Novo
     String? streamMsgId,
     int? segmentIndex,
     bool? isFinal,
@@ -986,17 +1044,94 @@ class RealtimeService with WidgetsBindingObserver {
     if (_notebookChannel == null) return false;
     final data = {
       'msg_id': streamMsgId ?? const Uuid().v4(),
-      'type': isLive ? 'audio_stream' : 'audio',
+      'type': isPodcast ? 'podcast_audio' : (isLive ? 'audio_stream' : 'audio'), // 🚀 Novo
       'sender_id': myUserId,
+      'sender_name': myUserName, // 🚀 Novo
       'audio_url': audioUrl,
       'duration': duration,
       'is_live': isLive,
+      'is_podcast': isPodcast, // 🚀 Novo
       'index': segmentIndex,
       'is_final': isFinal,
       'timestamp': DateTime.now().toIso8601String(),
     };
     _notebookChannel!.trigger(
       eventName: 'client-audio-message',
+      data: jsonEncode(data),
+    );
+    return true;
+  }
+
+  // 🚀 Novo: Controlo de Estado do Podcast
+  Future<bool> broadcastPodcastState({
+    required int notebookId,
+    required String myUserId,
+    required String myUserName,
+    required String status, // 'started', 'stopped'
+  }) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'sender_id': myUserId,
+      'sender_name': myUserName,
+      'status': status,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-podcast-state',
+      data: jsonEncode(data),
+    );
+    return true;
+  }
+
+  // 🚀 PTT WALKIE-TALKIE TRIGGER METHODS (Zero-HTTP Whispers)
+  Future<bool> broadcastChannelLocked({
+    required int notebookId,
+    required String userId,
+    required String userName,
+    required int timestamp,
+  }) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'user_id': userId,
+      'user_name': userName,
+      'timestamp': timestamp,
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-channel-locked',
+      data: jsonEncode(data),
+    );
+    return true;
+  }
+
+  Future<bool> broadcastAudioChunk({
+    required int notebookId,
+    required String userId,
+    required int sequence,
+    required String base64Data,
+  }) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'user_id': userId,
+      'sequence': sequence,
+      'data': base64Data,
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-audio-chunk',
+      data: jsonEncode(data),
+    );
+    return true;
+  }
+
+  Future<bool> broadcastChannelUnlocked({
+    required int notebookId,
+    required String userId,
+  }) async {
+    if (_notebookChannel == null) return false;
+    final data = {
+      'user_id': userId,
+    };
+    _notebookChannel!.trigger(
+      eventName: 'client-channel-unlocked',
       data: jsonEncode(data),
     );
     return true;

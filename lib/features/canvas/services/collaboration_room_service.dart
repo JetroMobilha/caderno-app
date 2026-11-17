@@ -1552,19 +1552,46 @@ class CollaborationRoomService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  String resolveSenderName(dynamic senderId, dynamic rawName) {
+    final String sId = senderId?.toString() ?? '';
+    final String nameStr = rawName?.toString() ?? '';
+
+    if (nameStr.isNotEmpty && nameStr != 'Eu' && nameStr != 'Você' && nameStr != 'Colega' && nameStr != 'Um colega') {
+      return nameStr;
+    }
+
+    if (sId.isNotEmpty && sId == _myUserId) {
+      return myUserName;
+    }
+
+    // 1. Procurar em onlineUsers
+    final onlineUser = onlineUsers.firstWhere(
+      (u) => u['id'].toString() == sId,
+      orElse: () => {},
+    );
+    final String? onlineName = onlineUser['name']?.toString();
+    if (onlineName != null && onlineName.isNotEmpty && onlineName != 'Eu' && onlineName != 'Você' && onlineName != 'Colega') {
+      return onlineName;
+    }
+
+    // 2. Procurar em enrolledMembers (membros inscritos do caderno)
+    final enrolledUser = enrolledMembers.firstWhere(
+      (m) => m['id'].toString() == sId,
+      orElse: () => {},
+    );
+    final String? enrolledName = enrolledUser['name']?.toString();
+    if (enrolledName != null && enrolledName.isNotEmpty && enrolledName != 'Eu' && enrolledName != 'Você' && enrolledName != 'Colega') {
+      return enrolledName;
+    }
+
+    return sId.isNotEmpty ? 'Utilizador #$sId' : 'Utilizador';
+  }
+
   void _addChatMessage(Map<String, dynamic> d) {
     if (_isDuplicateMessage(d)) return;
     
-    // Garantir que sender_name existe e NUNCA é 'Eu' ou 'Você' para os clientes
-    final String? rawName = d['sender_name']?.toString();
-    if (rawName == null || rawName.isEmpty || rawName == 'Eu' || rawName == 'Você') {
-        final sender = onlineUsers.firstWhere(
-            (u) => u['id'].toString() == d['sender_id'].toString(),
-            orElse: () => {'name': d['sender_id'] == _myUserId ? myUserName : 'Colega'},
-        );
-        final String resolved = (d['sender_id'] == _myUserId) ? myUserName : (sender['name']?.toString() ?? 'Colega');
-        d['sender_name'] = (resolved == 'Eu' || resolved == 'Você') ? myUserName : resolved;
-    }
+    // 🚀 Garantir que sender_name é resolvido de forma definitiva e nunca devolve 'Colega'
+    d['sender_name'] = resolveSenderName(d['sender_id'], d['sender_name']);
 
     chatMessages.add(d);
     if (chatMessages.length > 100) chatMessages.removeAt(0);
@@ -1590,7 +1617,7 @@ class CollaborationRoomService extends ChangeNotifier {
       return nameFromList;
     }
     _loadMyUserName();
-    return _myUserName ?? 'Colega';
+    return _myUserName ?? 'Utilizador';
   }
 
   void sendMessage(String m) {

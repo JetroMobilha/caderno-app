@@ -113,7 +113,7 @@ class CollaborationRoomService extends ChangeNotifier {
     _isChatOpen = value;
     if (value) {
       unreadChatCount = 0;
-      _markUnreadMessagesAsRead(); // 🚀 Marcar todas como lidas ao abrir
+      markUnreadMessagesAsRead(); // 🚀 Marcar todas como lidas ao abrir
     }
     _safeNotify();
   }
@@ -1622,12 +1622,15 @@ class CollaborationRoomService extends ChangeNotifier {
     if (!_isChatOpen && d['sender_id'] != _myUserId) {
       unreadChatCount++;
       _newMessageAlertController.add(d);
+    } else if (_isChatOpen) {
+      // 🚀 Se a janela já estiver aberta, marca automaticamente como lido
+      Future.delayed(const Duration(milliseconds: 100), () => markUnreadMessagesAsRead());
     }
     _safeNotify();
   }
 
   // 🚀 Novo: Assinalar mensagens de colegas como lidas
-  void _markUnreadMessagesAsRead() {
+  void markUnreadMessagesAsRead() {
     if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
     
     final List<String> msgsToMark = [];
@@ -1827,6 +1830,9 @@ class CollaborationRoomService extends ChangeNotifier {
           // Keep only last 100
           if (chatMessages.length > 100) {
             chatMessages.removeRange(0, chatMessages.length - 100);
+          }
+          if (_isChatOpen) {
+            markUnreadMessagesAsRead();
           }
           _safeNotify();
         }

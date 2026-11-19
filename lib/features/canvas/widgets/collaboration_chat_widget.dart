@@ -303,6 +303,11 @@ class _CollaborationChatWidgetState
   }
 
   Widget _buildChatTab(CollaborationRoomService collabService, AudioSessionService audioService) {
+      // 🚀 Marcar mensagens como lidas assim que a aba de chat renderizar
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        collabService.markUnreadMessagesAsRead();
+      });
+
       return Column(
           children: [
               Expanded(
@@ -476,13 +481,12 @@ class _CollaborationChatWidgetState
                                           : Colors.black38,
                                     ),
                                   ),
-                                  if (isMe) ...[
-                                    const SizedBox(width: 4),
-                                    _buildReadReceipts(
-                                      msgId: msg['msg_id']?.toString() ?? '',
-                                      collabService: collabService,
-                                    ),
-                                  ],
+                                  const SizedBox(width: 4),
+                                  _buildReadReceipts(
+                                    msgId: msg['msg_id']?.toString() ?? '',
+                                    collabService: collabService,
+                                    isMe: isMe,
+                                  ),
                                 ],
                               ),
                             ],
@@ -775,42 +779,46 @@ class _CollaborationChatWidgetState
   Widget _buildReadReceipts({
     required String msgId,
     required CollaborationRoomService collabService,
+    required bool isMe,
   }) {
     if (msgId.isEmpty) return const SizedBox.shrink();
 
     // 1. Quem leu?
     final Set<String> readers = collabService.messageReads[msgId] ?? {};
     
-    // Ignorar a minha própria leitura
+    // Ignorar a própria leitura para contagem de terceiros
     final int readCount = readers.where((id) => id != collabService.myUserId).length;
     final int otherUsersCount = collabService.onlineUsers.length > 1 
                                 ? (collabService.onlineUsers.length - 1) 
                                 : 0;
 
+    final Color defaultColor = isMe ? Colors.white70 : Colors.black38;
+
     // Ainda ninguém leu (apenas entregue)
     if (readCount == 0) {
-      return const Icon(Icons.check, size: 10, color: Colors.white60);
+      return Icon(Icons.check, size: 12, color: defaultColor);
     }
 
     // Todos os que estão na sala viram
     final bool readByAll = (readCount >= otherUsersCount) && otherUsersCount > 0;
+    final Color activeColor = readByAll ? const Color(0xFF2ECC71) : defaultColor;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           Icons.done_all,
-          size: 11,
-          color: readByAll ? const Color(0xFF2ECC71) : Colors.white60,
+          size: 13,
+          color: activeColor,
         ),
-        if (!readByAll) ...[
+        if (!readByAll && readCount > 0) ...[
           const SizedBox(width: 2),
           Text(
             '$readCount',
             style: GoogleFonts.inter(
-              fontSize: 7.5,
+              fontSize: 8,
               fontWeight: FontWeight.bold,
-              color: Colors.white60,
+              color: defaultColor,
             ),
           ),
         ],

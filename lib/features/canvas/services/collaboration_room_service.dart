@@ -113,7 +113,10 @@ class CollaborationRoomService extends ChangeNotifier {
     _isChatOpen = value;
     if (value) {
       unreadChatCount = 0;
-      markUnreadMessagesAsRead(); // 🚀 Marcar todas como lidas ao abrir
+      if (chatMessages.isEmpty) {
+        fetchChatHistory(); // 🚀 Carrega histórico se abrir vazio
+      }
+      _markUnreadMessagesAsRead(); // 🚀 Marcar todas como lidas ao abrir
     }
     _safeNotify();
   }
@@ -1132,9 +1135,11 @@ class CollaborationRoomService extends ChangeNotifier {
       final String act = d['activity'].toString();
       rt.updateUserActivityState(uid, act);
       final idx = onlineUsers.indexWhere((u) => u['id'].toString() == uid);
-      if (idx != -1) {
+      if (idx != -1 && onlineUsers[idx]['activity'] != act) {
         onlineUsers[idx]['activity'] = act;
-        _safeNotify();
+        if (act == 'typing' || onlineUsers[idx]['activity'] == 'typing') {
+            _safeNotify();
+        }
       }
     });
 
@@ -1202,16 +1207,26 @@ class CollaborationRoomService extends ChangeNotifier {
       (d) => _addChatMessage(d),
     );
 
-    // 🚀 Lidar com Recibos de Leitura em tempo real
+    // 🚀 Lidar com Recibos de Leitura em tempo real (Em Lote)
     _chatReadSubscription?.cancel();
     _chatReadSubscription = rt.onChatReadReceived.listen((d) {
       if (_isDisposed) return;
-      final String msgId = d['msg_id']?.toString() ?? '';
+      final List<dynamic>? msgIds = d['msg_ids'] as List?;
       final String readByUserId = d['read_by_user_id']?.toString() ?? '';
       
-      if (msgId.isNotEmpty && readByUserId.isNotEmpty && readByUserId != _myUserId) {
-        messageReads.putIfAbsent(msgId, () => {}).add(readByUserId);
-        _safeNotify();
+      if (msgIds != null && msgIds.isNotEmpty && readByUserId.isNotEmpty && readByUserId != _myUserId) {
+        bool changed = false;
+        for (var id in msgIds) {
+          final msgId = id.toString();
+          if (msgId.isNotEmpty) {
+            final reads = messageReads.putIfAbsent(msgId, () => {});
+            if (!reads.contains(readByUserId)) {
+              reads.add(readByUserId);
+              changed = true;
+            }
+          }
+        }
+        if (changed) _safeNotify();
       }
     });
 
@@ -1624,13 +1639,13 @@ class CollaborationRoomService extends ChangeNotifier {
       _newMessageAlertController.add(d);
     } else if (_isChatOpen) {
       // 🚀 Se a janela já estiver aberta, marca automaticamente como lido
-      Future.delayed(const Duration(milliseconds: 100), () => markUnreadMessagesAsRead());
+      Future.delayed(const Duration(milliseconds: 100), () => _markUnreadMessagesAsRead());
     }
     _safeNotify();
   }
 
   // 🚀 Novo: Assinalar mensagens de colegas como lidas
-  void markUnreadMessagesAsRead() {
+  void _markUnreadMessagesAsRead() {
     if (_isDisposed || _liveNotebookSid == null || _myUserId == null) return;
     
     final List<String> msgsToMark = [];
@@ -1648,13 +1663,11 @@ class CollaborationRoomService extends ChangeNotifier {
     if (msgsToMark.isEmpty) return;
     _safeNotify();
 
-    for (var msgId in msgsToMark) {
-      _realtimeService.broadcastChatRead(
-        notebookId: _liveNotebookSid!,
-        myUserId: _myUserId!,
-        msgId: msgId,
-      );
-    }
+    _realtimeService.broadcastChatRead(
+      notebookId: _liveNotebookSid!,
+      myUserId: _myUserId!,
+      msgIds: msgsToMark,
+    );
 
     try {
       _apiService.post('/notebooks/$_liveNotebookSid/session/chat/read', {
@@ -1832,7 +1845,7 @@ class CollaborationRoomService extends ChangeNotifier {
             chatMessages.removeRange(0, chatMessages.length - 100);
           }
           if (_isChatOpen) {
-            markUnreadMessagesAsRead();
+            _markUnreadMessagesAsRead();
           }
           _safeNotify();
         }

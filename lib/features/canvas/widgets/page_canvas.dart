@@ -42,7 +42,7 @@ class PageCanvas extends ConsumerWidget {
     }
 
     final toolState = ref.watch(canvasToolProvider);
-    final collabService = ref.watch(collaborationRoomServiceProvider);
+    final collabService = ref.read(collaborationRoomServiceProvider); // 🚀 Ler em vez de watch para evitar reconstruções no canvas
     final renderList = ref.watch(canvasRenderProvider(page.clientId)); // 🚀 v9.0
 
     final List<Widget> widgets = [];

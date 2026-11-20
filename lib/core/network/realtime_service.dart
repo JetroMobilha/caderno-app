@@ -1070,15 +1070,15 @@ class RealtimeService with WidgetsBindingObserver {
     return true;
   }
 
-  // 🚀 Novo: Disparar Confirmação de Leitura de Chat (Zero-HTTP Whisper)
+  // 🚀 Modificado: Disparar Confirmação de Leitura de Chat em Lote (Zero-HTTP Whisper)
   Future<bool> broadcastChatRead({
     required int notebookId,
     required String myUserId,
-    required String msgId,
+    required List<String> msgIds, // 🚀 Lote
   }) async {
-    if (_notebookChannel == null) return false;
+    if (_notebookChannel == null || msgIds.isEmpty) return false;
     final data = {
-      'msg_id': msgId,
+      'msg_ids': msgIds,
       'read_by_user_id': myUserId,
       'timestamp': DateTime.now().toIso8601String(),
     };

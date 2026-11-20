@@ -73,6 +73,8 @@ class _CollaborationChatWidgetState
     super.dispose();
   }
 
+  int _previousMessageCount = 0;
+
   @override
   Widget build(BuildContext context) {
     final collabService = ref.watch(collaborationRoomServiceProvider);
@@ -81,8 +83,11 @@ class _CollaborationChatWidgetState
 
     if (!collabService.isCollaborationEnabled) return const SizedBox.shrink();
 
-    // 🚀 AUTO-SCROLL quando chegam novas mensagens
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    // 🚀 AUTO-SCROLL apenas quando chegam mensagens novas
+    if (collabService.chatMessages.length != _previousMessageCount) {
+      _previousMessageCount = collabService.chatMessages.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    }
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
@@ -305,7 +310,10 @@ class _CollaborationChatWidgetState
   Widget _buildChatTab(CollaborationRoomService collabService, AudioSessionService audioService) {
       // 🚀 Marcar mensagens como lidas assim que a aba de chat renderizar
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        collabService.markUnreadMessagesAsRead();
+        // Redundância segura
+        if (!collabService.isChatOpen) {
+           collabService.isChatOpen = true; 
+        }
       });
 
       return Column(
@@ -481,12 +489,13 @@ class _CollaborationChatWidgetState
                                           : Colors.black38,
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  _buildReadReceipts(
-                                    msgId: msg['msg_id']?.toString() ?? '',
-                                    collabService: collabService,
-                                    isMe: isMe,
-                                  ),
+                                  if (isMe) ...[
+                                    const SizedBox(width: 4),
+                                    _buildReadReceipts(
+                                      msgId: msg['msg_id']?.toString() ?? '',
+                                      collabService: collabService,
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -779,7 +788,6 @@ class _CollaborationChatWidgetState
   Widget _buildReadReceipts({
     required String msgId,
     required CollaborationRoomService collabService,
-    required bool isMe,
   }) {
     if (msgId.isEmpty) return const SizedBox.shrink();
 
@@ -792,16 +800,14 @@ class _CollaborationChatWidgetState
                                 ? (collabService.onlineUsers.length - 1) 
                                 : 0;
 
-    final Color defaultColor = isMe ? Colors.white70 : Colors.black38;
-
     // Ainda ninguém leu (apenas entregue)
     if (readCount == 0) {
-      return Icon(Icons.check, size: 12, color: defaultColor);
+      return const Icon(Icons.check, size: 12, color: Colors.white70);
     }
 
     // Todos os que estão na sala viram
     final bool readByAll = (readCount >= otherUsersCount) && otherUsersCount > 0;
-    final Color activeColor = readByAll ? const Color(0xFF2ECC71) : defaultColor;
+    final Color activeColor = readByAll ? const Color(0xFF2ECC71) : Colors.white70;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -818,7 +824,7 @@ class _CollaborationChatWidgetState
             style: GoogleFonts.inter(
               fontSize: 8,
               fontWeight: FontWeight.bold,
-              color: defaultColor,
+              color: Colors.white70,
             ),
           ),
         ],

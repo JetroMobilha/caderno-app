@@ -28,6 +28,7 @@ class _CollaborationChatWidgetState
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker(); // 🚀 Novo
   Timer? _typingTimer; // 🚀 Debouncer para indicador de escrita
+  bool _isUploadingImage = false; // 🚀 Feedback de upload de imagem
 
   @override
   void initState() {
@@ -508,6 +509,36 @@ class _CollaborationChatWidgetState
             ),
           ),
 
+        // 🚀 Banner de Carregamento de Imagem (Feedback em Tempo Real)
+        if (_isUploadingImage)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            color: const Color(0xFF0F4C5C).withValues(alpha: 0.08),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF0F4C5C),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'A enviar imagem para o chat...',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0F4C5C),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // 🚀 Indicador de Gravação de Áudio ou Input do Chat
         if (audioService.isRecording || audioService.isProcessingAudio)
           _RecordingIndicator(
@@ -533,20 +564,10 @@ class _CollaborationChatWidgetState
                     color: Colors.transparent,
                     shape: const CircleBorder(),
                     child: IconButton(
-                      onPressed: () async {
-                          final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                          if (image != null && collabService.liveNotebookSid != null) {
-                              final bytes = await image.readAsBytes();
-                              final repository = ref.read(canvasRepositoryProvider);
-                              final url = await repository.uploadImage(collabService.liveNotebookSid!, image.name, bytes);
-                              if (url != null) {
-                                  collabService.sendImageMessage(url);
-                              }
-                          }
-                      },
-                      icon: const Icon(
+                      onPressed: _isUploadingImage ? null : () => _handlePickImage(collabService),
+                      icon: Icon(
                         Icons.image_outlined,
-                        color: Colors.grey,
+                        color: _isUploadingImage ? Colors.grey.shade300 : Colors.grey,
                         size: 20,
                       ),
                       padding: EdgeInsets.zero,
@@ -632,6 +653,64 @@ class _CollaborationChatWidgetState
   }
 
   // 🚀 NOVO MODO PODCASTING (RÁDIO ABERTA)
+  Future<void> _handlePickImage(CollaborationRoomService collabService) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+      );
+      if (image == null) return;
+      if (collabService.liveNotebookSid == null) return;
+
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      final bytes = await image.readAsBytes();
+      final repository = ref.read(canvasRepositoryProvider);
+      final url = await repository.uploadImage(
+        collabService.liveNotebookSid!,
+        image.name,
+        bytes,
+      );
+
+      if (!mounted) return;
+
+      if (url != null && url.isNotEmpty) {
+        collabService.sendImageMessage(url);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Não foi possível enviar a imagem. Tente novamente.',
+              style: GoogleFonts.inter(fontSize: 12),
+            ),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Erro ao carregar a imagem.',
+              style: GoogleFonts.inter(fontSize: 12),
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
+  }
+
   void _sendMessage(CollaborationRoomService collabService) {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
@@ -864,10 +943,10 @@ class _RecordingIndicator extends StatelessWidget {
 
     return Container(
       height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       color: isProcessing
-          ? const Color(0xFF0F4C5C).withOpacity(0.08)
-          : Colors.red.withOpacity(0.06),
+          ? const Color(0xFF0F4C5C).withValues(alpha: 0.08)
+          : Colors.red.withValues(alpha: 0.06),
       child: Row(
         children: [
           if (isProcessing)
@@ -880,12 +959,12 @@ class _RecordingIndicator extends StatelessWidget {
               ),
             )
           else
-            const _BlinkingDot(),
-          const SizedBox(width: 8),
+            const _SoundwaveEqualizer(),
+          const SizedBox(width: 10),
           Expanded(
             child: isProcessing
                 ? Text(
-                    'A PROCESSAR ÁUDIO...',
+                    'A ENVIAR NOTA DE VOZ...',
                     style: GoogleFonts.inter(
                       color: const Color(0xFF0F4C5C),
                       fontWeight: FontWeight.bold,
@@ -1057,3 +1136,67 @@ class _AudioPlayerWidgetState extends ConsumerState<_AudioPlayerWidget> {
     );
   }
 }
+
+class _SoundwaveEqualizer extends StatefulWidget {
+  const _SoundwaveEqualizer();
+
+  @override
+  State<_SoundwaveEqualizer> createState() => _SoundwaveEqualizerState();
+}
+
+class _SoundwaveEqualizerState extends State<_SoundwaveEqualizer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animController,
+      builder: (context, child) {
+        final val = _animController.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _buildBar(8 + val * 12),
+            const SizedBox(width: 2),
+            _buildBar(14 - val * 8),
+            const SizedBox(width: 2),
+            _buildBar(6 + val * 16),
+            const SizedBox(width: 2),
+            _buildBar(18 - val * 10),
+            const SizedBox(width: 2),
+            _buildBar(10 + val * 8),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBar(double height) {
+    return Container(
+      width: 3,
+      height: height.clamp(4.0, 22.0),
+      decoration: BoxDecoration(
+        color: Colors.redAccent,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+}
+

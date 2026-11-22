@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
@@ -41,10 +42,15 @@ class PttWalkieTalkieService extends ChangeNotifier {
   bool _isPlayingJitterBuffer = false;
   static const int _jitterBufferMinSize = 3;
 
-  // Gestão de Permissões e Web Autoplay
+  // Gestão de Permissões, Erros e Web Autoplay
   bool isPermissionGranted = false;
   bool isWebAudioInitialized = false;
   bool _isDisposed = false;
+  String? pttErrorMessage;
+
+  void clearErrorMessage() {
+    pttErrorMessage = null;
+  }
 
   // Subscrições dos Whispers
   StreamSubscription? _lockedSub;
@@ -181,6 +187,13 @@ class PttWalkieTalkieService extends ChangeNotifier {
           base64Data: base64String,
         );
       });
+    } on PlatformException catch (e) {
+      debugPrint('🚨 [PTT] Streaming de áudio não suportado nesta plataforma: $e');
+      pttErrorMessage = defaultTargetPlatform == TargetPlatform.windows
+          ? 'Rádio Aberta em tempo real disponível em Android, iOS e Web. No Windows utilize notas de voz no chat.'
+          : 'Microfone não disponível ou não suportado.';
+      releaseLock(notebookId: notebookId, myUserId: myUserId);
+      _safeNotify();
     } catch (e) {
       debugPrint('🚨 [PTT] Erro ao iniciar stream de gravação: $e');
       releaseLock(notebookId: notebookId, myUserId: myUserId);

@@ -19,6 +19,21 @@ class LivePodcastFloatingButton extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    // 🚀 Exibir SnackBar amigável se a plataforma não suportar gravação em stream (ex: Windows Desktop)
+    if (pttService.pttErrorMessage != null) {
+      final msg = pttService.pttErrorMessage!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg, style: GoogleFonts.inter(fontSize: 12)),
+            backgroundColor: Colors.orange.shade900,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        pttService.clearErrorMessage();
+      });
+    }
+
     final isOccupied = pttService.isChannelBusy || collabService.isPodcastChannelOccupied;
     final speakerName = pttService.activeSpeakerName ?? collabService.activePodcastSpeakerName ?? 'Alguém';
     final isMeSpeaking = pttService.isTransmitting || (collabService.activePodcastSpeakerId == collabService.myUserId);
@@ -47,6 +62,7 @@ class LivePodcastFloatingButton extends ConsumerWidget {
         duration: const Duration(milliseconds: 250),
         height: 56,
         padding: isOccupied ? const EdgeInsets.symmetric(horizontal: 16) : EdgeInsets.zero,
+        constraints: isOccupied ? const BoxConstraints(maxWidth: 220) : null,
         width: isOccupied ? null : 56,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
@@ -76,14 +92,18 @@ class LivePodcastFloatingButton extends ConsumerWidget {
                     size: 20,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '🔴 $speakerName no ar',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: isMeSpeaking
-                          ? Colors.white
-                          : Colors.redAccent,
+                  Flexible(
+                    child: Text(
+                      '🔴 $speakerName no ar',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isMeSpeaking
+                            ? Colors.white
+                            : Colors.redAccent,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                 ],
